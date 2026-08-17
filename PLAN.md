@@ -140,7 +140,9 @@ decision first) · **rejected** (a decision, not a backlog item)
       all**, and from that a route-overview page and a static OpenAPI export come
       almost free. Javalin needs a plugin for this. **Open questions:** what a
       route exposes beyond method and pattern (a description? response types?)
-      without dragging annotations back in.
+      without dragging annotations back in. Note that item 14 grouped the routes
+      into buckets — still an explicit list, just not one list, so this is
+      unaffected beyond needing to walk the index.
 
 - [x] **14. Router indexing.** Routes are grouped by method, then by first
       literal segment, with a bucket for the patterns that can match any first
