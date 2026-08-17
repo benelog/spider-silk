@@ -40,7 +40,7 @@ The template engine is [jte](https://jte.gg). jte also compiles templates to Jav
 | Module | Contents | Dependencies |
 |---|---|---|
 | `spider-silk-core` | The framework itself | `gg.jte:jte`, embedded Jetty (`jetty-ee10-servlet`) |
-| `spider-silk-test` | The `WebTest` harness, for test scope | core, and otherwise the JDK only |
+| `spider-silk-test` | The `WebTest` harness and `TestRequest`, for test scope | core, and otherwise the JDK only (the servlet API compile-time only, as in core) |
 | `example-flashcard` | Example: a flashcard study app | core, spring-jdbc, H2 |
 
 ## At a Glance
@@ -363,6 +363,24 @@ void createsADeck() {
 `get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and `postJson`, all return the raw `HttpResponse<String>` — assertions stay in whatever library the project already uses.
 `send(builder -> ...)` is the way out for anything else.
 
+When the handler itself is what is under test — not the routing that reaches it — `TestRequest` builds the argument and you call the method:
+
+```java
+@Test
+void createDeckRespondsWith201() {
+    WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
+            .jsonBody("{\"name\": \"Spanish\"}")
+            .build());
+
+    assertEquals(201, response.status());
+    assertEquals("Spanish", deckService.getDeck(idFrom(response)).name());
+}
+```
+
+No port, no servlet container, and no mock library: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, and `sessionAttr` state what the request carries, and `build()` hands back a `WebRequest`.
+Path variables are supplied rather than matched, since no route is involved — `pathParam("deckId", "3")` is what the router would have resolved.
+Everything a handler can tell apart still holds: a query parameter and a form field of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 the way a non-multipart request does.
+
 ## The Server
 
 Everything usually worth tuning is a method on `JettyServer`, and anything else is reachable through customizers that run against the real Jetty objects just before startup:
@@ -453,7 +471,9 @@ A response is an immutable value: every method below returns a new one, which is
 `body()` is a sealed `WebResponse.Body` — `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw` — so a `switch` over it needs no default case, and a test can assert on the answer without a servlet response to read it out of:
 
 ```java
-WebResponse response = controller.createDeck(new WebRequest(req, Map.of()));
+WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
+        .jsonBody("{\"name\": \"Spanish\"}")
+        .build());
 
 assertEquals(201, response.status());
 assertEquals("/api/decks/1", response.header("Location"));

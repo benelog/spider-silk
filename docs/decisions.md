@@ -33,9 +33,10 @@ What is still open lives in [PLAN.md](../PLAN.md).
 | 17 | Split `spider-silk-test` out of core | ✅ shipped |
 | 18 | `WebContext` split into `WebRequest` + sealed `WebResponse` | ✅ shipped |
 | 19 | Example: no `Controller` interface, one routing table | ✅ shipped |
+| 20 | `TestRequest` in `spider-silk-test`, and no mock library | ✅ shipped |
 
-Twenty of the twenty-one shipped.
-The twenty-first is 15b, which is a decision rather than a gap.
+Twenty-one of the twenty-two shipped.
+The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
 ## 1–7 · Server, lifecycle, routing, and the test harness
@@ -222,13 +223,15 @@ If the recipe turns out to be worth wrapping, it becomes a `spider-silk-ws` modu
 Documented, not wrapped: `QueuedThreadPool.setVirtualThreadsExecutor(VirtualThreads.getDefault...)` passed to `threadPool(...)`, with a test asserting the handler really does run on a virtual thread.
 No `virtualThreads()` method — it would be two lines of Jetty's own API behind a name that hides which knob was turned, and the choice is not ours to make: it pays off only when handlers block, and `synchronized` around the blocking call takes the benefit back.
 
-## 17–19 · Structural
+## 17–20 · Structural
 
 ### 17. Split `spider-silk-test`
 
 `spidersilk.test` is its own module, depending on core and otherwise on the JDK alone; core's jar now carries no test code at all.
 Core's own tests are a consumer of it like anyone else — `testImplementation project(':spider-silk-test')`.
 That looks circular and is not: the arrow runs core's *test* source set → the harness → core's *main* source set, which Gradle resolves without complaint.
+
+Item 20 later added the servlet API to this module as `compileOnly`, the same way core takes it, so what the module puts on a consumer's classpath is still core and the JDK.
 
 ### 18. `WebContext` split into `WebRequest` and a sealed `WebResponse`
 
@@ -289,6 +292,33 @@ The three decisions:
   Renaming the *interface* to `Action` was considered and rejected — see the table below.
 
 The route set is unchanged — every registration moved across verbatim — and all 27 were re-checked against a running server.
+
+### 20. `TestRequest`, and no mock library
+
+Item 18's write-up ends with the example's controller tests no longer needing `MockHttpServletResponse`, because a handler returns its answer.
+The request half stayed behind: those tests still built a `MockHttpServletRequest`, which is why `example-flashcard` carried `spring-test` and `spring-web` in test scope for exactly one class.
+A framework whose pitch is that nothing is resolved by name at runtime was answering "how do I test a handler?" with "add two Spring artifacts", and the README never said so — it showed `new WebRequest(req, Map.of())` and left `req` undefined.
+
+`TestRequest.post("/api/decks").jsonBody("...").build()` is the answer, and the four decisions are where it lives, what it is not, what it stubs, and how faithfully:
+
+- **`spider-silk-test`, never core.**
+  CLAUDE.md's rule, and item 17's precedent: core's jar carries no test code.
+  The servlet API arrives as `compileOnly`, mirroring core exactly, so nothing is added to what the module puts on a consumer's classpath and item 17's "core, and otherwise the JDK only" stays true as written.
+  Depending on Jetty's transitive copy of the API would have been shorter and would have tied the test module to the server the `WebServer` seam exists to keep replaceable.
+- **A builder for the request, not for `WebRequest` or `WebResponse`.**
+  Neither of those wants one: `WebResponse`'s `with`-style methods already are a builder, and adding a second type with a half-built state would break the `AfterFilter` shape item 18 bought.
+  `WebRequest` has two fields and is a read view — every accessor delegates to the `HttpServletRequest` underneath, so what actually needed building was *that*.
+- **A hand-written stub, not a mock library.**
+  `WebRequest` reads twelve servlet methods and three on `HttpSession`; the stub answers those and throws from the rest, so a method added to `WebRequest` and missing here fails loudly on the first test that reaches it rather than returning a quiet null.
+  That is the same bet as the rest of the framework: a small explicit thing over a general mechanism.
+- **Faithful where a handler can tell the difference.**
+  `getParameterValues` returns query values then form values, which is what makes `formParams`' subtraction — item 10b's — behave as it does behind a container, and it is precisely what a mock holding one parameter map cannot show.
+  Header lookup ignores case.
+  `getPart` throws `ServletException` when nothing was uploaded and returns null when the name is absent, so both of `req.file(...)`'s 400s are reachable — which made `DeckController.importCsv` directly testable for the first time.
+  `getCookies` returns null rather than an empty array, and `getSession(false)` stays null until something asks for a session.
+
+A query string in the path is rejected rather than parsed: `TestRequest.get("/decks?page=2")` throws and names `queryParam` instead, since a path that quietly kept its `?` would fail much later as a routing mismatch.
+Flash is left alone — `FLASH_ATTRIBUTE` is package-private in `spidersilk`, and a test module hard-coding that string would be a second copy of a private detail.
 
 ## Rejected — decisions, with the reason
 

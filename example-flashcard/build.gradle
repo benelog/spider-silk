@@ -3,16 +3,13 @@ plugins {
 }
 
 dependencies {
-    // Jetty comes in through core
     implementation project(':spider-silk-core')
     implementation 'org.springframework:spring-jdbc:6.2.19'
     implementation 'com.h2database:h2:2.3.232'
     runtimeOnly 'org.slf4j:slf4j-simple:2.0.17'
 
+    testImplementation project(':spider-silk-test')
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
-    testImplementation 'org.springframework:spring-test:6.2.19'
-    // MockHttpServletRequest/Response depend on spring-web classes (MediaType etc.)
-    testImplementation 'org.springframework:spring-web:6.2.19'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

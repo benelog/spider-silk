@@ -1,15 +1,11 @@
 package flashcard.web;
 
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
-
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.web.MockHttpServletRequest;
 
 import spidersilk.HttpException;
-import spidersilk.WebRequest;
 import spidersilk.WebResponse;
 import spidersilk.json.Json;
+import spidersilk.test.TestRequest;
 
 import flashcard.repository.CardRepository;
 import flashcard.repository.DeckRepository;
@@ -22,8 +18,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Calls the package-private handler methods directly and asserts on the
- * response they return, without a running server.
+ * Calls the handler methods directly and asserts on the response they return,
+ * without a running server.
  */
 class ApiControllerTest extends RepositoryTestSupport {
 
@@ -40,7 +36,7 @@ class ApiControllerTest extends RepositoryTestSupport {
     void listDecksRespondsWithJsonArray() {
         deckService.createDeck("English");
 
-        WebResponse response = controller.listDecks(request(new MockHttpServletRequest()));
+        WebResponse response = controller.listDecks(TestRequest.get("/api/decks").build());
 
         Json.JsonArray decks = Json.parse(body(response)).asArray();
         assertEquals(1, decks.size());
@@ -50,10 +46,9 @@ class ApiControllerTest extends RepositoryTestSupport {
 
     @Test
     void createDeckRespondsWith201AndLocation() {
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.setContent("{\"name\": \"Spanish\"}".getBytes(StandardCharsets.UTF_8));
-
-        WebResponse response = controller.createDeck(request(req));
+        WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
+                .jsonBody("{\"name\": \"Spanish\"}")
+                .build());
 
         assertEquals(201, response.status());
         long id = Json.parse(body(response)).asObject().getLong("id");
@@ -63,27 +58,21 @@ class ApiControllerTest extends RepositoryTestSupport {
 
     @Test
     void createDeckRejectsMalformedBodyWith400() {
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.setContent("not-json".getBytes(StandardCharsets.UTF_8));
-
         HttpException e = assertThrows(HttpException.class,
-                () -> controller.createDeck(request(req)));
+                () -> controller.createDeck(TestRequest.post("/api/decks")
+                        .jsonBody("not-json")
+                        .build()));
         assertEquals(400, e.status());
     }
 
     /** The reader throws on the missing key; bodyJson(reader) turns that into a 400. */
     @Test
     void createDeckRejectsABodyWithoutANameWith400() {
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.setContent("{\"title\": \"Spanish\"}".getBytes(StandardCharsets.UTF_8));
-
         HttpException e = assertThrows(HttpException.class,
-                () -> controller.createDeck(request(req)));
+                () -> controller.createDeck(TestRequest.post("/api/decks")
+                        .jsonBody("{\"title\": \"Spanish\"}")
+                        .build()));
         assertEquals(400, e.status());
-    }
-
-    private static WebRequest request(MockHttpServletRequest req) {
-        return new WebRequest(req, Map.of());
     }
 
     /** A JSON response carries its document as text, which is what to assert on. */

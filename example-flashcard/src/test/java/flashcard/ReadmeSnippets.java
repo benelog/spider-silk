@@ -11,7 +11,6 @@ import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
 import org.eclipse.jetty.util.VirtualThreads;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
-import org.springframework.mock.web.MockHttpServletRequest;
 
 import spidersilk.App;
 import spidersilk.AppServlet;
@@ -26,6 +25,7 @@ import spidersilk.json.JsonReader;
 import spidersilk.json.JsonWriter;
 import spidersilk.server.JettyServer;
 import spidersilk.server.WebServer;
+import spidersilk.test.TestRequest;
 
 import flashcard.web.ApiController;
 import flashcard.web.DeckController;
@@ -278,9 +278,9 @@ class ReadmeSnippets {
     // ---- block 24: asserting on a returned response ----
 
     void assertOnTheAnswer() throws Exception {
-        MockHttpServletRequest req = new MockHttpServletRequest();
-
-        WebResponse response = controller.createDeck(new WebRequest(req, Map.of()));
+        WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
+                .jsonBody("{\"name\": \"Spanish\"}")
+                .build());
 
         assertEquals(201, response.status());
         assertEquals("/api/decks/1", response.header("Location"));

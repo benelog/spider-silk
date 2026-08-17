@@ -1,12 +1,9 @@
 package flashcard.web;
 
-import java.util.Map;
-
 import org.junit.jupiter.api.Test;
-import org.springframework.mock.web.MockHttpServletRequest;
 
-import spidersilk.WebRequest;
 import spidersilk.WebResponse;
+import spidersilk.test.TestRequest;
 
 import flashcard.domain.Deck;
 import flashcard.repository.CardRepository;
@@ -20,8 +17,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Calls the package-private handler methods directly and asserts on the
- * response they return, without a running server.
+ * Calls the handler methods directly and asserts on the response they return,
+ * without a running server.
  */
 class DeckControllerTest extends RepositoryTestSupport {
 
@@ -36,10 +33,9 @@ class DeckControllerTest extends RepositoryTestSupport {
 
     @Test
     void createDeckRedirectsToTheNewDeck() {
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.setParameter("name", "English");
-
-        WebResponse response = controller.createDeck(new WebRequest(req, Map.of()));
+        WebResponse response = controller.createDeck(TestRequest.post("/decks")
+                .formParam("name", "English")
+                .build());
 
         assertEquals(302, response.status());
         assertTrue(response.header("Location").matches("/decks/\\d+"),
@@ -50,13 +46,26 @@ class DeckControllerTest extends RepositoryTestSupport {
     void renameDeckUpdatesTheNameAndRedirects() {
         Deck deck = deckService.createDeck("Old name");
 
-        MockHttpServletRequest req = new MockHttpServletRequest();
-        req.setParameter("name", "New name");
-
-        WebResponse response = controller.renameDeck(
-                new WebRequest(req, Map.of("deckId", String.valueOf(deck.id()))));
+        WebResponse response = controller.renameDeck(TestRequest.post("/decks/" + deck.id())
+                .pathParam("deckId", String.valueOf(deck.id()))
+                .formParam("name", "New name")
+                .build());
 
         assertEquals("New name", deckService.getDeck(deck.id()).name());
         assertEquals("/decks/" + deck.id(), response.header("Location"));
+    }
+
+    @Test
+    void importCsvAddsTheCardsInTheUploadedFile() {
+        Deck deck = deckService.createDeck("Spanish");
+
+        WebResponse response = controller.importCsv(
+                TestRequest.post("/decks/" + deck.id() + "/import")
+                        .pathParam("deckId", String.valueOf(deck.id()))
+                        .file("file", "cards.csv", "hola,hello,greeting\nadios,goodbye\n")
+                        .build());
+
+        assertEquals("/decks/" + deck.id(), response.header("Location"));
+        assertEquals(2, cardService.cardsWithTags(deck.id()).size());
     }
 }
