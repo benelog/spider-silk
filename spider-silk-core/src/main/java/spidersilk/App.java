@@ -3,6 +3,11 @@ package spidersilk;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Objects;
+
+import spidersilk.server.JettyServer;
+import spidersilk.server.WebServer;
+import spidersilk.server.WebServerFactory;
 
 /**
  * A Spider Silk application definition.
@@ -18,9 +23,12 @@ import java.util.List;
  *     long deckId = ctx.pathParamLong("deckId");
  *     ctx.render("deck.jte", model);
  * });
+ *
+ * app.start(8080);
  * }</pre>
  *
- * Deploy it to a servlet container with {@link AppServlet}.
+ * {@link #start(int)} runs the bundled Jetty. To deploy to an external servlet
+ * container instead, skip it and map {@link AppServlet} yourself.
  */
 public final class App {
 
@@ -33,6 +41,9 @@ public final class App {
     TemplateRenderer templates;
     String staticRoot;
     Handler notFound = ctx -> ctx.status(404).text("Not Found: " + ctx.path());
+
+    private WebServerFactory serverFactory = (app, port) -> new JettyServer(app).port(port);
+    private WebServer server;
 
     public App get(String path, Handler handler) {
         router.add("GET", path, handler);
@@ -92,5 +103,71 @@ public final class App {
     public App staticFiles(String classpathRoot) {
         this.staticRoot = classpathRoot;
         return this;
+    }
+
+    // ---- Server ----
+
+    /**
+     * Replaces the server {@link #start(int)} runs. The default builds a
+     * {@link JettyServer}; this is the seam for a different server, or for a
+     * Jetty tuned beyond the defaults.
+     *
+     * <pre>{@code
+     * app.server((a, port) -> new JettyServer(a).port(port).sessions(false))
+     *    .start(9000);
+     * }</pre>
+     */
+    public App server(WebServerFactory factory) {
+        this.serverFactory = Objects.requireNonNull(factory, "factory");
+        return this;
+    }
+
+    /** Starts on {@link JettyServer#DEFAULT_PORT}. */
+    public App start() {
+        return start(JettyServer.DEFAULT_PORT);
+    }
+
+    /** Starts the server. Port 0 picks a free port, readable through {@link #port()}. */
+    public App start(int port) {
+        if (server != null) {
+            throw new IllegalStateException("Already started on port " + port());
+        }
+        WebServer started = serverFactory.create(this, port);
+        started.start();
+        server = started;
+        return this;
+    }
+
+    /** Stops the server. Doing this while stopped is a no-op. */
+    public App stop() {
+        if (server != null) {
+            WebServer running = server;
+            server = null;
+            running.stop();
+        }
+        return this;
+    }
+
+    /** Blocks until the server stops. */
+    public App join() {
+        requireStarted().join();
+        return this;
+    }
+
+    /** The port actually bound. */
+    public int port() {
+        return requireStarted().port();
+    }
+
+    /** The running server, for implementation-specific access. */
+    public WebServer server() {
+        return requireStarted();
+    }
+
+    private WebServer requireStarted() {
+        if (server == null) {
+            throw new IllegalStateException("Not started. Call App.start() first.");
+        }
+        return server;
     }
 }

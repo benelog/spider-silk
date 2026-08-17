@@ -7,35 +7,36 @@ import javax.sql.DataSource;
 
 import jakarta.servlet.MultipartConfigElement;
 
-import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
-import org.eclipse.jetty.ee10.servlet.ServletHolder;
-import org.eclipse.jetty.server.Server;
 import org.h2.jdbcx.JdbcConnectionPool;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.support.EncodedResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import spidersilk.App;
-import spidersilk.AppServlet;
 import spidersilk.JteTemplates;
+import spidersilk.server.JettyServer;
 
 import flashcard.service.CsvFormatException;
 
 /**
  * Application startup: builds the object graph via FlashcardContext,
- * configures the App, and runs the Jetty server.
+ * configures the App, and runs the embedded server.
  */
 public class FlashcardApp {
+
+    private static final long MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
     public static void main(String[] args) throws Exception {
         DataSource dataSource = JdbcConnectionPool.create(
                 "jdbc:h2:~/db/spider-silk/flashcard;AUTO_SERVER=TRUE", "sa", "");
         initSchema(dataSource);
 
-        Server server = createServer(createApp(dataSource), 8080);
-        server.start();
-        System.out.println("Flashcard: http://localhost:8080");
-        server.join();
+        App app = createApp(dataSource)
+                // Everything else runs on the defaults; only the CSV upload limit is tuned.
+                .server((a, port) -> new JettyServer(a).port(port).multipart(uploadLimits()))
+                .start(8080);
+        System.out.println("Flashcard: http://localhost:" + app.port());
+        app.join();
     }
 
     public static void initSchema(DataSource dataSource) throws Exception {
@@ -64,21 +65,9 @@ public class FlashcardApp {
         return app;
     }
 
-    static Server createServer(App app, int port) {
-        Server server = new Server(port);
-        // Study sessions and flash messages use the HTTP session,
-        // so the SESSIONS option is required
-        ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
-        context.setContextPath("/");
-
-        ServletHolder holder = new ServletHolder(new AppServlet(app));
-        // Multipart config for CSV uploads (10MB max)
-        holder.getRegistration().setMultipartConfig(new MultipartConfigElement(
-                System.getProperty("java.io.tmpdir"), 10 * 1024 * 1024, 10 * 1024 * 1024,
-                1024 * 1024));
-        context.addServlet(holder, "/*");
-
-        server.setHandler(context);
-        return server;
+    /** CSV uploads are capped at 10MB, buffered in memory up to 1MB. */
+    static MultipartConfigElement uploadLimits() {
+        return new MultipartConfigElement(System.getProperty("java.io.tmpdir"),
+                MAX_UPLOAD_BYTES, MAX_UPLOAD_BYTES, 1024 * 1024);
     }
 }
