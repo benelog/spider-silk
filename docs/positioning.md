@@ -31,9 +31,10 @@ Each requires reflection, which is the one thing the framework exists to avoid.
 | | Spider Silk | Javalin 7 | Spark 2.9 | Helidon SE 4 | Spring Boot MVC |
 |---|---|---|---|---|---|
 | Route registration | lambdas | lambdas | static lambdas | lambdas | annotations |
+| Handler shape | returns a `WebResponse` | writes to `Context` | returns a body, writes `Response` | writes to `ServerResponse` | returns a value |
 | Reflection at runtime | none | JSON only (Jackson) | JSON only | JSON only | pervasive |
 | DI container | none | none | none | none | yes |
-| JSON | hand-built `Json` tree | `ctx.json(pojo)` (Javalin) | bring your own | JSON-P / JSON-B | Jackson |
+| JSON | hand-built `Json` tree | `ctx.json(pojo)` | bring your own | JSON-P / JSON-B | Jackson |
 | Templates | jte | many, pluggable | many, pluggable | none | many |
 | Server | embedded Jetty, swappable | embedded Jetty | embedded Jetty | Loom-native Níma | Tomcat |
 | Servlet deployable | yes | no | no | no | yes (war) |
@@ -49,15 +50,19 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
 1. **The no-reflection claim survives the whole request.**
    Javalin and Helidon avoid annotation scanning but hand JSON to Jackson or JSON-B, so a rename in a record still changes the wire format silently.
    Here the wire format is written out in the handler, so it changes only when someone edits it.
-2. **Errors are structural, not conventional.**
+2. **A handler answers by returning, so the compiler checks that it answered.**
+   `WebResponse handle(WebRequest)` makes a branch that forgets to respond a compile error and a double response unexpressible; the lambda-and-context frameworks in the table can only find both at runtime.
+   Spark returns a body but keeps status and headers on a mutable `Response`, so it gets half of this.
+   The response is an immutable value with a sealed body — `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw` — which is also what makes an after-filter a plain `WebResponse -> WebResponse` and lets a handler test assert on the answer with no servlet response to read it out of.
+3. **Errors are structural, not conventional.**
    `pathParamLong` returns a `long` or throws a 400.
    There is no binder that maps an unparseable value to `null` and lets it reach the service layer.
-3. **Stack traces are short and honest.**
+4. **Stack traces are short and honest.**
    No proxy frames, no filter chains you did not add.
-4. **No lock-in on the server.**
+5. **No lock-in on the server.**
    `AppServlet` runs on Tomcat; `WebServer` is four methods, so a second implementation is a small job.
    Javalin and Spark both marry Jetty.
-5. **Startup cost is close to zero** because there is nothing to scan.
+6. **Startup cost is close to zero** because there is nothing to scan.
 
 ## Weaknesses, stated precisely
 
@@ -125,7 +130,7 @@ Ordered by how often they will actually hurt.
 - Spark's static-import DSL: process-global state, no second app per JVM.
 - Javalin's plugin/bundled-plugins system: a registry of things that configure themselves is the beginning of a container.
 - `app.ws(path, config)` in core: a protocol upgrade leaves servlet dispatch, so core would be publishing an API that core's own routing, filters, error handlers, request logger, `routes()`, and test harness do not reach.
-  It also ends strength 4 — `WebServer` is four methods precisely so Jetty is replaceable — and `jakarta.websocket` is no escape, since its default `Configurator` instantiates endpoints reflectively.
+  It also ends strength 5 — `WebServer` is four methods precisely so Jetty is replaceable — and `jakarta.websocket` is no escape, since its default `Configurator` instantiates endpoints reflectively.
 
 ## Priorities
 
