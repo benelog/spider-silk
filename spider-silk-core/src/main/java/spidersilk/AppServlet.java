@@ -1,7 +1,6 @@
 package spidersilk;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,7 +38,8 @@ public class AppServlet extends HttpServlet {
                     match.handler().handle(ctx);
                     runFilters(app.afterFilters, segments, ctx);
                 }
-            } else if (isReadMethod(req) && serveStatic(path, res)) {
+            } else if (isReadMethod(req) && app.staticFiles != null
+                    && app.staticFiles.serve(path, req, res)) {
                 return;
             } else {
                 Set<String> allowed = app.router.allowedMethods(path);
@@ -98,21 +98,6 @@ public class AppServlet extends HttpServlet {
         if (flash != null) {
             session.removeAttribute(WebContext.FLASH_ATTRIBUTE);
             req.setAttribute(WebContext.FLASH_ATTRIBUTE, flash);
-        }
-    }
-
-    private boolean serveStatic(String path, HttpServletResponse res) throws IOException {
-        if (app.staticRoot == null || path.contains("..")) {
-            return false;
-        }
-        String resource = app.staticRoot + path;
-        try (InputStream in = AppServlet.class.getResourceAsStream(resource)) {
-            if (in == null) {
-                return false;
-            }
-            res.setContentType(ContentTypes.byPath(path));
-            in.transferTo(res.getOutputStream());
-            return true;
         }
     }
 

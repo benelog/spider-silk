@@ -42,7 +42,7 @@ public final class App {
     final Map<Integer, Handler> errorHandlers = new LinkedHashMap<>();
 
     TemplateRenderer templates;
-    String staticRoot;
+    StaticFiles staticFiles;
 
     private WebServerFactory serverFactory = (app, port) -> new JettyServer(app).port(port);
     private WebServer server;
@@ -151,7 +151,12 @@ public final class App {
 
     /** The classpath root to serve static files from, e.g. "/public". */
     public App staticFiles(String classpathRoot) {
-        this.staticRoot = classpathRoot;
+        return staticFiles(new StaticFiles(classpathRoot));
+    }
+
+    /** Static files with a hosted path or a cache policy of their own. */
+    public App staticFiles(StaticFiles staticFiles) {
+        this.staticFiles = Objects.requireNonNull(staticFiles, "staticFiles");
         return this;
     }
 
