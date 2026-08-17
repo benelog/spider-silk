@@ -2,6 +2,7 @@ package spidersilk;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -260,6 +261,7 @@ public final class WebResponse {
         return headers.get(name);
     }
 
+    /** Read-only, and in the order the headers were set. */
     public Map<String, String> headers() {
         return headers;
     }
@@ -281,7 +283,7 @@ public final class WebResponse {
     public WebResponse header(String name, String value) {
         Map<String, String> copy = new LinkedHashMap<>(headers);
         copy.put(Objects.requireNonNull(name, "name"), value);
-        return new WebResponse(status, Map.copyOf(copy), cookies, body);
+        return new WebResponse(status, unmodifiable(copy), cookies, body);
     }
 
     public WebResponse contentType(String contentType) {
@@ -339,7 +341,18 @@ public final class WebResponse {
         mergedHeaders.putAll(headers);
         List<Cookie> mergedCookies = new ArrayList<>(base.cookies);
         mergedCookies.addAll(cookies);
-        return new WebResponse(status, Map.copyOf(mergedHeaders), List.copyOf(mergedCookies), body);
+        return new WebResponse(status, unmodifiable(mergedHeaders), List.copyOf(mergedCookies),
+                body);
+    }
+
+    /**
+     * The map is freshly built here and its only reference goes into the wrapper,
+     * so a read-only view of it is as safe as a copy — and one allocation less.
+     * A {@code LinkedHashMap} behind the view is also what keeps the headers in
+     * the order they were set; {@link Map#copyOf} does not promise an order.
+     */
+    private static Map<String, String> unmodifiable(Map<String, String> fresh) {
+        return Collections.unmodifiableMap(fresh);
     }
 
     private static Cookie defaultCookie(String name, String value) {
