@@ -28,9 +28,10 @@ Status: **done** · **next** (agreed, ready to build) · **open** (needs a desig
 | 15b | WebSocket in core | P2 | ❌ rejected |
 | 16 | Virtual threads | P2 | ✅ done |
 | 17 | Split `spider-silk-test` out of core | — | ✅ done |
+| 18 | `WebContext` split into `WebRequest` + sealed `WebResponse` | — | ✅ done |
 
-18 of 19 done: all of P0, all of P1, all of P2, and the structural split.
-The nineteenth is 15b, which is a decision rather than a gap.
+19 of 20 done: all of P0, all of P1, all of P2, and both structural items.
+The twentieth is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
 ## P0 — done
@@ -45,10 +46,11 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       Port, host, context path, sessions, thread pool, and multipart as methods; three customizers for everything else.
       Sessions default on, because `req.flash`/`req.sessionAttr` need them.
 - [x] **4. Path-scoped filters.**
-      `before(path, handler)`; a final `*` matches the prefix and everything under it.
-      A before-filter that writes a response ends the request — a guard that turned the caller away must not be followed by the handler answering anyway.
-      Deliberate edge: setting a status *without* writing does **not** halt, because "only what you wrote happens" is the rule everywhere else, and widening the halt to any 4xx status would break a handler that sets 404 and then renders a page.
-      `throw new HttpException(...)` is the status-only rejection path.
+      `before(path, filter)`; a final `*` matches the prefix and everything under it.
+      A before-filter that returns a response ends the request — a guard that turned the caller away must not be followed by the handler answering anyway — and returning `null` continues to the route.
+      Item 18 turned that into a signature rather than a convention: the halt used to be inferred from a `bodyWritten` flag on the context, and it is now the difference between returning a value and returning nothing.
+      Deliberate edge: an answer of `WebResponse.empty(401)` still halts, since it *is* an answer; what does not halt is a filter that only reads.
+      `throw new HttpException(...)` is the status-only rejection path, and `error(401, ...)` renders it.
 - [x] **5. Route groups.**
       `app.path("/api", api -> ...)`, nestable, with the group passed as an argument.
       Spark's static-import equivalent keeps the prefix in process-global state, which rules out two apps per JVM.
@@ -109,7 +111,8 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
 - [x] **10b. The rest of the request API.**
       `queryParam`/`queryParams` read the query string, parsed here rather than through the servlet API, which merges it with the form body.
       `formParam`/`formParams` are what is left once the query values are taken out of the merged list — subtracted by count, not by position, so a name that appears in both places still splits correctly.
-      HEAD runs the GET route through a response that counts the body and throws it away, so the headers — `Content-Length` included — are the ones the GET would have sent; this servlet overrides `service`, so `HttpServlet`'s own HEAD machinery never runs and the container is not relied on.
+      HEAD runs the GET route and drops the body, so the headers — `Content-Length` included — are the ones the GET would have sent; this servlet overrides `service`, so `HttpServlet`'s own HEAD machinery never runs and the container is not relied on.
+      Since item 18 the length is usually just the body's own: a `Text`, `Bytes`, or rendered `Template` knows its size without being produced, and only a `Stream` or a `Raw` body still runs through a counting wrapper.
       OPTIONS answers from `Router.allowedMethods` plus the HEAD and OPTIONS this servlet adds itself, and `head`/`options` register a route when the automatic answer is not the right one.
 
 - [x] **11. Request logging hook.**
@@ -194,6 +197,39 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       `spidersilk.test` is its own module, depending on core and otherwise on the JDK alone; core's jar now carries no test code at all.
       Core's own tests are a consumer of it like anyone else — `testImplementation project(':spider-silk-test')`.
       That looks circular and is not: the arrow runs core's *test* source set → the harness → core's *main* source set, which Gradle resolves without complaint.
+
+- [x] **18. `WebContext` split into `WebRequest` and a sealed `WebResponse`.**
+      `WebContext` had grown to 552 lines under nine section comments, because "the request, the response, the session, and every way of answering" is four responsibilities wearing one name.
+      Splitting it along the HTTP metaphor was the obvious half; the other half was making `Handler` *return* the answer:
+
+      ```java
+      WebResponse handle(WebRequest request) throws Exception
+      ```
+
+      The compiler now checks that every branch answers, and answering twice stopped being expressible.
+      The five decisions:
+
+      - **`WebRequest`/`WebResponse`, not `HttpRequest`/`HttpResponse`.**
+        `WebTest`'s own documented idiom asserts on `java.net.http.HttpResponse<String>`, so a `spidersilk.HttpResponse` would collide with the JDK inside this framework's own test style, and `HttpServletRequest` is one import away in the other direction.
+        `Web*` is also what the codebase already calls things — `WebServer`, `WebServerFactory`, `WebTest`.
+      - **An envelope around a sealed `Body`, not a sealed response.**
+        Status, headers, and cookies are the same for every kind of answer, so they live once on `WebResponse`; what differs is the body, and *that* is the sealed type — `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw`.
+        A `switch` over the kinds needs no default case, and the `with`-style methods stay type-stable, which is what lets an `AfterFilter` be `WebResponse -> WebResponse` at all.
+        Sealing the response itself would have meant reimplementing `status`/`header`/`cookie` on seven records.
+      - **Templates are rendered during dispatch, not while writing.**
+        This is the trap the return-based model sets: a body produced after dispatch has left its `try` block can no longer reach `app.exception(...)`, and `FlashcardApp` maps `IllegalArgumentException` there.
+        So a `Template` is materialized into `Text` inside dispatch, which keeps the exception routing and hands HEAD an exact `Content-Length` for free.
+        `Stream`, `Sse`, and `Raw` genuinely cannot be materialized, and their failures land in the servlet log with a best-effort 500 — the honest limit, since the headers are already committed by then.
+      - **The filters changed shape with the handler.**
+        `BeforeFilter` returns a response or `null` to continue; `AfterFilter` takes the response and returns a replacement or `null` to keep it.
+        `null` rather than `Optional` because an observational filter stays a one-liner either way and `Optional.empty()` reads worse in the common case.
+        After-filters run only on a route that completed normally — not after a before-filter answered, not on an exception handler's output — which is what the javadoc already claimed and is now written down.
+      - **`bodyWritten` is gone, and `StaticFiles` produces a response like anything else.**
+        "Did anyone answer yet" used to be a mutable flag the servlet sniffed; it is now `body() instanceof Empty`.
+        `StaticFiles.resolve` returns a streamed `WebResponse` instead of writing the servlet response itself, so a static hit flows through the request logger like every other answer.
+
+      What it cost: `AppServlet` split into a dispatch half and a write half, and the example app's controller tests stopped needing `MockHttpServletResponse` entirely — they call the handler and assert on the value it returned.
+      Two behaviours changed on purpose: `redirect` sets a `Location` header rather than calling `sendRedirect`, and cookies moved to the response while the session and flash stayed on the request, since a session outlives the response and cannot be a value returned from one.
 
 ## Rejected — decisions, with the reason
 
