@@ -11,8 +11,7 @@ import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.Deck;
 import flashcard.domain.DeckStat;
@@ -23,22 +22,21 @@ public class DeckRepository {
     private static final RowMapper<Deck> MAPPER = DataClassRowMapper.newInstance(Deck.class);
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final SimpleJdbcInsert insert;
 
     public DeckRepository(DataSource dataSource) {
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
+        this.insert = new SimpleJdbcInsert(dataSource)
+                .withTableName("deck")
+                .usingGeneratedKeyColumns("id");
     }
 
     public Deck insert(Deck deck) {
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbc.update("""
-                insert into deck (name, created_at)
-                values (:name, :createdAt)
-                """,
+        Long id = insert.executeAndReturnKey(
                 new MapSqlParameterSource()
                         .addValue("name", deck.name())
-                        .addValue("createdAt", deck.createdAt()),
-                keyHolder, new String[] {"id"});
-        return new Deck(keyHolder.getKey().longValue(), deck.name(), deck.createdAt());
+                        .addValue("createdAt", deck.createdAt())).longValue();
+        return new Deck(id, deck.name(), deck.createdAt());
     }
 
     public void update(Deck deck) {

@@ -9,6 +9,7 @@ import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.ReviewState;
 
@@ -18,19 +19,17 @@ public class ReviewStateRepository {
             DataClassRowMapper.newInstance(ReviewState.class);
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final SimpleJdbcInsert insert;
 
     public ReviewStateRepository(DataSource dataSource) {
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
+        this.insert = new SimpleJdbcInsert(dataSource)
+                .withTableName("review_state")
+                .usingGeneratedKeyColumns("id");
     }
 
     public void insert(ReviewState state) {
-        jdbc.update("""
-                insert into review_state
-                    (card_id, interval_days, due_date, correct_count, wrong_count,
-                     last_reviewed_at)
-                values (:cardId, :intervalDays, :dueDate, :correctCount, :wrongCount,
-                        :lastReviewedAt)
-                """, params(state));
+        insert.execute(params(state));
     }
 
     public void update(ReviewState state) {

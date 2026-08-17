@@ -9,6 +9,7 @@ import javax.sql.DataSource;
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.DailyStat;
 import flashcard.domain.ReviewLog;
@@ -16,22 +17,22 @@ import flashcard.domain.ReviewLog;
 public class ReviewLogRepository {
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final SimpleJdbcInsert insert;
 
     public ReviewLogRepository(DataSource dataSource) {
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
+        this.insert = new SimpleJdbcInsert(dataSource)
+                .withTableName("review_log")
+                .usingGeneratedKeyColumns("id");
     }
 
     public void insert(ReviewLog log) {
-        jdbc.update("""
-                insert into review_log (card_id, correct, retry_round, reviewed_at, study_date)
-                values (:cardId, :correct, :retryRound, :reviewedAt, :studyDate)
-                """,
-                new MapSqlParameterSource()
-                        .addValue("cardId", log.cardId())
-                        .addValue("correct", log.correct())
-                        .addValue("retryRound", log.retryRound())
-                        .addValue("reviewedAt", log.reviewedAt())
-                        .addValue("studyDate", log.studyDate()));
+        insert.execute(new MapSqlParameterSource()
+                .addValue("cardId", log.cardId())
+                .addValue("correct", log.correct())
+                .addValue("retryRound", log.retryRound())
+                .addValue("reviewedAt", log.reviewedAt())
+                .addValue("studyDate", log.studyDate()));
     }
 
     /** Correct/wrong counts per day. Feeds the bar chart on the stats screen. */

@@ -10,8 +10,7 @@ import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.CardTagName;
 import flashcard.domain.Tag;
@@ -21,17 +20,19 @@ public class TagRepository {
     private static final RowMapper<Tag> MAPPER = DataClassRowMapper.newInstance(Tag.class);
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final SimpleJdbcInsert insert;
 
     public TagRepository(DataSource dataSource) {
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
+        this.insert = new SimpleJdbcInsert(dataSource)
+                .withTableName("tag")
+                .usingGeneratedKeyColumns("id");
     }
 
     public Tag insert(Tag tag) {
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbc.update("insert into tag (name) values (:name)",
-                new MapSqlParameterSource().addValue("name", tag.name()),
-                keyHolder, new String[] {"id"});
-        return new Tag(keyHolder.getKey().longValue(), tag.name());
+        Long id = insert.executeAndReturnKey(
+                new MapSqlParameterSource().addValue("name", tag.name())).longValue();
+        return new Tag(id, tag.name());
     }
 
     public Optional<Tag> findByName(String name) {

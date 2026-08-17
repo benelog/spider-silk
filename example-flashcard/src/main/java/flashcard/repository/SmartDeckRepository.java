@@ -10,8 +10,7 @@ import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.jdbc.support.KeyHolder;
+import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.SmartDeck;
 
@@ -21,23 +20,22 @@ public class SmartDeckRepository {
             DataClassRowMapper.newInstance(SmartDeck.class);
 
     private final NamedParameterJdbcTemplate jdbc;
+    private final SimpleJdbcInsert insert;
 
     public SmartDeckRepository(DataSource dataSource) {
         this.jdbc = new NamedParameterJdbcTemplate(dataSource);
+        this.insert = new SimpleJdbcInsert(dataSource)
+                .withTableName("smart_deck")
+                .usingGeneratedKeyColumns("id");
     }
 
     public SmartDeck insert(SmartDeck smartDeck) {
-        KeyHolder keyHolder = new GeneratedKeyHolder();
-        jdbc.update("""
-                insert into smart_deck (name, condition_type, param)
-                values (:name, :conditionType, :param)
-                """,
+        Long id = insert.executeAndReturnKey(
                 new MapSqlParameterSource()
                         .addValue("name", smartDeck.name())
                         .addValue("conditionType", smartDeck.conditionType().name())
-                        .addValue("param", smartDeck.param()),
-                keyHolder, new String[] {"id"});
-        return new SmartDeck(keyHolder.getKey().longValue(), smartDeck.name(),
+                        .addValue("param", smartDeck.param())).longValue();
+        return new SmartDeck(id, smartDeck.name(),
                 smartDeck.conditionType(), smartDeck.param());
     }
 
