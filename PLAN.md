@@ -29,9 +29,10 @@ Status: **done** · **next** (agreed, ready to build) · **open** (needs a desig
 | 16 | Virtual threads | P2 | ✅ done |
 | 17 | Split `spider-silk-test` out of core | — | ✅ done |
 | 18 | `WebContext` split into `WebRequest` + sealed `WebResponse` | — | ✅ done |
+| 19 | Example: no `Controller` interface, one routing table | — | ✅ done |
 
-19 of 20 done: all of P0, all of P1, all of P2, and both structural items.
-The twentieth is 15b, which is a decision rather than a gap.
+20 of 21 done: all of P0, all of P1, all of P2, and all three structural items.
+The twenty-first is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
 ## P0 — done
@@ -238,6 +239,26 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       What it cost: `AppServlet` split into a dispatch half and a write half, and the example app's controller tests stopped needing `MockHttpServletResponse` entirely — they call the handler and assert on the value it returned.
       Two behaviours changed on purpose: `redirect` sets a `Location` header rather than calling `sendRedirect`, and cookies moved to the response while the session and flash stayed on the request, since a session outlives the response and cannot be a value returned from one.
 
+- [x] **19. The example's routing table, in one place.**
+      The example app had a `Controller` interface — one method, `register(App app)` — and seven classes implementing it, with `FlashcardContext` handing back `List<Controller>` for `createApp` to loop over.
+      It read like good structure and was the wrong shape for this framework: the routing table was the *union* of what seven `register` methods each decided, so the honest answer to "what does this application answer?" was "read seven files".
+      That is what annotation scanning produces, arrived at by hand — and item 13's whole claim is that `app.routes()` is trustworthy because routing is an explicit list.
+      So the interface is gone and `FlashcardApp.registerRoutes` is the list.
+      The three decisions:
+
+      - **A handler arrives in one of three shapes, chosen by how much there is to hold.**
+        A lambda when there is no state worth a class; an `Action` class implementing `Handler` when a class answers exactly one route, registered as itself; public methods registered by reference when one class answers several related routes.
+        `HomeController` and `StatsController` answered one route each and became `HomeAction` and `StatsAction`; `DeckController`, `StudyController`, `SmartDeckController`, and `ApiController` kept their methods and made them public.
+        `RoutesController` had nothing left but its OpenAPI builder once registration moved out, so it is now `OpenApi.document(routes)` and its two routes are lambdas over `app` itself.
+      - **The handler methods are public, and that is the trade.**
+        Registration from outside the class needs them visible, which is a real cost — a package-private method could only be called by the class's own `register`.
+        It buys the property that mattered more: the path and the method that answers it sit on one line, in a list nothing else contributes to.
+      - **`Action` is a class-naming convention, not a rename of `Handler`.**
+        The name comes from WebWork and Struts 2, where it reads well for "one thing the application does", and it still does.
+        Renaming the *interface* to `Action` was considered and rejected — see the table below.
+
+      The route set is unchanged — every registration moved across verbatim — and all 27 were re-checked against a running server.
+
 ## Rejected — decisions, with the reason
 
 These are closed.
@@ -247,6 +268,8 @@ If one is reopened, it is a change to what the framework is.
 |---|---|
 | `WebResponse.json(Object)`, `req.bodyAsClass(Foo.class)` | Reflection. The whole point is that the wire format changes only when someone edits it. |
 | Annotation-driven routing | Reflection, plus scanning. |
+| Renaming `Handler` to `Action` | Struts 2's `Action` is the opposite model: an object instantiated per request and populated by reflection, whose `execute()` returns a *result name* that XML or an annotation resolves into a view. `Handler` is a stateless function returning the response itself. The name would import expectations this framework refuses. It also breaks the suffix rule — `…Handler` answers a request, `…Writer` fills a body — leaving `ExceptionHandler` stranded, and an `error(404, ...)` page renderer is not an "action" in anyone's sense. `Action` stays what it is worth being: a convention for naming the classes that implement `Handler` directly. |
+| A `Controller` interface with `register(App)` in the example | The routing table becomes the union of what every implementation decided, so `app.routes()` is still honest but nothing else is: reading the application's routes means reading every controller. A registry of things that register themselves is the shape of the container this framework exists without. |
 | A DI container | Not the web tier, and `FlashcardContext` shows the alternative. |
 | `ServiceLoader`-based server discovery | Classpath-driven binding is the magic this framework exists without. |
 | Javalin-style plugin registry | A registry of things that configure themselves is how a container starts. |
