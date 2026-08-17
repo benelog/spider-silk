@@ -1,18 +1,33 @@
 package spidersilk;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * A path pattern such as "/decks/{deckId}/cards".
  * Compares string segments only; no regular expressions, no reflection.
+ *
+ * <p>A final "*" segment matches the rest of the path, including nothing at all:
+ * "/admin/*" covers "/admin", "/admin/users", and "/admin/users/7". That is what
+ * makes it useful for filters, which usually want to guard a prefix and the
+ * prefix itself. "*" is only allowed as the last segment.
  */
 final class PathPattern {
 
     private final String[] segments;
+    private final boolean matchesRest;
 
     PathPattern(String pattern) {
-        this.segments = split(pattern);
+        String[] parsed = split(pattern);
+        for (int i = 0; i < parsed.length - 1; i++) {
+            if (parsed[i].equals("*")) {
+                throw new IllegalArgumentException(
+                        "\"*\" is only allowed as the last segment: " + pattern);
+            }
+        }
+        this.matchesRest = parsed.length > 0 && parsed[parsed.length - 1].equals("*");
+        this.segments = matchesRest ? Arrays.copyOf(parsed, parsed.length - 1) : parsed;
     }
 
     /** Splits a path into segments. A trailing slash is ignored. */
@@ -29,7 +44,7 @@ final class PathPattern {
 
     /** Returns the path variable map on a match, or null otherwise. */
     Map<String, String> match(String[] actual) {
-        if (actual.length != segments.length) {
+        if (matchesRest ? actual.length < segments.length : actual.length != segments.length) {
             return null;
         }
         Map<String, String> params = null;

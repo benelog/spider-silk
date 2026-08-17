@@ -1,14 +1,93 @@
 package spidersilk;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
 import spidersilk.test.WebTest;
 
-/** Status-code error handlers, end to end. */
+/** Path-scoped filters and status-code error handlers, end to end. */
 class RoutingFeaturesTest {
+
+    @Test
+    void pathScopedFilterRunsOnlyOnMatchingPaths() {
+        List<String> visited = new ArrayList<>();
+        App app = new App()
+                .before("/admin/*", ctx -> visited.add("filter:" + ctx.path()))
+                .get("/admin", ctx -> ctx.text("admin"))
+                .get("/admin/users", ctx -> ctx.text("users"))
+                .get("/public", ctx -> ctx.text("public"));
+
+        WebTest.test(app, client -> {
+            client.get("/admin");
+            client.get("/admin/users");
+            client.get("/public");
+        });
+
+        assertEquals(List.of("filter:/admin", "filter:/admin/users"), visited);
+    }
+
+    /** A guard that answered the request must stop the handler from also answering it. */
+    @Test
+    void aFilterThatWritesAResponseEndsTheRequest() {
+        App app = new App()
+                .before("/admin/*", ctx -> ctx.status(401).text("Unauthorized"))
+                .get("/admin/users", ctx -> ctx.text("secret"));
+
+        WebTest.test(app, client -> {
+            var response = client.get("/admin/users");
+            assertEquals(401, response.statusCode());
+            assertEquals("Unauthorized", response.body());
+        });
+    }
+
+    @Test
+    void aRedirectingFilterAlsoEndsTheRequest() {
+        App app = new App()
+                .before("/admin/*", ctx -> ctx.redirect("/login"))
+                .get("/admin/users", ctx -> ctx.text("secret"));
+
+        WebTest.test(app, client -> {
+            var response = client.get("/admin/users");
+            assertEquals(302, response.statusCode());
+            assertEquals("", response.body());
+        });
+    }
+
+    /** Rejecting without writing a body: throw, and let the error handler render it. */
+    @Test
+    void aFilterCanRejectByThrowingHttpException() {
+        App app = new App()
+                .error(401, ctx -> ctx.text("login required"))
+                .before("/admin/*", ctx -> {
+                    throw new HttpException(401, "no session");
+                })
+                .get("/admin/users", ctx -> ctx.text("secret"));
+
+        WebTest.test(app, client -> {
+            var response = client.get("/admin/users");
+            assertEquals(401, response.statusCode());
+            assertEquals("login required", response.body());
+        });
+    }
+
+    @Test
+    void globalFiltersStillRunOnEveryRoute() {
+        List<String> visited = new ArrayList<>();
+        App app = new App()
+                .before(ctx -> visited.add("before"))
+                .after(ctx -> visited.add("after"))
+                .get("/", ctx -> ctx.text("ok"));
+
+        WebTest.test(app, client -> client.get("/"));
+
+        assertEquals(List.of("before", "after"), visited);
+    }
 
     @Test
     void errorHandlerRendersTheNotFoundBody() {
@@ -82,5 +161,11 @@ class RoutingFeaturesTest {
             assertEquals(500, response.statusCode());
             assertEquals("something broke", response.body());
         });
+    }
+
+    @Test
+    void wildcardIsOnlyAllowedAsTheLastSegment() {
+        assertThrows(IllegalArgumentException.class, () -> new App().before("/*/edit", ctx -> {
+        }));
     }
 }

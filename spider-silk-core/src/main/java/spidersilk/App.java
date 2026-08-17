@@ -34,8 +34,8 @@ import spidersilk.server.WebServerFactory;
 public final class App {
 
     final Router router = new Router();
-    final List<Handler> beforeFilters = new ArrayList<>();
-    final List<Handler> afterFilters = new ArrayList<>();
+    final List<Filter> beforeFilters = new ArrayList<>();
+    final List<Filter> afterFilters = new ArrayList<>();
     final LinkedHashMap<Class<? extends Exception>, ExceptionHandler<? extends Exception>> exceptionHandlers =
             new LinkedHashMap<>();
     final Map<Integer, Handler> errorHandlers = new LinkedHashMap<>();
@@ -73,13 +73,27 @@ public final class App {
 
     /** A filter that runs before every route. */
     public App before(Handler filter) {
-        beforeFilters.add(filter);
+        return before("/*", filter);
+    }
+
+    /**
+     * A filter that runs before routes whose path matches. A trailing "*"
+     * covers the prefix and everything under it, so "/admin/*" guards
+     * "/admin" as well as "/admin/users".
+     */
+    public App before(String path, Handler filter) {
+        beforeFilters.add(new Filter(new PathPattern(path), filter));
         return this;
     }
 
     /** A filter that runs after a route completes normally. */
     public App after(Handler filter) {
-        afterFilters.add(filter);
+        return after("/*", filter);
+    }
+
+    /** A filter that runs after matching routes complete normally. */
+    public App after(String path, Handler filter) {
+        afterFilters.add(new Filter(new PathPattern(path), filter));
         return this;
     }
 

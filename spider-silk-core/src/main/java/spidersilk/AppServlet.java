@@ -2,6 +2,7 @@ package spidersilk;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -28,17 +29,15 @@ public class AppServlet extends HttpServlet {
         promoteFlash(req);
 
         String path = requestPath(req);
+        String[] segments = PathPattern.split(path);
         WebContext ctx = new WebContext(app, req, res, Map.of());
         try {
             Router.Match match = app.router.find(req.getMethod(), path);
             if (match != null) {
                 ctx = new WebContext(app, req, res, match.pathParams());
-                for (Handler filter : app.beforeFilters) {
-                    filter.handle(ctx);
-                }
-                match.handler().handle(ctx);
-                for (Handler filter : app.afterFilters) {
-                    filter.handle(ctx);
+                if (!runFilters(app.beforeFilters, segments, ctx)) {
+                    match.handler().handle(ctx);
+                    runFilters(app.afterFilters, segments, ctx);
                 }
             } else if (isReadMethod(req) && serveStatic(path, res)) {
                 return;
@@ -67,6 +66,26 @@ public class AppServlet extends HttpServlet {
 
     private boolean isReadMethod(HttpServletRequest req) {
         return "GET".equals(req.getMethod()) || "HEAD".equals(req.getMethod());
+    }
+
+    /**
+     * Runs the matching filters and reports whether one of them answered the
+     * request. A before-filter that writes a response — a redirect to the login
+     * page, a 403 body — ends the request there: the route handler must not run
+     * after a guard has turned the caller away. To reject without writing a body,
+     * throw an {@link HttpException}.
+     */
+    private boolean runFilters(List<Filter> filters, String[] segments, WebContext ctx)
+            throws Exception {
+        for (Filter filter : filters) {
+            if (filter.matches(segments)) {
+                filter.handler().handle(ctx);
+                if (ctx.bodyWritten()) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** Moves flash left in the session by the request before the redirect into this request. */
