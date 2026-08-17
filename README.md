@@ -496,6 +496,7 @@ The same features as ch07-jdbc-plus from `spring-jdbc-book` (decks, cards, tags,
 
 - **DB**: repositories use `NamedParameterJdbcTemplate` directly.
   The executed SQL is visible in the code.
+  Inserts are the exception: `SimpleJdbcInsert` reads the table metadata and returns the generated key.
 - **DI**: no container — `FlashcardContext` wires everything by calling constructors directly, playing the role of Spring's ApplicationContext by hand.
 - **Transactions**: instead of AOP, services call `Transactions.write()/read()`, a thin wrapper around `TransactionTemplate`.
   The wrapped block is exactly the transaction scope.
