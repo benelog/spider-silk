@@ -27,9 +27,10 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 14 | Router indexed by method and first segment | P2 | ✅ done |
 | 15 | WebSocket / SSE | P2 | ⬜ open |
 | 16 | Virtual threads | P2 | ✅ done |
-| 17 | Split `spider-silk-test` out of core | — | ⬜ open |
+| 17 | Split `spider-silk-test` out of core | — | ✅ done |
 
-14 of 18 done: all of P0, all of P1 except the JsonCodec seam, and two of P2.
+15 of 18 done: all of P0, all of P1 except the JsonCodec seam, two of P2,
+and the structural split.
 
 ## P0 — done
 
@@ -166,10 +167,12 @@ decision first) · **rejected** (a decision, not a backlog item)
 
 ## Structural
 
-- [ ] **17. Split `spider-silk-test`** *(open)*. `spidersilk.test` currently
-      ships inside core. It is two JDK-only classes, so the cost is small, but a
-      separate module would keep the production jar honest. Worth doing if the
-      harness grows, or when core is first published.
+- [x] **17. Split `spider-silk-test`.** `spidersilk.test` is its own module,
+      depending on core and otherwise on the JDK alone; core's jar now carries
+      no test code at all. Core's own tests are a consumer of it like anyone
+      else — `testImplementation project(':spider-silk-test')`. That looks
+      circular and is not: the arrow runs core's *test* source set → the harness
+      → core's *main* source set, which Gradle resolves without complaint.
 
 ## Rejected — decisions, with the reason
 

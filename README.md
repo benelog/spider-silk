@@ -32,6 +32,7 @@ Java code, which fits the framework's character.
 | Module | Contents | Dependencies |
 |---|---|---|
 | `spider-silk-core` | The framework itself | `gg.jte:jte`, embedded Jetty (`jetty-ee10-servlet`) |
+| `spider-silk-test` | The `WebTest` harness, for test scope | core, and otherwise the JDK only |
 | `example-flashcard` | Example: a flashcard study app | core, spring-jdbc, H2 |
 
 ## At a Glance
@@ -178,6 +179,12 @@ Routes are matched first, so a route can shadow a file. Directories are never
 served.
 
 ### Testing
+
+The harness is its own module, so the production jar carries no test code:
+
+```groovy
+testImplementation project(':spider-silk-test')
+```
 
 `WebTest` starts the app on a free port, hands you a client that keeps cookies,
 and stops it again — including when the body throws:

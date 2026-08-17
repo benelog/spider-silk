@@ -1,0 +1,10 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    // The only dependency: the App this harness starts and stops. Everything
+    // else it needs — the HTTP client, the cookie store — is in the JDK, which
+    // is what keeps this a test-scope jar nobody has to think about.
+    api project(':spider-silk-core')
+}

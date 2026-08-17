@@ -9,6 +9,9 @@
   (When adding a new feature to core, if it falls outside the web tier — persistence,
   transactions, scheduling, and so on — propose the example module or a separate module
   instead.)
+- **Test-only code lives in spider-silk-test.** The `WebTest` harness is its own module, so
+  core's jar carries no test code. Core's tests depend on it
+  (`testImplementation project(':spider-silk-test')`); do not move it back into core.
 - **No reflection.** There is no annotation scanning, no proxies, and no automatic binding
   in core. Do not make changes that break this principle.
 - There is no DI container: `FlashcardContext` assembles the object graph by calling
@@ -17,7 +20,7 @@
 ## Build / Verification
 
 ```bash
-./gradlew build   # compiles both modules + runs all tests
+./gradlew build   # compiles all three modules + runs all tests
 ```
 
 - H2 DB file location for the example app: `~/db/spider-silk/flashcard`
