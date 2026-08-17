@@ -3,11 +3,15 @@ package spidersilk;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
@@ -141,6 +145,17 @@ public final class WebContext {
         }
     }
 
+    /**
+     * Every value of a repeated parameter, in the order the request sent them —
+     * the shape a group of checkboxes or a multi-select arrives in. Empty when
+     * the parameter is absent, since "none checked" is an answer, not an error.
+     * {@link #param(String)} returns the first of these.
+     */
+    public List<String> params(String name) {
+        String[] values = req.getParameterValues(name);
+        return values == null ? List.of() : List.of(values);
+    }
+
     // ---- Body ----
 
     public String body() {
@@ -173,6 +188,72 @@ public final class WebContext {
         } catch (ServletException e) {
             throw new HttpException(400, "Not a multipart request");
         }
+    }
+
+    // ---- Cookies ----
+
+    /** A cookie the client sent, or null. */
+    public String cookie(String name) {
+        Cookie[] cookies = req.getCookies();
+        if (cookies == null) {
+            return null;
+        }
+        for (Cookie cookie : cookies) {
+            if (cookie.getName().equals(name)) {
+                return cookie.getValue();
+            }
+        }
+        return null;
+    }
+
+    /** Every cookie the client sent. A repeated name keeps the first value. */
+    public Map<String, String> cookies() {
+        Cookie[] cookies = req.getCookies();
+        if (cookies == null) {
+            return Map.of();
+        }
+        Map<String, String> byName = new LinkedHashMap<>();
+        for (Cookie cookie : cookies) {
+            byName.putIfAbsent(cookie.getName(), cookie.getValue());
+        }
+        return byName;
+    }
+
+    /**
+     * Sets a cookie that lasts until the browser closes, scoped to the whole
+     * site, HttpOnly, and SameSite=Lax. Those defaults are what a session-ish
+     * cookie should be; {@link #cookie(Cookie)} is there for the rest.
+     */
+    public WebContext cookie(String name, String value) {
+        return cookie(defaultCookie(name, value));
+    }
+
+    /** Sets a cookie that outlives the browser session, with the same defaults. */
+    public WebContext cookie(String name, String value, Duration maxAge) {
+        Cookie cookie = defaultCookie(name, value);
+        cookie.setMaxAge((int) Math.min(maxAge.toSeconds(), Integer.MAX_VALUE));
+        return cookie(cookie);
+    }
+
+    /** Sets a cookie built by hand — the way to Secure, a Domain, or SameSite=None. */
+    public WebContext cookie(Cookie cookie) {
+        res.addCookie(cookie);
+        return this;
+    }
+
+    /** Expires a cookie that was set with the defaults. */
+    public WebContext removeCookie(String name) {
+        Cookie cookie = defaultCookie(name, "");
+        cookie.setMaxAge(0);
+        return cookie(cookie);
+    }
+
+    private Cookie defaultCookie(String name, String value) {
+        Cookie cookie = new Cookie(name, value);
+        cookie.setPath("/");
+        cookie.setHttpOnly(true);
+        cookie.setAttribute("SameSite", "Lax");
+        return cookie;
     }
 
     // ---- Session ----
