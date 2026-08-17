@@ -13,12 +13,23 @@
 
 A very thin web framework on top of the Jakarta Servlet API.
 
-Two core principles:
+Three core principles:
 
 - **No reflection.**
   There is no annotation scanning, no proxies, no automatic binding.
   Routes are registered as lambdas, and type conversion happens only through explicit methods such as `pathParamLong`.
   What runs is exactly what you see in the code, stack traces stay short, and startup is fast.
+- **A handler is a function from a request to a response.**
+
+  ```java
+  @FunctionalInterface
+  public interface Handler {
+      WebResponse handle(WebRequest request) throws Exception;
+  }
+  ```
+
+  It answers by returning, not by writing, so the compiler checks that every branch answers and answering twice is not expressible.
+  `WebResponse` is an immutable value — a status, headers, and cookies around a sealed body — which is what lets an after-filter take one and hand back another, and what lets a test assert on a handler's answer without a servlet response to read it out of.
 - **Better RESTful API support than raw servlets.**
   Per-method routing with path variables, typed parameter extraction, exception-to-status mapping, automatic 405 (Method Not Allowed) responses, and a reflection-free JSON builder/parser.
 
@@ -39,7 +50,7 @@ App app = new App()
         .templates(new JteTemplates("jte"))     // classpath:/jte/*.jte
         .staticFiles("/public");                // serves classpath:/public/* statically
 
-// A handler takes a request and returns a response
+// Server-side rendering
 app.get("/decks/{deckId}", req -> {
     long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
     return WebResponse.render("deck.jte", model);
