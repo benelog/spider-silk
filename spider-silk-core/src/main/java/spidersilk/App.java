@@ -3,6 +3,7 @@ package spidersilk;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 import spidersilk.server.JettyServer;
@@ -37,10 +38,10 @@ public final class App {
     final List<Handler> afterFilters = new ArrayList<>();
     final LinkedHashMap<Class<? extends Exception>, ExceptionHandler<? extends Exception>> exceptionHandlers =
             new LinkedHashMap<>();
+    final Map<Integer, Handler> errorHandlers = new LinkedHashMap<>();
 
     TemplateRenderer templates;
     String staticRoot;
-    Handler notFound = ctx -> ctx.status(404).text("Not Found: " + ctx.path());
 
     private WebServerFactory serverFactory = (app, port) -> new JettyServer(app).port(port);
     private WebServer server;
@@ -88,9 +89,26 @@ public final class App {
         return this;
     }
 
-    public App notFound(Handler handler) {
-        this.notFound = handler;
+    /**
+     * Renders the body for a response that ended on this status with nothing
+     * written yet — one place for a styled 404 or 500, whether the status came
+     * from the router, from an {@link HttpException}, or from a handler that
+     * called {@code ctx.status(...)} and returned.
+     *
+     * <pre>{@code
+     * app.error(404, ctx -> ctx.render("not-found.jte", Map.of("path", ctx.path())));
+     * }</pre>
+     *
+     * A handler that already wrote a body is left alone.
+     */
+    public App error(int status, Handler handler) {
+        errorHandlers.put(status, Objects.requireNonNull(handler, "handler"));
         return this;
+    }
+
+    /** Shorthand for {@code error(404, handler)}. */
+    public App notFound(Handler handler) {
+        return error(404, handler);
     }
 
     /** The template engine used by {@link WebContext#render}. */

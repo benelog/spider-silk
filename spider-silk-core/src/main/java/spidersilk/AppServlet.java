@@ -40,21 +40,21 @@ public class AppServlet extends HttpServlet {
                 for (Handler filter : app.afterFilters) {
                     filter.handle(ctx);
                 }
+            } else if (isReadMethod(req) && serveStatic(path, res)) {
                 return;
+            } else {
+                Set<String> allowed = app.router.allowedMethods(path);
+                if (!allowed.isEmpty()) {
+                    res.setHeader("Allow", String.join(", ", allowed));
+                    fail(ctx, 405, "Method Not Allowed: " + req.getMethod() + " " + path);
+                } else {
+                    fail(ctx, 404, "Not Found: " + path);
+                }
             }
-            if (isReadMethod(req) && serveStatic(path, res)) {
-                return;
-            }
-            Set<String> allowed = app.router.allowedMethods(path);
-            if (!allowed.isEmpty()) {
-                res.setHeader("Allow", String.join(", ", allowed));
-                ctx.status(405).text("Method Not Allowed: " + req.getMethod() + " " + path);
-                return;
-            }
-            app.notFound.handle(ctx);
         } catch (Exception e) {
-            handleException(e, ctx, res);
+            handleException(e, ctx);
         }
+        completeErrorResponse(ctx);
     }
 
     private String requestPath(HttpServletRequest req) {
@@ -97,8 +97,7 @@ public class AppServlet extends HttpServlet {
         }
     }
 
-    private void handleException(Exception e, WebContext ctx, HttpServletResponse res)
-            throws IOException {
+    private void handleException(Exception e, WebContext ctx) {
         for (var entry : app.exceptionHandlers.entrySet()) {
             if (entry.getKey().isInstance(e)) {
                 @SuppressWarnings("unchecked")
@@ -108,26 +107,55 @@ public class AppServlet extends HttpServlet {
                     handler.handle(e, ctx);
                     return;
                 } catch (Exception handlerFailure) {
-                    internalError(handlerFailure, res);
+                    internalError(handlerFailure, ctx);
                     return;
                 }
             }
         }
         if (e instanceof HttpException httpException) {
-            res.setStatus(httpException.status());
-            res.setContentType("text/plain; charset=UTF-8");
-            res.getWriter().write(httpException.getMessage());
+            fail(ctx, httpException.status(), httpException.getMessage());
             return;
         }
-        internalError(e, res);
+        internalError(e, ctx);
     }
 
-    private void internalError(Exception e, HttpServletResponse res) throws IOException {
+    private void internalError(Exception e, WebContext ctx) {
         log("Error while handling request", e);
-        if (!res.isCommitted()) {
-            res.setStatus(500);
-            res.setContentType("text/plain; charset=UTF-8");
-            res.getWriter().write("Internal Server Error");
+        fail(ctx, 500, "Internal Server Error");
+    }
+
+    /** Records the status and the body the framework would write by default. */
+    private void fail(WebContext ctx, int status, String message) {
+        ctx.status(status);
+        ctx.errorMessage(message);
+    }
+
+    /**
+     * Fills in the body of an error response nobody wrote one for, preferring a
+     * handler registered through {@link App#error(int, Handler)}.
+     */
+    private void completeErrorResponse(WebContext ctx) throws IOException {
+        HttpServletResponse res = ctx.res();
+        if (res.getStatus() < 400 || ctx.bodyWritten() || res.isCommitted()) {
+            return;
+        }
+        Handler handler = app.errorHandlers.get(res.getStatus());
+        if (handler != null) {
+            try {
+                handler.handle(ctx);
+                return;
+            } catch (Exception e) {
+                log("Error handler failed for status " + res.getStatus(), e);
+                if (!res.isCommitted()) {
+                    res.setStatus(500);
+                    res.setContentType("text/plain; charset=UTF-8");
+                    res.getWriter().write("Internal Server Error");
+                }
+                return;
+            }
+        }
+        if (ctx.errorMessage() != null) {
+            ctx.text(ctx.errorMessage());
         }
     }
 }

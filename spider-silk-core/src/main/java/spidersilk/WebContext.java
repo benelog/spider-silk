@@ -30,6 +30,9 @@ public final class WebContext {
     private final HttpServletResponse res;
     private final Map<String, String> pathParams;
 
+    private boolean bodyWritten;
+    private String errorMessage;
+
     /** Public so tests can build a Context and call handler methods directly. */
     public WebContext(App app, HttpServletRequest req, HttpServletResponse res,
                    Map<String, String> pathParams) {
@@ -233,6 +236,7 @@ public final class WebContext {
     }
 
     public void redirect(String location) {
+        bodyWritten = true;
         try {
             res.sendRedirect(location);
         } catch (IOException e) {
@@ -257,6 +261,7 @@ public final class WebContext {
     }
 
     public void bytes(byte[] data, String contentType) {
+        bodyWritten = true;
         res.setContentType(contentType);
         try {
             res.getOutputStream().write(data);
@@ -271,6 +276,7 @@ public final class WebContext {
             throw new IllegalStateException(
                     "No template engine configured. Call App.templates(...).");
         }
+        bodyWritten = true;
         res.setContentType("text/html; charset=UTF-8");
         try {
             app.templates.render(template, model, res.getWriter());
@@ -279,7 +285,32 @@ public final class WebContext {
         }
     }
 
+    // ---- Errors ----
+
+    /**
+     * Inside an {@link App#error(int, Handler)} handler, the plain-text message
+     * the framework would have written. Null when the status came from a handler
+     * rather than from the router or an {@link HttpException}.
+     */
+    public String errorMessage() {
+        return errorMessage;
+    }
+
+    void errorMessage(String errorMessage) {
+        this.errorMessage = errorMessage;
+    }
+
+    /**
+     * Whether a response body was produced through this context. Writing
+     * straight to {@link #res()} bypasses the flag, and therefore bypasses
+     * {@link App#error(int, Handler)}.
+     */
+    boolean bodyWritten() {
+        return bodyWritten;
+    }
+
     private void write(String contentType, String content) {
+        bodyWritten = true;
         res.setContentType(contentType);
         try {
             res.getOutputStream().write(content.getBytes(StandardCharsets.UTF_8));
