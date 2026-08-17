@@ -66,10 +66,10 @@ app.post("/api/decks", req -> {
 });
 
 // Routes sharing a prefix — the group is an argument, not ambient state
-app.path("/api/decks", decks -> {
-    decks.before(req -> requireApiKey(req));    // covers /api/decks and everything under it
-    decks.get("", this::listDecks);             // GET  /api/decks
-    decks.get("/{deckId}", this::showDeck);     // GET  /api/decks/{deckId}
+app.path("/api/decks", group -> {
+    group.before(req -> requireApiKey(req));    // covers /api/decks and everything under it
+    group.get("", api::listDecks);              // GET  /api/decks
+    group.get("/{deckId}", api::showDeck);      // GET  /api/decks/{deckId}
 });
 
 // Exception-to-response mapping
@@ -84,6 +84,64 @@ app.start(8080);                                // embedded Jetty, sessions on
 
 `start` returns once the port is bound, and the server's threads keep the JVM alive — `join()` is there if you want to block the main thread anyway.
 `stop()` shuts it down; `port()` reports the bound port, which is how you read back the one the OS picked for `start(0)` in a test.
+
+### Three shapes a handler comes in
+
+`Handler` has one method, so how a handler is written is the application's call rather than the framework's.
+The example app uses all three shapes.
+
+**A lambda**, when there is no state worth a class:
+
+```java
+app.get("/openapi.json", req -> WebResponse.json(OpenApi.document(app.routes())));
+```
+
+**An `Action` class**, when a class answers exactly one route.
+It implements `Handler`, so it registers as itself:
+
+```java
+public class StatsAction implements Handler {
+
+    private final StatsService statsService;
+
+    public StatsAction(StatsService statsService) {
+        this.statsService = statsService;
+    }
+
+    @Override
+    public WebResponse handle(WebRequest req) {
+        return WebResponse.render("stats.jte", Map.of("stats", statsService.overview()));
+    }
+}
+```
+
+```java
+app.get("/stats", context.statsAction());
+```
+
+`Action` is WebWork and Struts 2's word for one thing the application does, and it still fits a class that is exactly one route.
+The framework does not know the name: `Handler` is the interface, `…Action` is a naming convention for the classes that implement it directly.
+
+**Public methods, registered by reference**, when one class answers several related routes:
+
+```java
+public class DeckController {
+
+    public WebResponse showDeck(WebRequest req) { ... }
+
+    public WebResponse renameDeck(WebRequest req) { ... }
+}
+```
+
+```java
+DeckController decks = context.deckController();
+app.get("/decks/{deckId}", decks::showDeck);
+app.post("/decks/{deckId}/rename", decks::renameDeck);
+```
+
+The methods are `public` because registration happens outside the class, and that is the point.
+There is no `Controller` interface and no `register(App)` method to implement, so every route the application answers is one statement in one list, and `app.routes()` reports exactly what is written there.
+A class that registers its own routes hides half the routing table inside itself, which is the thing annotation scanning does — just spelled out by hand.
 
 ### Filters and errors
 
@@ -276,7 +334,7 @@ for (Route route : app.routes()) {
 
 Method and path is all a route carries.
 The handler is left out — it is a lambda, and the only name it has is what reflection would dig out of its synthetic class — and so is any description, because documentation attached at the registration site is an annotation with the reflection taken out.
-What the routes are *for* is built on top of the list, which is plain data: the example app's `RoutesController` is a `/_routes` overview page and an `/openapi.json` document in about forty lines.
+What the routes are *for* is built on top of the list, which is plain data: the example app renders a `/_routes` overview page from it and builds an `/openapi.json` document in `OpenApi`, about forty lines in all.
 
 The automatic HEAD and OPTIONS answers are not listed.
 `routes()` reports what was registered, which is the honest answer for a framework whose claim is that only what you register runs.
@@ -423,7 +481,8 @@ The same features as ch07-jdbc-plus from `spring-jdbc-book` (decks, cards, tags,
   The wrapped block is exactly the transaction scope.
 - As a bonus, a JSON API (`/api/decks`, `/api/decks/{id}/cards`) sits on the same service layer to show the framework's REST support.
   Its wire format is in `flashcard.web.Codecs` as hand-written `JsonWriter`/`JsonReader` lambdas.
-- `/_routes` lists every route and `/openapi.json` is the same list as an OpenAPI 3.1 document — both built from `app.routes()` in `RoutesController`, which is what the framework exposing its routing table as data buys you.
+- `/_routes` lists every route and `/openapi.json` is the same list as an OpenAPI 3.1 document — both built from `app.routes()`, which is what the framework exposing its routing table as data buys you.
+- **Routing**: there is no `Controller` interface. `FlashcardApp.registerRoutes` is the whole table, and handlers arrive as an `Action` class, a public method reference, or a lambda.
 
 ### Run
 

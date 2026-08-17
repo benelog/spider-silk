@@ -1,6 +1,5 @@
 package flashcard.web;
 
-import spidersilk.App;
 import spidersilk.WebRequest;
 import spidersilk.WebResponse;
 
@@ -13,7 +12,7 @@ import flashcard.service.DeckService;
  * The wire format lives in {@link Codecs} as hand-written writers and readers
  * (no automatic serialization), so a handler is one line.
  */
-public class ApiController implements Controller {
+public class ApiController {
 
     private final DeckService deckService;
     private final CardService cardService;
@@ -23,27 +22,19 @@ public class ApiController implements Controller {
         this.cardService = cardService;
     }
 
-    @Override
-    public void register(App app) {
-        app.path("/api/decks", decks -> {
-            decks.get("", this::listDecks);
-            decks.post("", this::createDeck);
-            decks.get("/{deckId}/cards", this::listCards);
-        });
-    }
 
-    WebResponse listDecks(WebRequest req) {
+    public WebResponse listDecks(WebRequest req) {
         return WebResponse.json(deckService.deckSummaries(), Codecs.DECK_SUMMARIES);
     }
 
-    WebResponse createDeck(WebRequest req) {
+    public WebResponse createDeck(WebRequest req) {
         Deck deck = deckService.createDeck(req.bodyJson(Codecs.NEW_DECK).name());
         return WebResponse.json(deck, Codecs.DECK)
                 .status(201)
                 .header("Location", "/api/decks/" + deck.id());
     }
 
-    WebResponse listCards(WebRequest req) {
+    public WebResponse listCards(WebRequest req) {
         long deckId = req.pathParamLong("deckId");
         deckService.getDeck(deckId);   // IllegalArgumentException -> 404 when missing
         return WebResponse.json(cardService.cardsWithTags(deckId), Codecs.CARDS);

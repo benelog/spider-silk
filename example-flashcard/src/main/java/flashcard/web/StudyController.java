@@ -3,7 +3,6 @@ package flashcard.web;
 import java.util.HashMap;
 import java.util.Map;
 
-import spidersilk.App;
 import spidersilk.WebRequest;
 import spidersilk.WebResponse;
 
@@ -14,7 +13,7 @@ import flashcard.service.StudyDirection;
 import flashcard.service.StudySession;
 import flashcard.service.StudyService;
 
-public class StudyController implements Controller {
+public class StudyController {
 
     private static final String SESSION_KEY = "studySession";
 
@@ -26,46 +25,35 @@ public class StudyController implements Controller {
         this.smartDeckService = smartDeckService;
     }
 
-    @Override
-    public void register(App app) {
-        app.post("/study/deck/{deckId}", this::startDeckStudy);
-        app.post("/study/today", this::startTodayStudy);
-        app.post("/study/smart/{smartDeckId}", this::startSmartStudy);
-        app.post("/study/preset/{condition}", this::startPresetStudy);
-        app.get("/study", this::showStudy);
-        app.post("/study/answer", this::answer);
-        app.post("/study/retry", this::retry);
-        app.post("/study/finish", this::finish);
-    }
 
-    WebResponse startDeckStudy(WebRequest req) {
+    public WebResponse startDeckStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
         req.sessionAttr(SESSION_KEY,
                 studyService.startDeckSession(req.pathParamLong("deckId"), direction));
         return WebResponse.redirect("/study");
     }
 
-    WebResponse startTodayStudy(WebRequest req) {
+    public WebResponse startTodayStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
         req.sessionAttr(SESSION_KEY, studyService.startTodaySession(direction));
         return WebResponse.redirect("/study");
     }
 
-    WebResponse startSmartStudy(WebRequest req) {
+    public WebResponse startSmartStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
         req.sessionAttr(SESSION_KEY, studyService.startSmartSession(
                 smartDeckService.getSmartDeck(req.pathParamLong("smartDeckId")), direction));
         return WebResponse.redirect("/study");
     }
 
-    WebResponse startPresetStudy(WebRequest req) {
+    public WebResponse startPresetStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
         SmartCondition condition = req.pathParamEnum("condition", SmartCondition.class);
         req.sessionAttr(SESSION_KEY, studyService.startPresetSession(condition, direction));
         return WebResponse.redirect("/study");
     }
 
-    WebResponse showStudy(WebRequest req) {
+    public WebResponse showStudy(WebRequest req) {
         StudySession studySession = current(req);
         if (studySession == null || studySession.isEmpty()) {
             return WebResponse.redirect("/");
@@ -86,7 +74,7 @@ public class StudyController implements Controller {
         return WebResponse.render("study.jte", model);
     }
 
-    WebResponse answer(WebRequest req) {
+    public WebResponse answer(WebRequest req) {
         StudySession studySession = current(req);
         if (studySession == null) {
             return WebResponse.redirect("/");
@@ -95,7 +83,7 @@ public class StudyController implements Controller {
         return WebResponse.redirect("/study");
     }
 
-    WebResponse retry(WebRequest req) {
+    public WebResponse retry(WebRequest req) {
         StudySession studySession = current(req);
         if (studySession != null) {
             studySession.startRetryRound();
@@ -103,7 +91,7 @@ public class StudyController implements Controller {
         return WebResponse.redirect("/study");
     }
 
-    WebResponse finish(WebRequest req) {
+    public WebResponse finish(WebRequest req) {
         req.removeSessionAttr(SESSION_KEY);
         return WebResponse.redirect("/");
     }

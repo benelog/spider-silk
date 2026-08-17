@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /** The OpenAPI export is a pure function of app.routes(), so it needs no server. */
-class RoutesControllerTest {
+class OpenApiTest {
 
     private final List<Route> routes = List.of(
             new Route("GET", "/"),
@@ -23,7 +23,7 @@ class RoutesControllerTest {
 
     @Test
     void mapsEveryMethodUnderItsPathTemplate() {
-        Json.JsonObject document = RoutesController.openApi(routes).asObject();
+        Json.JsonObject document = OpenApi.document(routes).asObject();
         Json.JsonObject decks = document.getObject("paths").getObject("/api/decks");
 
         assertEquals("3.1.0", document.getString("openapi"));
@@ -36,7 +36,7 @@ class RoutesControllerTest {
     /** "{deckId}" is OpenAPI's own syntax, so the parameter falls out of the pattern. */
     @Test
     void declaresEveryPathVariableAsAParameter() {
-        Json.JsonObject operation = RoutesController.openApi(routes).asObject()
+        Json.JsonObject operation = OpenApi.document(routes).asObject()
                 .getObject("paths").getObject("/api/decks/{deckId}/cards").getObject("get");
 
         Json.JsonObject parameter = operation.getArray("parameters").get(0).asObject();
@@ -47,7 +47,7 @@ class RoutesControllerTest {
 
     @Test
     void leavesOutHtmlRoutesAndWildcards() {
-        Json.JsonObject paths = RoutesController.openApi(routes).asObject().getObject("paths");
+        Json.JsonObject paths = OpenApi.document(routes).asObject().getObject("paths");
 
         assertFalse(paths.has("/"));
         assertFalse(paths.has("/api/*"));

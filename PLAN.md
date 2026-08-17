@@ -144,7 +144,8 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       - **The overview page and the OpenAPI export are not in core.**
         Core hands out the list and stops.
         An OpenAPI document is a spec format, not the web tier, and its version drift is not a web framework's to own — CLAUDE.md's rule.
-        `flashcard.web.RoutesController` is the demonstration: `/_routes` renders `routes.jte`, `/openapi.json` builds a 3.1 document with the `Json` builder, and together they are about forty lines.
+        The example is the demonstration: `/_routes` renders `routes.jte` and `/openapi.json` builds a 3.1 document through `flashcard.web.OpenApi`, together about forty lines.
+        Both are registered as lambdas over `app` itself, which is why they list the routes registered after them.
         If the export earns its keep, it becomes a fourth module, the way `spider-silk-test` did.
       - **Routes only** — not filters, not error handlers.
         A second public record for "which guard covers this path" is nice-to-have, and additive later.

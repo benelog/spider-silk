@@ -1,7 +1,5 @@
 package flashcard;
 
-import java.util.List;
-
 import javax.sql.DataSource;
 
 import flashcard.repository.CardRepository;
@@ -17,12 +15,10 @@ import flashcard.service.StatsService;
 import flashcard.service.StudyService;
 import flashcard.service.Transactions;
 import flashcard.web.ApiController;
-import flashcard.web.Controller;
 import flashcard.web.DeckController;
-import flashcard.web.HomeController;
-import flashcard.web.RoutesController;
+import flashcard.web.HomeAction;
 import flashcard.web.SmartDeckController;
-import flashcard.web.StatsController;
+import flashcard.web.StatsAction;
 import flashcard.web.StudyController;
 
 /**
@@ -32,7 +28,12 @@ import flashcard.web.StudyController;
  */
 public class FlashcardContext {
 
-    private final List<Controller> controllers;
+    private final HomeAction homeAction;
+    private final DeckController deckController;
+    private final StudyController studyController;
+    private final SmartDeckController smartDeckController;
+    private final StatsAction statsAction;
+    private final ApiController apiController;
 
     public FlashcardContext(DataSource dataSource) {
         Transactions tx = new Transactions(dataSource);
@@ -53,18 +54,35 @@ public class FlashcardContext {
         StudyService studyService = new StudyService(cardRepository, reviewStateRepository,
                 reviewLogRepository, deckService, smartDeckService, tx);
 
-        this.controllers = List.of(
-                new HomeController(deckService, studyService, smartDeckService),
-                new DeckController(deckService, cardService),
-                new StudyController(studyService, smartDeckService),
-                new SmartDeckController(smartDeckService),
-                new StatsController(statsService),
-                new ApiController(deckService, cardService),
-                new RoutesController());
+        this.homeAction = new HomeAction(deckService, studyService, smartDeckService);
+        this.deckController = new DeckController(deckService, cardService);
+        this.studyController = new StudyController(studyService, smartDeckService);
+        this.smartDeckController = new SmartDeckController(smartDeckService);
+        this.statsAction = new StatsAction(statsService);
+        this.apiController = new ApiController(deckService, cardService);
     }
 
-    /** All controllers in the context, like getBeansOfType(Controller.class). */
-    public List<Controller> controllers() {
-        return controllers;
+    public HomeAction homeAction() {
+        return homeAction;
+    }
+
+    public DeckController deckController() {
+        return deckController;
+    }
+
+    public StudyController studyController() {
+        return studyController;
+    }
+
+    public SmartDeckController smartDeckController() {
+        return smartDeckController;
+    }
+
+    public StatsAction statsAction() {
+        return statsAction;
+    }
+
+    public ApiController apiController() {
+        return apiController;
     }
 }

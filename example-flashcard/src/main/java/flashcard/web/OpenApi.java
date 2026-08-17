@@ -2,30 +2,26 @@ package flashcard.web;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
-import spidersilk.App;
 import spidersilk.Route;
-import spidersilk.WebResponse;
 import spidersilk.json.Json;
 
 /**
- * What {@code app.routes()} is for: an overview page and an OpenAPI export.
+ * What {@code app.routes()} is for: the route list turned into an OpenAPI
+ * document.
  *
- * <p>Neither ships in core. Core hands out the route list as plain data and
- * stops there — an OpenAPI document is a spec format, not the web tier, and its
- * version drift is not something a web framework should own. This is one
+ * <p>This does not ship in core. Core hands out the route list as plain data
+ * and stops there — an OpenAPI document is a spec format, not the web tier, and
+ * its version drift is not something a web framework should own. This is one
  * application's use of the list, and it is about forty lines.
+ *
+ * <p>There is no handler here. The two routes that use it read {@code app}
+ * itself, so they are registered as lambdas in {@code FlashcardApp}, which is
+ * the third shape a handler comes in.
  */
-public class RoutesController implements Controller {
+public final class OpenApi {
 
-    @Override
-    public void register(App app) {
-        // Both handlers read app.routes() per request, so controllers registered
-        // after this one are listed too.
-        app.get("/_routes",
-                req -> WebResponse.render("routes.jte", Map.of("routes", app.routes())));
-        app.get("/openapi.json", req -> WebResponse.json(openApi(app.routes())));
+    private OpenApi() {
     }
 
     /**
@@ -37,7 +33,7 @@ public class RoutesController implements Controller {
      * OpenAPI equivalent. Both are this application's calls to make, which is
      * the point of getting the routes as a list.
      */
-    static Json.JsonValue openApi(List<Route> routes) {
+    public static Json.JsonValue document(List<Route> routes) {
         Json.JsonObject paths = Json.obj();
         for (Route route : routes) {
             if (!route.path().startsWith("/api") || route.path().contains("*")) {

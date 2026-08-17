@@ -3,7 +3,7 @@ package flashcard.web;
 import java.util.HashMap;
 import java.util.Map;
 
-import spidersilk.App;
+import spidersilk.Handler;
 import spidersilk.WebRequest;
 import spidersilk.WebResponse;
 
@@ -12,25 +12,27 @@ import flashcard.service.SmartDeckService;
 import flashcard.service.StudyDirection;
 import flashcard.service.StudyService;
 
-public class HomeController implements Controller {
+/**
+ * One route, so the class is the handler: it implements {@link Handler} and is
+ * registered as itself, {@code app.get("/", context.homeAction())}.
+ * A class that answers several routes keeps them as public methods instead —
+ * {@link DeckController} is the other shape.
+ */
+public class HomeAction implements Handler {
 
     private final DeckService deckService;
     private final StudyService studyService;
     private final SmartDeckService smartDeckService;
 
-    public HomeController(DeckService deckService, StudyService studyService,
-                          SmartDeckService smartDeckService) {
+    public HomeAction(DeckService deckService, StudyService studyService,
+                      SmartDeckService smartDeckService) {
         this.deckService = deckService;
         this.studyService = studyService;
         this.smartDeckService = smartDeckService;
     }
 
     @Override
-    public void register(App app) {
-        app.get("/", this::home);
-    }
-
-    WebResponse home(WebRequest req) {
+    public WebResponse handle(WebRequest req) {
         Map<String, Object> model = new HashMap<>();
         model.put("todayCount", studyService.todayCount());
         model.put("oftenWrongCount", smartDeckService.oftenWrongCount());
