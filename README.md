@@ -39,34 +39,34 @@ App app = new App()
         .templates(new JteTemplates("jte"))     // classpath:/jte/*.jte
         .staticFiles("/public");                // serves classpath:/public/* statically
 
-// Server-side rendering
-app.get("/decks/{deckId}", ctx -> {
-    long deckId = ctx.pathParamLong("deckId");  // non-numeric input becomes a 400
-    ctx.render("deck.jte", model);
+// A handler takes a request and returns a response
+app.get("/decks/{deckId}", req -> {
+    long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
+    return WebResponse.render("deck.jte", model);
 });
 
 // JSON API — you state in code what goes out (no automatic serialization)
-app.get("/api/decks", ctx -> ctx.json(
+app.get("/api/decks", req -> WebResponse.json(
         Json.arr().add(Json.obj().put("id", 1L).put("name", "English"))));
 
-app.post("/api/decks", ctx -> {
-    String name = ctx.bodyJson().asObject().getString("name");
-    ctx.status(201).json(Json.obj().put("name", name));
+app.post("/api/decks", req -> {
+    String name = req.bodyJson().asObject().getString("name");
+    return WebResponse.json(Json.obj().put("name", name)).status(201);
 });
 
 // Routes sharing a prefix — the group is an argument, not ambient state
 app.path("/api/decks", decks -> {
-    decks.before(ctx -> requireApiKey(ctx));    // covers /api/decks and everything under it
+    decks.before(req -> requireApiKey(req));    // covers /api/decks and everything under it
     decks.get("", this::listDecks);             // GET  /api/decks
     decks.get("/{deckId}", this::showDeck);     // GET  /api/decks/{deckId}
 });
 
 // Exception-to-response mapping
 app.exception(IllegalArgumentException.class,
-        (e, ctx) -> ctx.status(404).text(e.getMessage()));
+        (e, req) -> WebResponse.text(e.getMessage()).status(404));
 
 // One place for a styled error page, whatever produced the status
-app.error(404, ctx -> ctx.render("not-found.jte", Map.of("path", ctx.path())));
+app.error(404, req -> WebResponse.render("not-found.jte", Map.of("path", req.path())));
 
 app.start(8080);                                // embedded Jetty, sessions on
 ```
@@ -80,18 +80,24 @@ app.start(8080);                                // embedded Jetty, sessions on
 A trailing `*` covers the prefix *and* everything under it, so `/admin/*` guards `/admin` as well as `/admin/users` — which is what a guard almost always means:
 
 ```java
-app.before("/admin/*", ctx -> {
-    if (ctx.sessionAttr("user") == null) {
-        ctx.redirect("/login");     // writes a response, so the route handler does not run
-    }
-});
+app.before("/admin/*", req -> req.sessionAttr("user") == null
+        ? WebResponse.redirect("/login")    // answers here, so the route handler never runs
+        : null);                            // carry on
 ```
 
-A before-filter that writes a response ends the request there.
-To reject without writing a body, `throw new HttpException(401, "...")` and let `error(401, ...)` render it.
-`error(status, handler)` fills in the body for any response that ended on that status with nothing written — from the router, from an `HttpException`, or from a handler that called `ctx.status(...)` and returned.
-A handler that already wrote a body is left alone.
-Inside an error handler, `ctx.errorMessage()` is the plain-text message the framework would have used.
+A before-filter that returns a response ends the request there; returning `null` continues to the route.
+To reject without a body of your own, `throw new HttpException(401, "...")` and let `error(401, ...)` render it.
+
+An after-filter takes the response the route returned and hands back a replacement, or `null` to leave it alone:
+
+```java
+app.after((req, res) -> res.header("X-Request-Id", requestId()));
+```
+
+`error(status, handler)` fills in the body for any response that ended on that status with no body — from the router, from an `HttpException`, or from a handler that returned `WebResponse.empty(403)`.
+A response that already carries a body is left alone.
+What the error handler returns keeps the headers the framework had already worked out, such as the `Allow` of a 405, and answers with the registered status unless it sets one of its own.
+Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.
 
 ### JSON writers and readers
 
@@ -113,29 +119,32 @@ static final JsonReader<NewDeck> NEW_DECK =
 ```
 
 ```java
-app.get("/api/decks", ctx -> ctx.json(deckService.decks(), DECKS));
+app.get("/api/decks", req -> WebResponse.json(deckService.decks(), DECKS));
 
-app.post("/api/decks", ctx -> {
-    Deck deck = deckService.create(ctx.bodyJson(NEW_DECK).name());   // no key -> 400
-    ctx.status(201).json(deck, DECK);
+app.post("/api/decks", req -> {
+    Deck deck = deckService.create(req.bodyJson(NEW_DECK).name());   // no key -> 400
+    return WebResponse.json(deck, DECK).status(201);
 });
 ```
 
 Still no reflection: the mapping is code you wrote, so a field rename changes the wire format only if you edit it.
-`getString` throws `IllegalArgumentException` on a missing key or a value of the wrong type, and `ctx.bodyJson(reader)` turns that into a 400 — a handler gets a whole value or none, the same contract as `pathParamLong`.
+`getString` throws `IllegalArgumentException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400 — a handler gets a whole value or none, the same contract as `pathParamLong`.
 
 Most types only go out, which is why the two halves are separate interfaces rather than one with an unimplementable `read`.
 When a type does travel both ways, `JsonCodec<T>` is both at once — `JsonCodec.of(writer, reader)` to build one, `JsonCodec.list(codec)` for the list form.
 
 ### Cookies and repeated parameters
 
-```java
-ctx.cookie("theme", "dark");                        // session cookie
-ctx.cookie("token", value, Duration.ofDays(7));     // survives a browser restart
-ctx.removeCookie("token");
+Cookies split along the same line the rest of the API does: the ones the client sent are read off the request, the ones the server sets are part of the response.
 
-String theme = ctx.cookie("theme");                 // null when absent
-List<String> tags = ctx.params("tag");              // ?tag=java&tag=web, or a checkbox group
+```java
+String theme = req.cookie("theme");                 // null when absent
+List<String> tags = req.params("tag");              // ?tag=java&tag=web, or a checkbox group
+
+return WebResponse.html(page)
+        .cookie("theme", "dark")                    // session cookie
+        .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
+        .removeCookie("stale");
 ```
 
 A cookie set through the two-argument form gets `Path=/`, `HttpOnly`, and `SameSite=Lax` — what a cookie holding anything worth stealing should have.
@@ -150,9 +159,9 @@ The servlet API merges the two, so `param("id")` answers to an `id` in the URL a
 When the difference matters, say which one:
 
 ```java
-String page = ctx.queryParam("page");     // query string only, null when absent
-String name = ctx.formParam("name");      // form body only
-List<String> tags = ctx.formParams("tag");
+String page = req.queryParam("page");     // query string only, null when absent
+String name = req.formParam("name");      // form body only
+List<String> tags = req.formParams("tag");
 ```
 
 ### HEAD and OPTIONS
@@ -171,12 +180,12 @@ Allow: GET, POST, HEAD, OPTIONS
 
 ### Server-Sent Events
 
-`ctx.sse(...)` answers with a `text/event-stream` instead of a body, one flushed event per call:
+`WebResponse.sse(...)` answers with a `text/event-stream` instead of a body, one flushed event per call:
 
 ```java
-app.get("/decks/{deckId}/events", ctx -> {
-    long deckId = ctx.pathParamLong("deckId");
-    ctx.sse(stream -> {
+app.get("/decks/{deckId}/events", req -> {
+    long deckId = req.pathParamLong("deckId");
+    return WebResponse.sse(stream -> {
         while (stream.isOpen()) {
             stream.id(String.valueOf(revision))
                   .send("due", Json.obj().put("count", service.due(deckId)).toJson());
@@ -213,8 +222,8 @@ A stream quieter than Jetty's 30-second connector idle timeout is closed by the 
 ### Request logging
 
 ```java
-app.requestLogger((ctx, millis) -> logger.info("{} {} -> {} ({}ms)",
-        ctx.method(), ctx.path(), ctx.res().getStatus(), millis));
+app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
+        req.method(), req.path(), res.status(), millis));
 ```
 
 One lambda, and no logging framework in core: which logger, at which level, and in which format is the application's call.
@@ -243,7 +252,7 @@ Routes are an explicit list, so the framework can hand it back — no annotation
 `app.routes()` is an immutable snapshot of `record Route(String method, String path)`, in registration order, which is also the order the router breaks ties in:
 
 ```java
-app.get("/_routes", ctx -> ctx.render("routes.jte", Map.of("routes", app.routes())));
+app.get("/_routes", req -> WebResponse.render("routes.jte", Map.of("routes", app.routes())));
 ```
 
 Group prefixes are already resolved, so a path reads as `/api/decks/{deckId}/cards` — which is OpenAPI's path-template syntax verbatim, so an export needs no translation:
@@ -346,22 +355,41 @@ context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 
 - Routes: `get`, `post`, `put`, `patch`, `delete`, and `path(prefix, group -> ...)`
 - Introspection: `routes()` — every registered route as `Route(method, path)`, in registration order
-- Filters: `before(handler)` / `before(path, handler)`, same for `after`
+- Filters: `before(filter)` / `before(path, filter)`, same for `after`
 - Errors: `exception(Type, handler)`, `error(status, handler)`, `notFound(handler)`
 - Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles)`
 - Server: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`
 
-### What WebContext provides
+### What WebRequest provides
 
+- Request info: `method()`, `path()`, `header(name)`, `raw()` for the servlet request itself
 - Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`
 - Parameters: `param` (400 when missing), `param(name, default)`, `paramLong`, `paramBoolean`, `paramEnum`, `params(name)` for repeated values
-- Cookies: `cookie(name)` / `cookies()` to read, `cookie(name, value)` / `cookie(name, value, maxAge)` / `cookie(Cookie)` to set, `removeCookie(name)`
+- Query vs. form: `queryParam`, `queryParams`, `formParam`, `formParams`
+- Cookies the client sent: `cookie(name)`, `cookies()`
 - Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects), multipart upload via `file(name)`
 - Session: `sessionAttr(key)` / `sessionAttr(key, value)` / `removeSessionAttr`
 - Flash: `flash(key, value)` → read exactly once with `flashed(key)` on the request after a redirect
-- Response: `status`, `header`, `redirect`, `html`, `text`, `json`, `json(value, writer)`, `bytes`, `attachment`, `render`
-- Streaming: `sse(stream -> ...)` — `send(data)`, `send(event, data)`, `id`, `comment`, `isOpen`, `close`
 - Errors: `errorMessage()` inside an `error(status, handler)` handler
+
+### What WebResponse provides
+
+A response is an immutable value: every method below returns a new one, which is what lets an after-filter rewrite what a route answered.
+
+- Bodies: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `render(template, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
+- Statuses: `empty()`, `empty(status)`, `noContent()`, `redirect(location)`, `redirect(location, status)`
+- Building on: `status`, `header`, `contentType`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
+- Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`
+
+`body()` is a sealed `WebResponse.Body` — `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw` — so a `switch` over it needs no default case, and a test can assert on the answer without a servlet response to read it out of:
+
+```java
+WebResponse response = controller.createDeck(new WebRequest(req, Map.of()));
+
+assertEquals(201, response.status());
+assertEquals("/api/decks/1", response.header("Location"));
+assertEquals("{\"id\":1}", ((WebResponse.Text) response.body()).content());
+```
 
 ### The scope of "no reflection"
 

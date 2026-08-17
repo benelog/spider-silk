@@ -1,7 +1,8 @@
 package flashcard.web;
 
 import spidersilk.App;
-import spidersilk.WebContext;
+import spidersilk.WebRequest;
+import spidersilk.WebResponse;
 
 import flashcard.domain.SmartCondition;
 import flashcard.service.SmartDeckService;
@@ -20,15 +21,15 @@ public class SmartDeckController implements Controller {
         app.post("/smart-decks/{id}/delete", this::delete);
     }
 
-    void create(WebContext ctx) {
-        smartDeckService.create(ctx.param("name"),
-                ctx.paramEnum("condition", SmartCondition.class),
-                ctx.param("param", ""));
-        ctx.redirect("/");
+    WebResponse create(WebRequest req) {
+        smartDeckService.create(req.param("name"),
+                req.paramEnum("condition", SmartCondition.class),
+                req.param("param", ""));
+        return WebResponse.redirect("/");
     }
 
-    void delete(WebContext ctx) {
-        smartDeckService.delete(ctx.pathParamLong("id"));
-        ctx.redirect("/");
+    WebResponse delete(WebRequest req) {
+        smartDeckService.delete(req.pathParamLong("id"));
+        return WebResponse.redirect("/");
     }
 }

@@ -14,7 +14,7 @@ Status: **done** · **next** (agreed, ready to build) · **open** (needs a desig
 | 3 | Jetty settings + `customizeServer`/`Context`/`HttpConfiguration` | P0 | ✅ done |
 | 4 | Path-scoped `before`/`after` with trailing-`*` patterns | P0 | ✅ done |
 | 5 | `path(prefix, group -> ...)` route groups, nestable | P0 | ✅ done |
-| 6 | `error(status, handler)` + `ctx.errorMessage()` | P0 | ✅ done |
+| 6 | `error(status, handler)` + `req.errorMessage()` | P0 | ✅ done |
 | 7 | `WebTest.test(app, client -> ...)` harness | P0 | ✅ done |
 | 8 | `JsonCodec<T>` seam | P1 | ✅ done |
 | 9 | Static files: cache headers, hosted path | P1 | ✅ done |
@@ -43,7 +43,7 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       Deliberately *not* `ServiceLoader` — that is reflection, and discovery-by-classpath is the thing this framework avoids.
 - [x] **3. Jetty configuration.**
       Port, host, context path, sessions, thread pool, and multipart as methods; three customizers for everything else.
-      Sessions default on, because `ctx.flash`/`ctx.sessionAttr` need them.
+      Sessions default on, because `req.flash`/`req.sessionAttr` need them.
 - [x] **4. Path-scoped filters.**
       `before(path, handler)`; a final `*` matches the prefix and everything under it.
       A before-filter that writes a response ends the request — a guard that turned the caller away must not be followed by the handler answering anyway.
@@ -54,7 +54,7 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       Spark's static-import equivalent keeps the prefix in process-global state, which rules out two apps per JVM.
 - [x] **6. Status-code error handlers.**
       One place to render a 404 or 500, whatever set the status.
-      A handler that already wrote a body is left alone, tracked by `WebContext` rather than by wrapping the servlet response.
+      A response that already carries a body is left alone, which the sealed `WebResponse.Body` says outright rather than by wrapping the servlet response.
 - [x] **7. Test harness.**
       `WebTest.test(app, client -> ...)`: port 0, cookies kept, server stopped in a `finally`.
       Returns raw `HttpResponse`, so the project's own assertion library stays in charge.
@@ -82,7 +82,7 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       interface JsonCodec<T> extends JsonWriter<T>, JsonReader<T> { }
       ```
 
-      plus `ctx.json(value, writer)` and `ctx.bodyJson(reader)`.
+      plus `WebResponse.json(value, writer)` and `req.bodyJson(reader)`.
       Codecs stay hand-written, so the mapping is still visible; they just stopped being re-inlined in every handler.
       The four decisions:
 
@@ -96,7 +96,7 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
         Core ships the interfaces only; where codecs sit is a convention the example demonstrates.
       - **Collections compose**: `JsonWriter.list(writer)`, `JsonReader.list(reader)`, and `JsonCodec.list(codec)` return the `List<T>` form.
         Function composition, no reflection, and it collapsed the hand-rolled array loops in `ApiController.listDecks` and `listCards` — both handlers are now one line.
-      - **`read` throws, and `ctx.bodyJson(reader)` turns `IllegalArgumentException` into a 400.**
+      - **`read` throws, and `req.bodyJson(reader)` turns `IllegalArgumentException` into a 400.**
         The same contract as `pathParamLong`: it returns the value or it rejects the request.
         No `Result` or `Validator` type in core — business rules stay in the service layer, where they already throw.
         `Json`'s own accessors already throw `IllegalArgumentException` on a missing key or a wrong type, so a reader gets the rejection for free by simply reading.
@@ -113,7 +113,7 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       OPTIONS answers from `Router.allowedMethods` plus the HEAD and OPTIONS this servlet adds itself, and `head`/`options` register a route when the automatic answer is not the right one.
 
 - [x] **11. Request logging hook.**
-      `app.requestLogger((ctx, millis) -> ...)`.
+      `app.requestLogger((req, res, millis) -> ...)`.
       One lambda, no logging framework in core.
       It runs in a `finally` around the whole dispatch, *after* the error handler has had its turn, so the status it reports is the one that was sent rather than the one the router set.
       A logger that throws goes to the servlet log: the response is already out by then, and a broken logger must not become a broken response.
@@ -156,7 +156,7 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       `allowedMethods` runs off the same index.
 
 - [x] **15a. SSE.**
-      `ctx.sse(stream -> ...)` hands the handler an `SseStream` — `send(data)`, `send(event, data)`, `id(...)`, `comment(...)`, `isOpen()`, `close()` — and writes `text/event-stream` frames, flushed one event at a time.
+      `WebResponse.sse(stream -> ...)` hands the handler an `SseStream` — `send(data)`, `send(event, data)`, `id(...)`, `comment(...)`, `isOpen()`, `close()` — and writes `text/event-stream` frames, flushed one event at a time.
       `text/event-stream` is plain HTTP: a content type, one `data:` line per event, a blank line to end it, and a flush.
       It goes through `AppServlet` unchanged, so a deployment on Tomcat gets it too — which is the whole reason this half is in and 15b is out.
       Core adds the framing and nothing else; no new dependency.
@@ -165,12 +165,12 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       - **An SSE endpoint is a `get` route**, not a registration of its own.
         `routes()` lists it, filters cover it, `requestLogger` reports it when the stream ends — which is exactly the argument that sinks 15b, so the implementation had to keep it true.
       - **The events are strings.**
-        `ctx.json(value, writer)`'s counterpart is `stream.send(writer.write(value).toJson())`, not an overload that takes a codec — the mapping stays visible at the call site, the same rule as everywhere else.
+        `WebResponse.json(value, writer)`'s counterpart is `stream.send(writer.write(value).toJson())`, not an overload that takes a codec — the mapping stays visible at the call site, the same rule as everywhere else.
       - **The stream is blocking and holds its thread.**
         One open stream is one Jetty thread, which is the honest servlet answer and the one `AppServlet` can keep on Tomcat; `AsyncContext` would be a second dispatch model in core for a feature that has yet to prove it needs one.
         The recipe for many streams is item 16's: a virtual-thread executor on the pool, where a parked thread costs almost nothing.
       - **Ending a stream is never an error.**
-        A write to a stream that has gone throws `SseStream.Closed`, and `ctx.sse` catches that one type and finishes the request normally.
+        A write to a stream that has gone throws `SseStream.Closed`, which the servlet catches by that one type and finishes the request normally.
         A dedicated type rather than `UncheckedIOException`, so an IO failure in the handler's own code still reaches the exception handlers; and a write *after* `close()` throws the same `Closed` rather than an `IllegalStateException`, because otherwise every graceful shutdown would log a handler failure for each open stream.
         `SseHandler` is declared `throws Exception` for the `Thread.sleep` that every SSE loop contains — the same reason `Handler` throws.
       - **Graceful shutdown is resolved, not documented away.**
@@ -202,7 +202,7 @@ If one is reopened, it is a change to what the framework is.
 
 | Idea | Why not |
 |---|---|
-| `ctx.json(Object)`, `ctx.bodyAsClass(Foo.class)` | Reflection. The whole point is that the wire format changes only when someone edits it. |
+| `WebResponse.json(Object)`, `req.bodyAsClass(Foo.class)` | Reflection. The whole point is that the wire format changes only when someone edits it. |
 | Annotation-driven routing | Reflection, plus scanning. |
 | A DI container | Not the web tier, and `FlashcardContext` shows the alternative. |
 | `ServiceLoader`-based server discovery | Classpath-driven binding is the magic this framework exists without. |

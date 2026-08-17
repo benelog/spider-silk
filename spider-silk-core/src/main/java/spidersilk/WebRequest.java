@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -15,39 +14,38 @@ import java.util.stream.Collectors;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.Part;
 
 import spidersilk.json.Json;
 import spidersilk.json.JsonReader;
-import spidersilk.json.JsonWriter;
 
 /**
- * A context wrapping the request and the response.
- * Path variables, parameters, session, flash, and response helpers in one place.
- * Type conversion happens only through explicit methods (pathParamLong etc.).
- * No reflection.
+ * The request side of a handler: what was asked for, and the session it was
+ * asked in. The answer is the {@link WebResponse} the handler returns.
+ *
+ * <p>Reading is the whole of it, with one deliberate exception: the session.
+ * {@link #sessionAttr(String, Object)} and {@link #flash(String, String)} write,
+ * because a session outlives the response and cannot be a value returned from
+ * one. Cookies are the other half of that split — the ones the client sent are
+ * read here, the ones the server sets belong to {@link WebResponse}.
+ *
+ * <p>Type conversion happens only through explicit methods
+ * ({@link #pathParamLong} and the like). No reflection.
  */
-public final class WebContext {
+public final class WebRequest {
 
     static final String FLASH_ATTRIBUTE = "spidersilk.flash";
 
-    private final App app;
     private final HttpServletRequest req;
-    private final HttpServletResponse res;
     private final Map<String, String> pathParams;
 
     private Map<String, List<String>> queryString;
-    private boolean bodyWritten;
     private String errorMessage;
 
-    /** Public so tests can build a Context and call handler methods directly. */
-    public WebContext(App app, HttpServletRequest req, HttpServletResponse res,
-                   Map<String, String> pathParams) {
-        this.app = app;
+    /** Public so a test can build a request and call a handler method directly. */
+    public WebRequest(HttpServletRequest req, Map<String, String> pathParams) {
         this.req = req;
-        this.res = res;
         this.pathParams = pathParams;
     }
 
@@ -70,12 +68,8 @@ public final class WebContext {
     }
 
     /** Escape hatch when the raw request is needed. */
-    public HttpServletRequest req() {
+    public HttpServletRequest raw() {
         return req;
-    }
-
-    public HttpServletResponse res() {
-        return res;
     }
 
     // ---- Path variables ----
@@ -280,9 +274,9 @@ public final class WebContext {
         }
     }
 
-    // ---- Cookies ----
+    // ---- Cookies the client sent ----
 
-    /** A cookie the client sent, or null. */
+    /** A cookie the client sent, or null. Setting one is {@link WebResponse#cookie}. */
     public String cookie(String name) {
         Cookie[] cookies = req.getCookies();
         if (cookies == null) {
@@ -307,43 +301,6 @@ public final class WebContext {
             byName.putIfAbsent(cookie.getName(), cookie.getValue());
         }
         return byName;
-    }
-
-    /**
-     * Sets a cookie that lasts until the browser closes, scoped to the whole
-     * site, HttpOnly, and SameSite=Lax. Those defaults are what a session-ish
-     * cookie should be; {@link #cookie(Cookie)} is there for the rest.
-     */
-    public WebContext cookie(String name, String value) {
-        return cookie(defaultCookie(name, value));
-    }
-
-    /** Sets a cookie that outlives the browser session, with the same defaults. */
-    public WebContext cookie(String name, String value, Duration maxAge) {
-        Cookie cookie = defaultCookie(name, value);
-        cookie.setMaxAge((int) Math.min(maxAge.toSeconds(), Integer.MAX_VALUE));
-        return cookie(cookie);
-    }
-
-    /** Sets a cookie built by hand — the way to Secure, a Domain, or SameSite=None. */
-    public WebContext cookie(Cookie cookie) {
-        res.addCookie(cookie);
-        return this;
-    }
-
-    /** Expires a cookie that was set with the defaults. */
-    public WebContext removeCookie(String name) {
-        Cookie cookie = defaultCookie(name, "");
-        cookie.setMaxAge(0);
-        return cookie(cookie);
-    }
-
-    private Cookie defaultCookie(String name, String value) {
-        Cookie cookie = new Cookie(name, value);
-        cookie.setPath("/");
-        cookie.setHttpOnly(true);
-        cookie.setAttribute("SameSite", "Lax");
-        return cookie;
     }
 
     // ---- Session ----
@@ -388,140 +345,12 @@ public final class WebContext {
         return null;
     }
 
-    // ---- Response ----
-
-    public WebContext status(int code) {
-        res.setStatus(code);
-        return this;
-    }
-
-    public WebContext header(String name, String value) {
-        res.setHeader(name, value);
-        return this;
-    }
-
-    /** Sets Content-Disposition so the response downloads as a file. */
-    public WebContext attachment(String filename) {
-        res.setHeader("Content-Disposition", "attachment; filename=\"%s\"".formatted(filename));
-        return this;
-    }
-
-    public void redirect(String location) {
-        bodyWritten = true;
-        try {
-            res.sendRedirect(location);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    public void html(String content) {
-        write("text/html; charset=UTF-8", content);
-    }
-
-    public void text(String content) {
-        write("text/plain; charset=UTF-8", content);
-    }
-
-    public void json(Json.JsonValue value) {
-        json(value.toJson());
-    }
-
-    /** Writes a value as JSON through a hand-written writer. */
-    public <T> void json(T value, JsonWriter<T> writer) {
-        json(writer.write(value));
-    }
-
-    public void json(String rawJson) {
-        write("application/json", rawJson);
-    }
-
-    public void bytes(byte[] data, String contentType) {
-        bodyWritten = true;
-        res.setContentType(contentType);
-        try {
-            res.getOutputStream().write(data);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
-    /**
-     * Answers with a Server-Sent Events stream: {@code text/event-stream}, one
-     * event per {@link SseStream#send} call, flushed as it goes.
-     *
-     * <pre>{@code
-     * app.get("/decks/{deckId}/events", ctx -> {
-     *     long deckId = ctx.pathParamLong("deckId");
-     *     ctx.sse(stream -> {
-     *         while (stream.isOpen()) {
-     *             stream.send("due", Json.obj().put("count", service.due(deckId)).toJson());
-     *             Thread.sleep(1000);
-     *         }
-     *     });
-     * });
-     * }</pre>
-     *
-     * <p>This is an ordinary route answering in a different shape — not a
-     * registration of its own — so {@link App#routes()} lists it, filters cover
-     * it, and {@link App#requestLogger} reports it when the stream ends.
-     *
-     * <p>The request occupies its thread for the life of the stream, which is
-     * what keeps SSE working through a plain servlet container. Many concurrent
-     * streams are what the virtual-thread executor on the Jetty thread pool is
-     * for.
-     *
-     * <p>The handler returning closes the stream, and so does
-     * {@link App#stop()}. A client that disconnects is not an error: the write
-     * that discovers it throws {@link SseStream.Closed}, which ends the handler
-     * here rather than at an exception handler.
-     *
-     * <p>A HEAD of an SSE route answers with the headers and never runs the
-     * handler — a stream with the body thrown away would never end.
-     */
-    public void sse(SseHandler handler) throws Exception {
-        bodyWritten = true;
-        res.setStatus(200);
-        res.setContentType("text/event-stream; charset=UTF-8");
-        res.setHeader("Cache-Control", "no-cache");
-        if ("HEAD".equals(req.getMethod())) {
-            res.flushBuffer();
-            return;
-        }
-        SseStream stream = new SseStream(res);
-        app.openStreams.add(stream);
-        try {
-            res.flushBuffer();  // commit the headers, so the client opens before the first event
-            handler.handle(stream);
-        } catch (SseStream.Closed e) {
-            // The client left, or the server is stopping. Both end the request normally.
-        } finally {
-            app.openStreams.remove(stream);
-            stream.close();
-        }
-    }
-
-    /** Renders a template with the engine set via {@link App#templates(TemplateRenderer)}. */
-    public void render(String template, Map<String, Object> model) {
-        if (app.templates == null) {
-            throw new IllegalStateException(
-                    "No template engine configured. Call App.templates(...).");
-        }
-        bodyWritten = true;
-        res.setContentType("text/html; charset=UTF-8");
-        try {
-            app.templates.render(template, model, res.getWriter());
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
     // ---- Errors ----
 
     /**
      * Inside an {@link App#error(int, Handler)} handler, the plain-text message
-     * the framework would have written. Null when the status came from a handler
-     * rather than from the router or an {@link HttpException}.
+     * the framework would have answered with. Null when the status came from a
+     * handler rather than from the router or an {@link HttpException}.
      */
     public String errorMessage() {
         return errorMessage;
@@ -531,22 +360,10 @@ public final class WebContext {
         this.errorMessage = errorMessage;
     }
 
-    /**
-     * Whether a response body was produced through this context. Writing
-     * straight to {@link #res()} bypasses the flag, and therefore bypasses
-     * {@link App#error(int, Handler)}.
-     */
-    boolean bodyWritten() {
-        return bodyWritten;
-    }
-
-    private void write(String contentType, String content) {
-        bodyWritten = true;
-        res.setContentType(contentType);
-        try {
-            res.getOutputStream().write(content.getBytes(StandardCharsets.UTF_8));
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+    /** The same request, with the path variables a matched route resolved. */
+    WebRequest withPathParams(Map<String, String> resolved) {
+        WebRequest copy = new WebRequest(req, resolved);
+        copy.errorMessage = errorMessage;
+        return copy;
     }
 }

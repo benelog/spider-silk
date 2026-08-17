@@ -4,10 +4,9 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.mock.web.MockHttpServletResponse;
 
-import spidersilk.App;
-import spidersilk.WebContext;
+import spidersilk.WebRequest;
+import spidersilk.WebResponse;
 
 import flashcard.domain.Deck;
 import flashcard.repository.CardRepository;
@@ -21,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Calls the package-private handler methods directly with mock
- * requests/responses, without a running server.
+ * Calls the package-private handler methods directly and asserts on the
+ * response they return, without a running server.
  */
 class DeckControllerTest extends RepositoryTestSupport {
 
@@ -39,12 +38,12 @@ class DeckControllerTest extends RepositoryTestSupport {
     void createDeckRedirectsToTheNewDeck() {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.setParameter("name", "English");
-        MockHttpServletResponse res = new MockHttpServletResponse();
 
-        controller.createDeck(new WebContext(new App(), req, res, Map.of()));
+        WebResponse response = controller.createDeck(new WebRequest(req, Map.of()));
 
-        assertTrue(res.getRedirectedUrl().matches("/decks/\\d+"),
-                "unexpected redirect: " + res.getRedirectedUrl());
+        assertEquals(302, response.status());
+        assertTrue(response.header("Location").matches("/decks/\\d+"),
+                "unexpected redirect: " + response.header("Location"));
     }
 
     @Test
@@ -53,13 +52,11 @@ class DeckControllerTest extends RepositoryTestSupport {
 
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.setParameter("name", "New name");
-        MockHttpServletResponse res = new MockHttpServletResponse();
 
-        // Path variables arrive as an explicit map instead of URL matching
-        controller.renameDeck(new WebContext(new App(), req, res,
-                Map.of("deckId", String.valueOf(deck.id()))));
+        WebResponse response = controller.renameDeck(
+                new WebRequest(req, Map.of("deckId", String.valueOf(deck.id()))));
 
         assertEquals("New name", deckService.getDeck(deck.id()).name());
-        assertEquals("/decks/" + deck.id(), res.getRedirectedUrl());
+        assertEquals("/decks/" + deck.id(), response.header("Location"));
     }
 }

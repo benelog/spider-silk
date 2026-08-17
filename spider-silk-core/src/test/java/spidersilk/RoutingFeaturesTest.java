@@ -18,10 +18,13 @@ class RoutingFeaturesTest {
     void pathScopedFilterRunsOnlyOnMatchingPaths() {
         List<String> visited = new ArrayList<>();
         App app = new App()
-                .before("/admin/*", ctx -> visited.add("filter:" + ctx.path()))
-                .get("/admin", ctx -> ctx.text("admin"))
-                .get("/admin/users", ctx -> ctx.text("users"))
-                .get("/public", ctx -> ctx.text("public"));
+                .before("/admin/*", req -> {
+                    visited.add("filter:" + req.path());
+                    return null;
+                })
+                .get("/admin", req -> WebResponse.text("admin"))
+                .get("/admin/users", req -> WebResponse.text("users"))
+                .get("/public", req -> WebResponse.text("public"));
 
         WebTest.test(app, client -> {
             client.get("/admin");
@@ -34,10 +37,10 @@ class RoutingFeaturesTest {
 
     /** A guard that answered the request must stop the handler from also answering it. */
     @Test
-    void aFilterThatWritesAResponseEndsTheRequest() {
+    void aFilterThatAnswersEndsTheRequest() {
         App app = new App()
-                .before("/admin/*", ctx -> ctx.status(401).text("Unauthorized"))
-                .get("/admin/users", ctx -> ctx.text("secret"));
+                .before("/admin/*", req -> WebResponse.text("Unauthorized").status(401))
+                .get("/admin/users", req -> WebResponse.text("secret"));
 
         WebTest.test(app, client -> {
             var response = client.get("/admin/users");
@@ -49,8 +52,8 @@ class RoutingFeaturesTest {
     @Test
     void aRedirectingFilterAlsoEndsTheRequest() {
         App app = new App()
-                .before("/admin/*", ctx -> ctx.redirect("/login"))
-                .get("/admin/users", ctx -> ctx.text("secret"));
+                .before("/admin/*", req -> WebResponse.redirect("/login"))
+                .get("/admin/users", req -> WebResponse.text("secret"));
 
         WebTest.test(app, client -> {
             var response = client.get("/admin/users");
@@ -59,15 +62,15 @@ class RoutingFeaturesTest {
         });
     }
 
-    /** Rejecting without writing a body: throw, and let the error handler render it. */
+    /** Rejecting without a body of its own: throw, and let the error handler render it. */
     @Test
     void aFilterCanRejectByThrowingHttpException() {
         App app = new App()
-                .error(401, ctx -> ctx.text("login required"))
-                .before("/admin/*", ctx -> {
+                .error(401, req -> WebResponse.text("login required"))
+                .before("/admin/*", req -> {
                     throw new HttpException(401, "no session");
                 })
-                .get("/admin/users", ctx -> ctx.text("secret"));
+                .get("/admin/users", req -> WebResponse.text("secret"));
 
         WebTest.test(app, client -> {
             var response = client.get("/admin/users");
@@ -76,25 +79,46 @@ class RoutingFeaturesTest {
         });
     }
 
+    /** A filter that returns null carries on: before to the route, after to the response. */
     @Test
     void globalFiltersStillRunOnEveryRoute() {
         List<String> visited = new ArrayList<>();
         App app = new App()
-                .before(ctx -> visited.add("before"))
-                .after(ctx -> visited.add("after"))
-                .get("/", ctx -> ctx.text("ok"));
+                .before(req -> {
+                    visited.add("before");
+                    return null;
+                })
+                .after((req, res) -> {
+                    visited.add("after");
+                    return null;
+                })
+                .get("/", req -> WebResponse.text("ok"));
 
-        WebTest.test(app, client -> client.get("/"));
+        WebTest.test(app, client -> assertEquals("ok", client.get("/").body()));
 
         assertEquals(List.of("before", "after"), visited);
+    }
+
+    /** An after-filter answers with what it returns, which is how it rewrites a response. */
+    @Test
+    void anAfterFilterCanReplaceTheResponse() {
+        App app = new App()
+                .after((req, res) -> res.header("X-Served-By", "spider-silk"))
+                .get("/", req -> WebResponse.text("ok"));
+
+        WebTest.test(app, client -> {
+            var response = client.get("/");
+            assertEquals("ok", response.body());
+            assertEquals("spider-silk", response.headers().firstValue("X-Served-By").orElseThrow());
+        });
     }
 
     @Test
     void routeGroupPrefixesEveryRegistration() {
         App app = new App().path("/api/decks", decks -> {
-            decks.get("", ctx -> ctx.text("list"));
-            decks.post("", ctx -> ctx.text("created"));
-            decks.get("/{deckId}", ctx -> ctx.text("deck " + ctx.pathParam("deckId")));
+            decks.get("", req -> WebResponse.text("list"));
+            decks.post("", req -> WebResponse.text("created"));
+            decks.get("/{deckId}", req -> WebResponse.text("deck " + req.pathParam("deckId")));
         });
 
         WebTest.test(app, client -> {
@@ -106,8 +130,8 @@ class RoutingFeaturesTest {
 
     @Test
     void nestedGroupsAppendPrefixes() {
-        App app = new App().path("/api", api ->
-                api.path("/decks", decks -> decks.get("/{deckId}/cards", ctx -> ctx.text("cards"))));
+        App app = new App().path("/api", api -> api.path("/decks",
+                decks -> decks.get("/{deckId}/cards", req -> WebResponse.text("cards"))));
 
         WebTest.test(app, client -> assertEquals("cards", client.get("/api/decks/3/cards").body()));
     }
@@ -116,11 +140,14 @@ class RoutingFeaturesTest {
     void aGroupFilterCoversThePrefixAndEverythingUnderIt() {
         List<String> visited = new ArrayList<>();
         App app = new App().path("/api", api -> {
-            api.before(ctx -> visited.add(ctx.path()));
-            api.get("", ctx -> ctx.text("root"));
-            api.get("/decks", ctx -> ctx.text("decks"));
+            api.before(req -> {
+                visited.add(req.path());
+                return null;
+            });
+            api.get("", req -> WebResponse.text("root"));
+            api.get("/decks", req -> WebResponse.text("decks"));
         });
-        app.get("/other", ctx -> ctx.text("other"));
+        app.get("/other", req -> WebResponse.text("other"));
 
         WebTest.test(app, client -> {
             client.get("/api");
@@ -134,8 +161,8 @@ class RoutingFeaturesTest {
     @Test
     void errorHandlerRendersTheNotFoundBody() {
         App app = new App()
-                .error(404, ctx -> ctx.html("<h1>no such page: " + ctx.path() + "</h1>"))
-                .get("/", ctx -> ctx.text("ok"));
+                .error(404, req -> WebResponse.html("<h1>no such page: " + req.path() + "</h1>"))
+                .get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> {
             var response = client.get("/missing");
@@ -147,8 +174,8 @@ class RoutingFeaturesTest {
     @Test
     void errorHandlerAlsoCoversAStatusSetByAHandler() {
         App app = new App()
-                .error(403, ctx -> ctx.text("forbidden page"))
-                .get("/secret", ctx -> ctx.status(403));
+                .error(403, req -> WebResponse.text("forbidden page"))
+                .get("/secret", req -> WebResponse.empty(403));
 
         WebTest.test(app, client -> assertEquals("forbidden page", client.get("/secret").body()));
     }
@@ -156,8 +183,9 @@ class RoutingFeaturesTest {
     @Test
     void errorHandlerCoversHttpExceptionAndSeesItsMessage() {
         App app = new App()
-                .error(400, ctx -> ctx.text("bad request: " + ctx.errorMessage()))
-                .get("/decks/{deckId}", ctx -> ctx.text("deck " + ctx.pathParamLong("deckId")));
+                .error(400, req -> WebResponse.text("bad request: " + req.errorMessage()))
+                .get("/decks/{deckId}",
+                        req -> WebResponse.text("deck " + req.pathParamLong("deckId")));
 
         WebTest.test(app, client -> {
             var response = client.get("/decks/abc");
@@ -168,17 +196,17 @@ class RoutingFeaturesTest {
     }
 
     @Test
-    void aHandlerThatWroteABodyIsLeftAlone() {
+    void aHandlerThatAnsweredWithABodyIsLeftAlone() {
         App app = new App()
-                .error(404, ctx -> ctx.text("replaced"))
-                .get("/gone", ctx -> ctx.status(404).text("my own 404"));
+                .error(404, req -> WebResponse.text("replaced"))
+                .get("/gone", req -> WebResponse.text("my own 404").status(404));
 
         WebTest.test(app, client -> assertEquals("my own 404", client.get("/gone").body()));
     }
 
     @Test
     void defaultBodiesSurviveWithoutErrorHandlers() {
-        App app = new App().get("/", ctx -> ctx.text("ok"));
+        App app = new App().get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> {
             assertEquals("Not Found: /missing", client.get("/missing").body());
@@ -191,11 +219,27 @@ class RoutingFeaturesTest {
         });
     }
 
+    /** The Allow header the framework worked out survives the error handler's body. */
+    @Test
+    void anErrorHandlerKeepsTheHeadersTheFrameworkAlreadySet() {
+        App app = new App()
+                .error(405, req -> WebResponse.text("no such method here"))
+                .get("/", req -> WebResponse.text("ok"));
+
+        WebTest.test(app, client -> {
+            var response = client.post("/");
+            assertEquals(405, response.statusCode());
+            assertEquals("no such method here", response.body());
+            assertEquals("GET, HEAD, OPTIONS",
+                    response.headers().firstValue("Allow").orElseThrow());
+        });
+    }
+
     @Test
     void errorHandlerCoversUncaughtExceptions() {
         App app = new App()
-                .error(500, ctx -> ctx.text("something broke"))
-                .get("/boom", ctx -> {
+                .error(500, req -> WebResponse.text("something broke"))
+                .get("/boom", req -> {
                     throw new IllegalStateException("kaboom");
                 });
 
@@ -208,7 +252,7 @@ class RoutingFeaturesTest {
 
     @Test
     void wildcardIsOnlyAllowedAsTheLastSegment() {
-        assertThrows(IllegalArgumentException.class, () -> new App().before("/*/edit", ctx -> {
-        }));
+        assertThrows(IllegalArgumentException.class,
+                () -> new App().before("/*/edit", req -> null));
     }
 }

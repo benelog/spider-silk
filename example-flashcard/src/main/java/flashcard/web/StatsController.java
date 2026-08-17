@@ -3,7 +3,8 @@ package flashcard.web;
 import java.util.Map;
 
 import spidersilk.App;
-import spidersilk.WebContext;
+import spidersilk.WebRequest;
+import spidersilk.WebResponse;
 
 import flashcard.service.StatsService;
 
@@ -20,7 +21,7 @@ public class StatsController implements Controller {
         app.get("/stats", this::stats);
     }
 
-    void stats(WebContext ctx) {
-        ctx.render("stats.jte", Map.of("stats", statsService.overview()));
+    WebResponse stats(WebRequest req) {
+        return WebResponse.render("stats.jte", Map.of("stats", statsService.overview()));
     }
 }

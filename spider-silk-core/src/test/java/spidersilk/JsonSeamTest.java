@@ -12,7 +12,7 @@ import spidersilk.test.WebTest;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-/** {@code ctx.json(value, writer)} and {@code ctx.bodyJson(reader)} over HTTP. */
+/** {@code WebResponse.json(value, writer)} and {@code req.bodyJson(reader)} over HTTP. */
 class JsonSeamTest {
 
     record Deck(long id, String name) {
@@ -25,7 +25,7 @@ class JsonSeamTest {
 
     @Test
     void aWriterRendersTheResponse() {
-        App app = new App().get("/decks", ctx -> ctx.json(
+        App app = new App().get("/decks", req -> WebResponse.json(
                 List.of(new Deck(1, "English"), new Deck(2, "Spanish")), JsonWriter.list(DECK)));
 
         WebTest.test(app, client -> {
@@ -40,7 +40,7 @@ class JsonSeamTest {
 
     @Test
     void aReaderBuildsTheRequestValue() {
-        App app = new App().post("/decks", ctx -> ctx.text(ctx.bodyJson(DECK_NAME)));
+        App app = new App().post("/decks", req -> WebResponse.text(req.bodyJson(DECK_NAME)));
 
         WebTest.test(app, client -> assertEquals("English",
                 client.postJson("/decks", "{\"name\":\"English\"}").body()));
@@ -49,7 +49,7 @@ class JsonSeamTest {
     /** The reader throws IllegalArgumentException; the handler never sees a half-built value. */
     @Test
     void aBodyTheReaderRejectsIsA400() {
-        App app = new App().post("/decks", ctx -> ctx.text(ctx.bodyJson(DECK_NAME)));
+        App app = new App().post("/decks", req -> WebResponse.text(req.bodyJson(DECK_NAME)));
 
         WebTest.test(app, client -> {
             assertEquals(400, client.postJson("/decks", "{\"title\":\"English\"}").statusCode());

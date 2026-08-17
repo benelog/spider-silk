@@ -17,9 +17,9 @@ class RequestLoggerTest {
     void everyRequestIsReportedWithItsStatus() {
         List<String> logged = new ArrayList<>();
         App app = new App()
-                .requestLogger((ctx, millis) -> logged.add(
-                        ctx.method() + " " + ctx.path() + " -> " + ctx.res().getStatus()))
-                .get("/decks", ctx -> ctx.text("list"));
+                .requestLogger((req, res, millis) -> logged.add(
+                        req.method() + " " + req.path() + " -> " + res.status()))
+                .get("/decks", req -> WebResponse.text("list"));
 
         WebTest.test(app, client -> {
             client.get("/decks");
@@ -34,9 +34,9 @@ class RequestLoggerTest {
     void theStatusIsTheOneTheErrorHandlerLeftBehind() {
         List<Integer> statuses = new ArrayList<>();
         App app = new App()
-                .requestLogger((ctx, millis) -> statuses.add(ctx.res().getStatus()))
-                .error(404, ctx -> ctx.status(410).text("gone for good"))
-                .get("/", ctx -> ctx.text("ok"));
+                .requestLogger((req, res, millis) -> statuses.add(res.status()))
+                .error(404, req -> WebResponse.text("gone for good").status(410))
+                .get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> client.get("/missing"));
 
@@ -47,8 +47,8 @@ class RequestLoggerTest {
     void anUncaughtExceptionIsStillReported() {
         List<Integer> statuses = new ArrayList<>();
         App app = new App()
-                .requestLogger((ctx, millis) -> statuses.add(ctx.res().getStatus()))
-                .get("/boom", ctx -> {
+                .requestLogger((req, res, millis) -> statuses.add(res.status()))
+                .get("/boom", req -> {
                     throw new IllegalStateException("kaboom");
                 });
 
@@ -61,10 +61,10 @@ class RequestLoggerTest {
     void theElapsedTimeIsReported() {
         List<Long> times = new ArrayList<>();
         App app = new App()
-                .requestLogger((ctx, millis) -> times.add(millis))
-                .get("/slow", ctx -> {
+                .requestLogger((req, res, millis) -> times.add(millis))
+                .get("/slow", req -> {
                     Thread.sleep(15);
-                    ctx.text("done");
+                    return WebResponse.text("done");
                 });
 
         WebTest.test(app, client -> client.get("/slow"));
@@ -77,10 +77,10 @@ class RequestLoggerTest {
     @Test
     void aLoggerThatThrowsDoesNotAffectTheResponse() {
         App app = new App()
-                .requestLogger((ctx, millis) -> {
+                .requestLogger((req, res, millis) -> {
                     throw new IllegalStateException("logger is broken");
                 })
-                .get("/", ctx -> ctx.text("ok"));
+                .get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> {
             var response = client.get("/");

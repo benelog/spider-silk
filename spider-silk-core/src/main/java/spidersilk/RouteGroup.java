@@ -9,7 +9,7 @@ import java.util.function.Consumer;
  *
  * <pre>{@code
  * app.path("/api/decks", decks -> {
- *     decks.before(ctx -> requireApiKey(ctx));   // guards /api/decks and everything under it
+ *     decks.before(req -> requireApiKey(req));   // guards /api/decks and everything under it
  *     decks.get("", this::listDecks);            // GET  /api/decks
  *     decks.post("", this::createDeck);          // POST /api/decks
  *     decks.get("/{deckId}", this::showDeck);    // GET  /api/decks/{deckId}
@@ -67,21 +67,21 @@ public final class RouteGroup {
     }
 
     /** A filter over the whole group: the prefix itself and everything below it. */
-    public RouteGroup before(Handler filter) {
+    public RouteGroup before(BeforeFilter filter) {
         return before("/*", filter);
     }
 
-    public RouteGroup before(String path, Handler filter) {
+    public RouteGroup before(String path, BeforeFilter filter) {
         app.before(resolve(path), filter);
         return this;
     }
 
     /** A filter over the whole group: the prefix itself and everything below it. */
-    public RouteGroup after(Handler filter) {
+    public RouteGroup after(AfterFilter filter) {
         return after("/*", filter);
     }
 
-    public RouteGroup after(String path, Handler filter) {
+    public RouteGroup after(String path, AfterFilter filter) {
         app.after(resolve(path), filter);
         return this;
     }

@@ -8,10 +8,13 @@ import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.Objects;
 
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * Files served straight off the classpath, with the caching headers that stop a
@@ -35,6 +38,9 @@ import jakarta.servlet.http.HttpServletResponse;
 public final class StaticFiles {
 
     private static final String REVALIDATE = "no-cache";
+
+    private static final DateTimeFormatter HTTP_DATE =
+            DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US);
 
     private final String classpathRoot;
     private String hostedPath = "";
@@ -67,42 +73,53 @@ public final class StaticFiles {
         return this;
     }
 
-    /** Serves the request if it names a file here. Returns false to let routing continue. */
-    boolean serve(String path, HttpServletRequest req, HttpServletResponse res)
-            throws IOException {
+    /**
+     * The response for the file this path names, or null when it names none and
+     * routing should carry on. The body is a stream rather than a byte array, so
+     * a large file never lands in memory whole.
+     */
+    WebResponse resolve(String path, HttpServletRequest req) throws IOException {
         String relative = relativePath(path);
         if (relative == null) {
-            return false;
+            return null;
         }
         URL url = StaticFiles.class.getResource(classpathRoot + relative);
         if (url == null || isDirectory(url)) {
-            return false;
+            return null;
         }
 
         URLConnection connection = url.openConnection();
         long lastModified = connection.getLastModified();
         long length = connection.getContentLengthLong();
 
-        res.setHeader("Cache-Control", cacheControl);
+        WebResponse response = WebResponse.empty().header("Cache-Control", cacheControl);
         if (lastModified > 0) {
             String etag = etag(lastModified, length);
-            res.setHeader("ETag", etag);
-            res.setDateHeader("Last-Modified", lastModified);
+            response = response.header("ETag", etag)
+                    .header("Last-Modified", httpDate(lastModified));
             if (isUnchanged(req, etag, lastModified)) {
                 discard(connection);
-                res.setStatus(HttpServletResponse.SC_NOT_MODIFIED);
-                return true;
+                return response.status(304);
             }
         }
 
-        res.setContentType(ContentTypes.byPath(relative));
-        if (length >= 0) {
-            res.setContentLengthLong(length);
-        }
-        try (InputStream in = connection.getInputStream()) {
-            in.transferTo(res.getOutputStream());
-        }
-        return true;
+        response = response
+                .body(new WebResponse.Stream(out -> {
+                    try (InputStream in = connection.getInputStream()) {
+                        in.transferTo(out);
+                    }
+                }))
+                .contentType(ContentTypes.byPath(relative));
+        return length >= 0 ? response.header("Content-Length", Long.toString(length)) : response;
+    }
+
+    /**
+     * The IMF-fixdate HTTP wants: a two-digit day, English month and day names,
+     * and GMT. {@code RFC_1123_DATE_TIME} writes a single-digit day, which a
+     * client is not obliged to parse back.
+     */
+    private static String httpDate(long epochMillis) {
+        return HTTP_DATE.format(Instant.ofEpochMilli(epochMillis).atOffset(ZoneOffset.UTC));
     }
 
     /**

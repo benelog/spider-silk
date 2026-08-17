@@ -6,6 +6,7 @@ import java.util.Map;
 
 import spidersilk.App;
 import spidersilk.Route;
+import spidersilk.WebResponse;
 import spidersilk.json.Json;
 
 /**
@@ -22,8 +23,9 @@ public class RoutesController implements Controller {
     public void register(App app) {
         // Both handlers read app.routes() per request, so controllers registered
         // after this one are listed too.
-        app.get("/_routes", ctx -> ctx.render("routes.jte", Map.of("routes", app.routes())));
-        app.get("/openapi.json", ctx -> ctx.json(openApi(app.routes())));
+        app.get("/_routes",
+                req -> WebResponse.render("routes.jte", Map.of("routes", app.routes())));
+        app.get("/openapi.json", req -> WebResponse.json(openApi(app.routes())));
     }
 
     /**

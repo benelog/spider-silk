@@ -4,5 +4,5 @@ package spidersilk;
 @FunctionalInterface
 public interface ExceptionHandler<E extends Exception> {
 
-    void handle(E exception, WebContext ctx) throws Exception;
+    WebResponse handle(E exception, WebRequest request) throws Exception;
 }

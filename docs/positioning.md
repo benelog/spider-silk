@@ -33,7 +33,7 @@ Each requires reflection, which is the one thing the framework exists to avoid.
 | Route registration | lambdas | lambdas | static lambdas | lambdas | annotations |
 | Reflection at runtime | none | JSON only (Jackson) | JSON only | JSON only | pervasive |
 | DI container | none | none | none | none | yes |
-| JSON | hand-built `Json` tree | `ctx.json(pojo)` | bring your own | JSON-P / JSON-B | Jackson |
+| JSON | hand-built `Json` tree | `ctx.json(pojo)` (Javalin) | bring your own | JSON-P / JSON-B | Jackson |
 | Templates | jte | many, pluggable | many, pluggable | none | many |
 | Server | embedded Jetty, swappable | embedded Jetty | embedded Jetty | Loom-native Níma | Tomcat |
 | Servlet deployable | yes | no | no | no | yes (war) |
@@ -64,7 +64,7 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
 Ordered by how often they will actually hurt.
 
 1. **JSON output is verbose.**
-   `Json.obj().put("id", d.id()).put("name", d.name())` for every DTO is the single biggest ergonomic gap versus `ctx.json(deck)`.
+   `Json.obj().put("id", d.id()).put("name", d.name())` for every DTO is the single biggest ergonomic gap versus a reflective `json(deck)`.
    This is the cost of the core principle, but the cost can be reduced (see W1).
 2. **No route grouping and no path-scoped filters.**
    `before(...)` is global, so `/admin/*` authentication has to re-check the path inside the filter.
@@ -81,7 +81,7 @@ Ordered by how often they will actually hurt.
 7. **Thin request API.**
    Cookies and repeated parameters now ship; `formParam` distinct from query, HEAD/OPTIONS, and content negotiation do not.
 8. ~~**No WebSocket or SSE.**~~ Split in two, because the two halves answer "can `AppServlet` on Tomcat follow?" oppositely.
-   SSE can, and now ships: `ctx.sse(stream -> ...)` frames the events over the servlet response, so an SSE route is an ordinary `get` route that `routes()`, filters, and the request logger all still reach — and a servlet deployment gets it too.
+   SSE can, and now ships: `WebResponse.sse(stream -> ...)` frames the events over the servlet response, so an SSE route is an ordinary `get` route that `routes()`, filters, and the request logger all still reach — and a servlet deployment gets it too.
    WebSocket cannot: an upgrade leaves servlet dispatch, and with it the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest`.
    It stays out of core as a Jetty recipe, and becomes a `spider-silk-ws` module only if the recipe earns one.
 9. **No virtual-thread story.**
@@ -106,7 +106,7 @@ Ordered by how often they will actually hurt.
 
 **Propose** — worth doing, needs a design decision first:
 
-- A reflection-free typed JSON seam: `interface JsonCodec<T> { Json.JsonValue write(T); T read(Json.JsonValue); }` plus `ctx.json(value, codec)`.
+- A reflection-free typed JSON seam: `interface JsonCodec<T> { Json.JsonValue write(T); T read(Json.JsonValue); }` plus `WebResponse.json(value, codec)`.
   Codecs stay hand-written — the mapping is still visible — but they become reusable instead of inlined in every handler.
 - Route introspection.
   Because routes are an explicit list, `app.routes()` can return them with **no reflection at all**, which makes a route-overview page and even a static OpenAPI export cheap.
@@ -114,14 +114,14 @@ Ordered by how often they will actually hurt.
   This is a genuine differentiator worth leaning on.
 - Virtual threads as a documented recipe on `JettyServer.threadPool(...)`, then possibly a one-liner.
 - Graceful shutdown: a shutdown hook and a stop timeout, on by default.
-- SSE as framing over the servlet response, exposed as `ctx.sse(stream -> ...)` on an ordinary `get` route.
+- SSE as framing over the servlet response, exposed as `WebResponse.sse(stream -> ...)` on an ordinary `get` route.
   **Done** — the transport is the response that was already there, so this was `Json`'s kind of work, a wire format written out, and it cost no new dependency.
   (This entry started as "WebSocket support through Jetty, exposed as `app.ws(path, config)`"; the WebSocket half moved to the rejected list below.)
 
 **Reject on principle** — do not adopt, and say why in the docs:
 
-- `ctx.json(Object)` / `ctx.bodyAsClass(Foo.class)`: reflection.
-- `ctx.bodyValidator(...)` in its Javalin form: reflection.
+- `json(Object)` / `bodyAsClass(Foo.class)`: reflection.
+- `bodyValidator(...)` in its Javalin form: reflection.
 - Spark's static-import DSL: process-global state, no second app per JVM.
 - Javalin's plugin/bundled-plugins system: a registry of things that configure themselves is the beginning of a container.
 - `app.ws(path, config)` in core: a protocol upgrade leaves servlet dispatch, so core would be publishing an API that core's own routing, filters, error handlers, request logger, `routes()`, and test harness do not reach.

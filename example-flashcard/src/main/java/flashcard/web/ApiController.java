@@ -1,7 +1,8 @@
 package flashcard.web;
 
 import spidersilk.App;
-import spidersilk.WebContext;
+import spidersilk.WebRequest;
+import spidersilk.WebResponse;
 
 import flashcard.domain.Deck;
 import flashcard.service.CardService;
@@ -31,20 +32,20 @@ public class ApiController implements Controller {
         });
     }
 
-    void listDecks(WebContext ctx) {
-        ctx.json(deckService.deckSummaries(), Codecs.DECK_SUMMARIES);
+    WebResponse listDecks(WebRequest req) {
+        return WebResponse.json(deckService.deckSummaries(), Codecs.DECK_SUMMARIES);
     }
 
-    void createDeck(WebContext ctx) {
-        Deck deck = deckService.createDeck(ctx.bodyJson(Codecs.NEW_DECK).name());
-        ctx.status(201)
-                .header("Location", "/api/decks/" + deck.id())
-                .json(deck, Codecs.DECK);
+    WebResponse createDeck(WebRequest req) {
+        Deck deck = deckService.createDeck(req.bodyJson(Codecs.NEW_DECK).name());
+        return WebResponse.json(deck, Codecs.DECK)
+                .status(201)
+                .header("Location", "/api/decks/" + deck.id());
     }
 
-    void listCards(WebContext ctx) {
-        long deckId = ctx.pathParamLong("deckId");
+    WebResponse listCards(WebRequest req) {
+        long deckId = req.pathParamLong("deckId");
         deckService.getDeck(deckId);   // IllegalArgumentException -> 404 when missing
-        ctx.json(cardService.cardsWithTags(deckId), Codecs.CARDS);
+        return WebResponse.json(cardService.cardsWithTags(deckId), Codecs.CARDS);
     }
 }

@@ -14,6 +14,7 @@ import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import spidersilk.App;
 import spidersilk.JteTemplates;
+import spidersilk.WebResponse;
 import spidersilk.server.JettyServer;
 
 import flashcard.service.CsvFormatException;
@@ -54,12 +55,12 @@ public class FlashcardApp {
                 .staticFiles("/public");
 
         // CSV format error: this handler runs after the transaction rolled back.
-        app.exception(CsvFormatException.class, (e, ctx) -> {
-            ctx.flash("error", e.getMessage());
-            ctx.redirect("/");
+        app.exception(CsvFormatException.class, (e, req) -> {
+            req.flash("error", e.getMessage());
+            return WebResponse.redirect("/");
         });
         app.exception(IllegalArgumentException.class,
-                (e, ctx) -> ctx.status(404).text(e.getMessage()));
+                (e, req) -> WebResponse.text(e.getMessage()).status(404));
 
         context.controllers().forEach(controller -> controller.register(app));
         return app;

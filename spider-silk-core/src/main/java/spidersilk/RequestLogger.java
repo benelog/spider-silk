@@ -4,8 +4,8 @@ package spidersilk;
  * Called once per request, after the response is complete.
  *
  * <pre>{@code
- * app.requestLogger((ctx, millis) -> logger.info("{} {} -> {} ({}ms)",
- *         ctx.method(), ctx.path(), ctx.res().getStatus(), millis));
+ * app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
+ *         req.method(), req.path(), res.status(), millis));
  * }</pre>
  *
  * <p>One lambda instead of a logging framework in core: which logger to use, at
@@ -15,8 +15,9 @@ package spidersilk;
 public interface RequestLogger {
 
     /**
-     * @param ctx the request, and the response as it was finally answered
+     * @param request the request, as it was received
+     * @param response the response it was finally answered with
      * @param millis how long the whole request took, dispatch and rendering included
      */
-    void log(WebContext ctx, long millis);
+    void log(WebRequest request, WebResponse response, long millis);
 }

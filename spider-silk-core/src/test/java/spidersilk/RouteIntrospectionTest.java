@@ -10,8 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /** {@code app.routes()}: the routing table read back as data, without reflection. */
 class RouteIntrospectionTest {
 
-    private final Handler noop = ctx -> {
-    };
+    private final Handler noop = req -> null;
 
     @Test
     void listsRoutesInRegistrationOrder() {

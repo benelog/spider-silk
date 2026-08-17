@@ -8,10 +8,10 @@ import jakarta.servlet.http.HttpServletResponse;
 
 /**
  * An open Server-Sent Events stream, handed to the lambda of
- * {@link WebContext#sse(SseHandler)}.
+ * {@link WebResponse#sse(SseHandler)}.
  *
  * <pre>{@code
- * app.get("/events", ctx -> ctx.sse(stream -> {
+ * app.get("/events", req -> WebResponse.sse(stream -> {
  *     while (stream.isOpen()) {
  *         stream.id(String.valueOf(counter.incrementAndGet()))
  *               .send("tick", Json.obj().put("at", now()).toJson());
@@ -27,7 +27,7 @@ import jakarta.servlet.http.HttpServletResponse;
  *
  * <p>Once the stream is closed — because the client went away, or because the
  * server is stopping — every further write throws {@link Closed}, which
- * {@link WebContext#sse(SseHandler)} swallows. A handler that does nothing about
+ * {@link WebResponse#sse(SseHandler)} swallows. A handler that does nothing about
  * it therefore ends quietly; {@link #isOpen()} is the way to end it on purpose.
  *
  * <p>The bytes are UTF-8, which is the only encoding the EventSource protocol
@@ -130,7 +130,7 @@ public final class SseStream {
 
     /**
      * Thrown by a write to a stream that has ended — a client that navigated
-     * away, or a server that is stopping. {@link WebContext#sse(SseHandler)}
+     * away, or a server that is stopping. {@link WebResponse#sse(SseHandler)}
      * catches it and finishes the request normally, because neither of those is
      * an error the application did anything about.
      */

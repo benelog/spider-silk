@@ -5,11 +5,10 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.mock.web.MockHttpServletResponse;
 
-import spidersilk.App;
-import spidersilk.WebContext;
 import spidersilk.HttpException;
+import spidersilk.WebRequest;
+import spidersilk.WebResponse;
 import spidersilk.json.Json;
 
 import flashcard.repository.CardRepository;
@@ -23,8 +22,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
- * Calls the package-private handler methods directly with mock
- * requests/responses, without a running server.
+ * Calls the package-private handler methods directly and asserts on the
+ * response they return, without a running server.
  */
 class ApiControllerTest extends RepositoryTestSupport {
 
@@ -41,10 +40,9 @@ class ApiControllerTest extends RepositoryTestSupport {
     void listDecksRespondsWithJsonArray() {
         deckService.createDeck("English");
 
-        MockHttpServletResponse res = new MockHttpServletResponse();
-        controller.listDecks(new WebContext(new App(), new MockHttpServletRequest(), res, Map.of()));
+        WebResponse response = controller.listDecks(request(new MockHttpServletRequest()));
 
-        Json.JsonArray decks = Json.parse(body(res)).asArray();
+        Json.JsonArray decks = Json.parse(body(response)).asArray();
         assertEquals(1, decks.size());
         assertEquals("English", decks.get(0).asObject().getString("name"));
         assertEquals(0, decks.get(0).asObject().getLong("cardCount"));
@@ -54,13 +52,12 @@ class ApiControllerTest extends RepositoryTestSupport {
     void createDeckRespondsWith201AndLocation() {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.setContent("{\"name\": \"Spanish\"}".getBytes(StandardCharsets.UTF_8));
-        MockHttpServletResponse res = new MockHttpServletResponse();
 
-        controller.createDeck(new WebContext(new App(), req, res, Map.of()));
+        WebResponse response = controller.createDeck(request(req));
 
-        assertEquals(201, res.getStatus());
-        long id = Json.parse(body(res)).asObject().getLong("id");
-        assertEquals("/api/decks/" + id, res.getHeader("Location"));
+        assertEquals(201, response.status());
+        long id = Json.parse(body(response)).asObject().getLong("id");
+        assertEquals("/api/decks/" + id, response.header("Location"));
         assertEquals("Spanish", deckService.getDeck(id).name());
     }
 
@@ -69,8 +66,8 @@ class ApiControllerTest extends RepositoryTestSupport {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.setContent("not-json".getBytes(StandardCharsets.UTF_8));
 
-        HttpException e = assertThrows(HttpException.class, () -> controller.createDeck(
-                new WebContext(new App(), req, new MockHttpServletResponse(), Map.of())));
+        HttpException e = assertThrows(HttpException.class,
+                () -> controller.createDeck(request(req)));
         assertEquals(400, e.status());
     }
 
@@ -80,13 +77,17 @@ class ApiControllerTest extends RepositoryTestSupport {
         MockHttpServletRequest req = new MockHttpServletRequest();
         req.setContent("{\"title\": \"Spanish\"}".getBytes(StandardCharsets.UTF_8));
 
-        HttpException e = assertThrows(HttpException.class, () -> controller.createDeck(
-                new WebContext(new App(), req, new MockHttpServletResponse(), Map.of())));
+        HttpException e = assertThrows(HttpException.class,
+                () -> controller.createDeck(request(req)));
         assertEquals(400, e.status());
     }
 
-    /** json() sets no charset, so decode the raw bytes as UTF-8 explicitly. */
-    private static String body(MockHttpServletResponse res) {
-        return new String(res.getContentAsByteArray(), StandardCharsets.UTF_8);
+    private static WebRequest request(MockHttpServletRequest req) {
+        return new WebRequest(req, Map.of());
+    }
+
+    /** A JSON response carries its document as text, which is what to assert on. */
+    private static String body(WebResponse response) {
+        return ((WebResponse.Text) response.body()).content();
     }
 }

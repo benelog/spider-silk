@@ -24,8 +24,8 @@ class CookiesAndParamsTest {
     @Test
     void aCookieSetOnOneRequestComesBackOnTheNext() {
         App app = new App()
-                .get("/set", ctx -> ctx.cookie("theme", "dark").text("set"))
-                .get("/read", ctx -> ctx.text(String.valueOf(ctx.cookie("theme"))));
+                .get("/set", req -> WebResponse.text("set").cookie("theme", "dark"))
+                .get("/read", req -> WebResponse.text(String.valueOf(req.cookie("theme"))));
 
         WebTest.test(app, client -> {
             client.get("/set");
@@ -35,14 +35,14 @@ class CookiesAndParamsTest {
 
     @Test
     void anAbsentCookieIsNull() {
-        App app = new App().get("/read", ctx -> ctx.text(String.valueOf(ctx.cookie("nope"))));
+        App app = new App().get("/read", req -> WebResponse.text(String.valueOf(req.cookie("nope"))));
 
         WebTest.test(app, client -> assertEquals("null", client.get("/read").body()));
     }
 
     @Test
     void everyCookieIsReadable() {
-        App app = new App().get("/read", ctx -> ctx.text(ctx.cookies().toString()));
+        App app = new App().get("/read", req -> WebResponse.text(req.cookies().toString()));
 
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.send(request -> request
@@ -56,7 +56,7 @@ class CookiesAndParamsTest {
 
     @Test
     void defaultsAreScopedToTheSiteAndHiddenFromScripts() {
-        App app = new App().get("/set", ctx -> ctx.cookie("theme", "dark").text("set"));
+        App app = new App().get("/set", req -> WebResponse.text("set").cookie("theme", "dark"));
 
         WebTest.test(app, client -> {
             String setCookie = client.get("/set").headers()
@@ -72,7 +72,7 @@ class CookiesAndParamsTest {
     @Test
     void aMaxAgeMakesTheCookieOutliveTheSession() {
         App app = new App().get("/set",
-                ctx -> ctx.cookie("token", "abc", Duration.ofDays(7)).text("set"));
+                req -> WebResponse.text("set").cookie("token", "abc", Duration.ofDays(7)));
 
         WebTest.test(app, client -> {
             String setCookie = client.get("/set").headers()
@@ -84,7 +84,7 @@ class CookiesAndParamsTest {
 
     @Test
     void removingACookieExpiresIt() {
-        App app = new App().get("/logout", ctx -> ctx.removeCookie("token").text("bye"));
+        App app = new App().get("/logout", req -> WebResponse.text("bye").removeCookie("token"));
 
         WebTest.test(app, client -> {
             String setCookie = client.get("/logout").headers()
@@ -97,12 +97,12 @@ class CookiesAndParamsTest {
     /** The hand-built escape hatch reaches attributes the defaults do not set. */
     @Test
     void aHandBuiltCookieIsSentAsIs() {
-        App app = new App().get("/set", ctx -> {
+        App app = new App().get("/set", req -> {
             Cookie cookie = new Cookie("cross", "site");
             cookie.setPath("/api");
             cookie.setSecure(true);
             cookie.setAttribute("SameSite", "None");
-            ctx.cookie(cookie).text("set");
+            return WebResponse.text("set").cookie(cookie);
         });
 
         WebTest.test(app, client -> {
@@ -119,7 +119,7 @@ class CookiesAndParamsTest {
 
     @Test
     void repeatedQueryParametersAreAllReadable() {
-        App app = new App().get("/search", ctx -> ctx.text(ctx.params("tag").toString()));
+        App app = new App().get("/search", req -> WebResponse.text(req.params("tag").toString()));
 
         WebTest.test(app, client ->
                 assertEquals("[java, web, jvm]", client.get("/search?tag=java&tag=web&tag=jvm").body()));
@@ -127,7 +127,7 @@ class CookiesAndParamsTest {
 
     @Test
     void repeatedFormFieldsAreAllReadable() {
-        App app = new App().post("/cards", ctx -> ctx.text(ctx.params("tag").toString()));
+        App app = new App().post("/cards", req -> WebResponse.text(req.params("tag").toString()));
 
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.send(request -> request
@@ -141,15 +141,15 @@ class CookiesAndParamsTest {
 
     @Test
     void anAbsentParameterIsAnEmptyListRatherThanAnError() {
-        App app = new App().get("/search", ctx -> ctx.text(ctx.params("tag").toString()));
+        App app = new App().get("/search", req -> WebResponse.text(req.params("tag").toString()));
 
         WebTest.test(app, client -> assertEquals("[]", client.get("/search").body()));
     }
 
     @Test
     void theSingularAccessorStillReturnsTheFirstValue() {
-        App app = new App().get("/search", ctx ->
-                ctx.text(ctx.param("tag") + " of " + ctx.params("tag").size()));
+        App app = new App().get("/search", req ->
+                WebResponse.text(req.param("tag") + " of " + req.params("tag").size()));
 
         WebTest.test(app, client ->
                 assertEquals("java of 2", client.get("/search?tag=java&tag=web").body()));
@@ -157,7 +157,7 @@ class CookiesAndParamsTest {
 
     @Test
     void aFormPostedThroughTheTestClientRoundTrips() {
-        App app = new App().post("/decks", ctx -> ctx.text(ctx.param("name")));
+        App app = new App().post("/decks", req -> WebResponse.text(req.param("name")));
 
         WebTest.test(app, client -> assertEquals("English",
                 client.postForm("/decks", Map.of("name", "English")).body()));
@@ -165,13 +165,13 @@ class CookiesAndParamsTest {
 
     @Test
     void theListIsImmutable() {
-        App app = new App().get("/search", ctx -> {
-            List<String> tags = ctx.params("tag");
+        App app = new App().get("/search", req -> {
+            List<String> tags = req.params("tag");
             try {
                 tags.add("sneaky");
-                ctx.text("mutable");
+                return WebResponse.text("mutable");
             } catch (UnsupportedOperationException e) {
-                ctx.text("immutable");
+                return WebResponse.text("immutable");
             }
         });
 

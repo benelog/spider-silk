@@ -37,8 +37,8 @@ import spidersilk.server.WebServerFactory;
 public final class App {
 
     final Router router = new Router();
-    final List<Filter> beforeFilters = new ArrayList<>();
-    final List<Filter> afterFilters = new ArrayList<>();
+    final List<BeforeEntry> beforeFilters = new ArrayList<>();
+    final List<AfterEntry> afterFilters = new ArrayList<>();
     final LinkedHashMap<Class<? extends Exception>, ExceptionHandler<? extends Exception>> exceptionHandlers =
             new LinkedHashMap<>();
     final Map<Integer, Handler> errorHandlers = new LinkedHashMap<>();
@@ -118,7 +118,7 @@ public final class App {
      * dispatcher walks, read back as data.
      *
      * <pre>{@code
-     * app.get("/_routes", ctx -> ctx.render("routes.jte", Map.of("routes", app.routes())));
+     * app.get("/_routes", req -> WebResponse.render("routes.jte", Map.of("routes", app.routes())));
      * }</pre>
      *
      * <p>What was registered, and only that: the HEAD and OPTIONS answers
@@ -131,7 +131,7 @@ public final class App {
     }
 
     /** A filter that runs before every route. */
-    public App before(Handler filter) {
+    public App before(BeforeFilter filter) {
         return before("/*", filter);
     }
 
@@ -140,19 +140,19 @@ public final class App {
      * covers the prefix and everything under it, so "/admin/*" guards
      * "/admin" as well as "/admin/users".
      */
-    public App before(String path, Handler filter) {
-        beforeFilters.add(new Filter(new PathPattern(path), filter));
+    public App before(String path, BeforeFilter filter) {
+        beforeFilters.add(new BeforeEntry(new PathPattern(path), filter));
         return this;
     }
 
     /** A filter that runs after a route completes normally. */
-    public App after(Handler filter) {
+    public App after(AfterFilter filter) {
         return after("/*", filter);
     }
 
     /** A filter that runs after matching routes complete normally. */
-    public App after(String path, Handler filter) {
-        afterFilters.add(new Filter(new PathPattern(path), filter));
+    public App after(String path, AfterFilter filter) {
+        afterFilters.add(new AfterEntry(new PathPattern(path), filter));
         return this;
     }
 
@@ -163,16 +163,18 @@ public final class App {
     }
 
     /**
-     * Renders the body for a response that ended on this status with nothing
-     * written yet — one place for a styled 404 or 500, whether the status came
-     * from the router, from an {@link HttpException}, or from a handler that
-     * called {@code ctx.status(...)} and returned.
+     * Renders the body for a response that ended on this status with no body —
+     * one place for a styled 404 or 500, whether the status came from the router,
+     * from an {@link HttpException}, or from a handler that answered with
+     * {@code WebResponse.empty(404)}.
      *
      * <pre>{@code
-     * app.error(404, ctx -> ctx.render("not-found.jte", Map.of("path", ctx.path())));
+     * app.error(404, req -> WebResponse.render("not-found.jte", Map.of("path", req.path())));
      * }</pre>
      *
-     * A handler that already wrote a body is left alone.
+     * <p>A response that already carries a body is left alone. What the handler
+     * returns keeps the headers the framework had already worked out, and answers
+     * with the registered status unless it sets one of its own.
      */
     public App error(int status, Handler handler) {
         errorHandlers.put(status, Objects.requireNonNull(handler, "handler"));
@@ -188,8 +190,8 @@ public final class App {
      * Called after every response, with how long the request took.
      *
      * <pre>{@code
-     * app.requestLogger((ctx, millis) -> logger.info("{} {} -> {} ({}ms)",
-     *         ctx.method(), ctx.path(), ctx.res().getStatus(), millis));
+     * app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
+     *         req.method(), req.path(), res.status(), millis));
      * }</pre>
      *
      * One lambda, and no logging framework in core. A logger that throws is
@@ -201,7 +203,7 @@ public final class App {
         return this;
     }
 
-    /** The template engine used by {@link WebContext#render}. */
+    /** The template engine used by {@link WebResponse#render}. */
     public App templates(TemplateRenderer renderer) {
         this.templates = renderer;
         return this;

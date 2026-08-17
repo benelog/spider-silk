@@ -21,6 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import spidersilk.App;
+import spidersilk.WebResponse;
 
 class JettyServerTest {
 
@@ -37,7 +38,7 @@ class JettyServerTest {
     @Test
     void servesRoutesOverHttp() throws Exception {
         app = new App()
-                .get("/hello/{name}", ctx -> ctx.text("Hello " + ctx.pathParam("name")))
+                .get("/hello/{name}", req -> WebResponse.text("Hello " + req.pathParam("name")))
                 .start(0);
 
         HttpResponse<String> response = get("/hello/spider");
@@ -64,20 +65,20 @@ class JettyServerTest {
     @Test
     void sessionsAreEnabledByDefault() throws Exception {
         app = new App()
-                .get("/flash", ctx -> {
-                    ctx.flash("message", "saved");
-                    ctx.text("ok");
+                .get("/flash", req -> {
+                    req.flash("message", "saved");
+                    return WebResponse.text("ok");
                 })
                 .start(0);
 
         assertEquals(200, get("/flash").statusCode());
     }
 
-    /** ctx.file(...) needs a MultipartConfig on the servlet; the default supplies one. */
+    /** req.file(...) needs a MultipartConfig on the servlet; the default supplies one. */
     @Test
     void multipartUploadsWorkOutOfTheBox() throws Exception {
         app = new App()
-                .post("/upload", ctx -> ctx.text(ctx.file("csv").asText()))
+                .post("/upload", req -> WebResponse.text(req.file("csv").asText()))
                 .start(0);
 
         String boundary = "spidersilkboundary";
@@ -101,7 +102,7 @@ class JettyServerTest {
 
     @Test
     void customizersReachTheRealJettyObjects() throws Exception {
-        JettyServer jetty = new JettyServer(new App().get("/", ctx -> ctx.text("ok")))
+        JettyServer jetty = new JettyServer(new App().get("/", req -> WebResponse.text("ok")))
                 .port(0)
                 .customizeHttpConfiguration(http -> http.setSendServerVersion(false))
                 .customizeServer(server -> server.setAttribute("customized", true));
@@ -126,10 +127,10 @@ class JettyServerTest {
     @Test
     void stopWaitsForARequestInFlight() throws Exception {
         CountDownLatch handlerEntered = new CountDownLatch(1);
-        app = new App().get("/slow", ctx -> {
+        app = new App().get("/slow", req -> {
             handlerEntered.countDown();
             Thread.sleep(300);
-            ctx.text("finished");
+            return WebResponse.text("finished");
         }).start(0);
 
         String url = "http://localhost:" + app.port() + "/slow";
@@ -210,7 +211,7 @@ class JettyServerTest {
     /** An idle keep-alive connection must not hold the stop timeout hostage. */
     @Test
     void anIdleConnectionDoesNotDelayTheStop() throws Exception {
-        app = new App().get("/", ctx -> ctx.text("ok")).start(0);
+        app = new App().get("/", req -> WebResponse.text("ok")).start(0);
         assertEquals(200, get("/").statusCode());   // leaves a keep-alive connection behind
 
         long startedAt = System.nanoTime();
@@ -230,7 +231,9 @@ class JettyServerTest {
         QueuedThreadPool threadPool = new QueuedThreadPool();
         threadPool.setVirtualThreadsExecutor(VirtualThreads.getDefaultVirtualThreadsExecutor());
         app = new App()
-                .get("/", ctx -> ctx.text(Thread.currentThread().isVirtual() ? "virtual" : "platform"))
+                .get("/",
+                        req -> WebResponse.text(
+                                Thread.currentThread().isVirtual() ? "virtual" : "platform"))
                 .server((a, port) -> new JettyServer(a).port(port).threadPool(threadPool))
                 .start(0);
 

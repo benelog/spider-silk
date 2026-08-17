@@ -4,7 +4,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import spidersilk.App;
-import spidersilk.WebContext;
+import spidersilk.WebRequest;
+import spidersilk.WebResponse;
 
 import flashcard.service.DeckService;
 import flashcard.service.SmartDeckService;
@@ -29,7 +30,7 @@ public class HomeController implements Controller {
         app.get("/", this::home);
     }
 
-    void home(WebContext ctx) {
+    WebResponse home(WebRequest req) {
         Map<String, Object> model = new HashMap<>();
         model.put("todayCount", studyService.todayCount());
         model.put("oftenWrongCount", smartDeckService.oftenWrongCount());
@@ -37,8 +38,8 @@ public class HomeController implements Controller {
         model.put("decks", deckService.deckSummaries());
         model.put("smartDecks", smartDeckService.smartDecks());
         model.put("directions", StudyDirection.values());
-        model.put("message", ctx.flashed("message"));
-        model.put("error", ctx.flashed("error"));
-        ctx.render("home.jte", model);
+        model.put("message", req.flashed("message"));
+        model.put("error", req.flashed("error"));
+        return WebResponse.render("home.jte", model);
     }
 }

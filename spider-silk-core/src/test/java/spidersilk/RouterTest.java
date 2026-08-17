@@ -10,8 +10,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 
 class RouterTest {
 
-    private final Handler noop = ctx -> {
-    };
+    private final Handler noop = req -> null;
 
     @Test
     void findsHandlerByMethodAndPath() {
@@ -30,8 +29,7 @@ class RouterTest {
     @Test
     void firstMatchingRouteInRegistrationOrderWins() {
         Router router = new Router();
-        Handler first = ctx -> {
-        };
+        Handler first = req -> null;
         router.add("GET", "/study/today", first);
         router.add("GET", "/study/{mode}", noop);
 
@@ -53,8 +51,7 @@ class RouterTest {
     @Test
     void aVariableFirstSegmentIsWeighedAgainstLiteralOnes() {
         Router router = new Router();
-        Handler byId = ctx -> {
-        };
+        Handler byId = req -> null;
         router.add("GET", "/decks", noop);
         router.add("GET", "/{page}", byId);
 
@@ -66,8 +63,7 @@ class RouterTest {
     @Test
     void aVariablePatternRegisteredFirstStillWins() {
         Router router = new Router();
-        Handler first = ctx -> {
-        };
+        Handler first = req -> null;
         router.add("GET", "/{page}", first);
         router.add("GET", "/decks", noop);
 
@@ -77,8 +73,7 @@ class RouterTest {
     @Test
     void theRootIsItsOwnBucket() {
         Router router = new Router();
-        Handler root = ctx -> {
-        };
+        Handler root = req -> null;
         router.add("GET", "/", root);
         router.add("GET", "/decks", noop);
 
@@ -90,8 +85,7 @@ class RouterTest {
     @Test
     void aWildcardPatternMatchesAnyFirstSegment() {
         Router router = new Router();
-        Handler everything = ctx -> {
-        };
+        Handler everything = req -> null;
         router.add("GET", "/*", everything);
 
         assertEquals(everything, router.find("GET", "/").handler());

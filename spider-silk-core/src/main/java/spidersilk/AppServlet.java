@@ -1,17 +1,19 @@
 package spidersilk;
 
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServlet;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -21,6 +23,13 @@ import jakarta.servlet.http.HttpSession;
 /**
  * The entry point that deploys an {@link App} to a servlet container.
  * Mapped to "/*", it takes care of routing, static files, and exception handling.
+ *
+ * <p>Handlers answer with a {@link WebResponse} rather than writing one, so this
+ * class runs in two halves: {@link #dispatch} works out what the answer is, and
+ * {@link #write} puts it on the wire. Everything that can be routed to
+ * {@link App#exception} happens in the first half — template rendering included,
+ * which is why a {@link WebResponse.Template} is materialized before the second
+ * half begins.
  */
 public class AppServlet extends HttpServlet {
 
@@ -36,67 +45,64 @@ public class AppServlet extends HttpServlet {
         promoteFlash(req);
 
         long startedAt = System.nanoTime();
-        WebContext ctx = null;
+        WebRequest request = new WebRequest(req, Map.of());
+        WebResponse response = dispatch(request);
         try {
-            if ("HEAD".equals(req.getMethod())) {
-                HeadResponse head = new HeadResponse(res);
-                ctx = dispatch(req, head);
-                head.finish();
-            } else {
-                ctx = dispatch(req, res);
-            }
+            write(response, req, res, "HEAD".equals(req.getMethod()));
+        } catch (Exception e) {
+            writeFailed(e, res);
         } finally {
-            logRequest(ctx, startedAt);
+            logRequest(request, response, startedAt);
         }
     }
 
-    /** Reports the finished request, with the status it was finally answered with. */
-    private void logRequest(WebContext ctx, long startedAt) {
-        if (app.requestLogger == null || ctx == null) {
+    /** Reports the finished request, with the response it was finally answered with. */
+    private void logRequest(WebRequest request, WebResponse response, long startedAt) {
+        if (app.requestLogger == null) {
             return;
         }
         try {
-            app.requestLogger.log(ctx, (System.nanoTime() - startedAt) / 1_000_000);
+            app.requestLogger.log(request, response, (System.nanoTime() - startedAt) / 1_000_000);
         } catch (Exception e) {
             log("Request logger failed", e);
         }
     }
 
-    private WebContext dispatch(HttpServletRequest req, HttpServletResponse res)
-            throws IOException {
+    // ---- Working out the answer ----
+
+    /** Never throws and never returns null: every path here ends in a response. */
+    private WebResponse dispatch(WebRequest request) {
+        HttpServletRequest req = request.raw();
         String method = req.getMethod();
-        String path = requestPath(req);
+        String path = request.path();
         String[] segments = PathPattern.split(path);
-        WebContext ctx = new WebContext(app, req, res, Map.of());
+        WebRequest current = request;
+        WebResponse response;
         try {
             Router.Match match = routeFor(method, path);
             if (match != null) {
-                ctx = new WebContext(app, req, res, match.pathParams());
-                if (!runFilters(app.beforeFilters, segments, ctx)) {
-                    match.handler().handle(ctx);
-                    runFilters(app.afterFilters, segments, ctx);
-                }
-            } else if (isReadMethod(method) && app.staticFiles != null
-                    && app.staticFiles.serve(path, req, res)) {
-                return ctx;
-            } else {
-                Set<String> allowed = allowedMethods(path);
-                if (allowed.isEmpty()) {
-                    fail(ctx, 404, "Not Found: " + path);
+                current = request.withPathParams(match.pathParams());
+                WebResponse answered = runBefore(segments, current);
+                if (answered != null) {
+                    response = answered;
                 } else {
-                    res.setHeader("Allow", String.join(", ", allowed));
-                    if ("OPTIONS".equals(method)) {
-                        res.setContentLength(0);
-                    } else {
-                        fail(ctx, 405, "Method Not Allowed: " + method + " " + path);
-                    }
+                    response = required(match.handler().handle(current), "Handler", method, path);
+                    response = runAfter(segments, current, response);
                 }
+            } else if (isReadMethod(method) && app.staticFiles != null) {
+                WebResponse file = app.staticFiles.resolve(path, req);
+                if (file != null) {
+                    return file;
+                }
+                response = noRoute(current, method, path);
+            } else {
+                response = noRoute(current, method, path);
             }
+            response = renderTemplate(response);
         } catch (Exception e) {
-            handleException(e, ctx);
+            response = handleException(e, current);
         }
-        completeErrorResponse(ctx);
-        return ctx;
+        return completeErrorResponse(response, current);
     }
 
     /** A HEAD with no route of its own is answered by the GET route, minus the body. */
@@ -106,6 +112,24 @@ public class AppServlet extends HttpServlet {
             return app.router.find("GET", path);
         }
         return match;
+    }
+
+    /**
+     * The answer when nothing is registered for this path and method: 404 when
+     * the path is unknown, and otherwise an {@code Allow} header with either an
+     * OPTIONS answer or a 405 behind it.
+     */
+    private WebResponse noRoute(WebRequest request, String method, String path) {
+        Set<String> allowed = allowedMethods(path);
+        if (allowed.isEmpty()) {
+            return fail(request, 404, "Not Found: " + path);
+        }
+        String allow = String.join(", ", allowed);
+        if ("OPTIONS".equals(method)) {
+            return WebResponse.empty().header("Allow", allow).header("Content-Length", "0");
+        }
+        return fail(request, 405, "Method Not Allowed: " + method + " " + path)
+                .header("Allow", allow);
     }
 
     /**
@@ -126,36 +150,61 @@ public class AppServlet extends HttpServlet {
         return allowed;
     }
 
-    private String requestPath(HttpServletRequest req) {
-        String path = req.getServletPath();
-        if (req.getPathInfo() != null) {
-            path = path + req.getPathInfo();
-        }
-        return path.isEmpty() ? "/" : path;
-    }
-
     private boolean isReadMethod(String method) {
         return "GET".equals(method) || "HEAD".equals(method);
     }
 
     /**
-     * Runs the matching filters and reports whether one of them answered the
-     * request. A before-filter that writes a response — a redirect to the login
-     * page, a 403 body — ends the request there: the route handler must not run
-     * after a guard has turned the caller away. To reject without writing a body,
-     * throw an {@link HttpException}.
+     * Runs the matching before-filters and reports whether one of them answered.
+     * A filter that returns a response — a redirect to the login page, a 403 —
+     * ends the request there: the route handler must not run after a guard has
+     * turned the caller away. To reject with the framework's own body, throw an
+     * {@link HttpException}.
      */
-    private boolean runFilters(List<Filter> filters, String[] segments, WebContext ctx)
-            throws Exception {
-        for (Filter filter : filters) {
-            if (filter.matches(segments)) {
-                filter.handler().handle(ctx);
-                if (ctx.bodyWritten()) {
-                    return true;
+    private WebResponse runBefore(String[] segments, WebRequest request) throws Exception {
+        for (BeforeEntry entry : app.beforeFilters) {
+            if (entry.matches(segments)) {
+                WebResponse answered = entry.filter().handle(request);
+                if (answered != null) {
+                    return answered;
                 }
             }
         }
-        return false;
+        return null;
+    }
+
+    /** Lets each matching after-filter replace the response, or leave it alone by returning null. */
+    private WebResponse runAfter(String[] segments, WebRequest request, WebResponse response)
+            throws Exception {
+        WebResponse current = response;
+        for (AfterEntry entry : app.afterFilters) {
+            if (entry.matches(segments)) {
+                WebResponse replaced = entry.filter().handle(request, current);
+                if (replaced != null) {
+                    current = replaced;
+                }
+            }
+        }
+        return current;
+    }
+
+    /**
+     * Renders a {@link WebResponse.Template} into the text it produces, while the
+     * exception handling around the handler still applies. A template that throws
+     * therefore reaches {@link App#exception} rather than the container, and a
+     * HEAD of a rendered page reports the length the GET would have sent.
+     */
+    private WebResponse renderTemplate(WebResponse response) {
+        if (!(response.body() instanceof WebResponse.Template template)) {
+            return response;
+        }
+        if (app.templates == null) {
+            throw new IllegalStateException(
+                    "No template engine configured. Call App.templates(...).");
+        }
+        StringWriter out = new StringWriter();
+        app.templates.render(template.name(), template.model(), out);
+        return response.body(new WebResponse.Text(out.toString()));
     }
 
     /** Moves flash left in the session by the request before the redirect into this request. */
@@ -164,79 +213,200 @@ public class AppServlet extends HttpServlet {
         if (session == null) {
             return;
         }
-        Object flash = session.getAttribute(WebContext.FLASH_ATTRIBUTE);
+        Object flash = session.getAttribute(WebRequest.FLASH_ATTRIBUTE);
         if (flash != null) {
-            session.removeAttribute(WebContext.FLASH_ATTRIBUTE);
-            req.setAttribute(WebContext.FLASH_ATTRIBUTE, flash);
+            session.removeAttribute(WebRequest.FLASH_ATTRIBUTE);
+            req.setAttribute(WebRequest.FLASH_ATTRIBUTE, flash);
         }
     }
 
-    private void handleException(Exception e, WebContext ctx) {
+    private WebResponse handleException(Exception e, WebRequest request) {
         for (var entry : app.exceptionHandlers.entrySet()) {
             if (entry.getKey().isInstance(e)) {
                 @SuppressWarnings("unchecked")
                 ExceptionHandler<Exception> handler =
                         (ExceptionHandler<Exception>) entry.getValue();
                 try {
-                    handler.handle(e, ctx);
-                    return;
+                    return renderTemplate(required(handler.handle(e, request),
+                            "Exception handler", request.method(), request.path()));
                 } catch (Exception handlerFailure) {
-                    internalError(handlerFailure, ctx);
-                    return;
+                    return internalError(handlerFailure, request);
                 }
             }
         }
         if (e instanceof HttpException httpException) {
-            fail(ctx, httpException.status(), httpException.getMessage());
-            return;
+            return fail(request, httpException.status(), httpException.getMessage());
         }
-        internalError(e, ctx);
+        return internalError(e, request);
     }
 
-    private void internalError(Exception e, WebContext ctx) {
+    private WebResponse internalError(Exception e, WebRequest request) {
         log("Error while handling request", e);
-        fail(ctx, 500, "Internal Server Error");
+        return fail(request, 500, "Internal Server Error");
     }
 
-    /** Records the status and the body the framework would write by default. */
-    private void fail(WebContext ctx, int status, String message) {
-        ctx.status(status);
-        ctx.errorMessage(message);
+    /** Records the body the framework would answer with by default, and the status. */
+    private WebResponse fail(WebRequest request, int status, String message) {
+        request.errorMessage(message);
+        return WebResponse.empty(status);
+    }
+
+    private WebResponse required(WebResponse response, String what, String method, String path) {
+        if (response == null) {
+            throw new NullPointerException(
+                    "%s returned no response for %s %s".formatted(what, method, path));
+        }
+        return response;
     }
 
     /**
      * Fills in the body of an error response nobody wrote one for, preferring a
-     * handler registered through {@link App#error(int, Handler)}.
+     * handler registered through {@link App#error(int, Handler)}. Whatever the
+     * handler returns keeps the headers already set — the {@code Allow} of a 405,
+     * say — and answers with the registered status unless it set one itself.
      */
-    private void completeErrorResponse(WebContext ctx) throws IOException {
-        HttpServletResponse res = ctx.res();
-        if (res.getStatus() < 400 || ctx.bodyWritten() || res.isCommitted()) {
-            return;
+    private WebResponse completeErrorResponse(WebResponse response, WebRequest request) {
+        if (response.status() < 400 || !(response.body() instanceof WebResponse.Empty)) {
+            return response;
         }
-        Handler handler = app.errorHandlers.get(res.getStatus());
+        int status = response.status();
+        Handler handler = app.errorHandlers.get(status);
         if (handler != null) {
             try {
-                handler.handle(ctx);
-                return;
+                WebResponse answered = renderTemplate(required(handler.handle(request),
+                        "Error handler", request.method(), request.path()));
+                return answered.over(response).status(
+                        answered.hasStatus() ? answered.status() : status);
             } catch (Exception e) {
-                log("Error handler failed for status " + res.getStatus(), e);
-                if (!res.isCommitted()) {
-                    res.setStatus(500);
-                    res.setContentType("text/plain; charset=UTF-8");
-                    res.getWriter().write("Internal Server Error");
-                }
-                return;
+                log("Error handler failed for status " + status, e);
+                return WebResponse.text("Internal Server Error").status(500);
             }
         }
-        if (ctx.errorMessage() != null) {
-            ctx.text(ctx.errorMessage());
+        if (request.errorMessage() != null) {
+            return WebResponse.text(request.errorMessage()).over(response).status(status);
+        }
+        return response;
+    }
+
+    // ---- Putting the answer on the wire ----
+
+    private void write(WebResponse response, HttpServletRequest req, HttpServletResponse res,
+            boolean head) throws Exception {
+        res.setStatus(response.status());
+        for (Map.Entry<String, String> header : response.headers().entrySet()) {
+            if ("Content-Type".equalsIgnoreCase(header.getKey())) {
+                res.setContentType(header.getValue());
+            } else {
+                res.setHeader(header.getKey(), header.getValue());
+            }
+        }
+        for (Cookie cookie : response.cookies()) {
+            res.addCookie(cookie);
+        }
+
+        switch (response.body()) {
+            case WebResponse.Empty ignored -> {
+                // The status and the headers are the whole answer.
+            }
+            case WebResponse.Text text ->
+                    writeBytes(text.content().getBytes(StandardCharsets.UTF_8), res, head);
+            case WebResponse.Bytes bytes -> writeBytes(bytes.data(), res, head);
+            case WebResponse.Stream stream -> writeStream(stream.writer(), res, head);
+            case WebResponse.Sse sse -> writeSse(sse.handler(), res, head);
+            case WebResponse.Raw raw -> writeRaw(raw.handler(), req, res, head);
+            case WebResponse.Template ignored -> throw new IllegalStateException(
+                    "A template should have been rendered before the response was written");
+        }
+    }
+
+    /** A body already in memory: a HEAD knows its length without producing it. */
+    private void writeBytes(byte[] data, HttpServletResponse res, boolean head) throws IOException {
+        if (head) {
+            setLengthIfUnset(res, data.length);
+            return;
+        }
+        res.getOutputStream().write(data);
+    }
+
+    /**
+     * A body produced as it goes. A HEAD still runs the writer, because only
+     * running it says how long the body would have been — and because the writer
+     * is what closes whatever it opened.
+     */
+    private void writeStream(StreamWriter writer, HttpServletResponse res, boolean head)
+            throws Exception {
+        if (head) {
+            CountingStream counted = new CountingStream();
+            writer.write(counted);
+            setLengthIfUnset(res, counted.written);
+            return;
+        }
+        writer.write(res.getOutputStream());
+    }
+
+    /**
+     * An SSE stream, which occupies this thread until it ends. A HEAD answers
+     * with the headers and never runs the handler: a stream whose body is thrown
+     * away would never end.
+     */
+    private void writeSse(SseHandler handler, HttpServletResponse res, boolean head)
+            throws Exception {
+        if (head) {
+            res.flushBuffer();
+            return;
+        }
+        SseStream stream = new SseStream(res);
+        app.openStreams.add(stream);
+        try {
+            res.flushBuffer();  // commit the headers, so the client opens before the first event
+            handler.handle(stream);
+        } catch (SseStream.Closed e) {
+            // The client left, or the server is stopping. Both end the request normally.
+        } finally {
+            app.openStreams.remove(stream);
+            stream.close();
+        }
+    }
+
+    /** The escape hatch. A HEAD counts what it wrote and throws the bytes away. */
+    private void writeRaw(RawHandler handler, HttpServletRequest req, HttpServletResponse res,
+            boolean head) throws Exception {
+        if (!head) {
+            handler.handle(req, res);
+            return;
+        }
+        HeadResponse counted = new HeadResponse(res);
+        handler.handle(req, counted);
+        counted.finish();
+    }
+
+    private void setLengthIfUnset(HttpServletResponse res, long length) {
+        if (length > 0 && !res.isCommitted() && res.getHeader("Content-Length") == null) {
+            res.setContentLengthLong(length);
         }
     }
 
     /**
-     * A HEAD answered by the GET handler: every header the handler sets goes
-     * through, the body goes nowhere. The bytes are counted, so a handler that
-     * did not set {@code Content-Length} itself still reports the length the
+     * A body that failed halfway. The status and the headers may already be on
+     * the wire by then, so this is best-effort: a 500 when nothing has been sent,
+     * and a log entry either way. Nothing is rethrown into the container, which
+     * would only turn a broken page into a broken page plus a stack trace.
+     */
+    private void writeFailed(Exception e, HttpServletResponse res) throws IOException {
+        log("Failed while writing the response", e);
+        if (res.isCommitted()) {
+            return;
+        }
+        res.reset();
+        res.setStatus(500);
+        res.setContentType("text/plain; charset=UTF-8");
+        res.getWriter().write("Internal Server Error");
+    }
+
+    /**
+     * A HEAD answered by a {@link WebResponse.Raw} handler: every header it sets
+     * goes through, the body goes nowhere. The bytes are counted, so a handler
+     * that did not set {@code Content-Length} itself still reports the length the
      * GET would have sent.
      */
     private static final class HeadResponse extends HttpServletResponseWrapper {
@@ -250,7 +420,7 @@ public class AppServlet extends HttpServlet {
 
         @Override
         public ServletOutputStream getOutputStream() {
-            return body;
+            return new ServletStream(body);
         }
 
         @Override
@@ -277,7 +447,7 @@ public class AppServlet extends HttpServlet {
     }
 
     /** Counts what a HEAD would have sent, and throws it away. */
-    private static final class CountingStream extends ServletOutputStream {
+    private static final class CountingStream extends OutputStream {
 
         private long written;
 
@@ -289,6 +459,26 @@ public class AppServlet extends HttpServlet {
         @Override
         public void write(byte[] b, int off, int len) {
             written += len;
+        }
+    }
+
+    /** The same counting, in the shape the servlet API asks for. */
+    private static final class ServletStream extends ServletOutputStream {
+
+        private final CountingStream counted;
+
+        ServletStream(CountingStream counted) {
+            this.counted = counted;
+        }
+
+        @Override
+        public void write(int b) {
+            counted.write(b);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) {
+            counted.write(b, off, len);
         }
 
         @Override

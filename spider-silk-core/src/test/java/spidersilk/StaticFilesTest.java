@@ -142,14 +142,14 @@ class StaticFilesTest {
     void routesWinOverFiles() {
         App app = new App()
                 .staticFiles("/public")
-                .get("/style.css", ctx -> ctx.text("from the route"));
+                .get("/style.css", req -> WebResponse.text("from the route"));
 
         WebTest.test(app, client -> assertEquals("from the route", client.get("/style.css").body()));
     }
 
     @Test
     void anAppWithoutStaticFilesStillRoutes() {
-        WebTest.test(new App().get("/", ctx -> ctx.text("ok")), client -> {
+        WebTest.test(new App().get("/", req -> WebResponse.text("ok")), client -> {
             assertEquals("ok", client.get("/").body());
             assertEquals(404, client.get("/style.css").statusCode());
         });

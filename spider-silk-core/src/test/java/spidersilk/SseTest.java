@@ -24,7 +24,7 @@ class SseTest {
 
     @Test
     void eventsAreFramedTheWayTheProtocolDefinesThem() {
-        App app = new App().get("/events", ctx -> ctx.sse(stream -> {
+        App app = new App().get("/events", req -> WebResponse.sse(stream -> {
             stream.id("7").send("tick", "first");
             stream.send("line one\nline two");
             stream.comment("keep-alive");
@@ -58,9 +58,12 @@ class SseTest {
         List<String> filtered = new ArrayList<>();
         List<Integer> logged = new ArrayList<>();
         App app = new App()
-                .requestLogger((ctx, millis) -> logged.add(ctx.res().getStatus()))
-                .before("/events", ctx -> filtered.add("before " + ctx.path()))
-                .get("/events", ctx -> ctx.sse(stream -> stream.send("one")));
+                .requestLogger((req, res, millis) -> logged.add(res.status()))
+                .before("/events", req -> {
+                    filtered.add("before " + req.path());
+                    return null;
+                })
+                .get("/events", req -> WebResponse.sse(stream -> stream.send("one")));
 
         assertEquals(List.of(new Route("GET", "/events")), app.routes());
 
@@ -74,7 +77,7 @@ class SseTest {
     @Test
     void headAnswersWithTheHeadersAndNeverOpensAStream() {
         AtomicBoolean opened = new AtomicBoolean();
-        App app = new App().get("/events", ctx -> ctx.sse(stream -> {
+        App app = new App().get("/events", req -> WebResponse.sse(stream -> {
             opened.set(true);
             stream.send("never sent");
         }));
@@ -140,7 +143,7 @@ class SseTest {
 
     /** An endless stream, which only a closed connection or a stopped server ends. */
     private App ticker(CountDownLatch handlerEnded) {
-        return new App().get("/events", ctx -> ctx.sse(stream -> {
+        return new App().get("/events", req -> WebResponse.sse(stream -> {
             try {
                 while (stream.isOpen()) {
                     stream.send("tick");

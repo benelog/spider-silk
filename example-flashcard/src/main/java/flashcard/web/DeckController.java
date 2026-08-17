@@ -5,7 +5,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 import spidersilk.App;
-import spidersilk.WebContext;
+import spidersilk.WebRequest;
+import spidersilk.WebResponse;
 
 import flashcard.service.CardService;
 import flashcard.service.DeckService;
@@ -35,73 +36,74 @@ public class DeckController implements Controller {
         app.post("/decks/{deckId}/import", this::importCsv);
     }
 
-    void createDeck(WebContext ctx) {
-        ctx.redirect("/decks/" + deckService.createDeck(ctx.param("name")).id());
+    WebResponse createDeck(WebRequest req) {
+        return WebResponse.redirect("/decks/" + deckService.createDeck(req.param("name")).id());
     }
 
-    void showDeck(WebContext ctx) {
-        long deckId = ctx.pathParamLong("deckId");
+    WebResponse showDeck(WebRequest req) {
+        long deckId = req.pathParamLong("deckId");
         Map<String, Object> model = new HashMap<>();
         model.put("deck", deckService.getDeck(deckId));
         model.put("cards", cardService.cardsWithTags(deckId));
         model.put("directions", StudyDirection.values());
-        model.put("message", ctx.flashed("message"));
-        model.put("error", ctx.flashed("error"));
-        ctx.render("deck.jte", model);
+        model.put("message", req.flashed("message"));
+        model.put("error", req.flashed("error"));
+        return WebResponse.render("deck.jte", model);
     }
 
-    void renameDeck(WebContext ctx) {
-        long deckId = ctx.pathParamLong("deckId");
-        deckService.renameDeck(deckId, ctx.param("name"));
-        ctx.redirect("/decks/" + deckId);
+    WebResponse renameDeck(WebRequest req) {
+        long deckId = req.pathParamLong("deckId");
+        deckService.renameDeck(deckId, req.param("name"));
+        return WebResponse.redirect("/decks/" + deckId);
     }
 
-    void deleteDeck(WebContext ctx) {
-        deckService.deleteDeck(ctx.pathParamLong("deckId"));
-        ctx.redirect("/");
+    WebResponse deleteDeck(WebRequest req) {
+        deckService.deleteDeck(req.pathParamLong("deckId"));
+        return WebResponse.redirect("/");
     }
 
-    void addCard(WebContext ctx) {
-        long deckId = ctx.pathParamLong("deckId");
-        cardService.addCard(deckId, ctx.param("text"), ctx.param("meaning"),
-                ctx.param("tags", ""));
-        ctx.redirect("/decks/" + deckId);
+    WebResponse addCard(WebRequest req) {
+        long deckId = req.pathParamLong("deckId");
+        cardService.addCard(deckId, req.param("text"), req.param("meaning"),
+                req.param("tags", ""));
+        return WebResponse.redirect("/decks/" + deckId);
     }
 
-    void editCardForm(WebContext ctx) {
-        long deckId = ctx.pathParamLong("deckId");
-        long cardId = ctx.pathParamLong("cardId");
+    WebResponse editCardForm(WebRequest req) {
+        long deckId = req.pathParamLong("deckId");
+        long cardId = req.pathParamLong("cardId");
         Map<String, Object> model = new HashMap<>();
         model.put("deck", deckService.getDeck(deckId));
         model.put("card", cardService.getCard(cardId));
         model.put("tags", String.join(", ", cardService.tagsOf(cardId)));
-        ctx.render("card-edit.jte", model);
+        return WebResponse.render("card-edit.jte", model);
     }
 
-    void editCard(WebContext ctx) {
-        long deckId = ctx.pathParamLong("deckId");
-        cardService.editCard(ctx.pathParamLong("cardId"), ctx.param("text"),
-                ctx.param("meaning"), ctx.param("tags", ""));
-        ctx.redirect("/decks/" + deckId);
+    WebResponse editCard(WebRequest req) {
+        long deckId = req.pathParamLong("deckId");
+        cardService.editCard(req.pathParamLong("cardId"), req.param("text"),
+                req.param("meaning"), req.param("tags", ""));
+        return WebResponse.redirect("/decks/" + deckId);
     }
 
-    void deleteCard(WebContext ctx) {
-        long deckId = ctx.pathParamLong("deckId");
-        cardService.deleteCard(ctx.pathParamLong("cardId"));
-        ctx.redirect("/decks/" + deckId);
+    WebResponse deleteCard(WebRequest req) {
+        long deckId = req.pathParamLong("deckId");
+        cardService.deleteCard(req.pathParamLong("cardId"));
+        return WebResponse.redirect("/decks/" + deckId);
     }
 
-    void exportCsv(WebContext ctx) {
-        long deckId = ctx.pathParamLong("deckId");
+    WebResponse exportCsv(WebRequest req) {
+        long deckId = req.pathParamLong("deckId");
         String csv = deckService.exportCsv(deckId);
-        ctx.attachment("deck-%d.csv".formatted(deckId))
-                .bytes(csv.getBytes(StandardCharsets.UTF_8), "text/csv; charset=UTF-8");
+        return WebResponse
+                .bytes(csv.getBytes(StandardCharsets.UTF_8), "text/csv; charset=UTF-8")
+                .attachment("deck-%d.csv".formatted(deckId));
     }
 
-    void importCsv(WebContext ctx) {
-        long deckId = ctx.pathParamLong("deckId");
-        int imported = deckService.importCsv(deckId, ctx.file("file").asText());
-        ctx.flash("message", "Imported " + imported + " cards.");
-        ctx.redirect("/decks/" + deckId);
+    WebResponse importCsv(WebRequest req) {
+        long deckId = req.pathParamLong("deckId");
+        int imported = deckService.importCsv(deckId, req.file("file").asText());
+        req.flash("message", "Imported " + imported + " cards.");
+        return WebResponse.redirect("/decks/" + deckId);
     }
 }
