@@ -57,7 +57,7 @@ ServletContextHandler context = new ServletContextHandler(ServletContextHandler.
 context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 ```
 
-### What Context provides
+### What WebContext provides
 
 - Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`
 - Parameters: `param` (400 when missing), `param(name, default)`, `paramLong`, `paramBoolean`, `paramEnum`
