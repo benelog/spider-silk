@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 import spidersilk.server.JettyServer;
@@ -40,6 +42,7 @@ public final class App {
     final LinkedHashMap<Class<? extends Exception>, ExceptionHandler<? extends Exception>> exceptionHandlers =
             new LinkedHashMap<>();
     final Map<Integer, Handler> errorHandlers = new LinkedHashMap<>();
+    final Set<SseStream> openStreams = ConcurrentHashMap.newKeySet();
 
     TemplateRenderer templates;
     StaticFiles staticFiles;
@@ -248,8 +251,16 @@ public final class App {
         return this;
     }
 
-    /** Stops the server. Doing this while stopped is a no-op. */
+    /**
+     * Stops the server. Doing this while stopped is a no-op.
+     *
+     * <p>Open SSE streams are closed first. Each of them is a request that has
+     * been in flight since it started and would never finish on its own, so the
+     * graceful stop would wait out its whole timeout and then report a failure
+     * to drain — a stream is closed before Jetty is asked to drain anything.
+     */
     public App stop() {
+        closeOpenStreams();
         if (server != null) {
             WebServer running = server;
             server = null;
@@ -272,6 +283,13 @@ public final class App {
     /** The running server, for implementation-specific access. */
     public WebServer server() {
         return requireStarted();
+    }
+
+    private void closeOpenStreams() {
+        for (SseStream stream : List.copyOf(openStreams)) {
+            openStreams.remove(stream);
+            stream.close();
+        }
     }
 
     private WebServer requireStarted() {

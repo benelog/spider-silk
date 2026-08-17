@@ -446,6 +446,61 @@ public final class WebContext {
         }
     }
 
+    /**
+     * Answers with a Server-Sent Events stream: {@code text/event-stream}, one
+     * event per {@link SseStream#send} call, flushed as it goes.
+     *
+     * <pre>{@code
+     * app.get("/decks/{deckId}/events", ctx -> {
+     *     long deckId = ctx.pathParamLong("deckId");
+     *     ctx.sse(stream -> {
+     *         while (stream.isOpen()) {
+     *             stream.send("due", Json.obj().put("count", service.due(deckId)).toJson());
+     *             Thread.sleep(1000);
+     *         }
+     *     });
+     * });
+     * }</pre>
+     *
+     * <p>This is an ordinary route answering in a different shape — not a
+     * registration of its own — so {@link App#routes()} lists it, filters cover
+     * it, and {@link App#requestLogger} reports it when the stream ends.
+     *
+     * <p>The request occupies its thread for the life of the stream, which is
+     * what keeps SSE working through a plain servlet container. Many concurrent
+     * streams are what the virtual-thread executor on the Jetty thread pool is
+     * for.
+     *
+     * <p>The handler returning closes the stream, and so does
+     * {@link App#stop()}. A client that disconnects is not an error: the write
+     * that discovers it throws {@link SseStream.Closed}, which ends the handler
+     * here rather than at an exception handler.
+     *
+     * <p>A HEAD of an SSE route answers with the headers and never runs the
+     * handler — a stream with the body thrown away would never end.
+     */
+    public void sse(SseHandler handler) throws Exception {
+        bodyWritten = true;
+        res.setStatus(200);
+        res.setContentType("text/event-stream; charset=UTF-8");
+        res.setHeader("Cache-Control", "no-cache");
+        if ("HEAD".equals(req.getMethod())) {
+            res.flushBuffer();
+            return;
+        }
+        SseStream stream = new SseStream(res);
+        app.openStreams.add(stream);
+        try {
+            res.flushBuffer();  // commit the headers, so the client opens before the first event
+            handler.handle(stream);
+        } catch (SseStream.Closed e) {
+            // The client left, or the server is stopping. Both end the request normally.
+        } finally {
+            app.openStreams.remove(stream);
+            stream.close();
+        }
+    }
+
     /** Renders a template with the engine set via {@link App#templates(TemplateRenderer)}. */
     public void render(String template, Map<String, Object> model) {
         if (app.templates == null) {
