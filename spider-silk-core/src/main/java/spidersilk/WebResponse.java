@@ -81,11 +81,11 @@ public final class WebResponse {
     }
 
     /** A Server-Sent Events stream, filled for as long as it should last. */
-    public record Sse(SseHandler handler) implements Body {
+    public record Sse(SseWriter writer) implements Body {
     }
 
     /** The escape hatch: the raw servlet request and response, written by hand. */
-    public record Raw(RawHandler handler) implements Body {
+    public record Raw(ServletWriter writer) implements Body {
     }
 
     private static final Empty EMPTY_BODY = new Empty();
@@ -188,16 +188,16 @@ public final class WebResponse {
      * streams are what the virtual-thread executor on the Jetty thread pool is
      * for.
      *
-     * <p>The handler returning closes the stream, and so does {@link App#stop()}.
+     * <p>The writer returning closes the stream, and so does {@link App#stop()}.
      * A client that disconnects is not an error: the write that discovers it
-     * throws {@link SseStream.Closed}, which ends the handler here rather than at
+     * throws {@link SseStream.Closed}, which ends the writer here rather than at
      * an exception handler.
      *
      * <p>A HEAD of an SSE route answers with the headers and never runs the
-     * handler — a stream with the body thrown away would never end.
+     * writer — a stream with the body thrown away would never end.
      */
-    public static WebResponse sse(SseHandler handler) {
-        return of(new Sse(Objects.requireNonNull(handler, "handler")))
+    public static WebResponse sse(SseWriter writer) {
+        return of(new Sse(Objects.requireNonNull(writer, "writer")))
                 .contentType("text/event-stream; charset=UTF-8")
                 .header("Cache-Control", "no-cache");
     }
@@ -207,8 +207,8 @@ public final class WebResponse {
      * framework inspects what comes out, so the status and headers set on this
      * response are applied first and everything after that is yours.
      */
-    public static WebResponse raw(RawHandler handler) {
-        return of(new Raw(Objects.requireNonNull(handler, "handler")));
+    public static WebResponse raw(ServletWriter writer) {
+        return of(new Raw(Objects.requireNonNull(writer, "writer")));
     }
 
     /**

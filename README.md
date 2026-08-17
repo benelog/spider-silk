@@ -402,6 +402,11 @@ assertEquals("/api/decks/1", response.header("Location"));
 assertEquals("{\"id\":1}", ((WebResponse.Text) response.body()).content());
 ```
 
+The last three bodies take a lambda of their own, and the suffix says which family it belongs to.
+A `…Handler` answers a request with a `WebResponse` — that is `Handler` and `ExceptionHandler`.
+A `…Writer` returns nothing and fills the body of a response that has already been decided — `StreamWriter(OutputStream)`, `SseWriter(SseStream)`, and `ServletWriter(HttpServletRequest, HttpServletResponse)`.
+So `ServletWriter` is a sibling of `StreamWriter`, not a relative of `Handler`.
+
 ### The scope of "no reflection"
 
 The principle applies to the **framework core**: routing, parameter extraction, and JSON handling use no reflection anywhere.

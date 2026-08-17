@@ -312,8 +312,8 @@ public class AppServlet extends HttpServlet {
                     writeBytes(text.content().getBytes(StandardCharsets.UTF_8), res, head);
             case WebResponse.Bytes bytes -> writeBytes(bytes.data(), res, head);
             case WebResponse.Stream stream -> writeStream(stream.writer(), res, head);
-            case WebResponse.Sse sse -> writeSse(sse.handler(), res, head);
-            case WebResponse.Raw raw -> writeRaw(raw.handler(), req, res, head);
+            case WebResponse.Sse sse -> writeSse(sse.writer(), res, head);
+            case WebResponse.Raw raw -> writeRaw(raw.writer(), req, res, head);
             case WebResponse.Template ignored -> throw new IllegalStateException(
                     "A template should have been rendered before the response was written");
         }
@@ -346,10 +346,10 @@ public class AppServlet extends HttpServlet {
 
     /**
      * An SSE stream, which occupies this thread until it ends. A HEAD answers
-     * with the headers and never runs the handler: a stream whose body is thrown
+     * with the headers and never runs the writer: a stream whose body is thrown
      * away would never end.
      */
-    private void writeSse(SseHandler handler, HttpServletResponse res, boolean head)
+    private void writeSse(SseWriter writer, HttpServletResponse res, boolean head)
             throws Exception {
         if (head) {
             res.flushBuffer();
@@ -359,7 +359,7 @@ public class AppServlet extends HttpServlet {
         app.openStreams.add(stream);
         try {
             res.flushBuffer();  // commit the headers, so the client opens before the first event
-            handler.handle(stream);
+            writer.write(stream);
         } catch (SseStream.Closed e) {
             // The client left, or the server is stopping. Both end the request normally.
         } finally {
@@ -369,14 +369,14 @@ public class AppServlet extends HttpServlet {
     }
 
     /** The escape hatch. A HEAD counts what it wrote and throws the bytes away. */
-    private void writeRaw(RawHandler handler, HttpServletRequest req, HttpServletResponse res,
+    private void writeRaw(ServletWriter writer, HttpServletRequest req, HttpServletResponse res,
             boolean head) throws Exception {
         if (!head) {
-            handler.handle(req, res);
+            writer.write(req, res);
             return;
         }
         HeadResponse counted = new HeadResponse(res);
-        handler.handle(req, counted);
+        writer.write(req, counted);
         counted.finish();
     }
 

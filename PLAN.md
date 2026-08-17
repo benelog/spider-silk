@@ -175,7 +175,7 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       - **Ending a stream is never an error.**
         A write to a stream that has gone throws `SseStream.Closed`, which the servlet catches by that one type and finishes the request normally.
         A dedicated type rather than `UncheckedIOException`, so an IO failure in the handler's own code still reaches the exception handlers; and a write *after* `close()` throws the same `Closed` rather than an `IllegalStateException`, because otherwise every graceful shutdown would log a handler failure for each open stream.
-        `SseHandler` is declared `throws Exception` for the `Thread.sleep` that every SSE loop contains — the same reason `Handler` throws.
+        `SseWriter` (named `SseHandler` until item 18's naming rule) is declared `throws Exception` for the `Thread.sleep` that every SSE loop contains — the same reason `Handler` throws.
       - **Graceful shutdown is resolved, not documented away.**
         An open stream is a request in flight that never finishes, so item 12's five-second `stopTimeout` would wait it out and then report a failure to drain — exactly the failure `setShutdownIdleTimeout` fixed for idle keep-alive connections, except that this connection really is busy.
         So `App` keeps a registry of open streams and closes them as the first statement of `stop()`, before Jetty is asked to drain anything; the test asserts the stop takes under three seconds and that the handler ended.
@@ -227,6 +227,12 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       - **`bodyWritten` is gone, and `StaticFiles` produces a response like anything else.**
         "Did anyone answer yet" used to be a mutable flag the servlet sniffed; it is now `body() instanceof Empty`.
         `StaticFiles.resolve` returns a streamed `WebResponse` instead of writing the servlet response itself, so a static hit flows through the request logger like every other answer.
+
+      - **`…Handler` answers a request; `…Writer` fills a body.**
+        Splitting the response into kinds produced a second family of lambdas, and calling them all `Handler` made `RawHandler` read as a relative of `Handler` — a reviewer's first guess was that one extended the other.
+        So the suffix now carries the distinction: `Handler` and `ExceptionHandler` return a `WebResponse`, while `StreamWriter`, `SseWriter`, and `ServletWriter` return nothing and fill the body of a response already decided.
+        That renamed `RawHandler` to `ServletWriter` and `SseHandler` to `SseWriter`, and their method from `handle` to `write`.
+        `Handler` itself stayed: it is the central type, `App.error(int, Handler)` uses it too so `RouteHandler` would be inaccurate, and it is what Javalin and Helidon call the same thing.
 
       What it cost: `AppServlet` split into a dispatch half and a write half, and the example app's controller tests stopped needing `MockHttpServletResponse` entirely — they call the handler and assert on the value it returned.
       Two behaviours changed on purpose: `redirect` sets a `Location` header rather than calling `sendRedirect`, and cookies moved to the response while the session and flash stayed on the request, since a session outlives the response and cannot be a value returned from one.
