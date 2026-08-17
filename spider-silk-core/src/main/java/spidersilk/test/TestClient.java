@@ -39,6 +39,18 @@ public final class TestClient {
         return send(request -> request.uri(URI.create(url(path))).GET());
     }
 
+    /** Sends a HEAD, which the app answers with the GET route's headers and no body. */
+    public HttpResponse<String> head(String path) {
+        return send(request -> request.uri(URI.create(url(path)))
+                .method("HEAD", HttpRequest.BodyPublishers.noBody()));
+    }
+
+    /** Sends an OPTIONS, answered from the routes registered for the path. */
+    public HttpResponse<String> options(String path) {
+        return send(request -> request.uri(URI.create(url(path)))
+                .method("OPTIONS", HttpRequest.BodyPublishers.noBody()));
+    }
+
     public HttpResponse<String> delete(String path) {
         return send(request -> request.uri(URI.create(url(path))).DELETE());
     }

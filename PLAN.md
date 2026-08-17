@@ -20,7 +20,7 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 8 | `JsonCodec<T>` seam | P1 | ⬜ open |
 | 9 | Static files: cache headers, hosted path | P1 | ✅ done |
 | 10a | Cookies and repeated parameters | P1 | ✅ done |
-| 10b | `formParam` distinct from query, HEAD/OPTIONS | P1 | ⬜ next |
+| 10b | `formParam` distinct from query, HEAD/OPTIONS | P1 | ✅ done |
 | 11 | Request logging hook | P1 | ⬜ next |
 | 12 | Graceful shutdown on by default | P1 | ⬜ next |
 | 13 | Route introspection → overview page, OpenAPI export | P2 | ⬜ open |
@@ -29,7 +29,7 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 16 | Virtual threads | P2 | ⬜ next |
 | 17 | Split `spider-silk-test` out of core | — | ⬜ open |
 
-9 of 18 done: all of P0, and two of P1.
+10 of 18 done: all of P0, and three of P1.
 
 ## P0 — done
 
@@ -91,11 +91,6 @@ decision first) · **rejected** (a decision, not a backlog item)
       needs a validation story. Settle these before writing code — this is the
       API most likely to be regretted.
 
-- [ ] **9. Static file caching.** `AppServlet.serveStatic` sends no
-      `Content-Length`, no `Last-Modified`, no `ETag`, and answers no
-      conditional requests, so every reload re-sends the CSS. Add those, plus a
-      hosted-path prefix so `/public` can be served under `/assets`.
-
 - [x] **10a. Cookies and repeated parameters.** `cookie(name)` / `cookies()` to
       read; `cookie(name, value)`, `cookie(name, value, maxAge)`, and
       `cookie(Cookie)` to set; `removeCookie(name)`. The two- and three-argument
@@ -105,11 +100,18 @@ decision first) · **rejected** (a decision, not a backlog item)
       empty list when there is none — an unchecked checkbox group is an answer,
       not a 400.
 
-- [ ] **10b. The rest of the request API.** `formParam` distinct from query
-      parameters — the servlet API merges the two, so this means parsing the
-      query string separately and is a real decision, not a wrapper. Plus
-      automatic HEAD for GET routes and an OPTIONS response derived from
-      `Router.allowedMethods`.
+- [x] **10b. The rest of the request API.** `queryParam`/`queryParams` read the
+      query string, parsed here rather than through the servlet API, which
+      merges it with the form body. `formParam`/`formParams` are what is left
+      once the query values are taken out of the merged list — subtracted by
+      count, not by position, so a name that appears in both places still splits
+      correctly. HEAD runs the GET route through a response that counts the body
+      and throws it away, so the headers — `Content-Length` included — are the
+      ones the GET would have sent; this servlet overrides `service`, so
+      `HttpServlet`'s own HEAD machinery never runs and the container is not
+      relied on. OPTIONS answers from `Router.allowedMethods` plus the HEAD and
+      OPTIONS this servlet adds itself, and `head`/`options` register a route
+      when the automatic answer is not the right one.
 
 - [ ] **11. Request logging hook.** `app.requestLogger((ctx, millis) -> ...)`.
       One lambda, no logging framework in core.

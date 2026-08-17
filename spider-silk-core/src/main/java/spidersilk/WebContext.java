@@ -2,8 +2,10 @@ package spidersilk;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -34,6 +36,7 @@ public final class WebContext {
     private final HttpServletResponse res;
     private final Map<String, String> pathParams;
 
+    private Map<String, List<String>> queryString;
     private boolean bodyWritten;
     private String errorMessage;
 
@@ -154,6 +157,76 @@ public final class WebContext {
     public List<String> params(String name) {
         String[] values = req.getParameterValues(name);
         return values == null ? List.of() : List.of(values);
+    }
+
+    /**
+     * A parameter from the query string only, or null. The servlet API merges
+     * the query string with a form body, so an {@code id} in the URL and an
+     * {@code id} in the form both answer to {@link #param(String)}; this is the
+     * way to say which one you meant.
+     */
+    public String queryParam(String name) {
+        List<String> values = queryParams(name);
+        return values.isEmpty() ? null : values.get(0);
+    }
+
+    /** Every value of a repeated query-string parameter. */
+    public List<String> queryParams(String name) {
+        return queryString().getOrDefault(name, List.of());
+    }
+
+    /**
+     * A parameter from the form body only, or null — the counterpart to
+     * {@link #queryParam(String)}. Only present for a form-encoded body the
+     * container parsed; a JSON body is read with {@link #body()}.
+     */
+    public String formParam(String name) {
+        List<String> values = formParams(name);
+        return values.isEmpty() ? null : values.get(0);
+    }
+
+    /** Every value of a repeated form field. */
+    public List<String> formParams(String name) {
+        List<String> merged = params(name);
+        List<String> fromQuery = queryParams(name);
+        if (fromQuery.isEmpty()) {
+            return merged;
+        }
+        // The container hands back query and form values in one list. Take out
+        // one entry per query value: what is left came from the body.
+        List<String> remaining = new ArrayList<>(merged);
+        for (String value : fromQuery) {
+            remaining.remove(value);
+        }
+        return List.copyOf(remaining);
+    }
+
+    private Map<String, List<String>> queryString() {
+        if (queryString == null) {
+            queryString = parseQueryString(req.getQueryString());
+        }
+        return queryString;
+    }
+
+    private static Map<String, List<String>> parseQueryString(String query) {
+        if (query == null || query.isEmpty()) {
+            return Map.of();
+        }
+        Map<String, List<String>> parsed = new LinkedHashMap<>();
+        for (String pair : query.split("&")) {
+            if (pair.isEmpty()) {
+                continue;
+            }
+            int equals = pair.indexOf('=');
+            String name = decode(equals < 0 ? pair : pair.substring(0, equals));
+            String value = equals < 0 ? "" : decode(pair.substring(equals + 1));
+            parsed.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
+        }
+        return parsed;
+    }
+
+    private static String decode(String value) {
+        return URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
 
     // ---- Body ----

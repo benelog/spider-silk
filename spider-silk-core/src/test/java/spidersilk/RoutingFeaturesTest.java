@@ -185,7 +185,8 @@ class RoutingFeaturesTest {
 
             var notAllowed = client.post("/");
             assertEquals(405, notAllowed.statusCode());
-            assertEquals("GET", notAllowed.headers().firstValue("Allow").orElseThrow());
+            assertEquals("GET, HEAD, OPTIONS",
+                    notAllowed.headers().firstValue("Allow").orElseThrow());
             assertEquals("Method Not Allowed: POST /", notAllowed.body());
         });
     }

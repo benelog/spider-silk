@@ -56,6 +56,16 @@ public final class RouteGroup {
         return this;
     }
 
+    public RouteGroup head(String path, Handler handler) {
+        app.head(resolve(path), handler);
+        return this;
+    }
+
+    public RouteGroup options(String path, Handler handler) {
+        app.options(resolve(path), handler);
+        return this;
+    }
+
     /** A filter over the whole group: the prefix itself and everything below it. */
     public RouteGroup before(Handler filter) {
         return before("/*", filter);

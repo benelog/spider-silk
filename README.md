@@ -120,6 +120,33 @@ A cookie set through the two-argument form gets `Path=/`, `HttpOnly`, and
 parameter is absent — "no boxes checked" is an answer, not a 400. `param(name)`
 still returns the first value and still 400s when there is none.
 
+### Query string vs. form body
+
+The servlet API merges the two, so `param("id")` answers to an `id` in the URL
+and an `id` in the form alike. When the difference matters, say which one:
+
+```java
+String page = ctx.queryParam("page");     // query string only, null when absent
+String name = ctx.formParam("name");      // form body only
+List<String> tags = ctx.formParams("tag");
+```
+
+### HEAD and OPTIONS
+
+Both are answered without registering anything. A `HEAD` runs the `GET` route
+and drops the body, keeping the headers — including a `Content-Length` counted
+from what the `GET` would have sent. An `OPTIONS` answers with the `Allow`
+header the path's routes imply, and a 404 when the path has none:
+
+```
+$ curl -X OPTIONS -i localhost:8080/decks
+HTTP/1.1 200 OK
+Allow: GET, POST, HEAD, OPTIONS
+```
+
+`app.head(...)` and `app.options(...)` register a route of their own when the
+automatic answer is not the one you want — a CORS preflight, usually.
+
 ### Static files
 
 `staticFiles("/public")` serves `classpath:/public/*` at the root. Every
@@ -153,9 +180,9 @@ void createsADeck() {
 }
 ```
 
-`get`/`post`/`put`/`patch`/`delete`, plus `postForm` and `postJson`, all return
-the raw `HttpResponse<String>` — assertions stay in whatever library the project
-already uses. `send(builder -> ...)` is the way out for anything else.
+`get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and
+`postJson`, all return the raw `HttpResponse<String>` — assertions stay in
+whatever library the project already uses. `send(builder -> ...)` is the way out for anything else.
 
 ## The Server
 

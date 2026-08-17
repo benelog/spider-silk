@@ -73,6 +73,24 @@ public final class App {
     }
 
     /**
+     * A HEAD of its own. Rarely needed: a GET route already answers HEAD with
+     * its headers and no body.
+     */
+    public App head(String path, Handler handler) {
+        router.add("HEAD", path, handler);
+        return this;
+    }
+
+    /**
+     * An OPTIONS of its own — a CORS preflight, usually. Without one, OPTIONS
+     * is answered with the {@code Allow} header the path's routes imply.
+     */
+    public App options(String path, Handler handler) {
+        router.add("OPTIONS", path, handler);
+        return this;
+    }
+
+    /**
      * Routes sharing a path prefix. The group is passed in as an argument, so
      * nothing is registered behind your back:
      *
