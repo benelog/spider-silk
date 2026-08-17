@@ -24,12 +24,12 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 11 | Request logging hook | P1 | ✅ done |
 | 12 | Graceful shutdown on by default | P1 | ✅ done |
 | 13 | Route introspection → overview page, OpenAPI export | P2 | ⬜ open |
-| 14 | Router indexed by method and first segment | P2 | ⬜ next |
+| 14 | Router indexed by method and first segment | P2 | ✅ done |
 | 15 | WebSocket / SSE | P2 | ⬜ open |
 | 16 | Virtual threads | P2 | ⬜ next |
 | 17 | Split `spider-silk-test` out of core | — | ⬜ open |
 
-12 of 18 done: all of P0, and all of P1 except the JsonCodec seam.
+13 of 18 done: all of P0, all of P1 except the JsonCodec seam, and one of P2.
 
 ## P0 — done
 
@@ -142,9 +142,13 @@ decision first) · **rejected** (a decision, not a backlog item)
       route exposes beyond method and pattern (a description? response types?)
       without dragging annotations back in.
 
-- [ ] **14. Router indexing.** `Router.find` scans every route on every request.
-      Group by method, then by first literal segment. Correct behaviour first:
-      registration order must still decide between two patterns that both match.
+- [x] **14. Router indexing.** Routes are grouped by method, then by first
+      literal segment, with a bucket for the patterns that can match any first
+      segment — one starting with a variable, or a bare `*`. A lookup merges the
+      two candidate lists **by registration index**, so the tie-break is exactly
+      what it was when `find` scanned everything: `/study/today` registered
+      before `/study/{mode}` still wins, and so does `/{page}` registered before
+      `/decks`. `allowedMethods` runs off the same index.
 
 - [ ] **15. WebSocket / SSE** *(open)*. Jetty can do both. **Open question:**
       whether this belongs in core at all, given that the servlet-deployable

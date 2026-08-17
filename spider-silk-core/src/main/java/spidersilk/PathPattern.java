@@ -42,6 +42,24 @@ final class PathPattern {
         return trimmed.isEmpty() ? new String[0] : trimmed.split("/");
     }
 
+    /**
+     * The first segment when it is a literal, which is what a router can index
+     * by: "" for the root, "decks" for "/decks/{deckId}". Null when the pattern
+     * can match any first segment — it starts with a variable, or it is a bare
+     * "*".
+     */
+    String literalFirstSegment() {
+        if (segments.length == 0) {
+            return matchesRest ? null : "";
+        }
+        String first = segments[0];
+        return isVariable(first) ? null : first;
+    }
+
+    private static boolean isVariable(String segment) {
+        return segment.length() >= 2 && segment.startsWith("{") && segment.endsWith("}");
+    }
+
     /** Returns the path variable map on a match, or null otherwise. */
     Map<String, String> match(String[] actual) {
         if (matchesRest ? actual.length < segments.length : actual.length != segments.length) {
@@ -50,7 +68,7 @@ final class PathPattern {
         Map<String, String> params = null;
         for (int i = 0; i < segments.length; i++) {
             String segment = segments[i];
-            if (segment.length() >= 2 && segment.startsWith("{") && segment.endsWith("}")) {
+            if (isVariable(segment)) {
                 if (params == null) {
                     params = new HashMap<>();
                 }
