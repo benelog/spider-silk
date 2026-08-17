@@ -513,4 +513,5 @@ The rollback test in `DeckServiceTest` shows the `TransactionTemplate` boundary 
 ## Positioning and Roadmap
 
 Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what that comparison says should change: [docs/positioning.md](docs/positioning.md).
-The work that follows from it, with a progress table: [PLAN.md](PLAN.md).
+Why each piece has the shape it has, item by item, with the rejected list: [docs/decisions.md](docs/decisions.md).
+What was deliberately deferred, and what would make it worth doing: [PLAN.md](PLAN.md).

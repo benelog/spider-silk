@@ -145,4 +145,4 @@ All shipped: `JsonCodec<T>` seam, static file caching, cookies and multi-value p
 Route introspection (overview page, OpenAPI export), router indexing, SSE, virtual threads.
 All shipped, and WebSocket in core is a decision rather than a gap.
 
-Item-by-item status, the reasoning behind each decision, and the rejected list live in [PLAN.md](../PLAN.md).
+The reasoning behind each decision and the rejected list live in [decisions.md](decisions.md); what is still deferred lives in [PLAN.md](../PLAN.md).
