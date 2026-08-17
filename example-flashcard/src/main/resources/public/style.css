@@ -1,0 +1,93 @@
+body {
+    font-family: "Pretendard", "Apple SD Gothic Neo", sans-serif;
+    max-width: 720px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    color: #222;
+}
+
+h1 a, nav a { color: inherit; text-decoration: none; }
+nav { margin-bottom: 1rem; }
+nav a { margin-right: 0.75rem; color: #2b6cb0; }
+
+ul.plain { list-style: none; padding: 0; }
+ul.plain li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid #eee;
+}
+
+form.inline { display: inline; }
+
+.tile-row { display: flex; gap: 1rem; flex-wrap: wrap; margin: 1rem 0; }
+.tile {
+    flex: 1 1 180px;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    padding: 1rem;
+}
+.tile .count { font-size: 1.8rem; font-weight: 700; }
+
+.card-box {
+    border: 1px solid #ccc;
+    border-radius: 12px;
+    padding: 3rem 1rem;
+    text-align: center;
+    font-size: 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.muted { color: #888; font-size: 0.85rem; }
+.error { color: #c53030; }
+.notice { color: #2f855a; }
+
+a.button, button {
+    display: inline-block;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid #888;
+    border-radius: 8px;
+    background: #fff;
+    color: #222;
+    text-decoration: none;
+    font-size: 0.95rem;
+    cursor: pointer;
+}
+
+a.button.primary, button.primary { background: #2b6cb0; border-color: #2b6cb0; color: #fff; }
+button.correct { background: #2f855a; border-color: #2f855a; color: #fff; }
+button.wrong { background: #c53030; border-color: #c53030; color: #fff; }
+
+input[type=text], select {
+    padding: 0.4rem;
+    border: 1px solid #bbb;
+    border-radius: 6px;
+}
+
+.tag {
+    display: inline-block;
+    background: #edf2f7;
+    border-radius: 10px;
+    padding: 0.05rem 0.5rem;
+    font-size: 0.8rem;
+    color: #4a5568;
+    margin-left: 0.25rem;
+}
+
+/* 30-day activity bar chart */
+.chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 140px;
+    border-bottom: 1px solid #ccc;
+    margin: 1rem 0;
+}
+.chart .day { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+.chart .bar-correct { background: #2b6cb0; }
+.chart .bar-wrong { background: #e53e3e; }
+
+table.stats { border-collapse: collapse; width: 100%; }
+table.stats th, table.stats td { border-bottom: 1px solid #eee; padding: 0.4rem 0.6rem; text-align: left; }
