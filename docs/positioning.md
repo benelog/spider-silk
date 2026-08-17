@@ -82,6 +82,10 @@ Ordered by how often they will actually hurt.
    Cookies and repeated parameters now ship; `formParam` distinct from query, HEAD/OPTIONS, and content negotiation do not.
 8. **No WebSocket or SSE.**
    Jetty is right there; the framework does not expose it.
+   Since split in two, because the two halves answer "can `AppServlet` on Tomcat follow?" oppositely.
+   SSE can: it is plain HTTP, so core will add the event framing and nothing else (`ctx.sse(...)`) and the servlet deployment keeps working.
+   WebSocket cannot: an upgrade leaves servlet dispatch, and with it the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest`.
+   It stays out of core as a Jetty recipe, and becomes a `spider-silk-ws` module only if the recipe earns one.
 9. **No virtual-thread story.**
    Javalin has `config.useVirtualThreads`; Helidon SE is built on Loom.
    Jetty 12 can do it, but Spider Silk documents nothing.
@@ -112,7 +116,9 @@ Ordered by how often they will actually hurt.
   This is a genuine differentiator worth leaning on.
 - Virtual threads as a documented recipe on `JettyServer.threadPool(...)`, then possibly a one-liner.
 - Graceful shutdown: a shutdown hook and a stop timeout, on by default.
-- WebSocket support through Jetty, exposed as `app.ws(path, config)`.
+- SSE as framing over the servlet response, exposed as `ctx.sse(stream -> ...)` on an ordinary `get` route.
+  The transport is the response that was already there, so this is `Json`'s kind of work — a wire format written out — and it costs no new dependency.
+  (This entry started as "WebSocket support through Jetty, exposed as `app.ws(path, config)`"; the WebSocket half moved to the rejected list below.)
 
 **Reject on principle** — do not adopt, and say why in the docs:
 
@@ -120,6 +126,8 @@ Ordered by how often they will actually hurt.
 - `ctx.bodyValidator(...)` in its Javalin form: reflection.
 - Spark's static-import DSL: process-global state, no second app per JVM.
 - Javalin's plugin/bundled-plugins system: a registry of things that configure themselves is the beginning of a container.
+- `app.ws(path, config)` in core: a protocol upgrade leaves servlet dispatch, so core would be publishing an API that core's own routing, filters, error handlers, request logger, `routes()`, and test harness do not reach.
+  It also ends strength 4 — `WebServer` is four methods precisely so Jetty is replaceable — and `jakarta.websocket` is no escape, since its default `Configurator` instantiates endpoints reflectively.
 
 ## Priorities
 
@@ -130,6 +138,7 @@ All shipped: embedded server and lifecycle, path-scoped filters, route groups, `
 `JsonCodec<T>` seam, static file caching, cookies and multi-value parameters, request logging, graceful shutdown.
 
 **P2 — the gaps that decide whether it is more than a teaching framework.**
-Route introspection (overview page, OpenAPI export), router indexing, WebSocket/SSE, virtual threads.
+Route introspection (overview page, OpenAPI export), router indexing, SSE, virtual threads.
+All shipped but SSE, and WebSocket in core is now a decision rather than a gap.
 
-Item-by-item status, open design questions, and the rejected list live in [PLAN.md](../PLAN.md).
+Item-by-item status, the reasoning behind each decision, and the rejected list live in [PLAN.md](../PLAN.md).

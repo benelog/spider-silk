@@ -24,12 +24,15 @@ Status: **done** · **next** (agreed, ready to build) · **open** (needs a desig
 | 12 | Graceful shutdown on by default | P1 | ✅ done |
 | 13 | Route introspection → overview page, OpenAPI export | P2 | ✅ done |
 | 14 | Router indexed by method and first segment | P2 | ✅ done |
-| 15 | WebSocket / SSE | P2 | ⬜ open |
+| 15a | SSE: event framing over the servlet response | P2 | 🔜 next |
+| 15b | WebSocket in core | P2 | ❌ rejected |
 | 16 | Virtual threads | P2 | ✅ done |
 | 17 | Split `spider-silk-test` out of core | — | ✅ done |
 
-17 of 18 done: all of P0, all of P1, three of P2, and the structural split.
-The one that remains open is WebSocket/SSE.
+17 of 19 done: all of P0, all of P1, three of P2, and the structural split.
+Nothing is open any more.
+What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
+15a is the only item left to build; 15b is closed.
 
 ## P0 — done
 
@@ -153,9 +156,29 @@ The one that remains open is WebSocket/SSE.
       A lookup merges the two candidate lists **by registration index**, so the tie-break is exactly what it was when `find` scanned everything: `/study/today` registered before `/study/{mode}` still wins, and so does `/{page}` registered before `/decks`.
       `allowedMethods` runs off the same index.
 
-- [ ] **15. WebSocket / SSE** *(open)*.
-      Jetty can do both.
-      **Open question:** whether this belongs in core at all, given that the servlet-deployable story (`AppServlet` on Tomcat) cannot follow it there.
+- [ ] **15a. SSE** *(next)*.
+      `text/event-stream` is plain HTTP: a content type, one `data:` line per event, a blank line to end it, and a flush.
+      It goes through `AppServlet` unchanged, so a deployment on Tomcat gets it for free — which is the whole reason this half is in and 15b is out.
+      Core adds the framing and nothing else: the transport is the servlet response that was already there, and `ctx.res()` is public, so the only thing being removed is the chance to get `\n\n` wrong.
+      No new dependency.
+      The shape, to be settled when it is built:
+
+      - **`ctx.sse(stream -> ...)`**, with the lambda handed a small `SseStream` — `send(data)`, `send(event, data)`, `id(...)`, `comment(...)`, `close()`.
+        Not a second `Handler` type and not a route-registration method: an SSE endpoint is a `get` route that answers in a different shape, so it stays a route, and `routes()` keeps listing it as one.
+        Filters, `error(...)`, and `requestLogger` therefore all still apply — the argument that sinks 15b.
+      - **The events are strings.**
+        `ctx.json(value, writer)`'s counterpart is `stream.send(writer.write(value).toString())`, not an overload that takes a codec — the same rule as everywhere else, the mapping stays visible at the call site.
+      - **The stream is blocking and holds its thread.**
+        One open stream is one Jetty thread, which is the honest servlet answer and the one `AppServlet` can keep on Tomcat; `AsyncContext` would be a second dispatch model in core for a feature that has yet to prove it needs one.
+        The recipe for many streams is item 16's: a virtual-thread executor on the pool, where a parked thread costs almost nothing.
+      - **Graceful shutdown has to be resolved, not documented away.**
+        An open stream is a request in flight that never finishes, so item 12's five-second `stopTimeout` waits it out and then Jetty throws a `TimeoutException` — exactly the failure `setShutdownIdleTimeout` fixed for idle keep-alive connections, and this time the connection really is busy.
+        So `App` keeps the open streams and closes them at the start of `stop()`, before Jetty begins its drain.
+        A heartbeat comment on an interval is the other half of the same problem — a proxy in front will cut an idle stream — but it is a parameter, not a design question, and can wait for a first user.
+
+- **15b. WebSocket in core** — *rejected*, see the table below.
+      Jetty can do it, and `customizeContext` plus `JakartaWebSocketServletContainerInitializer` is the recipe for an application that needs it: the WebSocket dependency then sits in that application's build file, not in core's.
+      If the recipe turns out to be worth wrapping, it becomes a `spider-silk-ws` module the way `spider-silk-test` did, where being Jetty-only is stated in the module's name rather than hidden in core.
 
 - [x] **16. Virtual threads.**
       Documented, not wrapped: `QueuedThreadPool.setVirtualThreadsExecutor(VirtualThreads.getDefault...)` passed to `threadPool(...)`, with a test asserting the handler really does run on a virtual thread.
@@ -181,3 +204,4 @@ If one is reopened, it is a change to what the framework is.
 | `ServiceLoader`-based server discovery | Classpath-driven binding is the magic this framework exists without. |
 | Javalin-style plugin registry | A registry of things that configure themselves is how a container starts. |
 | Spark's static-import DSL | Process-global mutable state: one app per JVM, no parallel tests. |
+| `app.ws(path, config)` in core | A WebSocket is a protocol upgrade, so it leaves servlet dispatch: the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` all stop applying to it. Core would be handing out an API that core's own features silently do not cover. It also ends the no-lock-in claim — `WebServer` is four methods precisely so Jetty is replaceable, and `AppServlet` on Tomcat cannot follow. `jakarta.websocket` is not the way out either: its default `Configurator` instantiates endpoints reflectively. Recipe now, `spider-silk-ws` module if it earns one. |
