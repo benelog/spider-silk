@@ -2,6 +2,13 @@
   <img src="docs/logo.svg" alt="Spider Silk" width="160">
 </p>
 
+<p align="center">
+  <img src="https://img.shields.io/badge/Java-21-e2603f?style=flat-square&labelColor=2b303b" alt="Java 21">
+  <img src="https://img.shields.io/badge/Jakarta%20Servlet-6.0-8a93a6?style=flat-square&labelColor=2b303b" alt="Jakarta Servlet 6.0">
+  <img src="https://img.shields.io/badge/jte-3.2.4-8a93a6?style=flat-square&labelColor=2b303b" alt="jte 3.2.4">
+  <img src="https://img.shields.io/badge/reflection-none-e2603f?style=flat-square&labelColor=2b303b" alt="No reflection">
+</p>
+
 # Spider Silk
 
 A very thin web framework on top of the Jakarta Servlet API.
