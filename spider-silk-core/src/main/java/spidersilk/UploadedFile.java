@@ -1,4 +1,4 @@
-package steelspider;
+package spidersilk;
 
 import java.io.IOException;
 import java.io.InputStream;

@@ -1,11 +1,11 @@
-package steelspider;
+package spidersilk;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
- * A Steel Spider application definition.
+ * A Spider Silk application definition.
  * Routes, filters, and exception handlers are registered as lambdas.
  * There is no annotation scanning and no reflection: only what you register runs.
  *

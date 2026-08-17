@@ -1,4 +1,4 @@
-# Steel Spider
+# Spider Silk
 
 A very thin web framework on top of the Jakarta Servlet API.
 
@@ -20,7 +20,7 @@ Java code, which fits the framework's character.
 
 | Module | Contents | Dependencies |
 |---|---|---|
-| `steel-spider-core` | The framework itself | `jakarta.servlet-api` (compileOnly), `gg.jte:jte` |
+| `spider-silk-core` | The framework itself | `jakarta.servlet-api` (compileOnly), `gg.jte:jte` |
 | `example-flashcard` | Example: a flashcard study app | core, Jetty (embedded), spring-jdbc, H2 |
 
 ## At a Glance
@@ -97,7 +97,7 @@ gradle :example-flashcard:run
 # http://localhost:8080
 ```
 
-The database is an H2 file (`~/db/steel-spider/flashcard`), so data survives
+The database is an H2 file (`~/db/spider-silk/flashcard`), so data survives
 restarts.
 
 ### Tests

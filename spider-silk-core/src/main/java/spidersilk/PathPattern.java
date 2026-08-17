@@ -1,4 +1,4 @@
-package steelspider;
+package spidersilk;
 
 import java.util.HashMap;
 import java.util.Map;

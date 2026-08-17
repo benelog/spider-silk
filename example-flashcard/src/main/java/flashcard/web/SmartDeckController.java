@@ -1,7 +1,7 @@
 package flashcard.web;
 
-import steelspider.App;
-import steelspider.WebContext;
+import spidersilk.App;
+import spidersilk.WebContext;
 
 import flashcard.domain.SmartCondition;
 import flashcard.service.SmartDeckService;

@@ -1,4 +1,4 @@
-package steelspider.json;
+package spidersilk.json;
 
 import org.junit.jupiter.api.Test;
 

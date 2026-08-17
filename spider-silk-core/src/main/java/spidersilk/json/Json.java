@@ -1,4 +1,4 @@
-package steelspider.json;
+package spidersilk.json;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;

@@ -1,4 +1,4 @@
-package steelspider;
+package spidersilk;
 
 /**
  * An exception carrying an HTTP status code. Throw it from any handler

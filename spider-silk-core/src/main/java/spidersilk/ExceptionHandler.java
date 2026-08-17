@@ -1,4 +1,4 @@
-package steelspider;
+package spidersilk;
 
 /** Turns a specific exception type into a response. */
 @FunctionalInterface

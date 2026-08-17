@@ -3,8 +3,8 @@ package flashcard.web;
 import java.util.HashMap;
 import java.util.Map;
 
-import steelspider.App;
-import steelspider.WebContext;
+import spidersilk.App;
+import spidersilk.WebContext;
 
 import flashcard.service.DeckService;
 import flashcard.service.SmartDeckService;

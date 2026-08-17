@@ -1,9 +1,9 @@
 package flashcard.web;
 
-import steelspider.App;
-import steelspider.WebContext;
-import steelspider.HttpException;
-import steelspider.json.Json;
+import spidersilk.App;
+import spidersilk.WebContext;
+import spidersilk.HttpException;
+import spidersilk.json.Json;
 
 import flashcard.domain.Deck;
 import flashcard.service.CardService;
@@ -11,7 +11,7 @@ import flashcard.service.DeckService;
 
 /**
  * A JSON API on top of the same service layer.
- * Responses are assembled explicitly with Steel Spider's Json builder
+ * Responses are assembled explicitly with Spider Silk's Json builder
  * (no automatic serialization).
  */
 public class ApiController implements Controller {

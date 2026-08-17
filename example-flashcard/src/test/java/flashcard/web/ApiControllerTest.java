@@ -7,10 +7,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
-import steelspider.App;
-import steelspider.WebContext;
-import steelspider.HttpException;
-import steelspider.json.Json;
+import spidersilk.App;
+import spidersilk.WebContext;
+import spidersilk.HttpException;
+import spidersilk.json.Json;
 
 import flashcard.repository.CardRepository;
 import flashcard.repository.DeckRepository;

@@ -1,4 +1,4 @@
-rootProject.name = 'steel-spider'
+rootProject.name = 'spider-silk'
 
-include 'steel-spider-core'
+include 'spider-silk-core'
 include 'example-flashcard'

@@ -4,8 +4,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-import steelspider.App;
-import steelspider.WebContext;
+import spidersilk.App;
+import spidersilk.WebContext;
 
 import flashcard.service.CardService;
 import flashcard.service.DeckService;

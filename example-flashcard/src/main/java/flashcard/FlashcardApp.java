@@ -15,9 +15,9 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.support.EncodedResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
-import steelspider.App;
-import steelspider.AppServlet;
-import steelspider.JteTemplates;
+import spidersilk.App;
+import spidersilk.AppServlet;
+import spidersilk.JteTemplates;
 
 import flashcard.service.CsvFormatException;
 
@@ -29,7 +29,7 @@ public class FlashcardApp {
 
     public static void main(String[] args) throws Exception {
         DataSource dataSource = JdbcConnectionPool.create(
-                "jdbc:h2:~/db/steel-spider/flashcard;AUTO_SERVER=TRUE", "sa", "");
+                "jdbc:h2:~/db/spider-silk/flashcard;AUTO_SERVER=TRUE", "sa", "");
         initSchema(dataSource);
 
         Server server = createServer(createApp(dataSource), 8080);

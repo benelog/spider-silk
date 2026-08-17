@@ -1,7 +1,7 @@
 subprojects {
     apply plugin: 'java'
 
-    group = 'io.github.benelog.steelspider'
+    group = 'io.github.benelog.spidersilk'
     version = '0.1.0'
 
     repositories {

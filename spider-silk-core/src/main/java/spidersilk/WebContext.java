@@ -1,4 +1,4 @@
-package steelspider;
+package spidersilk;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -13,7 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.Part;
 
-import steelspider.json.Json;
+import spidersilk.json.Json;
 
 /**
  * A context wrapping the request and the response.
@@ -23,7 +23,7 @@ import steelspider.json.Json;
  */
 public final class WebContext {
 
-    static final String FLASH_ATTRIBUTE = "steelspider.flash";
+    static final String FLASH_ATTRIBUTE = "spidersilk.flash";
 
     private final App app;
     private final HttpServletRequest req;

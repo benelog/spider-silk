@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
-import steelspider.App;
-import steelspider.WebContext;
+import spidersilk.App;
+import spidersilk.WebContext;
 
 import flashcard.domain.Deck;
 import flashcard.repository.CardRepository;
