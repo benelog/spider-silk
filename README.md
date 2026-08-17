@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.svg" alt="Spider Silk" width="160">
+</p>
+
 # Spider Silk
 
 A very thin web framework on top of the Jakarta Servlet API.
