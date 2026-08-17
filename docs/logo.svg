@@ -22,7 +22,7 @@
   </g>
 
   <!-- spider at the hub -->
-  <g stroke="#e2603f" fill="#e2603f">
+  <g stroke="#5a3a22" fill="#5a3a22" transform="translate(100 102) scale(1.2) translate(-100 -102)">
     <g fill="none" stroke-width="1.8" stroke-linecap="round">
       <path d="M 105 96 Q 114 88 120 82"/>
       <path d="M 106 100 Q 116 97 124 94"/>
