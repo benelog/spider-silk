@@ -2,20 +2,25 @@
 
 ## Design Principles
 
-- **spider-silk-core covers the web tier only.** Routing, parameter extraction, JSON, and
-  templates are the extent of core's territory. Transaction/DB helpers (`Transactions` and
-  the like) belong in example-flashcard (`flashcard.service`), not in core.
+- **spider-silk-core covers the web tier only.**
+  Routing, parameter extraction, JSON, and templates are the extent of core's territory.
+  Transaction/DB helpers (`Transactions` and the like) belong in example-flashcard (`flashcard.service`), not in core.
   Do not add data-layer dependencies such as spring-jdbc to core's build.gradle.
-  (When adding a new feature to core, if it falls outside the web tier — persistence,
-  transactions, scheduling, and so on — propose the example module or a separate module
-  instead.)
-- **Test-only code lives in spider-silk-test.** The `WebTest` harness is its own module, so
-  core's jar carries no test code. Core's tests depend on it
-  (`testImplementation project(':spider-silk-test')`); do not move it back into core.
-- **No reflection.** There is no annotation scanning, no proxies, and no automatic binding
-  in core. Do not make changes that break this principle.
-- There is no DI container: `FlashcardContext` assembles the object graph by calling
-  constructors directly.
+  (When adding a new feature to core, if it falls outside the web tier — persistence, transactions, scheduling, and so on — propose the example module or a separate module instead.)
+- **Test-only code lives in spider-silk-test.**
+  The `WebTest` harness is its own module, so core's jar carries no test code.
+  Core's tests depend on it (`testImplementation project(':spider-silk-test')`); do not move it back into core.
+- **No reflection.**
+  There is no annotation scanning, no proxies, and no automatic binding in core.
+  Do not make changes that break this principle.
+- There is no DI container: `FlashcardContext` assembles the object graph by calling constructors directly.
+
+## Documentation
+
+- **Markdown is one sentence per line.**
+  Do not wrap prose to a column width: a line ends where a sentence ends, however long it runs.
+  A diff then shows the sentence that changed instead of every line a rewrap touched.
+  Headings, tables, and code blocks are unaffected.
 
 ## Build / Verification
 
