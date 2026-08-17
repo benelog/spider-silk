@@ -2,8 +2,6 @@ package flashcard.web;
 
 import spidersilk.App;
 import spidersilk.WebContext;
-import spidersilk.HttpException;
-import spidersilk.json.Json;
 
 import flashcard.domain.Deck;
 import flashcard.service.CardService;
@@ -11,8 +9,8 @@ import flashcard.service.DeckService;
 
 /**
  * A JSON API on top of the same service layer.
- * Responses are assembled explicitly with Spider Silk's Json builder
- * (no automatic serialization).
+ * The wire format lives in {@link Codecs} as hand-written writers and readers
+ * (no automatic serialization), so a handler is one line.
  */
 public class ApiController implements Controller {
 
@@ -34,42 +32,19 @@ public class ApiController implements Controller {
     }
 
     void listDecks(WebContext ctx) {
-        Json.JsonArray decks = Json.arr();
-        for (var summary : deckService.deckSummaries()) {
-            decks.add(Json.obj()
-                    .put("id", summary.id())
-                    .put("name", summary.name())
-                    .put("cardCount", summary.cardCount())
-                    .put("dueCount", summary.dueCount()));
-        }
-        ctx.json(decks);
+        ctx.json(deckService.deckSummaries(), Codecs.DECK_SUMMARIES);
     }
 
     void createDeck(WebContext ctx) {
-        String name;
-        try {
-            name = ctx.bodyJson().asObject().getString("name");
-        } catch (IllegalArgumentException e) {
-            // A malformed body is a 400 (bad request), not a 404 (not found)
-            throw new HttpException(400, e.getMessage());
-        }
-        Deck deck = deckService.createDeck(name);
+        Deck deck = deckService.createDeck(ctx.bodyJson(Codecs.NEW_DECK).name());
         ctx.status(201)
                 .header("Location", "/api/decks/" + deck.id())
-                .json(Json.obj().put("id", deck.id()).put("name", deck.name()));
+                .json(deck, Codecs.DECK);
     }
 
     void listCards(WebContext ctx) {
         long deckId = ctx.pathParamLong("deckId");
         deckService.getDeck(deckId);   // IllegalArgumentException -> 404 when missing
-        Json.JsonArray cards = Json.arr();
-        for (var cardWithTags : cardService.cardsWithTags(deckId)) {
-            cards.add(Json.obj()
-                    .put("id", cardWithTags.card().id())
-                    .put("text", cardWithTags.card().text())
-                    .put("meaning", cardWithTags.card().meaning())
-                    .put("tags", Json.arr().addAll(cardWithTags.tags())));
-        }
-        ctx.json(cards);
+        ctx.json(cardService.cardsWithTags(deckId), Codecs.CARDS);
     }
 }

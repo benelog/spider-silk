@@ -74,6 +74,17 @@ class ApiControllerTest extends RepositoryTestSupport {
         assertEquals(400, e.status());
     }
 
+    /** The reader throws on the missing key; bodyJson(reader) turns that into a 400. */
+    @Test
+    void createDeckRejectsABodyWithoutANameWith400() {
+        MockHttpServletRequest req = new MockHttpServletRequest();
+        req.setContent("{\"title\": \"Spanish\"}".getBytes(StandardCharsets.UTF_8));
+
+        HttpException e = assertThrows(HttpException.class, () -> controller.createDeck(
+                new WebContext(new App(), req, new MockHttpServletResponse(), Map.of())));
+        assertEquals(400, e.status());
+    }
+
     /** json() sets no charset, so decode the raw bytes as UTF-8 explicitly. */
     private static String body(MockHttpServletResponse res) {
         return new String(res.getContentAsByteArray(), StandardCharsets.UTF_8);

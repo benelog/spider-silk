@@ -17,7 +17,7 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 5 | `path(prefix, group -> ...)` route groups, nestable | P0 | ✅ done |
 | 6 | `error(status, handler)` + `ctx.errorMessage()` | P0 | ✅ done |
 | 7 | `WebTest.test(app, client -> ...)` harness | P0 | ✅ done |
-| 8 | `JsonCodec<T>` seam | P1 | ⬜ open |
+| 8 | `JsonCodec<T>` seam | P1 | ✅ done |
 | 9 | Static files: cache headers, hosted path | P1 | ✅ done |
 | 10a | Cookies and repeated parameters | P1 | ✅ done |
 | 10b | `formParam` distinct from query, HEAD/OPTIONS | P1 | ✅ done |
@@ -29,8 +29,8 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 16 | Virtual threads | P2 | ✅ done |
 | 17 | Split `spider-silk-test` out of core | — | ✅ done |
 
-15 of 18 done: all of P0, all of P1 except the JsonCodec seam, two of P2,
-and the structural split.
+16 of 18 done: all of P0, all of P1, two of P2, and the structural split. The
+two that remain open are both P2 — route introspection and WebSocket/SSE.
 
 ## P0 — done
 
@@ -75,22 +75,48 @@ and the structural split.
       external-directory location. Both are real, neither is needed until
       someone deploys behind something that is not already doing it.
 
-- [ ] **8. `JsonCodec<T>` seam** *(open — needs a design decision)*
+- [x] **8. `JsonCodec<T>` seam.**
 
       ```java
-      interface JsonCodec<T> {
-          Json.JsonValue write(T value);
-          T read(Json.JsonValue json);
-      }
+      @FunctionalInterface
+      interface JsonWriter<T> { Json.JsonValue write(T value); }
+
+      @FunctionalInterface
+      interface JsonReader<T> { T read(Json.JsonValue json); }
+
+      interface JsonCodec<T> extends JsonWriter<T>, JsonReader<T> { }
       ```
 
-      plus `ctx.json(value, codec)` and `ctx.bodyJson(codec)`. Codecs stay
-      hand-written, so the mapping is still visible; they just stop being
-      re-inlined in every handler. **Open questions:** where codecs live (next to
-      the record? a `Codecs` holder?), whether collections get
-      `JsonCodec.list(codec)`, and whether `read` returning a partly-built object
-      needs a validation story. Settle these before writing code — this is the
-      API most likely to be regretted.
+      plus `ctx.json(value, writer)` and `ctx.bodyJson(reader)`. Codecs stay
+      hand-written, so the mapping is still visible; they just stopped being
+      re-inlined in every handler. The four decisions:
+
+      - **Two interfaces, not one with two methods.** Most codecs are write-only
+        — `DeckSummary` and `CardWithTags` never come back in — and a combined
+        interface makes those fill `read` with `UnsupportedOperationException`.
+        Split, each half is a SAM and therefore a lambda:
+        `JsonWriter<DeckSummary> w = s -> Json.obj().put("id", s.id())...`.
+        A two-method interface cannot be written as a lambda at all — which is
+        also why `JsonCodec.of(writer, reader)` exists: a codec is the one shape
+        that would otherwise need an anonymous class.
+      - **Codecs live in the web layer**, a `Codecs` holder beside the
+        controllers, not on the record. A codec on `Deck` would make
+        `flashcard.domain` import `spidersilk.json.Json` — the domain would
+        depend on the web framework to state its own wire format. The wire
+        format belongs to the tier that serves it. Core ships the interfaces
+        only; where codecs sit is a convention the example demonstrates.
+      - **Collections compose**: `JsonWriter.list(writer)`,
+        `JsonReader.list(reader)`, and `JsonCodec.list(codec)` return the
+        `List<T>` form. Function composition, no reflection, and it collapsed
+        the hand-rolled array loops in `ApiController.listDecks` and
+        `listCards` — both handlers are now one line.
+      - **`read` throws, and `ctx.bodyJson(reader)` turns
+        `IllegalArgumentException` into a 400.** The same contract as
+        `pathParamLong`: it returns the value or it rejects the request. No
+        `Result` or `Validator` type in core — business rules stay in the
+        service layer, where they already throw. `Json`'s own accessors already
+        throw `IllegalArgumentException` on a missing key or a wrong type, so a
+        reader gets the rejection for free by simply reading.
 
 - [x] **10a. Cookies and repeated parameters.** `cookie(name)` / `cookies()` to
       read; `cookie(name, value)`, `cookie(name, value, maxAge)`, and

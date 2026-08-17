@@ -20,6 +20,8 @@ import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.Part;
 
 import spidersilk.json.Json;
+import spidersilk.json.JsonReader;
+import spidersilk.json.JsonWriter;
 
 /**
  * A context wrapping the request and the response.
@@ -248,6 +250,21 @@ public final class WebContext {
         }
     }
 
+    /**
+     * Parses the body as JSON and hands it to a hand-written reader. Responds
+     * with 400 both on invalid syntax and on a body the reader rejects — a
+     * missing key or a value of the wrong type — so a handler receives a whole
+     * value or nothing at all, the same contract as {@link #pathParamLong}.
+     */
+    public <T> T bodyJson(JsonReader<T> reader) {
+        Json.JsonValue json = bodyJson();
+        try {
+            return reader.read(json);
+        } catch (IllegalArgumentException e) {
+            throw new HttpException(400, "Request body was rejected: " + e.getMessage());
+        }
+    }
+
     /** A multipart upload. Responds with 400 if missing. */
     public UploadedFile file(String name) {
         try {
@@ -408,6 +425,11 @@ public final class WebContext {
 
     public void json(Json.JsonValue value) {
         json(value.toJson());
+    }
+
+    /** Writes a value as JSON through a hand-written writer. */
+    public <T> void json(T value, JsonWriter<T> writer) {
+        json(writer.write(value));
     }
 
     public void json(String rawJson) {

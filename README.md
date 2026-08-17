@@ -101,6 +101,45 @@ ended on that status with nothing written — from the router, from an
 A handler that already wrote a body is left alone. Inside an error handler,
 `ctx.errorMessage()` is the plain-text message the framework would have used.
 
+### JSON writers and readers
+
+`Json.obj()` builds a tree inline, which gets repetitive once the same record is
+serialized in three handlers. `JsonWriter<T>` and `JsonReader<T>` name that
+mapping so it can be reused. Both have one method, so both are lambdas:
+
+```java
+static final JsonWriter<Deck> DECK = deck -> Json.obj()
+        .put("id", deck.id())
+        .put("name", deck.name());
+
+static final JsonWriter<List<Deck>> DECKS = JsonWriter.list(DECK);
+
+record NewDeck(String name) { }
+
+static final JsonReader<NewDeck> NEW_DECK =
+        json -> new NewDeck(json.asObject().getString("name"));
+```
+
+```java
+app.get("/api/decks", ctx -> ctx.json(deckService.decks(), DECKS));
+
+app.post("/api/decks", ctx -> {
+    Deck deck = deckService.create(ctx.bodyJson(NEW_DECK).name());   // no key -> 400
+    ctx.status(201).json(deck, DECK);
+});
+```
+
+Still no reflection: the mapping is code you wrote, so a field rename changes
+the wire format only if you edit it. `getString` throws
+`IllegalArgumentException` on a missing key or a value of the wrong type, and
+`ctx.bodyJson(reader)` turns that into a 400 — a handler gets a whole value or
+none, the same contract as `pathParamLong`.
+
+Most types only go out, which is why the two halves are separate interfaces
+rather than one with an unimplementable `read`. When a type does travel both
+ways, `JsonCodec<T>` is both at once — `JsonCodec.of(writer, reader)` to build
+one, `JsonCodec.list(codec)` for the list form.
+
 ### Cookies and repeated parameters
 
 ```java
@@ -284,10 +323,10 @@ context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 - Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`
 - Parameters: `param` (400 when missing), `param(name, default)`, `paramLong`, `paramBoolean`, `paramEnum`, `params(name)` for repeated values
 - Cookies: `cookie(name)` / `cookies()` to read, `cookie(name, value)` / `cookie(name, value, maxAge)` / `cookie(Cookie)` to set, `removeCookie(name)`
-- Body: `body()`, `bodyJson()`, multipart upload via `file(name)`
+- Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects), multipart upload via `file(name)`
 - Session: `sessionAttr(key)` / `sessionAttr(key, value)` / `removeSessionAttr`
 - Flash: `flash(key, value)` → read exactly once with `flashed(key)` on the request after a redirect
-- Response: `status`, `header`, `redirect`, `html`, `text`, `json`, `bytes`, `attachment`, `render`
+- Response: `status`, `header`, `redirect`, `html`, `text`, `json`, `json(value, writer)`, `bytes`, `attachment`, `render`
 - Errors: `errorMessage()` inside an `error(status, handler)` handler
 
 ### The scope of "no reflection"
