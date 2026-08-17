@@ -1,5 +1,6 @@
 package spidersilk.server;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -56,12 +57,20 @@ public final class JettyServer implements WebServer {
     private final List<Consumer<HttpConfiguration>> httpConfigurationCustomizers =
             new ArrayList<>();
 
+    /** How long {@link #stop()} lets requests in flight finish. */
+    public static final Duration DEFAULT_STOP_TIMEOUT = Duration.ofSeconds(5);
+
+    /** How long a connection with nothing on it survives a graceful stop. */
+    private static final Duration SHUTDOWN_IDLE_TIMEOUT = Duration.ofMillis(100);
+
     private int port = DEFAULT_PORT;
     private String host;
     private String contextPath = "/";
     private boolean sessions = true;
     private ThreadPool threadPool;
     private MultipartConfigElement multipart = defaultMultipartConfig();
+    private Duration stopTimeout = DEFAULT_STOP_TIMEOUT;
+    private boolean shutdownHook = true;
 
     private Server server;
     private ServerConnector connector;
@@ -115,6 +124,29 @@ public final class JettyServer implements WebServer {
         return this;
     }
 
+    /**
+     * How long {@link #stop()} waits for requests in flight before dropping
+     * them. Five seconds by default. Idle connections do not hold this up —
+     * only requests that are actually running. {@link Duration#ZERO} turns
+     * graceful shutdown off and stops immediately.
+     */
+    public JettyServer stopTimeout(Duration stopTimeout) {
+        this.stopTimeout = Objects.requireNonNull(stopTimeout, "stopTimeout");
+        return this;
+    }
+
+    /**
+     * Whether a JVM shutdown hook stops the server on Ctrl-C or SIGTERM. On by
+     * default, so an app that only calls {@code start()} still shuts down
+     * gracefully. This is Jetty's own {@code stopAtShutdown}: one hook for the
+     * whole JVM, taken back out when the server stops, so a process that starts
+     * a server per test does not accumulate any.
+     */
+    public JettyServer shutdownHook(boolean shutdownHook) {
+        this.shutdownHook = shutdownHook;
+        return this;
+    }
+
     // ---- Escape hatches into Jetty ----
 
     /** Runs against the {@link Server} after the handler is set, before startup. */
@@ -152,6 +184,8 @@ public final class JettyServer implements WebServer {
             connector = createConnector(candidate);
             candidate.addConnector(connector);
             candidate.setHandler(createContext());
+            candidate.setStopTimeout(stopTimeout.toMillis());
+            candidate.setStopAtShutdown(shutdownHook);
             serverCustomizers.forEach(customizer -> customizer.accept(candidate));
             candidate.start();
             server = candidate;
@@ -203,6 +237,10 @@ public final class JettyServer implements WebServer {
         ServerConnector connector =
                 new ServerConnector(server, new HttpConnectionFactory(httpConfiguration));
         connector.setPort(port);
+        // Without this, a graceful stop waits out the whole stop timeout for
+        // keep-alive connections that are sitting idle, and then reports a
+        // timeout. The drain is for requests in flight, not for open sockets.
+        connector.setShutdownIdleTimeout(SHUTDOWN_IDLE_TIMEOUT.toMillis());
         if (host != null) {
             connector.setHost(host);
         }

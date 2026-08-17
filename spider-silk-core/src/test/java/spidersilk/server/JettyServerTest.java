@@ -1,6 +1,7 @@
 package spidersilk.server;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -9,6 +10,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.time.Duration;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -113,6 +118,105 @@ class JettyServerTest {
         } finally {
             jetty.stop();
         }
+    }
+
+    /** Graceful shutdown: a request already running is finished, not dropped. */
+    @Test
+    void stopWaitsForARequestInFlight() throws Exception {
+        CountDownLatch handlerEntered = new CountDownLatch(1);
+        app = new App().get("/slow", ctx -> {
+            handlerEntered.countDown();
+            Thread.sleep(300);
+            ctx.text("finished");
+        }).start(0);
+
+        String url = "http://localhost:" + app.port() + "/slow";
+        CompletableFuture<HttpResponse<String>> inFlight = client.sendAsync(
+                HttpRequest.newBuilder(URI.create(url)).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertTrue(handlerEntered.await(2, TimeUnit.SECONDS), "the handler never started");
+
+        app.stop();
+
+        HttpResponse<String> response = inFlight.get(2, TimeUnit.SECONDS);
+        assertEquals(200, response.statusCode());
+        assertEquals("finished", response.body());
+    }
+
+    @Test
+    void gracefulShutdownIsOnByDefault() {
+        JettyServer jetty = new JettyServer(new App()).port(0);
+        jetty.start();
+        try {
+            assertEquals(JettyServer.DEFAULT_STOP_TIMEOUT.toMillis(),
+                    jetty.jetty().getStopTimeout());
+        } finally {
+            jetty.stop();
+        }
+    }
+
+    /** A suite that starts a server per test would rather not wait for the drain. */
+    @Test
+    void aZeroStopTimeoutTurnsGracefulShutdownOff() {
+        JettyServer jetty = new JettyServer(new App()).port(0).stopTimeout(Duration.ZERO);
+        jetty.start();
+        try {
+            assertEquals(0, jetty.jetty().getStopTimeout());
+        } finally {
+            jetty.stop();
+        }
+    }
+
+    /** Customizers run last, so they can still overrule a setting method. */
+    @Test
+    void customizeServerOverrulesTheStopTimeout() {
+        JettyServer jetty = new JettyServer(new App())
+                .port(0)
+                .stopTimeout(Duration.ofSeconds(2))
+                .customizeServer(server -> server.setStopTimeout(7_000));
+        jetty.start();
+        try {
+            assertEquals(7_000, jetty.jetty().getStopTimeout());
+        } finally {
+            jetty.stop();
+        }
+    }
+
+    /** Ctrl-C stops the server: Jetty's own hook, one per JVM rather than one per server. */
+    @Test
+    void aShutdownHookIsRegisteredByDefault() {
+        JettyServer jetty = new JettyServer(new App()).port(0);
+        jetty.start();
+        try {
+            assertTrue(jetty.jetty().getStopAtShutdown());
+        } finally {
+            jetty.stop();
+        }
+    }
+
+    @Test
+    void theShutdownHookCanBeTurnedOff() {
+        JettyServer jetty = new JettyServer(new App()).port(0).shutdownHook(false);
+        jetty.start();
+        try {
+            assertFalse(jetty.jetty().getStopAtShutdown());
+        } finally {
+            jetty.stop();
+        }
+    }
+
+    /** An idle keep-alive connection must not hold the stop timeout hostage. */
+    @Test
+    void anIdleConnectionDoesNotDelayTheStop() throws Exception {
+        app = new App().get("/", ctx -> ctx.text("ok")).start(0);
+        assertEquals(200, get("/").statusCode());   // leaves a keep-alive connection behind
+
+        long startedAt = System.nanoTime();
+        app.stop();
+        app = null;
+
+        long millis = (System.nanoTime() - startedAt) / 1_000_000;
+        assertTrue(millis < 1_000, "stop took " + millis + "ms with only an idle connection open");
     }
 
     @Test

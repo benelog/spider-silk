@@ -22,14 +22,14 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 10a | Cookies and repeated parameters | P1 | ✅ done |
 | 10b | `formParam` distinct from query, HEAD/OPTIONS | P1 | ✅ done |
 | 11 | Request logging hook | P1 | ✅ done |
-| 12 | Graceful shutdown on by default | P1 | ⬜ next |
+| 12 | Graceful shutdown on by default | P1 | ✅ done |
 | 13 | Route introspection → overview page, OpenAPI export | P2 | ⬜ open |
 | 14 | Router indexed by method and first segment | P2 | ⬜ next |
 | 15 | WebSocket / SSE | P2 | ⬜ open |
 | 16 | Virtual threads | P2 | ⬜ next |
 | 17 | Split `spider-silk-test` out of core | — | ⬜ open |
 
-11 of 18 done: all of P0, and four of P1.
+12 of 18 done: all of P0, and all of P1 except the JsonCodec seam.
 
 ## P0 — done
 
@@ -120,10 +120,18 @@ decision first) · **rejected** (a decision, not a backlog item)
       set. A logger that throws goes to the servlet log: the response is already
       out by then, and a broken logger must not become a broken response.
 
-- [ ] **12. Graceful shutdown.** A stop timeout and a JVM shutdown hook, on by
-      default in `JettyServer`, with a method to turn them off. Note the
-      interaction found while testing: a non-zero stop timeout makes `stop()`
-      wait for keep-alive connections, so the default has to be modest.
+- [x] **12. Graceful shutdown.** `stopTimeout` (five seconds) and
+      `shutdownHook` (on), both with a method to turn them off. The interaction
+      the note warned about turned out to be worse than "make the default
+      modest": a stop timeout of *any* size made `stop()` wait out the whole
+      timeout for idle keep-alive connections and then **throw** a
+      `TimeoutException` — the project's own suite went from 0.75s to 6s and
+      five tests failed. The fix is `ServerConnector.setShutdownIdleTimeout`
+      (100ms): the drain then waits for requests in flight only, which is what
+      it was ever supposed to mean, and five seconds costs an idle stop nothing.
+      The hook is Jetty's own `setStopAtShutdown` rather than a thread of our
+      own — one hook per JVM, deregistered on stop, so a suite that starts a
+      server per test does not accumulate them.
 
 ## P2 — what decides whether this is more than a teaching framework
 

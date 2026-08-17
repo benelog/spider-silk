@@ -195,7 +195,8 @@ void createsADeck() {
 
 `get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and
 `postJson`, all return the raw `HttpResponse<String>` — assertions stay in
-whatever library the project already uses. `send(builder -> ...)` is the way out for anything else.
+whatever library the project already uses. `send(builder -> ...)` is the way out
+for anything else.
 
 ## The Server
 
@@ -211,11 +212,19 @@ new JettyServer(app)
         .sessions(false)
         .threadPool(new QueuedThreadPool(200, 8))
         .multipart(new MultipartConfigElement(tmp, 10_485_760L, 10_485_760L, 1_048_576))
+        .stopTimeout(Duration.ofSeconds(20))    // longer drain for slow requests
+        .shutdownHook(false)                    // something else owns the lifecycle
         .customizeHttpConfiguration(http -> http.setSendServerVersion(false))
         .customizeContext(context -> context.addFilter(MyFilter.class, "/*", null))
-        .customizeServer(server -> server.setStopTimeout(5_000))
+        .customizeServer(server -> server.setDumpBeforeStop(true))
         .start();
 ```
+
+Shutdown is graceful out of the box: a JVM shutdown hook stops the server on
+Ctrl-C or SIGTERM, and `stop()` gives requests in flight five seconds to finish
+before dropping them. Idle keep-alive connections do not hold that up — they are
+closed as soon as the drain starts, so a stop with nothing running returns
+immediately. `stopTimeout(Duration.ZERO)` turns the drain off entirely.
 
 To keep `app.start(port)` as the entry point while still configuring the server,
 or to run a different server entirely, replace the factory:
