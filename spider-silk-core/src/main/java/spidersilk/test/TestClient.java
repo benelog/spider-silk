@@ -1,0 +1,99 @@
+package spidersilk.test;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.URI;
+import java.net.URLEncoder;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+import java.util.StringJoiner;
+import java.util.function.UnaryOperator;
+
+/**
+ * An HTTP client aimed at the app under test.
+ *
+ * <p>Every method returns the raw {@link HttpResponse} rather than an assertion
+ * DSL — the assertions belong to whichever test library the project already
+ * uses. {@link #send(UnaryOperator)} is the way out for anything these
+ * shorthands do not cover.
+ */
+public final class TestClient {
+
+    private final HttpClient client;
+    private final String baseUrl;
+
+    TestClient(HttpClient client, String baseUrl) {
+        this.client = client;
+        this.baseUrl = baseUrl;
+    }
+
+    /** The absolute URL a path resolves to, e.g. "http://localhost:34567/decks". */
+    public String url(String path) {
+        return baseUrl + path;
+    }
+
+    public HttpResponse<String> get(String path) {
+        return send(request -> request.uri(URI.create(url(path))).GET());
+    }
+
+    public HttpResponse<String> delete(String path) {
+        return send(request -> request.uri(URI.create(url(path))).DELETE());
+    }
+
+    public HttpResponse<String> post(String path) {
+        return post(path, "");
+    }
+
+    /** Posts a raw body. Pair it with {@code header("Content-Type", ...)} via {@link #send}. */
+    public HttpResponse<String> post(String path, String body) {
+        return send(request -> request.uri(URI.create(url(path)))
+                .POST(HttpRequest.BodyPublishers.ofString(body)));
+    }
+
+    public HttpResponse<String> put(String path, String body) {
+        return send(request -> request.uri(URI.create(url(path)))
+                .PUT(HttpRequest.BodyPublishers.ofString(body)));
+    }
+
+    public HttpResponse<String> patch(String path, String body) {
+        return send(request -> request.uri(URI.create(url(path)))
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(body)));
+    }
+
+    /** Posts a URL-encoded form, the shape an HTML {@code <form>} submits. */
+    public HttpResponse<String> postForm(String path, Map<String, String> form) {
+        return send(request -> request.uri(URI.create(url(path)))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(encode(form))));
+    }
+
+    /** Posts a JSON body. */
+    public HttpResponse<String> postJson(String path, String json) {
+        return send(request -> request.uri(URI.create(url(path)))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json)));
+    }
+
+    /** Builds and sends any request. Redirects are not followed, so 302s stay visible. */
+    public HttpResponse<String> send(UnaryOperator<HttpRequest.Builder> build) {
+        try {
+            return client.send(build.apply(HttpRequest.newBuilder()).build(),
+                    HttpResponse.BodyHandlers.ofString());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for a response", e);
+        }
+    }
+
+    private static String encode(Map<String, String> form) {
+        StringJoiner encoded = new StringJoiner("&");
+        form.forEach((name, value) -> encoded.add(URLEncoder.encode(name, StandardCharsets.UTF_8)
+                + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8)));
+        return encoded.toString();
+    }
+}
