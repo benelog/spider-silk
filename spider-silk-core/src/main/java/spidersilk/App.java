@@ -43,6 +43,7 @@ public final class App {
 
     TemplateRenderer templates;
     StaticFiles staticFiles;
+    RequestLogger requestLogger;
 
     private WebServerFactory serverFactory = (app, port) -> new JettyServer(app).port(port);
     private WebServer server;
@@ -159,6 +160,23 @@ public final class App {
     /** Shorthand for {@code error(404, handler)}. */
     public App notFound(Handler handler) {
         return error(404, handler);
+    }
+
+    /**
+     * Called after every response, with how long the request took.
+     *
+     * <pre>{@code
+     * app.requestLogger((ctx, millis) -> logger.info("{} {} -> {} ({}ms)",
+     *         ctx.method(), ctx.path(), ctx.res().getStatus(), millis));
+     * }</pre>
+     *
+     * One lambda, and no logging framework in core. A logger that throws is
+     * reported to the servlet log and does not affect the response, which has
+     * already been sent by then.
+     */
+    public App requestLogger(RequestLogger logger) {
+        this.requestLogger = Objects.requireNonNull(logger, "logger");
+        return this;
     }
 
     /** The template engine used by {@link WebContext#render}. */

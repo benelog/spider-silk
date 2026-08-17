@@ -35,16 +35,35 @@ public class AppServlet extends HttpServlet {
         req.setCharacterEncoding("UTF-8");
         promoteFlash(req);
 
-        if ("HEAD".equals(req.getMethod())) {
-            HeadResponse head = new HeadResponse(res);
-            dispatch(req, head);
-            head.finish();
-            return;
+        long startedAt = System.nanoTime();
+        WebContext ctx = null;
+        try {
+            if ("HEAD".equals(req.getMethod())) {
+                HeadResponse head = new HeadResponse(res);
+                ctx = dispatch(req, head);
+                head.finish();
+            } else {
+                ctx = dispatch(req, res);
+            }
+        } finally {
+            logRequest(ctx, startedAt);
         }
-        dispatch(req, res);
     }
 
-    private void dispatch(HttpServletRequest req, HttpServletResponse res) throws IOException {
+    /** Reports the finished request, with the status it was finally answered with. */
+    private void logRequest(WebContext ctx, long startedAt) {
+        if (app.requestLogger == null || ctx == null) {
+            return;
+        }
+        try {
+            app.requestLogger.log(ctx, (System.nanoTime() - startedAt) / 1_000_000);
+        } catch (Exception e) {
+            log("Request logger failed", e);
+        }
+    }
+
+    private WebContext dispatch(HttpServletRequest req, HttpServletResponse res)
+            throws IOException {
         String method = req.getMethod();
         String path = requestPath(req);
         String[] segments = PathPattern.split(path);
@@ -59,7 +78,7 @@ public class AppServlet extends HttpServlet {
                 }
             } else if (isReadMethod(method) && app.staticFiles != null
                     && app.staticFiles.serve(path, req, res)) {
-                return;
+                return ctx;
             } else {
                 Set<String> allowed = allowedMethods(path);
                 if (allowed.isEmpty()) {
@@ -77,6 +96,7 @@ public class AppServlet extends HttpServlet {
             handleException(e, ctx);
         }
         completeErrorResponse(ctx);
+        return ctx;
     }
 
     /** A HEAD with no route of its own is answered by the GET route, minus the body. */

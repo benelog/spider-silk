@@ -21,7 +21,7 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 9 | Static files: cache headers, hosted path | P1 | ✅ done |
 | 10a | Cookies and repeated parameters | P1 | ✅ done |
 | 10b | `formParam` distinct from query, HEAD/OPTIONS | P1 | ✅ done |
-| 11 | Request logging hook | P1 | ⬜ next |
+| 11 | Request logging hook | P1 | ✅ done |
 | 12 | Graceful shutdown on by default | P1 | ⬜ next |
 | 13 | Route introspection → overview page, OpenAPI export | P2 | ⬜ open |
 | 14 | Router indexed by method and first segment | P2 | ⬜ next |
@@ -29,7 +29,7 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 16 | Virtual threads | P2 | ⬜ next |
 | 17 | Split `spider-silk-test` out of core | — | ⬜ open |
 
-10 of 18 done: all of P0, and three of P1.
+11 of 18 done: all of P0, and four of P1.
 
 ## P0 — done
 
@@ -113,8 +113,12 @@ decision first) · **rejected** (a decision, not a backlog item)
       OPTIONS this servlet adds itself, and `head`/`options` register a route
       when the automatic answer is not the right one.
 
-- [ ] **11. Request logging hook.** `app.requestLogger((ctx, millis) -> ...)`.
-      One lambda, no logging framework in core.
+- [x] **11. Request logging hook.** `app.requestLogger((ctx, millis) -> ...)`.
+      One lambda, no logging framework in core. It runs in a `finally` around
+      the whole dispatch, *after* the error handler has had its turn, so the
+      status it reports is the one that was sent rather than the one the router
+      set. A logger that throws goes to the servlet log: the response is already
+      out by then, and a broken logger must not become a broken response.
 
 - [ ] **12. Graceful shutdown.** A stop timeout and a JVM shutdown hook, on by
       default in `JettyServer`, with a method to turn them off. Note the

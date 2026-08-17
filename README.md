@@ -147,6 +147,19 @@ Allow: GET, POST, HEAD, OPTIONS
 `app.head(...)` and `app.options(...)` register a route of their own when the
 automatic answer is not the one you want — a CORS preflight, usually.
 
+### Request logging
+
+```java
+app.requestLogger((ctx, millis) -> logger.info("{} {} -> {} ({}ms)",
+        ctx.method(), ctx.path(), ctx.res().getStatus(), millis));
+```
+
+One lambda, and no logging framework in core: which logger, at which level, and
+in which format is the application's call. It runs once per request after the
+response is complete, so the status it sees is the one that was actually sent —
+the error handler's, if one ran. A logger that throws is reported to the servlet
+log and leaves the response alone.
+
 ### Static files
 
 `staticFiles("/public")` serves `classpath:/public/*` at the root. Every
