@@ -18,18 +18,21 @@ import java.util.Set;
 final class Router {
 
     /** {@code order} is the registration index — the tie-breaker the index must not lose. */
-    record Route(String method, PathPattern pattern, Handler handler, int order) {
+    record Entry(String method, String path, PathPattern pattern, Handler handler, int order) {
     }
 
     record Match(Handler handler, Map<String, String> pathParams) {
     }
 
     private final Map<String, MethodRoutes> byMethod = new LinkedHashMap<>();
-    private int registered;
+
+    /** Every route in registration order, which the index alone no longer preserves. */
+    private final List<Entry> registrations = new ArrayList<>();
 
     void add(String method, String path, Handler handler) {
-        Route route = new Route(method, new PathPattern(path), handler, registered++);
-        byMethod.computeIfAbsent(method, key -> new MethodRoutes()).add(route);
+        Entry entry = new Entry(method, path, new PathPattern(path), handler, registrations.size());
+        registrations.add(entry);
+        byMethod.computeIfAbsent(method, key -> new MethodRoutes()).add(entry);
     }
 
     Match find(String method, String path) {
@@ -38,10 +41,10 @@ final class Router {
             return null;
         }
         String[] segments = PathPattern.split(path);
-        for (Route route : routes.candidates(segments)) {
-            Map<String, String> params = route.pattern().match(segments);
+        for (Entry entry : routes.candidates(segments)) {
+            Map<String, String> params = entry.pattern().match(segments);
             if (params != null) {
-                return new Match(route.handler(), params);
+                return new Match(entry.handler(), params);
             }
         }
         return null;
@@ -52,8 +55,8 @@ final class Router {
         String[] segments = PathPattern.split(path);
         Set<String> methods = new LinkedHashSet<>();
         byMethod.forEach((method, routes) -> {
-            for (Route route : routes.candidates(segments)) {
-                if (route.pattern().match(segments) != null) {
+            for (Entry entry : routes.candidates(segments)) {
+                if (entry.pattern().match(segments) != null) {
                     methods.add(method);
                     return;
                 }
@@ -62,24 +65,29 @@ final class Router {
         return methods;
     }
 
+    /** An immutable snapshot of what was registered, in registration order. */
+    List<Route> routes() {
+        return registrations.stream().map(entry -> new Route(entry.method(), entry.path())).toList();
+    }
+
     /** The routes of one method, split by the first segment they can match. */
     private static final class MethodRoutes {
 
-        private final Map<String, List<Route>> byFirstSegment = new HashMap<>();
-        private final List<Route> anyFirstSegment = new ArrayList<>();
+        private final Map<String, List<Entry>> byFirstSegment = new HashMap<>();
+        private final List<Entry> anyFirstSegment = new ArrayList<>();
 
-        void add(Route route) {
-            String first = route.pattern().literalFirstSegment();
+        void add(Entry entry) {
+            String first = entry.pattern().literalFirstSegment();
             if (first == null) {
-                anyFirstSegment.add(route);
+                anyFirstSegment.add(entry);
             } else {
-                byFirstSegment.computeIfAbsent(first, key -> new ArrayList<>()).add(route);
+                byFirstSegment.computeIfAbsent(first, key -> new ArrayList<>()).add(entry);
             }
         }
 
         /** Everything that could match this path, in registration order. */
-        List<Route> candidates(String[] segments) {
-            List<Route> literal = byFirstSegment.getOrDefault(
+        List<Entry> candidates(String[] segments) {
+            List<Entry> literal = byFirstSegment.getOrDefault(
                     segments.length == 0 ? "" : segments[0], List.of());
             if (anyFirstSegment.isEmpty()) {
                 return literal;
@@ -91,8 +99,8 @@ final class Router {
         }
 
         /** Both lists are in registration order already, so this is one merge step. */
-        private static List<Route> mergeByOrder(List<Route> left, List<Route> right) {
-            List<Route> merged = new ArrayList<>(left.size() + right.size());
+        private static List<Entry> mergeByOrder(List<Entry> left, List<Entry> right) {
+            List<Entry> merged = new ArrayList<>(left.size() + right.size());
             int i = 0;
             int j = 0;
             while (i < left.size() && j < right.size()) {

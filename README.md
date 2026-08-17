@@ -217,6 +217,39 @@ app.staticFiles(new StaticFiles("/public")
 Routes are matched first, so a route can shadow a file. Directories are never
 served.
 
+### Route introspection
+
+Routes are an explicit list, so the framework can hand it back — no annotation
+scanning, no plugin, no reflection. `app.routes()` is an immutable snapshot of
+`record Route(String method, String path)`, in registration order, which is also
+the order the router breaks ties in:
+
+```java
+app.get("/_routes", ctx -> ctx.render("routes.jte", Map.of("routes", app.routes())));
+```
+
+Group prefixes are already resolved, so a path reads as
+`/api/decks/{deckId}/cards` — which is OpenAPI's path-template syntax verbatim,
+so an export needs no translation:
+
+```java
+for (Route route : app.routes()) {
+    paths.put(route.path(), Json.obj().put(route.method().toLowerCase(Locale.ROOT), ...));
+}
+```
+
+Method and path is all a route carries. The handler is left out — it is a
+lambda, and the only name it has is what reflection would dig out of its
+synthetic class — and so is any description, because documentation attached at
+the registration site is an annotation with the reflection taken out. What the
+routes are *for* is built on top of the list, which is plain data: the example
+app's `RoutesController` is a `/_routes` overview page and an `/openapi.json`
+document in about forty lines.
+
+The automatic HEAD and OPTIONS answers are not listed. `routes()` reports what
+was registered, which is the honest answer for a framework whose claim is that
+only what you register runs.
+
 ### Testing
 
 The harness is its own module, so the production jar carries no test code:
@@ -313,6 +346,7 @@ context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 ### What App provides
 
 - Routes: `get`, `post`, `put`, `patch`, `delete`, and `path(prefix, group -> ...)`
+- Introspection: `routes()` — every registered route as `Route(method, path)`, in registration order
 - Filters: `before(handler)` / `before(path, handler)`, same for `after`
 - Errors: `exception(Type, handler)`, `error(status, handler)`, `notFound(handler)`
 - Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles)`
@@ -351,7 +385,11 @@ built without Spring Boot.
   a thin wrapper around `TransactionTemplate`. The wrapped block is exactly the
   transaction scope.
 - As a bonus, a JSON API (`/api/decks`, `/api/decks/{id}/cards`) sits on the
-  same service layer to show the framework's REST support.
+  same service layer to show the framework's REST support. Its wire format is in
+  `flashcard.web.Codecs` as hand-written `JsonWriter`/`JsonReader` lambdas.
+- `/_routes` lists every route and `/openapi.json` is the same list as an
+  OpenAPI 3.1 document — both built from `app.routes()` in `RoutesController`,
+  which is what the framework exposing its routing table as data buys you.
 
 ### Run
 

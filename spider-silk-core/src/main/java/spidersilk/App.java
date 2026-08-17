@@ -108,6 +108,25 @@ public final class App {
         return this;
     }
 
+    /**
+     * Every route registered so far, in registration order — which is also the
+     * order the router resolves ties in. Routes are an explicit list, so this
+     * needs no annotation scanning and no reflection; it is the same list the
+     * dispatcher walks, read back as data.
+     *
+     * <pre>{@code
+     * app.get("/_routes", ctx -> ctx.render("routes.jte", Map.of("routes", app.routes())));
+     * }</pre>
+     *
+     * <p>What was registered, and only that: the HEAD and OPTIONS answers
+     * {@link AppServlet} derives from a GET route are not listed, because
+     * nobody registered them. An overview page or an OpenAPI export is built
+     * from this snapshot rather than shipped in core.
+     */
+    public List<Route> routes() {
+        return router.routes();
+    }
+
     /** A filter that runs before every route. */
     public App before(Handler filter) {
         return before("/*", filter);

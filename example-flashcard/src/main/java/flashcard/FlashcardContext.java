@@ -20,6 +20,7 @@ import flashcard.web.ApiController;
 import flashcard.web.Controller;
 import flashcard.web.DeckController;
 import flashcard.web.HomeController;
+import flashcard.web.RoutesController;
 import flashcard.web.SmartDeckController;
 import flashcard.web.StatsController;
 import flashcard.web.StudyController;
@@ -58,7 +59,8 @@ public class FlashcardContext {
                 new StudyController(studyService, smartDeckService),
                 new SmartDeckController(smartDeckService),
                 new StatsController(statsService),
-                new ApiController(deckService, cardService));
+                new ApiController(deckService, cardService),
+                new RoutesController());
     }
 
     /** All controllers in the context, like getBeansOfType(Controller.class). */

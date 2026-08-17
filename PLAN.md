@@ -23,14 +23,14 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 10b | `formParam` distinct from query, HEAD/OPTIONS | P1 | ✅ done |
 | 11 | Request logging hook | P1 | ✅ done |
 | 12 | Graceful shutdown on by default | P1 | ✅ done |
-| 13 | Route introspection → overview page, OpenAPI export | P2 | ⬜ open |
+| 13 | Route introspection → overview page, OpenAPI export | P2 | ✅ done |
 | 14 | Router indexed by method and first segment | P2 | ✅ done |
 | 15 | WebSocket / SSE | P2 | ⬜ open |
 | 16 | Virtual threads | P2 | ✅ done |
 | 17 | Split `spider-silk-test` out of core | — | ✅ done |
 
-16 of 18 done: all of P0, all of P1, two of P2, and the structural split. The
-two that remain open are both P2 — route introspection and WebSocket/SSE.
+17 of 18 done: all of P0, all of P1, three of P2, and the structural split.
+The one that remains open is WebSocket/SSE.
 
 ## P0 — done
 
@@ -162,14 +162,41 @@ two that remain open are both P2 — route introspection and WebSocket/SSE.
 
 ## P2 — what decides whether this is more than a teaching framework
 
-- [ ] **13. Route introspection** *(open — the differentiator)*. Routes are an
-      explicit list, so `app.routes()` can expose them with **no reflection at
-      all**, and from that a route-overview page and a static OpenAPI export come
-      almost free. Javalin needs a plugin for this. **Open questions:** what a
-      route exposes beyond method and pattern (a description? response types?)
-      without dragging annotations back in. Note that item 14 grouped the routes
-      into buckets — still an explicit list, just not one list, so this is
-      unaffected beyond needing to walk the index.
+- [x] **13. Route introspection** *(the differentiator)*. `app.routes()` returns
+      `List<Route>` — `record Route(String method, String path)` — with **no
+      reflection at all**: it is the same list the dispatcher walks, read back as
+      data. Javalin needs a plugin for this. The four decisions:
+
+      - **Method and path, and nothing else.** The handler is left out: it is a
+        lambda, so the only name it has is what reflection would dig out of its
+        synthetic class. `PathPattern` stays package-private too — the exposed
+        data is plain strings, not a matching engine.
+      - **No description, no response types.** The decisive fact is that
+        `PathPattern`'s `{deckId}` *is* OpenAPI's path-template syntax verbatim,
+        so `/api/decks/{deckId}/cards` drops into a `paths:` key untranslated —
+        the minimal shape already yields a valid document. Adding a description
+        would mean a parameter on all seven registration methods on both `App`
+        and `RouteGroup`, and documentation attached at the registration site is
+        an annotation with the reflection taken out. Deferring costs nothing:
+        those overloads are purely additive if the need ever proves real.
+      - **The overview page and the OpenAPI export are not in core.** Core hands
+        out the list and stops. An OpenAPI document is a spec format, not the
+        web tier, and its version drift is not a web framework's to own —
+        CLAUDE.md's rule. `flashcard.web.RoutesController` is the demonstration:
+        `/_routes` renders `routes.jte`, `/openapi.json` builds a 3.1 document
+        with the `Json` builder, and together they are about forty lines. If the
+        export earns its keep, it becomes a fourth module, the way
+        `spider-silk-test` did.
+      - **Routes only** — not filters, not error handlers. A second public
+        record for "which guard covers this path" is nice-to-have, and additive
+        later.
+
+      Item 14's buckets lose registration order, so `Router` keeps a flat
+      registration-order list beside the index; `routes()` is an immutable
+      snapshot of it, taken per call. The automatic HEAD and OPTIONS answers do
+      **not** appear — `routes()` lists what was registered, which is the honest
+      answer for a framework whose pitch is that only what you register runs.
+      A `*` route has no OpenAPI equivalent, so the example's export skips it.
 
 - [x] **14. Router indexing.** Routes are grouped by method, then by first
       literal segment, with a bucket for the patterns that can match any first

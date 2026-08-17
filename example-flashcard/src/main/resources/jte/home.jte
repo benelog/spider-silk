@@ -21,7 +21,7 @@
 </head>
 <body>
 <h1><a href="/">Flashcard</a></h1>
-<nav><a href="/">Home</a> <a href="/stats">Stats</a></nav>
+<nav><a href="/">Home</a> <a href="/stats">Stats</a> <a href="/_routes">Routes</a></nav>
 
 @if(message != null)
 <p class="notice">${message}</p>
