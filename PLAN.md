@@ -24,15 +24,14 @@ Status: **done** · **next** (agreed, ready to build) · **open** (needs a desig
 | 12 | Graceful shutdown on by default | P1 | ✅ done |
 | 13 | Route introspection → overview page, OpenAPI export | P2 | ✅ done |
 | 14 | Router indexed by method and first segment | P2 | ✅ done |
-| 15a | SSE: event framing over the servlet response | P2 | 🔜 next |
+| 15a | SSE: event framing over the servlet response | P2 | ✅ done |
 | 15b | WebSocket in core | P2 | ❌ rejected |
 | 16 | Virtual threads | P2 | ✅ done |
 | 17 | Split `spider-silk-test` out of core | — | ✅ done |
 
-17 of 19 done: all of P0, all of P1, three of P2, and the structural split.
-Nothing is open any more.
+18 of 19 done: all of P0, all of P1, all of P2, and the structural split.
+The nineteenth is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
-15a is the only item left to build; 15b is closed.
 
 ## P0 — done
 
@@ -156,25 +155,30 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
       A lookup merges the two candidate lists **by registration index**, so the tie-break is exactly what it was when `find` scanned everything: `/study/today` registered before `/study/{mode}` still wins, and so does `/{page}` registered before `/decks`.
       `allowedMethods` runs off the same index.
 
-- [ ] **15a. SSE** *(next)*.
+- [x] **15a. SSE.**
+      `ctx.sse(stream -> ...)` hands the handler an `SseStream` — `send(data)`, `send(event, data)`, `id(...)`, `comment(...)`, `isOpen()`, `close()` — and writes `text/event-stream` frames, flushed one event at a time.
       `text/event-stream` is plain HTTP: a content type, one `data:` line per event, a blank line to end it, and a flush.
-      It goes through `AppServlet` unchanged, so a deployment on Tomcat gets it for free — which is the whole reason this half is in and 15b is out.
-      Core adds the framing and nothing else: the transport is the servlet response that was already there, and `ctx.res()` is public, so the only thing being removed is the chance to get `\n\n` wrong.
-      No new dependency.
-      The shape, to be settled when it is built:
+      It goes through `AppServlet` unchanged, so a deployment on Tomcat gets it too — which is the whole reason this half is in and 15b is out.
+      Core adds the framing and nothing else; no new dependency.
+      The five decisions:
 
-      - **`ctx.sse(stream -> ...)`**, with the lambda handed a small `SseStream` — `send(data)`, `send(event, data)`, `id(...)`, `comment(...)`, `close()`.
-        Not a second `Handler` type and not a route-registration method: an SSE endpoint is a `get` route that answers in a different shape, so it stays a route, and `routes()` keeps listing it as one.
-        Filters, `error(...)`, and `requestLogger` therefore all still apply — the argument that sinks 15b.
+      - **An SSE endpoint is a `get` route**, not a registration of its own.
+        `routes()` lists it, filters cover it, `requestLogger` reports it when the stream ends — which is exactly the argument that sinks 15b, so the implementation had to keep it true.
       - **The events are strings.**
-        `ctx.json(value, writer)`'s counterpart is `stream.send(writer.write(value).toString())`, not an overload that takes a codec — the same rule as everywhere else, the mapping stays visible at the call site.
+        `ctx.json(value, writer)`'s counterpart is `stream.send(writer.write(value).toJson())`, not an overload that takes a codec — the mapping stays visible at the call site, the same rule as everywhere else.
       - **The stream is blocking and holds its thread.**
         One open stream is one Jetty thread, which is the honest servlet answer and the one `AppServlet` can keep on Tomcat; `AsyncContext` would be a second dispatch model in core for a feature that has yet to prove it needs one.
         The recipe for many streams is item 16's: a virtual-thread executor on the pool, where a parked thread costs almost nothing.
-      - **Graceful shutdown has to be resolved, not documented away.**
-        An open stream is a request in flight that never finishes, so item 12's five-second `stopTimeout` waits it out and then Jetty throws a `TimeoutException` — exactly the failure `setShutdownIdleTimeout` fixed for idle keep-alive connections, and this time the connection really is busy.
-        So `App` keeps the open streams and closes them at the start of `stop()`, before Jetty begins its drain.
-        A heartbeat comment on an interval is the other half of the same problem — a proxy in front will cut an idle stream — but it is a parameter, not a design question, and can wait for a first user.
+      - **Ending a stream is never an error.**
+        A write to a stream that has gone throws `SseStream.Closed`, and `ctx.sse` catches that one type and finishes the request normally.
+        A dedicated type rather than `UncheckedIOException`, so an IO failure in the handler's own code still reaches the exception handlers; and a write *after* `close()` throws the same `Closed` rather than an `IllegalStateException`, because otherwise every graceful shutdown would log a handler failure for each open stream.
+        `SseHandler` is declared `throws Exception` for the `Thread.sleep` that every SSE loop contains — the same reason `Handler` throws.
+      - **Graceful shutdown is resolved, not documented away.**
+        An open stream is a request in flight that never finishes, so item 12's five-second `stopTimeout` would wait it out and then report a failure to drain — exactly the failure `setShutdownIdleTimeout` fixed for idle keep-alive connections, except that this connection really is busy.
+        So `App` keeps a registry of open streams and closes them as the first statement of `stop()`, before Jetty is asked to drain anything; the test asserts the stop takes under three seconds and that the handler ended.
+        The writes are synchronized on the stream, because that close comes from another thread and must not cut a frame in half.
+
+      Two deliberate edges: a HEAD of an SSE route answers with the headers and never runs the handler, since a stream with the body thrown away would never end; and the heartbeat stays the application's, `stream.comment("ping")` on a timer, because Jetty's own 30-second connector idle timeout is a number core has no business choosing for anyone.
 
 - **15b. WebSocket in core** — *rejected*, see the table below.
       Jetty can do it, and `customizeContext` plus `JakartaWebSocketServletContainerInitializer` is the recipe for an application that needs it: the WebSocket dependency then sits in that application's build file, not in core's.

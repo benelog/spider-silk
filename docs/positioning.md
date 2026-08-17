@@ -80,10 +80,8 @@ Ordered by how often they will actually hurt.
    Javalin ships `JavalinTest`; here every integration test hand-rolls port-0 startup and an `HttpClient`.
 7. **Thin request API.**
    Cookies and repeated parameters now ship; `formParam` distinct from query, HEAD/OPTIONS, and content negotiation do not.
-8. **No WebSocket or SSE.**
-   Jetty is right there; the framework does not expose it.
-   Since split in two, because the two halves answer "can `AppServlet` on Tomcat follow?" oppositely.
-   SSE can: it is plain HTTP, so core will add the event framing and nothing else (`ctx.sse(...)`) and the servlet deployment keeps working.
+8. ~~**No WebSocket or SSE.**~~ Split in two, because the two halves answer "can `AppServlet` on Tomcat follow?" oppositely.
+   SSE can, and now ships: `ctx.sse(stream -> ...)` frames the events over the servlet response, so an SSE route is an ordinary `get` route that `routes()`, filters, and the request logger all still reach — and a servlet deployment gets it too.
    WebSocket cannot: an upgrade leaves servlet dispatch, and with it the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest`.
    It stays out of core as a Jetty recipe, and becomes a `spider-silk-ws` module only if the recipe earns one.
 9. **No virtual-thread story.**
@@ -117,7 +115,7 @@ Ordered by how often they will actually hurt.
 - Virtual threads as a documented recipe on `JettyServer.threadPool(...)`, then possibly a one-liner.
 - Graceful shutdown: a shutdown hook and a stop timeout, on by default.
 - SSE as framing over the servlet response, exposed as `ctx.sse(stream -> ...)` on an ordinary `get` route.
-  The transport is the response that was already there, so this is `Json`'s kind of work — a wire format written out — and it costs no new dependency.
+  **Done** — the transport is the response that was already there, so this was `Json`'s kind of work, a wire format written out, and it cost no new dependency.
   (This entry started as "WebSocket support through Jetty, exposed as `app.ws(path, config)`"; the WebSocket half moved to the rejected list below.)
 
 **Reject on principle** — do not adopt, and say why in the docs:
@@ -139,6 +137,6 @@ All shipped: embedded server and lifecycle, path-scoped filters, route groups, `
 
 **P2 — the gaps that decide whether it is more than a teaching framework.**
 Route introspection (overview page, OpenAPI export), router indexing, SSE, virtual threads.
-All shipped but SSE, and WebSocket in core is now a decision rather than a gap.
+All shipped, and WebSocket in core is a decision rather than a gap.
 
 Item-by-item status, the reasoning behind each decision, and the rejected list live in [PLAN.md](../PLAN.md).
