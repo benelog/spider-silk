@@ -26,10 +26,10 @@ decision first) · **rejected** (a decision, not a backlog item)
 | 13 | Route introspection → overview page, OpenAPI export | P2 | ⬜ open |
 | 14 | Router indexed by method and first segment | P2 | ✅ done |
 | 15 | WebSocket / SSE | P2 | ⬜ open |
-| 16 | Virtual threads | P2 | ⬜ next |
+| 16 | Virtual threads | P2 | ✅ done |
 | 17 | Split `spider-silk-test` out of core | — | ⬜ open |
 
-13 of 18 done: all of P0, all of P1 except the JsonCodec seam, and one of P2.
+14 of 18 done: all of P0, all of P1 except the JsonCodec seam, and two of P2.
 
 ## P0 — done
 
@@ -154,9 +154,13 @@ decision first) · **rejected** (a decision, not a backlog item)
       whether this belongs in core at all, given that the servlet-deployable
       story (`AppServlet` on Tomcat) cannot follow it there.
 
-- [ ] **16. Virtual threads.** Document `JettyServer.threadPool(...)` with a
-      virtual-thread executor first; promote to a one-liner only if the recipe
-      turns out to be stable.
+- [x] **16. Virtual threads.** Documented, not wrapped:
+      `QueuedThreadPool.setVirtualThreadsExecutor(VirtualThreads.getDefault...)`
+      passed to `threadPool(...)`, with a test asserting the handler really does
+      run on a virtual thread. No `virtualThreads()` method — it would be two
+      lines of Jetty's own API behind a name that hides which knob was turned,
+      and the choice is not ours to make: it pays off only when handlers block,
+      and `synchronized` around the blocking call takes the benefit back.
 
 ## Structural
 

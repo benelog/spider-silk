@@ -220,6 +220,22 @@ new JettyServer(app)
         .start();
 ```
 
+Handlers can run on virtual threads. That is a thread pool setting, not a
+framework feature, so it stays two lines of Jetty's own API — platform threads
+keep running the selectors, the handlers get the virtual ones:
+
+```java
+QueuedThreadPool pool = new QueuedThreadPool();
+pool.setVirtualThreadsExecutor(VirtualThreads.getDefaultVirtualThreadsExecutor());
+
+app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool))
+   .start(8080);
+```
+
+Worth it only if the handlers block — on I/O, on a database. A `synchronized`
+block around that blocking call pins the carrier thread and takes the benefit
+back.
+
 Shutdown is graceful out of the box: a JVM shutdown hook stops the server on
 Ctrl-C or SIGTERM, and `stop()` gives requests in flight five seconds to finish
 before dropping them. Idle keep-alive connections do not hold that up — they are

@@ -108,7 +108,24 @@ public final class JettyServer implements WebServer {
         return this;
     }
 
-    /** The thread pool. The default is Jetty's own {@code QueuedThreadPool}. */
+    /**
+     * The thread pool. The default is Jetty's own {@code QueuedThreadPool}.
+     *
+     * <p>This is also where virtual threads come in — platform threads keep
+     * running the selectors, handlers run on virtual ones:
+     *
+     * <pre>{@code
+     * QueuedThreadPool pool = new QueuedThreadPool();
+     * pool.setVirtualThreadsExecutor(VirtualThreads.getDefaultVirtualThreadsExecutor());
+     * app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool)).start(8080);
+     * }</pre>
+     *
+     * <p>A recipe rather than a method of ours: it is two lines of Jetty's own
+     * API, and wrapping it would only hide which Jetty knob was turned. Note
+     * that a virtual thread is only worth it if the handlers block — on I/O, on
+     * a database — and that a {@code synchronized} block around that blocking
+     * call pins the carrier thread and undoes the benefit.
+     */
     public JettyServer threadPool(ThreadPool threadPool) {
         this.threadPool = threadPool;
         return this;

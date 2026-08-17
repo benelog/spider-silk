@@ -15,6 +15,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import org.eclipse.jetty.util.VirtualThreads;
+import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -217,6 +219,22 @@ class JettyServerTest {
 
         long millis = (System.nanoTime() - startedAt) / 1_000_000;
         assertTrue(millis < 1_000, "stop took " + millis + "ms with only an idle connection open");
+    }
+
+    /**
+     * The virtual-thread recipe: platform threads keep running the selectors,
+     * handlers run on virtual ones. No API of our own — just a thread pool.
+     */
+    @Test
+    void handlersCanRunOnVirtualThreads() throws Exception {
+        QueuedThreadPool threadPool = new QueuedThreadPool();
+        threadPool.setVirtualThreadsExecutor(VirtualThreads.getDefaultVirtualThreadsExecutor());
+        app = new App()
+                .get("/", ctx -> ctx.text(Thread.currentThread().isVirtual() ? "virtual" : "platform"))
+                .server((a, port) -> new JettyServer(a).port(port).threadPool(threadPool))
+                .start(0);
+
+        assertEquals("virtual", get("/").body());
     }
 
     @Test
