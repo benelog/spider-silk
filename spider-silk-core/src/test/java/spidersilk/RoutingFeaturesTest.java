@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import spidersilk.test.WebTest;
 
-/** Path-scoped filters and status-code error handlers, end to end. */
+/** Path-scoped filters, route groups, and status-code error handlers, end to end. */
 class RoutingFeaturesTest {
 
     @Test
@@ -87,6 +87,48 @@ class RoutingFeaturesTest {
         WebTest.test(app, client -> client.get("/"));
 
         assertEquals(List.of("before", "after"), visited);
+    }
+
+    @Test
+    void routeGroupPrefixesEveryRegistration() {
+        App app = new App().path("/api/decks", decks -> {
+            decks.get("", ctx -> ctx.text("list"));
+            decks.post("", ctx -> ctx.text("created"));
+            decks.get("/{deckId}", ctx -> ctx.text("deck " + ctx.pathParam("deckId")));
+        });
+
+        WebTest.test(app, client -> {
+            assertEquals("list", client.get("/api/decks").body());
+            assertEquals("created", client.post("/api/decks").body());
+            assertEquals("deck 7", client.get("/api/decks/7").body());
+        });
+    }
+
+    @Test
+    void nestedGroupsAppendPrefixes() {
+        App app = new App().path("/api", api ->
+                api.path("/decks", decks -> decks.get("/{deckId}/cards", ctx -> ctx.text("cards"))));
+
+        WebTest.test(app, client -> assertEquals("cards", client.get("/api/decks/3/cards").body()));
+    }
+
+    @Test
+    void aGroupFilterCoversThePrefixAndEverythingUnderIt() {
+        List<String> visited = new ArrayList<>();
+        App app = new App().path("/api", api -> {
+            api.before(ctx -> visited.add(ctx.path()));
+            api.get("", ctx -> ctx.text("root"));
+            api.get("/decks", ctx -> ctx.text("decks"));
+        });
+        app.get("/other", ctx -> ctx.text("other"));
+
+        WebTest.test(app, client -> {
+            client.get("/api");
+            client.get("/api/decks");
+            client.get("/other");
+        });
+
+        assertEquals(List.of("/api", "/api/decks"), visited);
     }
 
     @Test

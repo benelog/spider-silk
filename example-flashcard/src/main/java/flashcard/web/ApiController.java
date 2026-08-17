@@ -26,9 +26,11 @@ public class ApiController implements Controller {
 
     @Override
     public void register(App app) {
-        app.get("/api/decks", this::listDecks);
-        app.post("/api/decks", this::createDeck);
-        app.get("/api/decks/{deckId}/cards", this::listCards);
+        app.path("/api/decks", decks -> {
+            decks.get("", this::listDecks);
+            decks.post("", this::createDeck);
+            decks.get("/{deckId}/cards", this::listCards);
+        });
     }
 
     void listDecks(WebContext ctx) {

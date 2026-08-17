@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 import spidersilk.server.JettyServer;
 import spidersilk.server.WebServer;
@@ -68,6 +69,23 @@ public final class App {
 
     public App delete(String path, Handler handler) {
         router.add("DELETE", path, handler);
+        return this;
+    }
+
+    /**
+     * Routes sharing a path prefix. The group is passed in as an argument, so
+     * nothing is registered behind your back:
+     *
+     * <pre>{@code
+     * app.path("/api/decks", decks -> {
+     *     decks.get("", this::listDecks);           // GET /api/decks
+     *     decks.get("/{deckId}", this::showDeck);   // GET /api/decks/{deckId}
+     * });
+     * }</pre>
+     */
+    public App path(String prefix, Consumer<RouteGroup> routes) {
+        Objects.requireNonNull(routes, "routes")
+                .accept(new RouteGroup(this, Objects.requireNonNull(prefix, "prefix")));
         return this;
     }
 
