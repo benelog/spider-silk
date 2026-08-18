@@ -8,8 +8,8 @@ import javax.sql.DataSource;
 
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SimplePropertySqlParameterSource;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.CardTagName;
@@ -31,7 +31,7 @@ public class TagRepository {
 
     public Tag insert(Tag tag) {
         Long id = insert.executeAndReturnKey(
-                new MapSqlParameterSource().addValue("name", tag.name())).longValue();
+                new SimplePropertySqlParameterSource(tag)).longValue();
         return new Tag(id, tag.name());
     }
 

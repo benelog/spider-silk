@@ -9,8 +9,8 @@ import javax.sql.DataSource;
 
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SimplePropertySqlParameterSource;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.Deck;
@@ -33,9 +33,7 @@ public class DeckRepository {
 
     public Deck insert(Deck deck) {
         Long id = insert.executeAndReturnKey(
-                new MapSqlParameterSource()
-                        .addValue("name", deck.name())
-                        .addValue("createdAt", deck.createdAt())).longValue();
+                new SimplePropertySqlParameterSource(deck)).longValue();
         return new Deck(id, deck.name(), deck.createdAt());
     }
 

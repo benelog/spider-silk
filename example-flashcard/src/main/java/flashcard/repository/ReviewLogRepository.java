@@ -7,8 +7,8 @@ import java.util.Map;
 import javax.sql.DataSource;
 
 import org.springframework.jdbc.core.DataClassRowMapper;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SimplePropertySqlParameterSource;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.DailyStat;
@@ -27,12 +27,7 @@ public class ReviewLogRepository {
     }
 
     public void insert(ReviewLog log) {
-        insert.execute(new MapSqlParameterSource()
-                .addValue("cardId", log.cardId())
-                .addValue("correct", log.correct())
-                .addValue("retryRound", log.retryRound())
-                .addValue("reviewedAt", log.reviewedAt())
-                .addValue("studyDate", log.studyDate()));
+        insert.execute(new SimplePropertySqlParameterSource(log));
     }
 
     /** Correct/wrong counts per day. Feeds the bar chart on the stats screen. */

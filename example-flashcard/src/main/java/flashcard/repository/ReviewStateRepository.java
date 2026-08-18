@@ -7,8 +7,8 @@ import javax.sql.DataSource;
 
 import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SimplePropertySqlParameterSource;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.ReviewState;
@@ -29,7 +29,7 @@ public class ReviewStateRepository {
     }
 
     public void insert(ReviewState state) {
-        insert.execute(params(state));
+        insert.execute(new SimplePropertySqlParameterSource(state));
     }
 
     public void update(ReviewState state) {
@@ -41,7 +41,7 @@ public class ReviewStateRepository {
                     wrong_count      = :wrongCount,
                     last_reviewed_at = :lastReviewedAt
                 where id = :id
-                """, params(state).addValue("id", state.id()));
+                """, new SimplePropertySqlParameterSource(state));
     }
 
     public Optional<ReviewState> findByCardId(Long cardId) {
@@ -51,15 +51,5 @@ public class ReviewStateRepository {
                 from review_state
                 where card_id = :cardId
                 """, Map.of("cardId", cardId), MAPPER).stream().findFirst();
-    }
-
-    private MapSqlParameterSource params(ReviewState state) {
-        return new MapSqlParameterSource()
-                .addValue("cardId", state.cardId())
-                .addValue("intervalDays", state.intervalDays())
-                .addValue("dueDate", state.dueDate())
-                .addValue("correctCount", state.correctCount())
-                .addValue("wrongCount", state.wrongCount())
-                .addValue("lastReviewedAt", state.lastReviewedAt());
     }
 }
