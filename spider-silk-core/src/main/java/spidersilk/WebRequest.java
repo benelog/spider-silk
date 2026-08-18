@@ -120,13 +120,17 @@ public final class WebRequest {
     }
 
     public long paramLong(String name) {
-        String value = param(name);
-        try {
-            return Long.parseLong(value);
-        } catch (NumberFormatException e) {
-            throw new HttpException(400,
-                    "Parameter %s is not a number: %s".formatted(name, value));
-        }
+        return parseLong(name, param(name));
+    }
+
+    /**
+     * An optional numeric parameter — {@code ?page=} pagination, typically.
+     * The default answers for an absent parameter; a value that is present but
+     * not a number is still a 400, the same contract as {@link #paramLong(String)}.
+     */
+    public long paramLong(String name, long defaultValue) {
+        String value = req.getParameter(name);
+        return value == null ? defaultValue : parseLong(name, value);
     }
 
     public boolean paramBoolean(String name, boolean defaultValue) {
@@ -135,7 +139,28 @@ public final class WebRequest {
     }
 
     public <E extends Enum<E>> E paramEnum(String name, Class<E> type) {
-        String value = param(name);
+        return parseEnum(name, type, param(name));
+    }
+
+    /**
+     * An optional enum parameter: the default when absent, still a 400 when the
+     * value names no constant.
+     */
+    public <E extends Enum<E>> E paramEnum(String name, Class<E> type, E defaultValue) {
+        String value = req.getParameter(name);
+        return value == null ? defaultValue : parseEnum(name, type, value);
+    }
+
+    private static long parseLong(String name, String value) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            throw new HttpException(400,
+                    "Parameter %s is not a number: %s".formatted(name, value));
+        }
+    }
+
+    private static <E extends Enum<E>> E parseEnum(String name, Class<E> type, String value) {
         try {
             return Enum.valueOf(type, value);
         } catch (IllegalArgumentException e) {

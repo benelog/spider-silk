@@ -47,6 +47,31 @@ class JsonTest {
         assertEquals("fallback", object.optString("missing", "fallback"));
     }
 
+    /** The opt* family answers the default for a missing key and for a JSON null alike. */
+    @Test
+    void optAccessorsAnswerDefaultsForMissingOrNullValues() {
+        Json.JsonObject object = Json.parse(
+                "{\"name\":null,\"count\":3,\"ratio\":0.5,\"active\":true}").asObject();
+
+        assertEquals("unnamed", object.optString("name", "unnamed"));
+        assertEquals(3L, object.optLong("count", 0));
+        assertEquals(7L, object.optLong("missing", 7));
+        assertEquals(0.5, object.optDouble("ratio", 0.0));
+        assertEquals(1.5, object.optDouble("missing", 1.5));
+        assertTrue(object.optBoolean("active", false));
+        assertTrue(object.optBoolean("missing", true));
+        assertEquals(0.5, object.getDouble("ratio"));
+    }
+
+    @Test
+    void aParsedArrayReadsWithForEach() {
+        long sum = 0;
+        for (Json.JsonValue value : Json.parse("[1,2,3]").asArray()) {
+            sum += value.asLong();
+        }
+        assertEquals(6, sum);
+    }
+
     @Test
     void throwsOnInvalidSyntax() {
         assertThrows(IllegalArgumentException.class, () -> Json.parse("{\"a\":}"));

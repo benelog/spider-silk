@@ -198,6 +198,8 @@ app.post("/api/decks", req -> {
 
 Still no reflection: the mapping is code you wrote, so a field rename changes the wire format only if you edit it.
 `getString` throws `IllegalArgumentException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400 — a handler gets a whole value or none, the same contract as `pathParamLong`.
+For a key that is allowed to be absent, `optString`/`optLong`/`optDouble`/`optBoolean` answer a default instead — for a missing key and for an explicit JSON `null` alike.
+A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
 
 Most types only go out, which is why the two halves are separate interfaces rather than one with an unimplementable `read`.
 When a type does travel both ways, `JsonCodec<T>` is both at once — `JsonCodec.of(writer, reader)` to build one, `JsonCodec.list(codec)` for the list form.
@@ -221,6 +223,7 @@ A cookie set through the two-argument form gets `Path=/`, `HttpOnly`, and `SameS
 
 `params(name)` returns every value in request order, and an empty list when the parameter is absent — "no boxes checked" is an answer, not a 400.
 `param(name)` still returns the first value and still 400s when there is none.
+For an optional parameter with a type, `paramLong("page", 1)` and `paramEnum("direction", Direction.class, Direction.FRONT)` answer the default when the parameter is absent — and still 400 when it is present but unparseable, because the default covers absence, not garbage.
 
 ### Query string vs. form body
 
@@ -323,6 +326,8 @@ Routes are an explicit list, so the framework can hand it back — no annotation
 ```java
 app.get("/_routes", req -> WebResponse.render("routes.jte", Map.of("routes", app.routes())));
 ```
+
+Because order breaks ties, a second route matching exactly the same requests — the same path, or the same shape with a variable renamed — could never run, so registering one throws `IllegalStateException` on the spot instead of leaving a dead entry in the table.
 
 Group prefixes are already resolved, so a path reads as `/api/decks/{deckId}/cards` — which is OpenAPI's path-template syntax verbatim, so an export needs no translation:
 
@@ -451,7 +456,7 @@ context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 
 - Request info: `method()`, `path()`, `header(name)`, `raw()` for the servlet request itself
 - Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`
-- Parameters: `param` (400 when missing), `param(name, default)`, `paramLong`, `paramBoolean`, `paramEnum`, `params(name)` for repeated values
+- Parameters: `param` (400 when missing), `paramLong`, `paramEnum`, each with a `(..., default)` form for optional parameters; `paramBoolean(name, default)`; `params(name)` for repeated values
 - Query vs. form: `queryParam`, `queryParams`, `formParam`, `formParams`
 - Cookies the client sent: `cookie(name)`, `cookies()`
 - Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects), multipart upload via `file(name)`
@@ -463,7 +468,7 @@ context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 
 A response is an immutable value: every method below returns a new one, which is what lets an after-filter rewrite what a route answered.
 
-- Bodies: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `render(template, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
+- Bodies: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `render(template)`, `render(template, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
 - Statuses: `empty()`, `empty(status)`, `noContent()`, `redirect(location)`, `redirect(location, status)`
 - Building on: `status`, `header`, `contentType`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
 - Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`

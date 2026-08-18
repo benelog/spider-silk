@@ -29,10 +29,29 @@ final class Router {
     /** Every route in registration order, which the index alone no longer preserves. */
     private final List<Entry> registrations = new ArrayList<>();
 
+    /** What each registration matches, keyed by "GET /decks/{}". Spots dead re-registrations. */
+    private final Map<String, Entry> byShape = new HashMap<>();
+
     void add(String method, String path, Handler handler) {
         Entry entry = new Entry(method, path, new PathPattern(path), handler, registrations.size());
+        Entry existing = byShape.putIfAbsent(method + " " + entry.pattern().canonicalForm(), entry);
+        if (existing != null) {
+            throw new IllegalStateException(duplicateMessage(entry, existing));
+        }
         registrations.add(entry);
         byMethod.computeIfAbsent(method, key -> new MethodRoutes()).add(entry);
+    }
+
+    /**
+     * Registration order breaks ties between overlapping patterns, so a second
+     * route matching exactly the same requests could never run — a mistake worth
+     * a failure at registration rather than a silent 200 from the wrong handler.
+     */
+    private static String duplicateMessage(Entry entry, Entry existing) {
+        String base = entry.method() + " " + entry.path() + " is already registered";
+        return entry.path().equals(existing.path())
+                ? base
+                : base + " as " + existing.path() + ", which matches the same requests";
     }
 
     Match find(String method, String path) {

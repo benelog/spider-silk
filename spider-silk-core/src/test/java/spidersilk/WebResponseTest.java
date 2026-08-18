@@ -1,6 +1,7 @@
 package spidersilk;
 
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -9,6 +10,15 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /** The envelope itself: what a {@code with}-style method does to the one it replaces. */
 class WebResponseTest {
+
+    @Test
+    void aTemplateWithNothingToPassInNeedsNoModel() {
+        WebResponse response = WebResponse.render("about.jte");
+
+        WebResponse.Template template = (WebResponse.Template) response.body();
+        assertEquals("about.jte", template.name());
+        assertEquals(Map.of(), template.model());
+    }
 
     @Test
     void headersKeepTheOrderTheyWereSetIn() {

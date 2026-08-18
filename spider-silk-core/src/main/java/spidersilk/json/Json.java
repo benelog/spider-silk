@@ -1,6 +1,7 @@
 package spidersilk.json;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -178,6 +179,10 @@ public final class Json {
             return get(key).asLong();
         }
 
+        public double getDouble(String key) {
+            return get(key).asDouble();
+        }
+
         public boolean getBoolean(String key) {
             return get(key).asBoolean();
         }
@@ -194,6 +199,24 @@ public final class Json {
         public String optString(String key, String defaultValue) {
             JsonValue value = members.get(key);
             return value == null || value.isNull() ? defaultValue : value.asString();
+        }
+
+        /** Returns defaultValue when the key is missing or the value is null. */
+        public long optLong(String key, long defaultValue) {
+            JsonValue value = members.get(key);
+            return value == null || value.isNull() ? defaultValue : value.asLong();
+        }
+
+        /** Returns defaultValue when the key is missing or the value is null. */
+        public double optDouble(String key, double defaultValue) {
+            JsonValue value = members.get(key);
+            return value == null || value.isNull() ? defaultValue : value.asDouble();
+        }
+
+        /** Returns defaultValue when the key is missing or the value is null. */
+        public boolean optBoolean(String key, boolean defaultValue) {
+            JsonValue value = members.get(key);
+            return value == null || value.isNull() ? defaultValue : value.asBoolean();
         }
 
         @Override
@@ -213,7 +236,8 @@ public final class Json {
         }
     }
 
-    public static final class JsonArray implements JsonValue {
+    /** Iterable, so a parsed array reads with for-each: {@code for (JsonValue v : array)}. */
+    public static final class JsonArray implements JsonValue, Iterable<JsonValue> {
 
         private final List<JsonValue> values = new ArrayList<>();
 
@@ -255,6 +279,11 @@ public final class Json {
 
         public List<JsonValue> values() {
             return List.copyOf(values);
+        }
+
+        @Override
+        public Iterator<JsonValue> iterator() {
+            return values().iterator();
         }
 
         @Override

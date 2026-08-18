@@ -60,6 +60,23 @@ final class PathPattern {
         return segment.length() >= 2 && segment.startsWith("{") && segment.endsWith("}");
     }
 
+    /**
+     * The set of paths this pattern matches, as a string: variable names erased,
+     * slashes normalized. "/decks/{deckId}" and "decks/{id}/" both come back as
+     * "/decks/{}", which is what lets the router spot a second registration that
+     * could never run.
+     */
+    String canonicalForm() {
+        StringBuilder sb = new StringBuilder();
+        for (String segment : segments) {
+            sb.append('/').append(isVariable(segment) ? "{}" : segment);
+        }
+        if (matchesRest) {
+            sb.append("/*");
+        }
+        return sb.isEmpty() ? "/" : sb.toString();
+    }
+
     /** Returns the path variable map on a match, or null otherwise. */
     Map<String, String> match(String[] actual) {
         if (matchesRest ? actual.length < segments.length : actual.length != segments.length) {

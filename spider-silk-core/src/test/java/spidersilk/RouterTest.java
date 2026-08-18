@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class RouterTest {
 
@@ -99,5 +100,39 @@ class RouterTest {
         router.add("DELETE", "/{page}", noop);
 
         assertEquals(Set.of("POST", "DELETE"), router.allowedMethods("/decks"));
+    }
+
+    /** A second route matching the same requests could never run, so it fails right away. */
+    @Test
+    void rejectsASecondRouteMatchingTheSameRequests() {
+        Router router = new Router();
+        router.add("GET", "/decks", noop);
+
+        IllegalStateException duplicate = assertThrows(IllegalStateException.class,
+                () -> router.add("GET", "/decks", noop));
+        assertEquals("GET /decks is already registered", duplicate.getMessage());
+    }
+
+    /** The same shape spelled differently — renamed variable, stray slashes — is still dead. */
+    @Test
+    void aRenamedVariableOrAStraySlashIsStillADuplicate() {
+        Router router = new Router();
+        router.add("GET", "/decks/{deckId}", noop);
+
+        IllegalStateException renamed = assertThrows(IllegalStateException.class,
+                () -> router.add("GET", "decks/{id}/", noop));
+        assertEquals("GET decks/{id}/ is already registered as /decks/{deckId},"
+                + " which matches the same requests", renamed.getMessage());
+    }
+
+    @Test
+    void anotherMethodOrAMerelyOverlappingPatternIsNotADuplicate() {
+        Router router = new Router();
+        router.add("GET", "/decks", noop);
+        router.add("POST", "/decks", noop);
+        router.add("GET", "/decks/{deckId}", noop);
+        router.add("GET", "/decks/new", noop);
+
+        assertEquals(4, router.routes().size());
     }
 }

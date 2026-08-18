@@ -135,6 +135,11 @@ public final class WebResponse {
         return of(new Bytes(data)).contentType(contentType);
     }
 
+    /** A template with nothing to pass in. */
+    public static WebResponse render(String template) {
+        return render(template, Map.of());
+    }
+
     /**
      * A template rendered with the engine set via
      * {@link App#templates(TemplateRenderer)}.
