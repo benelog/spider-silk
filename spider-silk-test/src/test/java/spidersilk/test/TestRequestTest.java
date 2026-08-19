@@ -5,6 +5,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import spidersilk.HttpException;
+import spidersilk.HttpStatus;
 import spidersilk.WebRequest;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -45,7 +46,7 @@ class TestRequestTest {
 
         HttpException e = assertThrows(HttpException.class,
                 () -> request.pathParamLong("deckId"));
-        assertEquals(400, e.status());
+        assertEquals(HttpStatus.BAD_REQUEST, e.status());
     }
 
     // ---- Parameters ----
@@ -54,7 +55,7 @@ class TestRequestTest {
     void aMissingRequiredParameterIsA400() {
         WebRequest request = TestRequest.post("/decks").build();
 
-        assertEquals(400, assertThrows(HttpException.class, () -> request.param("name")).status());
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(HttpException.class, () -> request.param("name")).status());
     }
 
     @Test
@@ -133,7 +134,7 @@ class TestRequestTest {
 
         HttpException e = assertThrows(HttpException.class,
                 () -> request.bodyJson(json -> json.asObject().getString("name")));
-        assertEquals(400, e.status());
+        assertEquals(HttpStatus.BAD_REQUEST, e.status());
     }
 
     // ---- Cookies ----
@@ -197,7 +198,7 @@ class TestRequestTest {
                 .file("other", "cards.csv", "front,back\n")
                 .build();
 
-        assertEquals(400, assertThrows(HttpException.class, () -> request.file("file")).status());
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(HttpException.class, () -> request.file("file")).status());
     }
 
     /** No file at all means the request is not multipart, which is the other 400. */
@@ -205,6 +206,6 @@ class TestRequestTest {
     void askingForAFileOnARequestWithNoneIsA400() {
         WebRequest request = TestRequest.post("/decks/3/import").build();
 
-        assertEquals(400, assertThrows(HttpException.class, () -> request.file("file")).status());
+        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(HttpException.class, () -> request.file("file")).status());
     }
 }

@@ -5,7 +5,7 @@ package spidersilk;
  *
  * <pre>{@code
  * app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
- *         req.method(), req.path(), res.status(), millis));
+ *         req.method(), req.path(), res.status().code(), millis));
  * }</pre>
  *
  * <p>One lambda instead of a logging framework in core: which logger to use, at

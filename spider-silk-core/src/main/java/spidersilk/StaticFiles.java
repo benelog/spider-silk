@@ -99,7 +99,7 @@ public final class StaticFiles {
                     .header("Last-Modified", httpDate(lastModified));
             if (isUnchanged(req, etag, lastModified)) {
                 discard(connection);
-                return response.status(304);
+                return response.status(HttpStatus.NOT_MODIFIED);
             }
         }
 

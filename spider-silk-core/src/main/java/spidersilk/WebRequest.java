@@ -88,7 +88,7 @@ public final class WebRequest {
         try {
             return Long.parseLong(value);
         } catch (NumberFormatException e) {
-            throw new HttpException(400,
+            throw new HttpException(HttpStatus.BAD_REQUEST,
                     "Path variable {%s} is not a number: %s".formatted(name, value));
         }
     }
@@ -98,7 +98,7 @@ public final class WebRequest {
         try {
             return Enum.valueOf(type, value);
         } catch (IllegalArgumentException e) {
-            throw new HttpException(400,
+            throw new HttpException(HttpStatus.BAD_REQUEST,
                     "Invalid value for path variable {%s}: %s".formatted(name, value));
         }
     }
@@ -109,7 +109,7 @@ public final class WebRequest {
     public String param(String name) {
         String value = req.getParameter(name);
         if (value == null) {
-            throw new HttpException(400, "Missing required parameter: " + name);
+            throw new HttpException(HttpStatus.BAD_REQUEST, "Missing required parameter: " + name);
         }
         return value;
     }
@@ -155,7 +155,7 @@ public final class WebRequest {
         try {
             return Long.parseLong(value);
         } catch (NumberFormatException e) {
-            throw new HttpException(400,
+            throw new HttpException(HttpStatus.BAD_REQUEST,
                     "Parameter %s is not a number: %s".formatted(name, value));
         }
     }
@@ -164,7 +164,7 @@ public final class WebRequest {
         try {
             return Enum.valueOf(type, value);
         } catch (IllegalArgumentException e) {
-            throw new HttpException(400,
+            throw new HttpException(HttpStatus.BAD_REQUEST,
                     "Invalid value for parameter %s: %s".formatted(name, value));
         }
     }
@@ -265,7 +265,7 @@ public final class WebRequest {
         try {
             return Json.parse(body());
         } catch (IllegalArgumentException e) {
-            throw new HttpException(400, "Request body is not valid JSON: " + e.getMessage());
+            throw new HttpException(HttpStatus.BAD_REQUEST, "Request body is not valid JSON: " + e.getMessage());
         }
     }
 
@@ -280,7 +280,7 @@ public final class WebRequest {
         try {
             return reader.read(json);
         } catch (IllegalArgumentException e) {
-            throw new HttpException(400, "Request body was rejected: " + e.getMessage());
+            throw new HttpException(HttpStatus.BAD_REQUEST, "Request body was rejected: " + e.getMessage());
         }
     }
 
@@ -289,13 +289,13 @@ public final class WebRequest {
         try {
             Part part = req.getPart(name);
             if (part == null) {
-                throw new HttpException(400, "Missing uploaded file: " + name);
+                throw new HttpException(HttpStatus.BAD_REQUEST, "Missing uploaded file: " + name);
             }
             return new UploadedFile(part);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } catch (ServletException e) {
-            throw new HttpException(400, "Not a multipart request");
+            throw new HttpException(HttpStatus.BAD_REQUEST, "Not a multipart request");
         }
     }
 

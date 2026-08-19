@@ -43,10 +43,10 @@ class OptionalParamsTest {
 
         HttpException notANumber = assertThrows(HttpException.class,
                 () -> request.paramLong("page", 1));
-        assertEquals(400, notANumber.status());
+        assertEquals(HttpStatus.BAD_REQUEST, notANumber.status());
 
         HttpException noSuchConstant = assertThrows(HttpException.class,
                 () -> request.paramEnum("direction", Direction.class, Direction.FRONT));
-        assertEquals(400, noSuchConstant.status());
+        assertEquals(HttpStatus.BAD_REQUEST, noSuchConstant.status());
     }
 }

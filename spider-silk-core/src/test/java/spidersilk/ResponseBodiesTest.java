@@ -59,7 +59,7 @@ class ResponseBodiesTest {
         App app = new App().get("/hand-written", req -> WebResponse
                 .raw((servletRequest, servletResponse) ->
                         servletResponse.getWriter().write("written by hand"))
-                .status(201)
+                .status(HttpStatus.CREATED)
                 .contentType("text/plain; charset=UTF-8")
                 .header("X-Escape-Hatch", "open"));
 

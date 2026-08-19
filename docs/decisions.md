@@ -320,6 +320,25 @@ A framework whose pitch is that nothing is resolved by name at runtime was answe
 A query string in the path is rejected rather than parsed: `TestRequest.get("/decks?page=2")` throws and names `queryParam` instead, since a path that quietly kept its `?` would fail much later as a routing mismatch.
 Flash is left alone — `FLASH_ATTRIBUTE` is package-private in `spidersilk`, and a test module hard-coding that string would be a second copy of a private detail.
 
+## 21 · The status type
+
+### 21. `HttpStatus`: an enum, not an int
+
+Every status in the API is an `HttpStatus` constant — `WebResponse.status`, `empty`, `redirect`, `App.error`, `HttpException` — and the readable side too: `response.status()` answers the enum, and the one place that needs the number is the line that writes it, `res.setStatus(status.code())`.
+An int accepts `42` and `4040` as readily as `404`; the enum makes a status that does not exist unwritable, which is the same bet as `paramEnum` and the rest of the typed extraction — invalid states rejected at the type, not at runtime.
+
+Three calls inside that decision:
+
+- **The IANA registry, under RFC 9110 names.**
+  `CONTENT_TOO_LARGE` and `UNPROCESSABLE_CONTENT`, not the older `PAYLOAD_TOO_LARGE` and `UNPROCESSABLE_ENTITY` that Spring readers know — the current spec's names, chosen deliberately and said so in the Javadoc.
+  Deprecated and unused registrations (305, 306, 418) are left out, and the numbers were cross-checked against Jetty's `HttpStatus` constants rather than written from memory, since a transposed digit here is exactly the bug the type exists to prevent.
+- **`of(int)` is the sanctioned runtime path, not a loophole.**
+  A handler mirroring an upstream answer or reading a code from configuration has a number, not a name; without a lookup the only way out would be `raw()`.
+  `of` throws `IllegalArgumentException` on a code the registry does not know, so the enforcement moves to the boundary instead of disappearing.
+- **The getter answers the enum too.**
+  A setter that takes `HttpStatus` and a getter that hands back `int` would be the asymmetry `paramEnum` avoids, so tests assert `assertEquals(HttpStatus.CREATED, response.status())` and a logger that wants the number says `status().code()`.
+  `WebTest`'s client is the JDK's `HttpClient`, so `statusCode()` there stays an int: the boundary is the framework's own API, not other people's.
+
 ## Rejected — decisions, with the reason
 
 These are closed.

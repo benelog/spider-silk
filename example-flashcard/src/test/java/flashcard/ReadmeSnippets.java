@@ -13,6 +13,7 @@ import org.eclipse.jetty.util.VirtualThreads;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 
 import spidersilk.App;
+import spidersilk.HttpStatus;
 import spidersilk.AppServlet;
 import spidersilk.JteTemplates;
 import spidersilk.Route;
@@ -126,7 +127,7 @@ class ReadmeSnippets {
 
         app.post("/api/decks", req -> {
             String name = req.bodyJson().asObject().getString("name");
-            return WebResponse.json(Json.obj().put("name", name)).status(201);
+            return WebResponse.json(Json.obj().put("name", name)).status(HttpStatus.CREATED);
         });
 
         // Routes sharing a prefix — the group is an argument, not ambient state
@@ -138,10 +139,10 @@ class ReadmeSnippets {
 
         // Exception-to-response mapping
         app.exception(IllegalArgumentException.class,
-                (e, req) -> WebResponse.text(e.getMessage()).status(404));
+                (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
         // One place for a styled error page, whatever produced the status
-        app.error(404, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
+        app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
     }
 
     // ---- blocks 3, 5, 7: the three shapes a handler comes in ----
@@ -182,7 +183,7 @@ class ReadmeSnippets {
 
         app.post("/api/decks", req -> {
             Deck deck = deckService.create(req.bodyJson(NEW_DECK).name());   // no key -> 400
-            return WebResponse.json(deck, DECK).status(201);
+            return WebResponse.json(deck, DECK).status(HttpStatus.CREATED);
         });
 
         JsonCodec<Deck> codec = JsonCodec.of(DECK, json -> new Deck(0, ""));
@@ -224,7 +225,7 @@ class ReadmeSnippets {
 
     void loggingAndAssets(App app) {
         app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
-                req.method(), req.path(), res.status(), millis));
+                req.method(), req.path(), res.status().code(), millis));
 
         app.staticFiles(new StaticFiles("/public")
                 .hostedPath("/assets")              // classpath:/public/* at /assets/*
@@ -282,7 +283,7 @@ class ReadmeSnippets {
                 .jsonBody("{\"name\": \"Spanish\"}")
                 .build());
 
-        assertEquals(201, response.status());
+        assertEquals(HttpStatus.CREATED, response.status());
         assertEquals("/api/decks/1", response.header("Location"));
         assertEquals("{\"id\":1}", ((WebResponse.Text) response.body()).content());
     }

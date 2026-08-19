@@ -122,13 +122,13 @@ public class AppServlet extends HttpServlet {
     private WebResponse noRoute(WebRequest request, String method, String path) {
         Set<String> allowed = allowedMethods(path);
         if (allowed.isEmpty()) {
-            return fail(request, 404, "Not Found: " + path);
+            return fail(request, HttpStatus.NOT_FOUND, "Not Found: " + path);
         }
         String allow = String.join(", ", allowed);
         if ("OPTIONS".equals(method)) {
             return WebResponse.empty().header("Allow", allow).header("Content-Length", "0");
         }
-        return fail(request, 405, "Method Not Allowed: " + method + " " + path)
+        return fail(request, HttpStatus.METHOD_NOT_ALLOWED, "Method Not Allowed: " + method + " " + path)
                 .header("Allow", allow);
     }
 
@@ -242,11 +242,11 @@ public class AppServlet extends HttpServlet {
 
     private WebResponse internalError(Exception e, WebRequest request) {
         log("Error while handling request", e);
-        return fail(request, 500, "Internal Server Error");
+        return fail(request, HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error");
     }
 
     /** Records the body the framework would answer with by default, and the status. */
-    private WebResponse fail(WebRequest request, int status, String message) {
+    private WebResponse fail(WebRequest request, HttpStatus status, String message) {
         request.errorMessage(message);
         return WebResponse.empty(status);
     }
@@ -261,15 +261,15 @@ public class AppServlet extends HttpServlet {
 
     /**
      * Fills in the body of an error response nobody wrote one for, preferring a
-     * handler registered through {@link App#error(int, Handler)}. Whatever the
+     * handler registered through {@link App#error(HttpStatus, Handler)}. Whatever the
      * handler returns keeps the headers already set — the {@code Allow} of a 405,
      * say — and answers with the registered status unless it set one itself.
      */
     private WebResponse completeErrorResponse(WebResponse response, WebRequest request) {
-        if (response.status() < 400 || !(response.body() instanceof WebResponse.Empty)) {
+        if (response.status().code() < 400 || !(response.body() instanceof WebResponse.Empty)) {
             return response;
         }
-        int status = response.status();
+        HttpStatus status = response.status();
         Handler handler = app.errorHandlers.get(status);
         if (handler != null) {
             try {
@@ -279,7 +279,8 @@ public class AppServlet extends HttpServlet {
                         answered.hasStatus() ? answered.status() : status);
             } catch (Exception e) {
                 log("Error handler failed for status " + status, e);
-                return WebResponse.text("Internal Server Error").status(500);
+                return WebResponse.text("Internal Server Error")
+                        .status(HttpStatus.INTERNAL_SERVER_ERROR);
             }
         }
         if (request.errorMessage() != null) {
@@ -292,7 +293,7 @@ public class AppServlet extends HttpServlet {
 
     private void write(WebResponse response, HttpServletRequest req, HttpServletResponse res,
             boolean head) throws Exception {
-        res.setStatus(response.status());
+        res.setStatus(response.status().code());
         for (Map.Entry<String, String> header : response.headers().entrySet()) {
             if ("Content-Type".equalsIgnoreCase(header.getKey())) {
                 res.setContentType(header.getValue());

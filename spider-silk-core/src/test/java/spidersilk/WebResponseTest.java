@@ -64,12 +64,12 @@ class WebResponseTest {
     /** An error handler's answer keeps what the framework had already worked out. */
     @Test
     void overKeepsTheBaseHeadersAndLetsTheNewOnesWin() {
-        WebResponse base = WebResponse.empty(405)
+        WebResponse base = WebResponse.empty(HttpStatus.METHOD_NOT_ALLOWED)
                 .header("Allow", "GET, POST")
                 .header("X-Kept", "yes");
 
         WebResponse answer = WebResponse.text("Method Not Allowed")
-                .status(405)
+                .status(HttpStatus.METHOD_NOT_ALLOWED)
                 .header("X-Kept", "replaced")
                 .over(base);
 

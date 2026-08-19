@@ -3,6 +3,7 @@ package flashcard.web;
 import org.junit.jupiter.api.Test;
 
 import spidersilk.HttpException;
+import spidersilk.HttpStatus;
 import spidersilk.WebResponse;
 import spidersilk.json.Json;
 import spidersilk.test.TestRequest;
@@ -50,7 +51,7 @@ class ApiControllerTest extends RepositoryTestSupport {
                 .jsonBody("{\"name\": \"Spanish\"}")
                 .build());
 
-        assertEquals(201, response.status());
+        assertEquals(HttpStatus.CREATED, response.status());
         long id = Json.parse(body(response)).asObject().getLong("id");
         assertEquals("/api/decks/" + id, response.header("Location"));
         assertEquals("Spanish", deckService.getDeck(id).name());
@@ -62,7 +63,7 @@ class ApiControllerTest extends RepositoryTestSupport {
                 () -> controller.createDeck(TestRequest.post("/api/decks")
                         .jsonBody("not-json")
                         .build()));
-        assertEquals(400, e.status());
+        assertEquals(HttpStatus.BAD_REQUEST, e.status());
     }
 
     /** The reader throws on the missing key; bodyJson(reader) turns that into a 400. */
@@ -72,7 +73,7 @@ class ApiControllerTest extends RepositoryTestSupport {
                 () -> controller.createDeck(TestRequest.post("/api/decks")
                         .jsonBody("{\"title\": \"Spanish\"}")
                         .build()));
-        assertEquals(400, e.status());
+        assertEquals(HttpStatus.BAD_REQUEST, e.status());
     }
 
     /** A JSON response carries its document as text, which is what to assert on. */

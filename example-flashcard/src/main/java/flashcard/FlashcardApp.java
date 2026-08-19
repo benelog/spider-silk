@@ -14,6 +14,7 @@ import org.springframework.core.io.support.EncodedResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import spidersilk.App;
+import spidersilk.HttpStatus;
 import spidersilk.JteTemplates;
 import spidersilk.WebResponse;
 import spidersilk.server.JettyServer;
@@ -66,7 +67,7 @@ public class FlashcardApp {
             return WebResponse.redirect("/");
         });
         app.exception(IllegalArgumentException.class,
-                (e, req) -> WebResponse.text(e.getMessage()).status(404));
+                (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
         registerRoutes(app, context);
         return app;

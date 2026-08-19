@@ -13,7 +13,7 @@ package spidersilk;
  * Returning a response ends the request there: a guard that turned the caller
  * away must not be followed by the handler it was guarding. Rejecting with a
  * status and the framework's own body is
- * {@code throw new HttpException(403, "...")}.
+ * {@code throw new HttpException(HttpStatus.FORBIDDEN, "...")}.
  */
 @FunctionalInterface
 public interface BeforeFilter {

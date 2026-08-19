@@ -53,7 +53,7 @@ app.get("/api/decks", req -> WebResponse.json(
 
 app.post("/api/decks", req -> {
     String name = req.bodyJson().asObject().getString("name");
-    return WebResponse.json(Json.obj().put("name", name)).status(201);
+    return WebResponse.json(Json.obj().put("name", name)).status(HttpStatus.CREATED);
 });
 
 // Routes sharing a prefix: the group is an argument, not ambient state
@@ -65,10 +65,10 @@ app.path("/api/decks", group -> {
 
 // Exception-to-response mapping
 app.exception(IllegalArgumentException.class,
-        (e, req) -> WebResponse.text(e.getMessage()).status(404));
+        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
 // One place for a styled error page, whatever produced the status
-app.error(404, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
+app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
 
 app.start(8080);                                // embedded Jetty, sessions on
 ```
@@ -146,7 +146,7 @@ app.before("/admin/*", req -> req.sessionAttr("user") == null
 ```
 
 A before-filter that returns a response ends the request there; returning `null` continues to the route.
-To reject without a body of your own, `throw new HttpException(401, "...")` and let `error(401, ...)` render it.
+To reject without a body of your own, `throw new HttpException(HttpStatus.UNAUTHORIZED, "...")` and let `error(HttpStatus.UNAUTHORIZED, ...)` render it.
 
 An after-filter takes the response the route returned and hands back a replacement, or `null` to leave it alone:
 
@@ -154,7 +154,7 @@ An after-filter takes the response the route returned and hands back a replaceme
 app.after((req, res) -> res.header("X-Request-Id", requestId()));
 ```
 
-`error(status, handler)` fills in the body for any response that ended on that status with no body, whether from the router, from an `HttpException`, or from a handler that returned `WebResponse.empty(403)`.
+`error(status, handler)` fills in the body for any response that ended on that status with no body, whether from the router, from an `HttpException`, or from a handler that returned `WebResponse.empty(HttpStatus.FORBIDDEN)`.
 A response that already carries a body is left alone.
 What the error handler returns keeps the headers the framework had already worked out, such as the `Allow` of a 405, and answers with the registered status unless it sets one of its own.
 Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.
@@ -183,7 +183,7 @@ app.get("/api/decks", req -> WebResponse.json(deckService.decks(), DECKS));
 
 app.post("/api/decks", req -> {
     Deck deck = deckService.create(req.bodyJson(NEW_DECK).name());   // no key -> 400
-    return WebResponse.json(deck, DECK).status(201);
+    return WebResponse.json(deck, DECK).status(HttpStatus.CREATED);
 });
 ```
 
@@ -286,7 +286,7 @@ A stream quieter than Jetty's 30-second connector idle timeout is closed by the 
 
 ```java
 app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
-        req.method(), req.path(), res.status(), millis));
+        req.method(), req.path(), res.status().code(), millis));
 ```
 
 One lambda, and no logging framework in core: which logger, at which level, and in which format is the application's call.
@@ -368,7 +368,7 @@ void createDeckRespondsWith201() {
             .jsonBody("{\"name\": \"Spanish\"}")
             .build());
 
-    assertEquals(201, response.status());
+    assertEquals(HttpStatus.CREATED, response.status());
     assertEquals("Spanish", deckService.getDeck(idFrom(response)).name());
 }
 ```
@@ -439,7 +439,7 @@ context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 - Routes: `get`, `post`, `put`, `patch`, `delete`, and `path(prefix, group -> ...)`
 - Introspection: `routes()` reports every registered route as `Route(method, path)`, in registration order
 - Filters: `before(filter)` / `before(path, filter)`, same for `after`
-- Errors: `exception(Type, handler)`, `error(status, handler)`, `notFound(handler)`
+- Errors: `exception(Type, handler)`, `error(HttpStatus, handler)`, `notFound(handler)`
 - Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles)`
 - Server: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`
 
@@ -460,7 +460,7 @@ context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 A response is an immutable value: every method below returns a new one, which is what lets an after-filter rewrite what a route answered.
 
 - Bodies: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
-- Statuses: `empty()`, `empty(status)`, `noContent()`, `redirect(location)`, `redirect(location, status)`
+- Statuses: `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`; a status is an `HttpStatus` constant, so a code that does not exist cannot be written, and `HttpStatus.of(int)` looks one up when the number only arrives at runtime
 - Building on: `status`, `header`, `contentType`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
 - Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`
 
@@ -471,7 +471,7 @@ WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
         .jsonBody("{\"name\": \"Spanish\"}")
         .build());
 
-assertEquals(201, response.status());
+assertEquals(HttpStatus.CREATED, response.status());
 assertEquals("/api/decks/1", response.header("Location"));
 assertEquals("{\"id\":1}", ((WebResponse.Text) response.body()).content());
 ```

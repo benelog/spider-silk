@@ -41,7 +41,7 @@ public final class App {
     final List<AfterEntry> afterFilters = new ArrayList<>();
     final LinkedHashMap<Class<? extends Exception>, ExceptionHandler<? extends Exception>> exceptionHandlers =
             new LinkedHashMap<>();
-    final Map<Integer, Handler> errorHandlers = new LinkedHashMap<>();
+    final Map<HttpStatus, Handler> errorHandlers = new LinkedHashMap<>();
     final Set<SseStream> openStreams = ConcurrentHashMap.newKeySet();
 
     TemplateRenderer templates;
@@ -166,24 +166,26 @@ public final class App {
      * Renders the body for a response that ended on this status with no body —
      * one place for a styled 404 or 500, whether the status came from the router,
      * from an {@link HttpException}, or from a handler that answered with
-     * {@code WebResponse.empty(404)}.
+     * {@code WebResponse.empty(HttpStatus.NOT_FOUND)}.
      *
      * <pre>{@code
-     * app.error(404, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
+     * app.error(HttpStatus.NOT_FOUND,
+     *         req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
      * }</pre>
      *
      * <p>A response that already carries a body is left alone. What the handler
      * returns keeps the headers the framework had already worked out, and answers
      * with the registered status unless it sets one of its own.
      */
-    public App error(int status, Handler handler) {
-        errorHandlers.put(status, Objects.requireNonNull(handler, "handler"));
+    public App error(HttpStatus status, Handler handler) {
+        errorHandlers.put(Objects.requireNonNull(status, "status"),
+                Objects.requireNonNull(handler, "handler"));
         return this;
     }
 
-    /** Shorthand for {@code error(404, handler)}. */
+    /** Shorthand for {@code error(HttpStatus.NOT_FOUND, handler)}. */
     public App notFound(Handler handler) {
-        return error(404, handler);
+        return error(HttpStatus.NOT_FOUND, handler);
     }
 
     /**
@@ -191,7 +193,7 @@ public final class App {
      *
      * <pre>{@code
      * app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
-     *         req.method(), req.path(), res.status(), millis));
+     *         req.method(), req.path(), res.status().code(), millis));
      * }</pre>
      *
      * One lambda, and no logging framework in core. A logger that throws is

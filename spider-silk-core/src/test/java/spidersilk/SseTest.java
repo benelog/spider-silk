@@ -56,7 +56,7 @@ class SseTest {
     @Test
     void anSseEndpointIsAnOrdinaryRoute() {
         List<String> filtered = new ArrayList<>();
-        List<Integer> logged = new ArrayList<>();
+        List<HttpStatus> logged = new ArrayList<>();
         App app = new App()
                 .requestLogger((req, res, millis) -> logged.add(res.status()))
                 .before("/events", req -> {
@@ -70,7 +70,7 @@ class SseTest {
         WebTest.test(app, client -> assertEquals("data: one\n\n", client.get("/events").body()));
 
         assertEquals(List.of("before /events"), filtered);
-        assertEquals(List.of(200), logged);
+        assertEquals(List.of(HttpStatus.OK), logged);
     }
 
     /** A stream with the body thrown away would never end, so HEAD stops at the headers. */

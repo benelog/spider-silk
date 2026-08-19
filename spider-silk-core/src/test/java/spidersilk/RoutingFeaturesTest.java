@@ -39,7 +39,7 @@ class RoutingFeaturesTest {
     @Test
     void aFilterThatAnswersEndsTheRequest() {
         App app = new App()
-                .before("/admin/*", req -> WebResponse.text("Unauthorized").status(401))
+                .before("/admin/*", req -> WebResponse.text("Unauthorized").status(HttpStatus.UNAUTHORIZED))
                 .get("/admin/users", req -> WebResponse.text("secret"));
 
         WebTest.test(app, client -> {
@@ -66,9 +66,9 @@ class RoutingFeaturesTest {
     @Test
     void aFilterCanRejectByThrowingHttpException() {
         App app = new App()
-                .error(401, req -> WebResponse.text("login required"))
+                .error(HttpStatus.UNAUTHORIZED, req -> WebResponse.text("login required"))
                 .before("/admin/*", req -> {
-                    throw new HttpException(401, "no session");
+                    throw new HttpException(HttpStatus.UNAUTHORIZED, "no session");
                 })
                 .get("/admin/users", req -> WebResponse.text("secret"));
 
@@ -161,7 +161,7 @@ class RoutingFeaturesTest {
     @Test
     void errorHandlerRendersTheNotFoundBody() {
         App app = new App()
-                .error(404, req -> WebResponse.html("<h1>no such page: " + req.path() + "</h1>"))
+                .error(HttpStatus.NOT_FOUND, req -> WebResponse.html("<h1>no such page: " + req.path() + "</h1>"))
                 .get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> {
@@ -174,8 +174,8 @@ class RoutingFeaturesTest {
     @Test
     void errorHandlerAlsoCoversAStatusSetByAHandler() {
         App app = new App()
-                .error(403, req -> WebResponse.text("forbidden page"))
-                .get("/secret", req -> WebResponse.empty(403));
+                .error(HttpStatus.FORBIDDEN, req -> WebResponse.text("forbidden page"))
+                .get("/secret", req -> WebResponse.empty(HttpStatus.FORBIDDEN));
 
         WebTest.test(app, client -> assertEquals("forbidden page", client.get("/secret").body()));
     }
@@ -183,7 +183,7 @@ class RoutingFeaturesTest {
     @Test
     void errorHandlerCoversHttpExceptionAndSeesItsMessage() {
         App app = new App()
-                .error(400, req -> WebResponse.text("bad request: " + req.errorMessage()))
+                .error(HttpStatus.BAD_REQUEST, req -> WebResponse.text("bad request: " + req.errorMessage()))
                 .get("/decks/{deckId}",
                         req -> WebResponse.text("deck " + req.pathParamLong("deckId")));
 
@@ -198,8 +198,8 @@ class RoutingFeaturesTest {
     @Test
     void aHandlerThatAnsweredWithABodyIsLeftAlone() {
         App app = new App()
-                .error(404, req -> WebResponse.text("replaced"))
-                .get("/gone", req -> WebResponse.text("my own 404").status(404));
+                .error(HttpStatus.NOT_FOUND, req -> WebResponse.text("replaced"))
+                .get("/gone", req -> WebResponse.text("my own 404").status(HttpStatus.NOT_FOUND));
 
         WebTest.test(app, client -> assertEquals("my own 404", client.get("/gone").body()));
     }
@@ -223,7 +223,7 @@ class RoutingFeaturesTest {
     @Test
     void anErrorHandlerKeepsTheHeadersTheFrameworkAlreadySet() {
         App app = new App()
-                .error(405, req -> WebResponse.text("no such method here"))
+                .error(HttpStatus.METHOD_NOT_ALLOWED, req -> WebResponse.text("no such method here"))
                 .get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> {
@@ -238,7 +238,7 @@ class RoutingFeaturesTest {
     @Test
     void errorHandlerCoversUncaughtExceptions() {
         App app = new App()
-                .error(500, req -> WebResponse.text("something broke"))
+                .error(HttpStatus.INTERNAL_SERVER_ERROR, req -> WebResponse.text("something broke"))
                 .get("/boom", req -> {
                     throw new IllegalStateException("kaboom");
                 });

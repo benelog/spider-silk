@@ -27,7 +27,7 @@ import spidersilk.json.JsonWriter;
  * }</pre>
  *
  * <p>A response is an immutable value. Every {@code with}-style method —
- * {@link #status(int)}, {@link #header(String, String)}, {@link #cookie(String, String)} —
+ * {@link #status(HttpStatus)}, {@link #header(String, String)}, {@link #cookie(String, String)} —
  * returns a new response rather than changing this one, which is what lets an
  * {@link AfterFilter} take a response and hand back a different one.
  *
@@ -92,12 +92,12 @@ public final class WebResponse {
     private static final Empty EMPTY_BODY = new Empty();
 
     /** Null means "not set", which answers 200 and lets {@link App#error} fill in a status. */
-    private final Integer status;
+    private final HttpStatus status;
     private final Map<String, String> headers;
     private final List<Cookie> cookies;
     private final Body body;
 
-    private WebResponse(Integer status, Map<String, String> headers, List<Cookie> cookies,
+    private WebResponse(HttpStatus status, Map<String, String> headers, List<Cookie> cookies,
             Body body) {
         this.status = status;
         this.headers = headers;
@@ -223,11 +223,14 @@ public final class WebResponse {
      * wants, and is what HTTP allows.
      */
     public static WebResponse redirect(String location) {
-        return redirect(location, 302);
+        return redirect(location, HttpStatus.FOUND);
     }
 
-    /** A redirect with a status of its own — 301 for permanent, 303 after a POST. */
-    public static WebResponse redirect(String location, int status) {
+    /**
+     * A redirect with a status of its own — {@code MOVED_PERMANENTLY} for
+     * permanent, {@code SEE_OTHER} after a POST.
+     */
+    public static WebResponse redirect(String location, HttpStatus status) {
         return empty(status).header("Location", Objects.requireNonNull(location, "location"));
     }
 
@@ -237,13 +240,13 @@ public final class WebResponse {
     }
 
     /** No body, at this status. */
-    public static WebResponse empty(int status) {
+    public static WebResponse empty(HttpStatus status) {
         return empty().status(status);
     }
 
     /** 204 No Content. */
     public static WebResponse noContent() {
-        return empty(204);
+        return empty(HttpStatus.NO_CONTENT);
     }
 
     private static WebResponse of(Body body) {
@@ -252,9 +255,9 @@ public final class WebResponse {
 
     // ---- Reading ----
 
-    /** The status this answers with. 200 when nothing set one. */
-    public int status() {
-        return status == null ? 200 : status;
+    /** The status this answers with. {@code OK} when nothing set one. */
+    public HttpStatus status() {
+        return status == null ? HttpStatus.OK : status;
     }
 
     /** Whether a status was set explicitly, which {@link App#error} needs to know. */
@@ -281,8 +284,8 @@ public final class WebResponse {
 
     // ---- Building on ----
 
-    public WebResponse status(int code) {
-        return new WebResponse(code, headers, cookies, body);
+    public WebResponse status(HttpStatus status) {
+        return new WebResponse(Objects.requireNonNull(status, "status"), headers, cookies, body);
     }
 
     public WebResponse header(String name, String value) {
@@ -337,7 +340,7 @@ public final class WebResponse {
 
     /**
      * This response, keeping the headers and cookies of the one it replaces. An
-     * {@link App#error(int, Handler)} handler answering a 405 gets the
+     * {@link App#error(HttpStatus, Handler)} handler answering a 405 gets the
      * {@code Allow} header the framework had already worked out, without having
      * to know about it.
      */

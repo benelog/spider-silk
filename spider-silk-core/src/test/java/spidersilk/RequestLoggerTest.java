@@ -18,7 +18,7 @@ class RequestLoggerTest {
         List<String> logged = new ArrayList<>();
         App app = new App()
                 .requestLogger((req, res, millis) -> logged.add(
-                        req.method() + " " + req.path() + " -> " + res.status()))
+                        req.method() + " " + req.path() + " -> " + res.status().code()))
                 .get("/decks", req -> WebResponse.text("list"));
 
         WebTest.test(app, client -> {
@@ -32,20 +32,20 @@ class RequestLoggerTest {
     /** The status has to be the one that was sent, not the one before the error handler ran. */
     @Test
     void theStatusIsTheOneTheErrorHandlerLeftBehind() {
-        List<Integer> statuses = new ArrayList<>();
+        List<HttpStatus> statuses = new ArrayList<>();
         App app = new App()
                 .requestLogger((req, res, millis) -> statuses.add(res.status()))
-                .error(404, req -> WebResponse.text("gone for good").status(410))
+                .error(HttpStatus.NOT_FOUND, req -> WebResponse.text("gone for good").status(HttpStatus.GONE))
                 .get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> client.get("/missing"));
 
-        assertEquals(List.of(410), statuses);
+        assertEquals(List.of(HttpStatus.GONE), statuses);
     }
 
     @Test
     void anUncaughtExceptionIsStillReported() {
-        List<Integer> statuses = new ArrayList<>();
+        List<HttpStatus> statuses = new ArrayList<>();
         App app = new App()
                 .requestLogger((req, res, millis) -> statuses.add(res.status()))
                 .get("/boom", req -> {
@@ -54,7 +54,7 @@ class RequestLoggerTest {
 
         WebTest.test(app, client -> client.get("/boom"));
 
-        assertEquals(List.of(500), statuses);
+        assertEquals(List.of(HttpStatus.INTERNAL_SERVER_ERROR), statuses);
     }
 
     @Test

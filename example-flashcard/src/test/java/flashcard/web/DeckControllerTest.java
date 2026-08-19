@@ -2,6 +2,7 @@ package flashcard.web;
 
 import org.junit.jupiter.api.Test;
 
+import spidersilk.HttpStatus;
 import spidersilk.WebResponse;
 import spidersilk.test.TestRequest;
 
@@ -37,7 +38,7 @@ class DeckControllerTest extends RepositoryTestSupport {
                 .formParam("name", "English")
                 .build());
 
-        assertEquals(302, response.status());
+        assertEquals(HttpStatus.FOUND, response.status());
         assertTrue(response.header("Location").matches("/decks/\\d+"),
                 "unexpected redirect: " + response.header("Location"));
     }

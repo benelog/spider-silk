@@ -1,5 +1,6 @@
 package flashcard.web;
 
+import spidersilk.HttpStatus;
 import spidersilk.WebRequest;
 import spidersilk.WebResponse;
 
@@ -30,7 +31,7 @@ public class ApiController {
     public WebResponse createDeck(WebRequest req) {
         Deck deck = deckService.createDeck(req.bodyJson(Codecs.NEW_DECK).name());
         return WebResponse.json(deck, Codecs.DECK)
-                .status(201)
+                .status(HttpStatus.CREATED)
                 .header("Location", "/api/decks/" + deck.id());
     }
 
