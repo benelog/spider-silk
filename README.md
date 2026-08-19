@@ -24,7 +24,7 @@ Three core principles:
 * **Better RESTful API support than raw servlets.**
     * Per-method routing with path variables, typed parameter extraction, exception-to-status mapping.
 
-**📖 Full documentation: [benelog.github.io/spider-silk](https://benelog.github.io/spider-silk)**
+**Full documentation: [benelog.github.io/spider-silk](https://benelog.github.io/spider-silk)**
 
 ## Quick Start
 
@@ -135,13 +135,6 @@ Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to
 | `spider-silk-core` | The framework itself | `gg.jte:jte`, embedded Jetty (`jetty-ee10-servlet`) |
 | `spider-silk-test` | The `WebTest` harness and `TestRequest`, for test scope | core, and otherwise the JDK only (the servlet API compile-time only, as in core) |
 | `example-flashcard` | Example: a flashcard study app | core, spring-jdbc, H2 |
-
-## Building from source
-
-```bash
-./gradlew build          # compiles all three modules and runs the tests
-npm install && npm run docs   # builds the documentation site into build/site
-```
 
 ## Further reading
 
