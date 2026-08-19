@@ -1,0 +1,6 @@
+= The Scope of "No Reflection"
+:navtitle: The Scope of "No Reflection"
+
+The principle applies to the *framework core*: routing, parameter extraction, and JSON handling use no reflection anywhere.
+
+The example project's choice of spring-jdbc's `DataClassRowMapper` and the transaction internals do use reflection; that is the example's choice, and switching to repositories that handle JDBC directly would remove even that.

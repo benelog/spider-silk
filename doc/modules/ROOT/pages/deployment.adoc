@@ -1,0 +1,27 @@
+= Deployment
+:navtitle: Deployment
+
+== An external servlet container
+
+Deploy to an external servlet container by skipping `start` and mapping `AppServlet` yourself:
+
+[source,java]
+----
+ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
+context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
+----
+
+`AppServlet` is a standard servlet, so it runs on any container (Tomcat and others), not just Jetty.
+Deploying that way, exclude the bundled Jetty:
+
+[source,groovy,subs="attributes+"]
+----
+implementation('{project-group}:spider-silk-core') {
+    exclude group: 'org.eclipse.jetty.ee10'
+}
+----
+
+== Precompiled templates
+
+jte compiles templates at runtime by default, which requires a JDK on the deployment machine.
+For production, precompile with the https://jte.gg/pre-compiling/[jte Gradle plugin] and pass the engine through the `JteTemplates(TemplateEngine)` constructor.

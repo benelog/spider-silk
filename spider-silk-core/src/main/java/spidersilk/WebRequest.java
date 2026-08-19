@@ -373,7 +373,7 @@ public final class WebRequest {
     // ---- Errors ----
 
     /**
-     * Inside an {@link App#error(int, Handler)} handler, the plain-text message
+     * Inside an {@link App#error(HttpStatus, Handler)} handler, the plain-text message
      * the framework would have answered with. Null when the status came from a
      * handler rather than from the router or an {@link HttpException}.
      */

@@ -1,0 +1,46 @@
+= Server-Sent Events
+:navtitle: Server-Sent Events
+
+`WebResponse.sse(...)` answers with a `text/event-stream` instead of a body, one flushed event per call:
+
+[source,java]
+----
+app.get("/decks/{deckId}/events", req -> {
+    long deckId = req.pathParamLong("deckId");
+    return WebResponse.sse(stream -> {
+        while (stream.isOpen()) {
+            stream.id(String.valueOf(revision))
+                  .send("due", Json.obj().put("count", service.due(deckId)).toJson());
+            Thread.sleep(1000);
+        }
+    });
+});
+----
+
+----
+id: 41
+event: due
+data: {"count":12}
+----
+
+`send(data)` sends an unnamed event, `send(event, data)` a named one, `id(...)` labels the event that follows so the browser can resume with `Last-Event-ID`, and `comment(text)` sends a heartbeat no listener sees.
+Data spanning several lines becomes one `data:` line each, which the client joins back together.
+
+== Why SSE is in core and WebSocket is not
+
+It is an ordinary `get` route answering in a different shape, not a registration of its own, so `app.routes()` lists it, filters cover it, and the request logger reports it when the stream ends.
+That is the whole reason SSE is in core and WebSocket is not: a WebSocket upgrade leaves servlet dispatch and none of the above would still apply.
+It also means a deployment on a plain servlet container gets SSE too, since `AppServlet` needs nothing else.
+
+== Threads and lifetime
+
+The request holds its thread for as long as the stream lasts.
+That is the price of staying servlet-native, and the xref:server.adoc#virtual-threads[virtual-thread executor] is what makes many concurrent streams cheap.
+
+Ending a stream is not an error, and there are three ways it happens:
+
+* the handler returns,
+* the client goes away: the write that discovers it throws `SseStream.Closed`, which ends the handler where it stands,
+* `app.stop()` closes every stream still open, before Jetty is asked to drain, because a stream is a request in flight that would otherwise never finish.
+
+A stream quieter than Jetty's 30-second connector idle timeout is closed by the server; `stream.comment("ping")` on a timer is what keeps it alive, and proxies in front usually want the same.

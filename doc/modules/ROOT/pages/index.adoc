@@ -1,0 +1,92 @@
+= Spider Silk
+:navtitle: Introduction
+
+image::logo.svg[Spider Silk,160]
+
+A thin web framework on top of the Jakarta Servlet API.
+
+== Three core principles
+
+No reflection.::
+There is no annotation scanning, no proxies, no automatic binding.
+What runs is exactly what you see in the code, stack traces stay short, and startup is fast.
+
+The API is intuitively simple.::
+A handler is a function from a request to a response: `WebResponse handle(WebRequest request)`.
+`WebResponse` as the return type matches the intuition directly: a handler takes a request in and hands a response back.
+
+Better RESTful API support than raw servlets.::
+Per-method routing with path variables, typed parameter extraction, exception-to-status mapping.
+
+The default template engine is https://jte.gg[jte].
+jte also compiles templates to Java code, which fits the framework's character.
+
+== Modules
+
+[cols="1,2,2",options="header"]
+|===
+| Module | Contents | Dependencies
+
+| `spider-silk-core`
+| The framework itself
+| `gg.jte:jte`, embedded Jetty (`jetty-ee10-servlet`)
+
+| `spider-silk-test`
+| The `WebTest` harness and `TestRequest`, for test scope
+| core, and otherwise the JDK only (the servlet API compile-time only, as in core)
+
+| `example-flashcard`
+| Example: a flashcard study app
+| core, spring-jdbc, H2
+|===
+
+== At a glance
+
+[source,java]
+----
+App app = new App()
+        .templates(new JteTemplates("jte"))     // classpath:/jte/*.jte
+        .staticFiles("/public");                // serves classpath:/public/* statically
+
+// Server-side rendering
+app.get("/decks/{deckId}", req -> {
+    long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
+    return WebResponse.template("deck.jte", model);
+});
+
+// JSON API: you state in code what goes out (no automatic serialization)
+app.get("/api/decks", req -> WebResponse.json(
+        Json.arr().add(Json.obj().put("id", 1L).put("name", "English"))));
+
+app.post("/api/decks", req -> {
+    String name = req.bodyJson().asObject().getString("name");
+    return WebResponse.json(Json.obj().put("name", name)).status(HttpStatus.CREATED);
+});
+
+// Routes sharing a prefix: the group is an argument, not ambient state
+app.path("/api/decks", group -> {
+    group.before(req -> requireApiKey(req));    // covers /api/decks and everything under it
+    group.get("", api::listDecks);              // GET  /api/decks
+    group.get("/{deckId}", api::showDeck);      // GET  /api/decks/{deckId}
+});
+
+// Exception-to-response mapping
+app.exception(IllegalArgumentException.class,
+        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+
+// One place for a styled error page, whatever produced the status
+app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
+
+app.start(8080);                                // embedded Jetty, sessions on
+----
+
+`start` returns once the port is bound, and the server's threads keep the JVM alive; `join()` is there if you want to block the main thread anyway.
+`stop()` shuts it down; `port()` reports the bound port, which is how you read back the one the OS picked for `start(0)` in a test.
+
+== Positioning and roadmap
+
+Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what that comparison says should change: https://github.com/benelog/spider-silk/blob/main/docs/positioning.md[docs/positioning.md].
+
+Why each piece has the shape it has, item by item, with the rejected list: https://github.com/benelog/spider-silk/blob/main/docs/decisions.md[docs/decisions.md].
+
+What was deliberately deferred, and what would make it worth doing: https://github.com/benelog/spider-silk/blob/main/PLAN.md[PLAN.md].

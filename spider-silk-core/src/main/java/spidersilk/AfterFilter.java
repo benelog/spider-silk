@@ -12,7 +12,7 @@ package spidersilk;
  *
  * <p>Only a route that completed normally reaches here: a response from a
  * {@link BeforeFilter}, from an {@link ExceptionHandler}, or from
- * {@link App#error(int, Handler)} does not.
+ * {@link App#error(HttpStatus, Handler)} does not.
  */
 @FunctionalInterface
 public interface AfterFilter {

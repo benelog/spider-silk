@@ -1,0 +1,45 @@
+= JSON
+:navtitle: JSON
+
+== Writers and readers
+
+`Json.obj()` builds a tree inline, which gets repetitive once the same record is serialized in three handlers.
+`JsonWriter<T>` and `JsonReader<T>` name that mapping so it can be reused.
+Both have one method, so both are lambdas:
+
+[source,java]
+----
+static final JsonWriter<Deck> DECK = deck -> Json.obj()
+        .put("id", deck.id())
+        .put("name", deck.name());
+
+static final JsonWriter<List<Deck>> DECKS = JsonWriter.list(DECK);
+
+record NewDeck(String name) { }
+
+static final JsonReader<NewDeck> NEW_DECK =
+        json -> new NewDeck(json.asObject().getString("name"));
+----
+
+[source,java]
+----
+app.get("/api/decks", req -> WebResponse.json(deckService.decks(), DECKS));
+
+app.post("/api/decks", req -> {
+    Deck deck = deckService.create(req.bodyJson(NEW_DECK).name());   // no key -> 400
+    return WebResponse.json(deck, DECK).status(HttpStatus.CREATED);
+});
+----
+
+Still no reflection: the mapping is code you wrote, so a field rename changes the wire format only if you edit it.
+
+== Reading values
+
+`getString` throws `IllegalArgumentException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400: a handler gets a whole value or none, the same contract as `pathParamLong`.
+For a key that is allowed to be absent, `optString`/`optLong`/`optDouble`/`optBoolean` answer a default instead, for a missing key and for an explicit JSON `null` alike.
+A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
+
+== `JsonCodec<T>`
+
+Most types only go out, which is why the two halves are separate interfaces rather than one with an unimplementable `read`.
+When a type does travel both ways, `JsonCodec<T>` is both at once: `JsonCodec.of(writer, reader)` to build one, `JsonCodec.list(codec)` for the list form.

@@ -1,0 +1,23 @@
+site:
+  title: Spider Silk
+  url: https://benelog.github.io/spider-silk
+  start_page: spider-silk::index.adoc
+
+content:
+  sources:
+    - url: ./
+      start_path: doc
+      branches: HEAD
+
+ui:
+  bundle:
+    url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/master/raw/build/ui-bundle.zip?job=bundle-stable
+    snapshot: true
+
+output:
+  dir: ./build/site
+
+runtime:
+  fetch: true
+  log:
+    failure_level: warn

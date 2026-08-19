@@ -1,0 +1,12 @@
+= Request Logging
+:navtitle: Request Logging
+
+[source,java]
+----
+app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
+        req.method(), req.path(), res.status().code(), millis));
+----
+
+One lambda, and no logging framework in core: which logger, at which level, and in which format is the application's call.
+It runs once per request after the response is complete, so the status it sees is the one that was actually sent: the error handler's, if one ran.
+A logger that throws is reported to the servlet log and leaves the response alone.

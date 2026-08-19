@@ -1,0 +1,34 @@
+= The Response
+:navtitle: The Response
+
+A response is an immutable value: every method returns a new one, which is what lets an after-filter rewrite what a route answered.
+
+== Bodies
+
+`html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
+
+`body()` is a sealed `WebResponse.Body` (`Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw`), so a `switch` over it needs no default case, and a test can assert on the answer without a servlet response to read it out of:
+
+[source,java]
+----
+WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
+        .jsonBody("{\"name\": \"Spanish\"}")
+        .build());
+
+assertEquals(HttpStatus.CREATED, response.status());
+assertEquals("/api/decks/1", response.header("Location"));
+assertEquals("{\"id\":1}", ((WebResponse.Text) response.body()).content());
+----
+
+== Statuses
+
+`empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`.
+
+A status is an `HttpStatus` constant, so a code that does not exist cannot be written, and `HttpStatus.of(int)` looks one up when the number only arrives at runtime.
+
+== The lambda families
+
+The last three bodies take a lambda of their own, and the suffix says which family it belongs to.
+A `…Handler` answers a request with a `WebResponse`: that is `Handler` and `ExceptionHandler`.
+A `…Writer` returns nothing and fills the body of a response that has already been decided: `StreamWriter(OutputStream)`, `SseWriter(SseStream)`, and `ServletWriter(HttpServletRequest, HttpServletResponse)`.
+So `ServletWriter` is a sibling of `StreamWriter`, not a relative of `Handler`.

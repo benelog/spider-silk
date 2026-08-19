@@ -1,0 +1,122 @@
+= Installation
+:navtitle: Installation
+
+Spider Silk requires Java 21 or later.
+
+Releases are published to https://github.com/benelog/spider-silk/packages[GitHub Packages], not to Maven Central.
+The current version is `{project-version}`.
+
+[IMPORTANT]
+====
+GitHub Packages requires authentication even for public repositories.
+Create a https://github.com/settings/tokens[personal access token (classic)] with the `read:packages` scope and use it as the password.
+====
+
+== Gradle
+
+[source,groovy,subs="attributes+"]
+----
+repositories {
+    mavenCentral()
+    maven {
+        url = uri('https://maven.pkg.github.com/{project-repo}')
+        credentials {
+            username = System.getenv('GITHUB_ACTOR')
+            password = System.getenv('GITHUB_TOKEN')   // a PAT with read:packages
+        }
+    }
+}
+
+dependencies {
+    implementation '{project-group}:spider-silk-core:{project-version}'
+    testImplementation '{project-group}:spider-silk-test:{project-version}'
+}
+----
+
+Keep the credentials out of the build file by putting them in `~/.gradle/gradle.properties` instead, and reading them with `findProperty`:
+
+[source,properties]
+----
+gpr.user=your-github-username
+gpr.token=ghp_yourPersonalAccessToken
+----
+
+[source,groovy]
+----
+credentials {
+    username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
+    password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
+}
+----
+
+== Maven
+
+Declare the repository in `pom.xml`:
+
+[source,xml,subs="attributes+"]
+----
+<repositories>
+  <repository>
+    <id>github</id>
+    <url>https://maven.pkg.github.com/{project-repo}</url>
+    <snapshots>
+      <enabled>true</enabled>
+    </snapshots>
+  </repository>
+</repositories>
+
+<dependencies>
+  <dependency>
+    <groupId>{project-group}</groupId>
+    <artifactId>spider-silk-core</artifactId>
+    <version>{project-version}</version>
+  </dependency>
+  <dependency>
+    <groupId>{project-group}</groupId>
+    <artifactId>spider-silk-test</artifactId>
+    <version>{project-version}</version>
+    <scope>test</scope>
+  </dependency>
+</dependencies>
+----
+
+The matching credentials go in `~/.m2/settings.xml`, under the same `id`:
+
+[source,xml]
+----
+<settings>
+  <servers>
+    <server>
+      <id>github</id>
+      <username>your-github-username</username>
+      <password>ghp_yourPersonalAccessToken</password>
+    </server>
+  </servers>
+</settings>
+----
+
+== Hello, world
+
+[source,java]
+----
+import spidersilk.App;
+import spidersilk.WebResponse;
+
+public class Main {
+
+    public static void main(String[] args) {
+        App app = new App();
+        app.get("/hello", req -> WebResponse.text("Hello, " + req.param("name", "world")));
+        app.start(8080);
+    }
+}
+----
+
+[source,bash]
+----
+$ curl localhost:8080/hello?name=silk
+Hello, silk
+----
+
+Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to serve a request.
+To deploy on an external servlet container instead, see xref:deployment.adoc[Deployment].

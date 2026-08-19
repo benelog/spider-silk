@@ -1,0 +1,28 @@
+= Route Introspection
+:navtitle: Route Introspection
+
+Routes are an explicit list, so the framework can hand it back: no annotation scanning, no plugin, no reflection.
+`app.routes()` is an immutable snapshot of `record Route(String method, String path)`, in registration order, which is also the order the router breaks ties in:
+
+[source,java]
+----
+app.get("/_routes", req -> WebResponse.template("routes.jte", Map.of("routes", app.routes())));
+----
+
+Because order breaks ties, a second route matching exactly the same requests (the same path, or the same shape with a variable renamed) could never run, so registering one throws `IllegalStateException` on the spot instead of leaving a dead entry in the table.
+
+Group prefixes are already resolved, so a path reads as `/api/decks/\{deckId}/cards`, which is OpenAPI's path-template syntax verbatim, so an export needs no translation:
+
+[source,java]
+----
+for (Route route : app.routes()) {
+    paths.put(route.path(), Json.obj().put(route.method().toLowerCase(Locale.ROOT), ...));
+}
+----
+
+Method and path is all a route carries.
+The handler is left out (it is a lambda, and the only name it has is what reflection would dig out of its synthetic class), and so is any description, because documentation attached at the registration site is an annotation with the reflection taken out.
+What the routes are _for_ is built on top of the list, which is plain data: the example app renders a `/_routes` overview page from it and builds an `/openapi.json` document in `OpenApi`, about forty lines in all.
+
+The automatic HEAD and OPTIONS answers are not listed.
+`routes()` reports what was registered, which is the honest answer for a framework whose claim is that only what you register runs.

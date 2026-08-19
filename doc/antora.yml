@@ -1,0 +1,12 @@
+name: spider-silk
+title: Spider Silk
+version: ~
+start_page: index.adoc
+asciidoc:
+  attributes:
+    project-group: io.github.benelog.spidersilk
+    project-version: 0.1.0-SNAPSHOT
+    project-repo: benelog/spider-silk
+    source-highlighter: highlight.js
+nav:
+  - modules/ROOT/nav.adoc

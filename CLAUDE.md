@@ -21,11 +21,20 @@
   Do not wrap prose to a column width: a line ends where a sentence ends, however long it runs.
   A diff then shows the sentence that changed instead of every line a rewrap touched.
   Headings, tables, and code blocks are unaffected.
+  The same rule applies to the AsciiDoc pages under `doc/`.
+- **The manual lives in `doc/`, as an Antora component.**
+  Pages are AsciiDoc under `doc/modules/ROOT/pages/`, one chapter per file, listed in `doc/modules/ROOT/nav.adoc`.
+  A new chapter is a new page plus a `nav.adoc` entry.
+  `README.md` stays a Quick Start: installation, hello world, and links into the site.
+  Do not grow the README back into the manual.
+- `docs/positioning.md` and `docs/decisions.md` stay Markdown; they are background, not the manual.
 
 ## Build / Verification
 
 ```bash
-./gradlew build   # compiles all three modules + runs all tests
+./gradlew build              # compiles all three modules + runs all tests
+./gradlew publishToMavenLocal # verifies the GitHub Packages publication config
+npm install && npm run docs   # builds the Antora site into build/site
 ```
 
 - H2 DB file location for the example app: `~/db/spider-silk/flashcard`

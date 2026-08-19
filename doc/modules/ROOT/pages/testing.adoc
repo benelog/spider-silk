@@ -1,0 +1,49 @@
+= Testing
+:navtitle: Testing
+
+The harness is its own module, so the production jar carries no test code:
+
+[source,groovy,subs="attributes+"]
+----
+testImplementation '{project-group}:spider-silk-test:{project-version}'
+----
+
+== End to end, with `WebTest`
+
+`WebTest` starts the app on a free port, hands you a client that keeps cookies, and stops it again, including when the body throws:
+
+[source,java]
+----
+@Test
+void createsADeck() {
+    WebTest.test(app, client -> {
+        var created = client.postForm("/decks", Map.of("name", "English"));
+        assertEquals(302, created.statusCode());           // redirects are not followed
+        assertTrue(client.get("/api/decks").body().contains("English"));
+    });
+}
+----
+
+`get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and `postJson`, all return the raw `HttpResponse<String>`, so assertions stay in whatever library the project already uses.
+`send(builder -> ...)` is the way out for anything else.
+
+== The handler alone, with `TestRequest`
+
+When the handler itself is what is under test, not the routing that reaches it, `TestRequest` builds the argument and you call the method:
+
+[source,java]
+----
+@Test
+void createDeckRespondsWith201() {
+    WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
+            .jsonBody("{\"name\": \"Spanish\"}")
+            .build());
+
+    assertEquals(HttpStatus.CREATED, response.status());
+    assertEquals("Spanish", deckService.getDeck(idFrom(response)).name());
+}
+----
+
+No port, no servlet container, and no mock library: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, and `sessionAttr` state what the request carries, and `build()` hands back a `WebRequest`.
+Path variables are supplied rather than matched, since no route is involved: `pathParam("deckId", "3")` is what the router would have resolved.
+Everything a handler can tell apart still holds: a query parameter and a form field of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 the way a non-multipart request does.

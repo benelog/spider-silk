@@ -205,7 +205,7 @@ public final class App {
         return this;
     }
 
-    /** The template engine used by {@link WebResponse#render}. */
+    /** The template engine used by {@link WebResponse#template}. */
     public App templates(TemplateRenderer renderer) {
         this.templates = renderer;
         return this;

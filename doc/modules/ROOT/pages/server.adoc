@@ -1,0 +1,60 @@
+= The Server
+:navtitle: The Server
+
+Everything usually worth tuning is a method on `JettyServer`, and anything else is reachable through customizers that run against the real Jetty objects just before startup:
+
+[source,java]
+----
+new JettyServer(app)
+        .port(8443)
+        .host("127.0.0.1")
+        .contextPath("/app")
+        .sessions(false)
+        .threadPool(new QueuedThreadPool(200, 8))
+        .multipart(new MultipartConfigElement(tmp, 10_485_760L, 10_485_760L, 1_048_576))
+        .stopTimeout(Duration.ofSeconds(20))    // longer drain for slow requests
+        .shutdownHook(false)                    // something else owns the lifecycle
+        .customizeHttpConfiguration(http -> http.setSendServerVersion(false))
+        .customizeContext(context -> context.addFilter(MyFilter.class, "/*", null))
+        .customizeServer(server -> server.setDumpBeforeStop(true))
+        .start();
+----
+
+[#virtual-threads]
+== Virtual threads
+
+Handlers can run on virtual threads.
+That is a thread pool setting, not a framework feature, so it stays two lines of Jetty's own API: platform threads keep running the selectors, the handlers get the virtual ones:
+
+[source,java]
+----
+QueuedThreadPool pool = new QueuedThreadPool();
+pool.setVirtualThreadsExecutor(VirtualThreads.getDefaultVirtualThreadsExecutor());
+
+app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool))
+   .start(8080);
+----
+
+Worth it only if the handlers block: on I/O, on a database.
+A `synchronized` block around that blocking call pins the carrier thread and takes the benefit back.
+
+== Shutdown
+
+Shutdown is graceful out of the box: a JVM shutdown hook stops the server on Ctrl-C or SIGTERM, and `stop()` gives requests in flight five seconds to finish before dropping them.
+Idle keep-alive connections do not hold that up; they are closed as soon as the drain starts, so a stop with nothing running returns immediately.
+`stopTimeout(Duration.ZERO)` turns the drain off entirely.
+
+== Replacing the server
+
+To keep `app.start(port)` as the entry point while still configuring the server, or to run a different server entirely, replace the factory:
+
+[source,java]
+----
+app.server((a, port) -> new JettyServer(a).port(port).sessions(false))
+   .start(9000);
+
+app.server((a, port) -> new MyUndertowServer(a, port))   // implements WebServer
+   .start(9000);
+----
+
+`WebServer` is four methods (`start`, `stop`, `join`, `port`), so a second implementation is a small job.

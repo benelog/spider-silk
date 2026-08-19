@@ -1,0 +1,36 @@
+= The Request
+:navtitle: The Request
+
+== Cookies and repeated parameters
+
+Cookies split along the same line the rest of the API does: the ones the client sent are read off the request, the ones the server sets are part of the response.
+
+[source,java]
+----
+String theme = req.cookie("theme");                 // null when absent
+List<String> tags = req.params("tag");              // ?tag=java&tag=web, or a checkbox group
+
+return WebResponse.html(page)
+        .cookie("theme", "dark")                    // session cookie
+        .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
+        .removeCookie("stale");
+----
+
+A cookie set through the two-argument form gets `Path=/`, `HttpOnly`, and `SameSite=Lax`, which is what a cookie holding anything worth stealing should have.
+`cookie(Cookie)` takes a hand-built `jakarta.servlet.http.Cookie` when you need `Secure`, a `Domain`, or `SameSite=None`.
+
+`params(name)` returns every value in request order, and an empty list when the parameter is absent: "no boxes checked" is an answer, not a 400.
+`param(name)` still returns the first value and still 400s when there is none.
+For an optional parameter with a type, `paramLong("page", 1)` and `paramEnum("direction", Direction.class, Direction.FRONT)` answer the default when the parameter is absent, and still 400 when it is present but unparseable, because the default covers absence, not garbage.
+
+== Query string vs. form body
+
+The servlet API merges the two, so `param("id")` answers to an `id` in the URL and an `id` in the form alike.
+When the difference matters, say which one:
+
+[source,java]
+----
+String page = req.queryParam("page");     // query string only, null when absent
+String name = req.formParam("name");      // form body only
+List<String> tags = req.formParams("tag");
+----

@@ -1,0 +1,15 @@
+= HEAD and OPTIONS
+:navtitle: HEAD and OPTIONS
+
+Both are answered without registering anything.
+A `HEAD` runs the `GET` route and drops the body, keeping the headers, including a `Content-Length` counted from what the `GET` would have sent.
+An `OPTIONS` answers with the `Allow` header the path's routes imply, and a 404 when the path has none:
+
+[source,bash]
+----
+$ curl -X OPTIONS -i localhost:8080/decks
+HTTP/1.1 200 OK
+Allow: GET, POST, HEAD, OPTIONS
+----
+
+`app.head(...)` and `app.options(...)` register a route of their own when the automatic answer is not the one you want: a CORS preflight, usually.

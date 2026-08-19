@@ -1,0 +1,48 @@
+= Example: Flashcard
+:navtitle: Example: Flashcard
+
+The same features as ch07-jdbc-plus from `spring-jdbc-book` (decks, cards, tags, spaced-repetition study, smart decks, CSV import/export, statistics) built without Spring Boot.
+
+DB::
+Repositories use `NamedParameterJdbcTemplate` directly.
+The executed SQL is visible in the code.
+Inserts are the exception: `SimpleJdbcInsert` reads the table metadata and returns the generated key, with `SimplePropertySqlParameterSource` taking the values straight off the domain record.
+`SmartDeckRepository` still spells its parameters out, because its `SmartCondition` enum has to reach the driver as `name()` rather than as an enum.
+
+DI::
+No container; `FlashcardContext` wires everything by calling constructors directly, playing the role of Spring's ApplicationContext by hand.
+
+Transactions::
+Instead of AOP, services call `Transactions.write()/read()`, a thin wrapper around `TransactionTemplate`.
+The wrapped block is exactly the transaction scope.
+
+JSON API::
+As a bonus, a JSON API (`/api/decks`, `/api/decks/\{id}/cards`) sits on the same service layer to show the framework's REST support.
+Its wire format is in `flashcard.web.Codecs` as hand-written `JsonWriter`/`JsonReader` lambdas.
+
+Introspection::
+`/_routes` lists every route and `/openapi.json` is the same list as an OpenAPI 3.1 document, both built from `app.routes()`, which is what the framework exposing its routing table as data buys you.
+
+Routing::
+There is no `Controller` interface.
+`FlashcardApp.registerRoutes` is the whole table, and handlers arrive as an `Action` class, a public method reference, or a lambda.
+
+== Run
+
+[source,bash]
+----
+gradle :example-flashcard:run
+# http://localhost:8080
+----
+
+The database is an H2 file (`~/db/spider-silk/flashcard`), so data survives restarts.
+
+== Tests
+
+[source,bash]
+----
+gradle test
+----
+
+Repository and service tests run against in-memory H2 without mocking.
+The rollback test in `DeckServiceTest` shows the `TransactionTemplate` boundary actually working.
