@@ -134,6 +134,7 @@ Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to
 |---|---|---|
 | `spider-silk-core` | The framework itself | `gg.jte:jte`, embedded Jetty (`jetty-ee10-servlet`) |
 | `spider-silk-test` | The `WebTest` harness and `TestRequest`, for test scope | core, and otherwise the JDK only (the servlet API compile-time only, as in core) |
+| `spider-silk-tomcat` | `TomcatServer`, for running the same app on an embedded Tomcat instead | core, `tomcat-embed-core` |
 | `example-flashcard` | Example: a flashcard study app | core, spring-jdbc, H2 |
 
 ## Further reading

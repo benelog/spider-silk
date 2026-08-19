@@ -36,7 +36,7 @@ Each requires reflection, which is the one thing the framework exists to avoid.
 | DI container | none | none | none | none | yes |
 | JSON | hand-built `Json` tree | `ctx.json(pojo)` | bring your own | JSON-P / JSON-B | Jackson |
 | Templates | jte | many, pluggable | many, pluggable | none | many |
-| Server | embedded Jetty, swappable | embedded Jetty | embedded Jetty | Loom-native Níma | Tomcat |
+| Server | embedded Jetty or Tomcat, swappable | embedded Jetty | embedded Jetty | Loom-native Níma | Tomcat (or Jetty/Undertow) |
 | Servlet deployable | yes | no | no | no | yes (war) |
 | Core size | ~a dozen classes | large | medium | large | very large |
 | Maintenance | one author | active | dormant at 2.9.x (community fork at 3.x) | Oracle | Pivotal/Broadcom |
@@ -61,6 +61,8 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
    No proxy frames, no filter chains you did not add.
 5. **No lock-in on the server.**
    `AppServlet` runs on Tomcat; `WebServer` is four methods, so a second implementation is a small job.
+   That is no longer a claim: `spider-silk-tomcat` is the second implementation, an embedded Tomcat behind the same `WebServerFactory`, and swapping to it is one line.
+   Jetty stays the default because Tomcat costs a working directory on disk, JULI logging, and a hand-rolled graceful shutdown — decision 22 has the detail.
    Javalin and Spark both marry Jetty.
 6. **Startup cost is close to zero** because there is nothing to scan.
 

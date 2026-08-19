@@ -2,4 +2,5 @@ rootProject.name = 'spider-silk'
 
 include 'spider-silk-core'
 include 'spider-silk-test'
+include 'spider-silk-tomcat'
 include 'example-flashcard'

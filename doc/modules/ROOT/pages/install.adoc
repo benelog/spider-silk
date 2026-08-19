@@ -119,4 +119,5 @@ Hello, silk
 ----
 
 Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to serve a request.
+To run the same app on an embedded Tomcat, add `spider-silk-tomcat` and see xref:tomcat.adoc[Tomcat].
 To deploy on an external servlet container instead, see xref:deployment.adoc[Deployment].

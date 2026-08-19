@@ -44,6 +44,7 @@ Shutdown is graceful out of the box: a JVM shutdown hook stops the server on Ctr
 Idle keep-alive connections do not hold that up; they are closed as soon as the drain starts, so a stop with nothing running returns immediately.
 `stopTimeout(Duration.ZERO)` turns the drain off entirely.
 
+[#replacing-the-server]
 == Replacing the server
 
 To keep `app.start(port)` as the entry point while still configuring the server, or to run a different server entirely, replace the factory:
@@ -53,8 +54,12 @@ To keep `app.start(port)` as the entry point while still configuring the server,
 app.server((a, port) -> new JettyServer(a).port(port).sessions(false))
    .start(9000);
 
-app.server((a, port) -> new MyUndertowServer(a, port))   // implements WebServer
+app.server((a, port) -> new TomcatServer(a).port(port))   // spider-silk-tomcat
+   .start(9000);
+
+app.server((a, port) -> new MyUndertowServer(a, port))    // implements WebServer
    .start(9000);
 ----
 
 `WebServer` is four methods (`start`, `stop`, `join`, `port`), so a second implementation is a small job.
+One is written already: xref:tomcat.adoc[Tomcat] ships as `spider-silk-tomcat`, and that page also lays out where the two servers differ and which to pick.

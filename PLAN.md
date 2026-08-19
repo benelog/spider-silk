@@ -24,3 +24,4 @@ Each one was left out with a reason, and each names what would have to happen fi
 - **A `spider-silk-ws` module** — [decision 15b](docs/decisions.md#15b-websocket-in-core--rejected).
   WebSocket stays out of core for good.
   If the `customizeContext` recipe turns out to be worth wrapping, it is wrapped in a module whose name states that it is Jetty-only.
+  `spider-silk-tomcat` is the precedent for that shape — [decision 22](docs/decisions.md#22-spider-silk-tomcat-with-jetty-still-the-default).

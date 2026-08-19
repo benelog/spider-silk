@@ -1,0 +1,111 @@
+= Tomcat
+:navtitle: Tomcat
+
+`spider-silk-tomcat` runs the same app on an embedded Tomcat instead of the Jetty bundled with core.
+It is a separate module because being tied to one server is a thing worth saying in the artifact's name rather than hiding inside core, and because core keeps its promise either way: `AppServlet` is a plain servlet, and `WebServer` is four methods.
+
+== Installation
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation('{project-group}:spider-silk-tomcat:{project-version}') {
+        exclude group: 'org.eclipse.jetty.ee10'    // core's Jetty, unused here
+    }
+}
+----
+
+The module depends on `tomcat-embed-core` 10.1.x, the Servlet 6.0 line — the same level as core's servlet API and as Jetty's `ee10`.
+Tomcat 11 implements Servlet 6.1 and would be a version skew for no gain.
+
+Excluding Jetty is optional; it only keeps an unused server off the classpath.
+
+== Running
+
+[source,java]
+----
+new App()
+        .get("/hello/{name}", req -> WebResponse.text("Hello " + req.pathParam("name")))
+        .server((app, port) -> new TomcatServer(app).port(port))
+        .start(8080);
+----
+
+The `TomcatServer` surface mirrors `JettyServer` method for method, so switching is one line at the factory:
+
+[source,java]
+----
+new TomcatServer(app)
+        .port(8443)
+        .host("127.0.0.1")
+        .contextPath("/app")
+        .baseDir(Path.of("/var/tmp/tomcat"))    // default: a temp dir, deleted on stop
+        .executor(Executors.newVirtualThreadPerTaskExecutor())
+        .multipart(new MultipartConfigElement(tmp, 10_485_760L, 10_485_760L, 1_048_576))
+        .stopTimeout(Duration.ofSeconds(20))
+        .shutdownHook(false)
+        .customizeConnector(connector -> connector.setProperty("maxThreads", "400"))
+        .customizeContext(context -> context.addParameter("mode", "production"))
+        .customizeTomcat(tomcat -> tomcat.getHost().setAutoDeploy(false))
+        .start();
+----
+
+Everything core provides works unchanged: routing, filters, error handlers, JSON, templates, static files, SSE, multipart uploads, sessions, and `WebTest`.
+`WebTest` never starts a server at all, so the test suite does not know or care which of the two is on the classpath.
+
+== Where the two differ
+
+[cols="1,2,2"]
+|===
+| | Jetty | Tomcat
+
+| Session handling
+| `sessions(false)` turns it off
+| always on — `StandardContext` installs a manager and offers no way out
+
+| Graceful shutdown
+| Jetty's own `stopTimeout`
+| hand-rolled here: pause the connector, then wait out the request threads
+
+| Shutdown hook
+| Jetty's `setStopAtShutdown`
+| ours, registered on start and removed again on stop
+
+| Keeping the JVM up
+| Jetty's threads are non-daemon
+| Tomcat's are daemons, so a non-daemon thread parked in `Server.await()` does it
+
+| Working directory
+| none — Jetty runs off the classpath
+| a `catalina.base` on disk, a temp directory unless `baseDir(...)` says otherwise
+
+| Virtual threads
+| `threadPool(...)` with a `QueuedThreadPool`
+| `executor(Executors.newVirtualThreadPerTaskExecutor())`
+
+| Logging
+| slf4j directly
+| JULI, so `jul-to-slf4j` plus a bridge handler to route it
+|===
+
+One of those is worth restating because it changes behaviour rather than just spelling.
+`stopTimeout(...)` on Tomcat only has something to wait on while the connector runs a `ThreadPoolExecutor`, which is the default but is not what `executor(...)` necessarily hands it — a virtual-thread executor leaves the drain a no-op.
+
+== Which one
+
+Neither is a better server; they fail in different places.
+
+Jetty stays the default because it costs nothing to keep — it needs no disk, its shutdown and lifecycle are its own rather than assembled here, it logs through slf4j like the rest of an application, and the whole embedded story comes out 140 lines shorter as a result — 286 lines of `JettyServer` against 430 of `TomcatServer`, for the same surface.
+For a service that is deployed as a jar and never touched by an operator, that is the whole picture.
+
+Tomcat earns its place where the surroundings already assume it.
+The operational knowledge in most organisations is Tomcat knowledge: the connector attributes, the access log valve, the thread-pool numbers, the JMX beans a dashboard is already scraping.
+It is also the server Spring Boot defaults to, so a service moving off Spring Boot onto Spider Silk keeps the same runtime behaviour and the same tuning while only the web tier changes.
+And it is the one with a security-advisory pipeline most enterprise processes already track.
+
+Neither choice is load-bearing.
+Swapping back is the same one line at the factory, because it always was: xref:server.adoc#replacing-the-server[replacing the server] is the seam both of these sit behind.
+
+== Deploying to a Tomcat you did not start
+
+None of this applies to a WAR dropped into a standalone Tomcat.
+That path needs no module at all — map `AppServlet` yourself and exclude the embedded server, as xref:deployment.adoc[Deployment] describes.

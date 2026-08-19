@@ -34,8 +34,10 @@ What is still open lives in [PLAN.md](../PLAN.md).
 | 18 | `WebContext` split into `WebRequest` + sealed `WebResponse` | ✅ shipped |
 | 19 | Example: no `Controller` interface, one routing table | ✅ shipped |
 | 20 | `TestRequest` in `spider-silk-test`, and no mock library | ✅ shipped |
+| 21 | `HttpStatus`: an enum, not an int | ✅ shipped |
+| 22 | `spider-silk-tomcat`, with Jetty still the default | ✅ shipped |
 
-Twenty-one of the twenty-two shipped.
+Twenty-three of the twenty-four shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -338,6 +340,29 @@ Three calls inside that decision:
 - **The getter answers the enum too.**
   A setter that takes `HttpStatus` and a getter that hands back `int` would be the asymmetry `paramEnum` avoids, so tests assert `assertEquals(HttpStatus.CREATED, response.status())` and a logger that wants the number says `status().code()`.
   `WebTest`'s client is the JDK's `HttpClient`, so `statusCode()` there stays an int: the boundary is the framework's own API, not other people's.
+
+## 22 · The second server
+
+### 22. `spider-silk-tomcat`, with Jetty still the default
+
+`TomcatServer` is decision 2 being cashed in: `WebServer` was made four methods so that a second server would be a small job, and this is the one that proves it.
+It is a module rather than a class in core, following 17 — being tied to one server is stated in the artifact's name, and core keeps depending on nothing but the servlet API and its own Jetty.
+`tomcat-embed-core` 10.1.x is the Servlet 6.0 line, matching core's servlet API and Jetty's `ee10`; Tomcat 11 is Servlet 6.1 and would be a version skew bought for nothing.
+
+Jetty stays the default, which is the actual decision here.
+Nothing about Tomcat is better for the framework's own purposes, and three things are worse for them: it wants a `catalina.base` on disk where Jetty runs diskless, its logging is JULI rather than slf4j, and — the one that cost real code — it has no graceful shutdown of its own.
+Decision 12 is Jetty's `stopTimeout` plus `setShutdownIdleTimeout`; on Tomcat the same guarantee is hand-rolled, pausing the connector and then shutting the request pool down within the timeout, which is what Spring Boot does for the same reason.
+The shutdown hook of 12 is the same story: Jetty's `setStopAtShutdown` deregisters itself, so ours has to be registered on start and removed again on stop to keep the property that a suite starting a server per test accumulates no hooks.
+Tomcat's threads are also daemons, so a non-daemon thread parked in `Server.await()` is what holds the JVM up — the thing decision 1 gets from Jetty for free.
+`TomcatServer` is 430 lines against `JettyServer`'s 286, and every one of those extra lines is one of these.
+
+Two asymmetries are left visible rather than papered over.
+There is no `sessions(false)`: Tomcat's `StandardContext` installs a session manager on start and offers no way out, and a method that silently did nothing would be worse than its absence.
+And `stopTimeout` only has something to wait on while the connector runs a `ThreadPoolExecutor`, so `executor(...)` with the virtual-thread executor turns the drain into a no-op — said in the Javadoc rather than worked around, because the alternative is tracking in-flight requests ourselves, which is a second lifecycle model in a module that exists to have none.
+
+What Tomcat buys is not technical.
+It is the operational knowledge an organisation already has, the runtime Spring Boot defaults to for anyone migrating off it, and a security-advisory pipeline most enterprise processes already track.
+That is a real reason to want it and not a reason to make it the default, which is exactly what a seam is for.
 
 ## Rejected — decisions, with the reason
 

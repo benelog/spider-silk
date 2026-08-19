@@ -13,6 +13,7 @@
 * xref:route-introspection.adoc[Route Introspection]
 * xref:testing.adoc[Testing]
 * xref:server.adoc[The Server]
+* xref:tomcat.adoc[Tomcat]
 * xref:deployment.adoc[Deployment]
 * xref:api-summary.adoc[API Summary]
 * xref:reflection-scope.adoc[The Scope of "No Reflection"]
