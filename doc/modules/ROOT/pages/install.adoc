@@ -106,7 +106,7 @@ public class Main {
 
     public static void main(String[] args) {
         App app = new App();
-        app.get("/hello", req -> WebResponse.text("Hello, " + req.param("name", "world")));
+        app.get("/hello/{name}", req -> WebResponse.text("Hello, " + req.pathParam("name")));
         app.start(8080);
     }
 }
@@ -114,7 +114,7 @@ public class Main {
 
 [source,bash]
 ----
-$ curl localhost:8080/hello?name=silk
+$ curl localhost:8080/hello/silk
 Hello, silk
 ----
 

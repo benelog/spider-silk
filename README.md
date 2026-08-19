@@ -113,40 +113,20 @@ public class Main {
 
     public static void main(String[] args) {
         App app = new App();
-        app.get("/hello", req -> WebResponse.text("Hello, " + req.param("name", "world")));
+        app.get("/hello/{name}", req -> WebResponse.text("Hello, " + req.pathParam("name")));
         app.start(8080);
     }
 }
 ```
 
 ```bash
-$ curl localhost:8080/hello?name=silk
+$ curl localhost:8080/hello/silk
 Hello, silk
 ```
 
-Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to serve a request.
-
-### A little more
-
-```java
-App app = new App()
-        .templates(new JteTemplates("jte"))     // classpath:/jte/*.jte
-        .staticFiles("/public");                // serves classpath:/public/* statically
-
-app.get("/decks/{deckId}", req -> {
-    long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
-    return WebResponse.template("deck.jte", model);
-});
-
-app.post("/api/decks", req -> {
-    String name = req.bodyJson().asObject().getString("name");
-    return WebResponse.json(Json.obj().put("name", name)).status(HttpStatus.CREATED);
-});
-
-app.start(8080);
-```
-
 Routing groups, filters, error handlers, JSON codecs, SSE, static files, route introspection, the test harness, and server tuning are all in the [documentation](https://benelog.github.io/spider-silk).
+
+Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to serve a request.
 
 ## Modules
 
