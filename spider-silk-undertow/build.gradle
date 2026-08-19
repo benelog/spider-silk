@@ -1,0 +1,16 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':spider-silk-core')
+
+    // api, not implementation: the customizers hand out Undertow's own types.
+    // 2.3.x is the Jakarta EE 10 line, Servlet 6.0, the same level as core's
+    // servlet API, Jetty's ee10, and Tomcat 10.1. undertow-core has a 2.4.x,
+    // but undertow-servlet — the half this module needs — has not followed yet.
+    api 'io.undertow:undertow-servlet:2.3.26.Final'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

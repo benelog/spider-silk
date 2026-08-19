@@ -54,12 +54,100 @@ To keep `app.start(port)` as the entry point while still configuring the server,
 app.server((a, port) -> new JettyServer(a).port(port).sessions(false))
    .start(9000);
 
-app.server((a, port) -> new TomcatServer(a).port(port))   // spider-silk-tomcat
+app.server((a, port) -> new TomcatServer(a).port(port))     // spider-silk-tomcat
    .start(9000);
 
-app.server((a, port) -> new MyUndertowServer(a, port))    // implements WebServer
+app.server((a, port) -> new UndertowServer(a).port(port))   // spider-silk-undertow
+   .start(9000);
+
+app.server((a, port) -> new MyOwnServer(a, port))           // implements WebServer
    .start(9000);
 ----
 
-`WebServer` is four methods (`start`, `stop`, `join`, `port`), so a second implementation is a small job.
-One is written already: xref:tomcat.adoc[Tomcat] ships as `spider-silk-tomcat`, and that page also lays out where the two servers differ and which to pick.
+`WebServer` is four methods (`start`, `stop`, `join`, `port`), so another implementation is a small job.
+Two are written already: xref:tomcat.adoc[Tomcat] and xref:undertow.adoc[Undertow], each in a module named after the server it is tied to.
+
+[#choosing]
+== Choosing a server
+
+Everything core provides works the same on all three — routing, filters, error handlers, JSON, templates, static files, SSE, multipart uploads, sessions — because all core ever needed was a servlet container.
+`WebTest` starts no server at all, so tests do not change either.
+What differs is the embedding: what the server needs from its surroundings, and how much of the lifecycle this project had to assemble by hand.
+
+[cols="1,2,2,2"]
+|===
+| | Jetty (default) | Tomcat | Undertow
+
+| Module
+| in `spider-silk-core`
+| `spider-silk-tomcat`
+| `spider-silk-undertow`
+
+| Session handling
+| `sessions(false)` turns it off
+| always on
+| always on
+
+| Graceful shutdown
+| Jetty's own `stopTimeout`
+| hand-rolled: pause the connector, drain the request threads
+| Undertow's `GracefulShutdownHandler`, which counts requests
+
+| Drain vs. virtual threads
+| unaffected
+| a no-op — `executor(...)` replaces the pool it waits on
+| unaffected
+
+| Shutdown hook
+| Jetty's `setStopAtShutdown`
+| ours: registered on start, removed on stop
+| ours: registered on start, removed on stop
+
+| Keeping the JVM up
+| Jetty's threads are non-daemon
+| a non-daemon thread parked in `Server.await()`
+| a non-daemon thread parked on a latch
+
+| Working directory
+| none
+| a `catalina.base` on disk, temporary unless `baseDir(...)`
+| none
+
+| Virtual threads
+| `threadPool(...)` with a `QueuedThreadPool`
+| `executor(...)`
+| `executor(...)`
+
+| Logging
+| slf4j directly
+| JULI, so `jul-to-slf4j` plus a bridge handler
+| JBoss Logging, which finds slf4j on the classpath
+
+| Customizers
+| server, context, HTTP configuration
+| Tomcat, context, connector
+| deployment, builder
+
+| Adapter size
+| 286 lines
+| 430 lines
+| 381 lines
+|===
+
+None of the three is a better server; they cost different things.
+
+**Jetty stays the default** because it costs nothing to keep.
+It needs no disk, its shutdown and lifecycle are its own rather than assembled here, and it logs through slf4j like the rest of an application.
+For a service deployed as a jar and never touched by an operator, that is the whole picture.
+
+**Tomcat earns its place where the surroundings already assume it.**
+The operational knowledge in most organisations is Tomcat knowledge: the connector attributes, the access log valve, the thread-pool numbers, the JMX beans a dashboard is already scraping.
+It is also the server Spring Boot defaults to, so a service moving off Spring Boot keeps the same runtime behaviour and the same tuning while only the web tier changes.
+And it is the one with a security-advisory pipeline most enterprise processes already track.
+
+**Undertow is the one to reach for on the technical merits.**
+It is the lightest of the three to embed — no working directory, no bridge for its logging — and it is the only one whose graceful shutdown is a first-class handler rather than something assembled from a thread pool, which is why it is also the only one where the drain survives switching to virtual threads.
+The catch is reach: it is a WildFly component rather than a standalone product, so the operational familiarity and the tooling around it are thinner than Tomcat's.
+
+None of this is load-bearing.
+Changing your mind is the same one line at the factory, in either direction.

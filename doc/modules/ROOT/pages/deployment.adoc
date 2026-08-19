@@ -12,7 +12,7 @@ context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 ----
 
 `AppServlet` is a standard servlet, so it runs on any container (Tomcat and others), not just Jetty.
-An embedded Tomcat that `app.start(port)` runs itself is a different thing, and lives in `spider-silk-tomcat`: see xref:tomcat.adoc[Tomcat].
+An embedded Tomcat that `app.start(port)` runs itself is a different thing, and lives in `spider-silk-tomcat`: see xref:tomcat.adoc[Tomcat], and xref:undertow.adoc[Undertow] for the third option.
 Deploying to a container you did not start, exclude the bundled Jetty:
 
 [source,groovy,subs="attributes+"]

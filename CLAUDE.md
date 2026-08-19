@@ -8,8 +8,9 @@
   Do not add data-layer dependencies such as spring-jdbc to core's build.gradle.
   (When adding a new feature to core, if it falls outside the web tier — persistence, transactions, scheduling, and so on — propose the example module or a separate module instead.)
 - **A module names what it is tied to.**
-  `spider-silk-tomcat` is the embedded-Tomcat `WebServer` implementation; it depends on core, never the other way round.
-  Core's default stays Jetty, and anything Tomcat-specific belongs in that module rather than behind a flag in core.
+  `spider-silk-tomcat` and `spider-silk-undertow` are `WebServer` implementations for those servers; they depend on core, never the other way round.
+  Core's default stays Jetty, and anything server-specific belongs in the matching module rather than behind a flag in core.
+  Each server module carries its own copy of the acceptance tests, deliberately: they assert what core promises against that container.
 - **Test-only code lives in spider-silk-test.**
   The `WebTest` harness is its own module, so core's jar carries no test code.
   Core's tests depend on it (`testImplementation project(':spider-silk-test')`); do not move it back into core.

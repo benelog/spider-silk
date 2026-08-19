@@ -36,8 +36,9 @@ What is still open lives in [PLAN.md](../PLAN.md).
 | 20 | `TestRequest` in `spider-silk-test`, and no mock library | ✅ shipped |
 | 21 | `HttpStatus`: an enum, not an int | ✅ shipped |
 | 22 | `spider-silk-tomcat`, with Jetty still the default | ✅ shipped |
+| 23 | `spider-silk-undertow`, the third server | ✅ shipped |
 
-Twenty-three of the twenty-four shipped.
+Twenty-four of the twenty-five shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -363,6 +364,28 @@ And `stopTimeout` only has something to wait on while the connector runs a `Thre
 What Tomcat buys is not technical.
 It is the operational knowledge an organisation already has, the runtime Spring Boot defaults to for anyone migrating off it, and a security-advisory pipeline most enterprise processes already track.
 That is a real reason to want it and not a reason to make it the default, which is exactly what a seam is for.
+
+## 23 · The third server
+
+### 23. `spider-silk-undertow`
+
+Two implementations prove a seam works; the third one tells you what it costs, which is why this was worth building rather than asserting.
+`undertow-servlet` 2.3.x is the Jakarta EE 10 line, Servlet 6.0, matching everything else — `undertow-core` has a 2.4.x, but the servlet half has not followed it.
+
+Undertow turned out to be the *easiest* of the three to embed, which was not the expected answer.
+Its graceful shutdown is a first-class `GracefulShutdownHandler` that counts requests, so decision 12's guarantee is a wire-up rather than the reconstruction Tomcat needed — and because it counts requests rather than shutting a pool down, it is the only one of the three where the drain survives `executor(...)` being handed the virtual-thread executor.
+It needs no working directory, and JBoss Logging finds slf4j on the classpath by itself, so neither of Tomcat's two environmental costs applies.
+`UndertowServer` is 381 lines against Tomcat's 430 and Jetty's 286; the gap to Jetty is almost entirely the JVM-lifetime problem, which Undertow shares with Tomcat — neither keeps the process alive on its own, so both park a non-daemon thread that `stop()` releases.
+
+So the default did not move again, and the reason is worth being honest about: it is not technical.
+Jetty is still the one whose lifecycle is entirely its own, and 286 lines against 381 is a real difference in how much of this project's own code sits between an application and its server.
+Undertow's disadvantage is reach rather than design — it is a WildFly component rather than a standalone product, so the operational familiarity, the tooling, and the number of people who have debugged it in production are all thinner than Tomcat's.
+That is a deployment fact, not an engineering one, and it belongs in the manual as advice rather than in core as a default.
+
+One structural note.
+The test suites are now three copies of the same acceptance tests, one per server, and that is deliberate: they assert what *core* promises — routing, sessions, multipart, SSE, static files, port 0, the drain, the hook — against each container in turn.
+Factoring them into one parameterised suite would mean a shared module that every server module depends on, which is a dependency built to save duplication in tests.
+Seventeen tests copied twice is the cheaper of the two.
 
 ## Rejected — decisions, with the reason
 

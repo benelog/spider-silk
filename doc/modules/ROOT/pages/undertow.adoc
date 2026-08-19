@@ -1,0 +1,63 @@
+= Undertow
+:navtitle: Undertow
+
+`spider-silk-undertow` runs the same app on an embedded Undertow.
+It is a separate module for the same reason `spider-silk-tomcat` is: being tied to one server is worth saying in the artifact's name rather than hiding behind a flag in core.
+
+For how the three servers compare and which to pick, see xref:server.adoc#choosing[Choosing a server].
+
+== Installation
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation('{project-group}:spider-silk-undertow:{project-version}') {
+        exclude group: 'org.eclipse.jetty.ee10'    // core's Jetty, unused here
+    }
+}
+----
+
+The module depends on `undertow-servlet` 2.3.x, the Jakarta EE 10 line — Servlet 6.0, the same level as core's servlet API, Jetty's `ee10`, and Tomcat 10.1.
+`undertow-core` has a 2.4.x, but `undertow-servlet`, the half this module needs, has not followed it yet.
+
+== Running
+
+[source,java]
+----
+new App()
+        .get("/hello/{name}", req -> WebResponse.text("Hello " + req.pathParam("name")))
+        .server((app, port) -> new UndertowServer(app).port(port))
+        .start(8080);
+----
+
+The `UndertowServer` surface mirrors `JettyServer` and `TomcatServer`:
+
+[source,java]
+----
+new UndertowServer(app)
+        .port(8443)
+        .host("127.0.0.1")
+        .contextPath("/app")
+        .executor(Executors.newVirtualThreadPerTaskExecutor())
+        .multipart(new MultipartConfigElement(tmp, 10_485_760L, 10_485_760L, 1_048_576))
+        .stopTimeout(Duration.ofSeconds(20))
+        .shutdownHook(false)
+        .customizeDeployment(deployment -> deployment.setDefaultEncoding("UTF-8"))
+        .customizeBuilder(builder -> builder.setIoThreads(4).setWorkerThreads(64))
+        .start();
+----
+
+Two customizers rather than three, because Undertow only has two objects worth reaching: the `DeploymentInfo` that describes the servlet deployment, and the `Undertow.Builder` that describes the server.
+
+== What is Undertow's own
+
+Graceful shutdown is the one place Undertow is the easiest of the three.
+`GracefulShutdownHandler` counts the requests it has let through, so `stopTimeout(...)` is a wait for that count to reach zero rather than a thread pool being drained.
+That is also why `executor(...)` does not interfere with it, as it does on Tomcat: swapping in the virtual-thread executor leaves the drain fully working.
+
+Undertow's worker threads do not hold the JVM up on their own, so `start()` parks a non-daemon thread that `stop()` releases — the same trick the Tomcat module needs, and what `join()` joins.
+
+There is no `sessions(boolean)`: an Undertow deployment always gets a session manager, and a method that silently did nothing would be worse than its absence.
+Static files still come off the classpath through core's own `StaticFiles`, so Undertow's resource manager is left empty on purpose.
+
+Logging goes through JBoss Logging, which picks slf4j up off the classpath when it finds it — so an application already using slf4j gets Undertow's log lines without a bridge.
