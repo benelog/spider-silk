@@ -15,7 +15,6 @@ import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import spidersilk.App;
 import spidersilk.HttpStatus;
-import spidersilk.JteTemplates;
 import spidersilk.WebResponse;
 import spidersilk.server.JettyServer;
 
@@ -57,9 +56,9 @@ public class FlashcardApp {
     static App createApp(DataSource dataSource) {
         FlashcardContext context = new FlashcardContext(dataSource);
 
-        App app = new App()
-                .templates(new JteTemplates("jte"))
-                .staticFiles("/public");
+        // Templates and static files are left at their defaults:
+        // jte over classpath:/jte, and classpath:/public served at the root.
+        App app = new App();
 
         // CSV format error: this handler runs after the transaction rolled back.
         app.exception(CsvFormatException.class, (e, req) -> {
@@ -124,7 +123,7 @@ public class FlashcardApp {
         // 3. A lambda, for a handler with no state worth a class of its own. Both of
         //    these read app.routes() per request, so they list the routes above.
         app.get("/_routes",
-                req -> WebResponse.template("routes.jte", Map.of("routes", app.routes())));
+                req -> WebResponse.template("routes", Map.of("routes", app.routes())));
         app.get("/openapi.json", req -> WebResponse.json(OpenApi.document(app.routes())));
     }
 

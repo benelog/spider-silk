@@ -1,0 +1,41 @@
+= Templates
+:navtitle: Templates
+
+`WebResponse.template(name, model)` answers with a rendered page.
+The name carries no extension: the engine appends its own.
+
+[source,java]
+----
+app.get("/decks/{deckId}", req ->
+        WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+----
+
+Nothing has to be configured for that: an `App` renders with https://jte.gg[jte] over `classpath:/jte`, appending `.jte`, so the handler above renders `classpath:/jte/deck.jte`.
+The model is a `Map`, passed to jte's parameters by name, and `ContentType.Html` escapes `${}` output for you.
+
+== A root or a suffix of your own
+
+[source,java]
+----
+app.templates(new JteTemplates("templates")     // classpath:/templates
+        .suffix(".html"));                      // .../deck.html
+----
+
+The suffix is appended, never checked for, so a name that still carries its extension is looked up with the suffix twice over.
+
+== Another engine
+
+`TemplateRenderer` is a single method — a template name, a model, and the writer to render into.
+An engine that is not jte is that one method, and `templates(renderer)` puts it in place of the default.
+
+[source,java]
+----
+app.templates((template, model, out) -> mustache.compile(template + ".mustache").execute(out, model));
+----
+
+Rendering happens while the handler's exception handling still applies, so a template that throws reaches `app.exception(...)` like any other failure, and a `HEAD` of a rendered page reports the length the `GET` would have sent.
+
+== Precompiled templates
+
+jte compiles at runtime by default, which needs a JDK on the deployment machine.
+xref:deployment.adoc[Deployment] covers precompiling for production.

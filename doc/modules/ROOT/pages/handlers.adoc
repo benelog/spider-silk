@@ -30,7 +30,7 @@ public class StatsAction implements Handler {
 
     @Override
     public WebResponse handle(WebRequest req) {
-        return WebResponse.template("stats.jte", Map.of("stats", statsService.overview()));
+        return WebResponse.template("stats", Map.of("stats", statsService.overview()));
     }
 }
 ----

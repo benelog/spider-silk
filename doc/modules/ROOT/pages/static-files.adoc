@@ -1,7 +1,7 @@
 = Static Files
 :navtitle: Static Files
 
-`staticFiles("/public")` serves `classpath:/public/*` at the root.
+`classpath:/public/*` is served at the root without being asked for; `staticFiles("/assets")` names a different directory.
 Every response carries an `ETag` and `Last-Modified` derived from the resource, so a reload comes back as a bodyless 304 instead of the file again.
 The default `Cache-Control: no-cache` means "cache it, but check with me first", which is right for names that never change.
 For fingerprinted names, say so:

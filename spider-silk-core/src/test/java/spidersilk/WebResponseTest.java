@@ -13,10 +13,10 @@ class WebResponseTest {
 
     @Test
     void aTemplateWithNothingToPassInNeedsNoModel() {
-        WebResponse response = WebResponse.template("about.jte");
+        WebResponse response = WebResponse.template("about");
 
         WebResponse.Template template = (WebResponse.Template) response.body();
-        assertEquals("about.jte", template.name());
+        assertEquals("about", template.name());
         assertEquals(Map.of(), template.model());
     }
 

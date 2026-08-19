@@ -6,7 +6,7 @@ Routes are an explicit list, so the framework can hand it back: no annotation sc
 
 [source,java]
 ----
-app.get("/_routes", req -> WebResponse.template("routes.jte", Map.of("routes", app.routes())));
+app.get("/_routes", req -> WebResponse.template("routes", Map.of("routes", app.routes())));
 ----
 
 Because order breaks ties, a second route matching exactly the same requests (the same path, or the same shape with a variable renamed) could never run, so registering one throws `IllegalStateException` on the spot instead of leaving a dead entry in the table.

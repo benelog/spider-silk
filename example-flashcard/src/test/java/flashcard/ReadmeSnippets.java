@@ -15,7 +15,6 @@ import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import spidersilk.App;
 import spidersilk.HttpStatus;
 import spidersilk.AppServlet;
-import spidersilk.JteTemplates;
 import spidersilk.Route;
 import spidersilk.StaticFiles;
 import spidersilk.WebRequest;
@@ -111,14 +110,12 @@ class ReadmeSnippets {
     // ---- block 2: At a Glance ----
 
     void atAGlance() {
-        App app = new App()
-                .templates(new JteTemplates("jte"))     // classpath:/jte/*.jte
-                .staticFiles("/public");                // serves classpath:/public/* statically
+        App app = new App();    // jte over classpath:/jte, and classpath:/public served at /
 
         // Server-side rendering
         app.get("/decks/{deckId}", req -> {
             long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
-            return WebResponse.template("deck.jte", model);
+            return WebResponse.template("deck", model);
         });
 
         // JSON API — you state in code what goes out (no automatic serialization)
@@ -142,7 +139,7 @@ class ReadmeSnippets {
                 (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
         // One place for a styled error page, whatever produced the status
-        app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
+        app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
     }
 
     // ---- blocks 3, 5, 7: the three shapes a handler comes in ----
@@ -236,7 +233,7 @@ class ReadmeSnippets {
 
     void introspection(App app) {
         app.get("/_routes",
-                req -> WebResponse.template("routes.jte", Map.of("routes", app.routes())));
+                req -> WebResponse.template("routes", Map.of("routes", app.routes())));
 
         Json.JsonObject paths = Json.obj();
         for (Route route : app.routes()) {

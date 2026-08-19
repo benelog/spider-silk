@@ -34,7 +34,7 @@ public class DeckController {
         model.put("directions", StudyDirection.values());
         model.put("message", req.flashed("message"));
         model.put("error", req.flashed("error"));
-        return WebResponse.template("deck.jte", model);
+        return WebResponse.template("deck", model);
     }
 
     public WebResponse renameDeck(WebRequest req) {
@@ -62,7 +62,7 @@ public class DeckController {
         model.put("deck", deckService.getDeck(deckId));
         model.put("card", cardService.getCard(cardId));
         model.put("tags", String.join(", ", cardService.tagsOf(cardId)));
-        return WebResponse.template("card-edit.jte", model);
+        return WebResponse.template("card-edit", model);
     }
 
     public WebResponse editCard(WebRequest req) {

@@ -44,14 +44,12 @@ jte also compiles templates to Java code, which fits the framework's character.
 
 [source,java]
 ----
-App app = new App()
-        .templates(new JteTemplates("jte"))     // classpath:/jte/*.jte
-        .staticFiles("/public");                // serves classpath:/public/* statically
+App app = new App();    // jte over classpath:/jte, and classpath:/public served at /
 
 // Server-side rendering
 app.get("/decks/{deckId}", req -> {
     long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
-    return WebResponse.template("deck.jte", model);
+    return WebResponse.template("deck", model); // classpath:/jte/deck.jte
 });
 
 // JSON API: you state in code what goes out (no automatic serialization)
@@ -75,7 +73,7 @@ app.exception(IllegalArgumentException.class,
         (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
 // One place for a styled error page, whatever produced the status
-app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
+app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 
 app.start(8080);                                // embedded Jetty, sessions on
 ----

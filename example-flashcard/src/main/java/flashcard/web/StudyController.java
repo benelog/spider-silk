@@ -63,7 +63,7 @@ public class StudyController {
 
         if (studySession.isRoundFinished()) {
             return WebResponse.template(studySession.hasWrongCards()
-                    ? "study-round-end.jte" : "study-done.jte", model);
+                    ? "study-round-end" : "study-done", model);
         }
 
         Card card = studyService.currentCard(studySession);
@@ -71,7 +71,7 @@ public class StudyController {
         model.put("question", textFirst ? card.text() : card.meaning());
         model.put("answer", textFirst ? card.meaning() : card.text());
         model.put("flipped", req.paramBoolean("flipped", false));
-        return WebResponse.template("study.jte", model);
+        return WebResponse.template("study", model);
     }
 
     public WebResponse answer(WebRequest req) {

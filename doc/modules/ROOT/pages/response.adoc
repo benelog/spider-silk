@@ -6,6 +6,7 @@ A response is an immutable value: every method returns a new one, which is what 
 == Bodies
 
 `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
+A template name carries no extension — the engine appends its own, as xref:templates.adoc[Templates] describes.
 
 `body()` is a sealed `WebResponse.Body` (`Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw`), so a `switch` over it needs no default case, and a test can assert on the answer without a servlet response to read it out of:
 

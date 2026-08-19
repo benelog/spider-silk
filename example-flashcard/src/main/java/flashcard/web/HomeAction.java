@@ -42,6 +42,6 @@ public class HomeAction implements Handler {
         model.put("directions", StudyDirection.values());
         model.put("message", req.flashed("message"));
         model.put("error", req.flashed("error"));
-        return WebResponse.template("home.jte", model);
+        return WebResponse.template("home", model);
     }
 }

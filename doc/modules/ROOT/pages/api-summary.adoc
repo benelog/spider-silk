@@ -7,7 +7,7 @@
 * Introspection: `routes()` reports every registered route as `Route(method, path)`, in registration order
 * Filters: `before(filter)` / `before(path, filter)`, same for `after`
 * Errors: `exception(Type, handler)`, `error(HttpStatus, handler)`, `notFound(handler)`
-* Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles)`
+* Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles)` — jte over `classpath:/jte` and `classpath:/public` at the root are the defaults, so neither has to be called
 * Server: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`
 
 == What `WebRequest` provides

@@ -7,6 +7,7 @@
 * xref:response.adoc[The Response]
 * xref:head-and-options.adoc[HEAD and OPTIONS]
 * xref:sse.adoc[Server-Sent Events]
+* xref:templates.adoc[Templates]
 * xref:static-files.adoc[Static Files]
 * xref:request-logging.adoc[Request Logging]
 * xref:route-introspection.adoc[Route Introspection]

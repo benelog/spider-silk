@@ -18,7 +18,7 @@ import spidersilk.json.JsonWriter;
  *
  * <pre>{@code
  * app.get("/decks/{deckId}", req ->
- *         WebResponse.template("deck.jte", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+ *         WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
  *
  * app.post("/decks", req ->
  *         WebResponse.redirect("/decks/" + service.create(req.param("name")).id()));
@@ -142,7 +142,11 @@ public final class WebResponse {
 
     /**
      * A template rendered with the engine set via
-     * {@link App#templates(TemplateRenderer)}.
+     * {@link App#templates(TemplateRenderer)} — by default jte over
+     * {@code classpath:/jte}, which turns {@code "deck"} into
+     * {@code classpath:/jte/deck.jte}. The name carries no extension: the
+     * engine appends its own, so a switch of engine does not rewrite every
+     * handler.
      */
     public static WebResponse template(String template, Map<String, Object> model) {
         return of(new Template(Objects.requireNonNull(template, "template"),

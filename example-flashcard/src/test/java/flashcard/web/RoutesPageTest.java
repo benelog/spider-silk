@@ -18,7 +18,7 @@ class RoutesPageTest {
     void rendersARowPerRoute() {
         StringWriter html = new StringWriter();
 
-        new JteTemplates("jte").render("routes.jte", Map.of("routes", List.of(
+        new JteTemplates("jte").render("routes", Map.of("routes", List.of(
                 new Route("GET", "/api/decks"),
                 new Route("POST", "/api/decks/{deckId}/cards"))), html);
 

@@ -20,8 +20,11 @@ import jakarta.servlet.http.HttpServletRequest;
  * Files served straight off the classpath, with the caching headers that stop a
  * browser re-downloading the stylesheet on every page load.
  *
+ * <p>{@code classpath:/public} is served at the root without being asked for;
+ * this is for a directory, a hosted path, or a cache policy of your own.
+ *
  * <pre>{@code
- * app.staticFiles("/public");                       // classpath:/public/* at /*
+ * app.staticFiles("/assets");                       // classpath:/assets/* at /*
  *
  * app.staticFiles(new StaticFiles("/public")
  *         .hostedPath("/assets")                    // classpath:/public/* at /assets/*
@@ -36,6 +39,9 @@ import jakarta.servlet.http.HttpServletRequest;
  * carries a content hash and the file at that name can never change.
  */
 public final class StaticFiles {
+
+    /** The classpath root an {@link App} serves files from by default. */
+    public static final String DEFAULT_ROOT = "/public";
 
     private static final String REVALIDATE = "no-cache";
 

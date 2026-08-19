@@ -124,7 +124,7 @@ $ curl localhost:8080/hello/silk
 Hello, silk
 ```
 
-Routing groups, filters, error handlers, JSON codecs, SSE, static files, route introspection, the test harness, and server tuning are all in the [documentation](https://benelog.github.io/spider-silk).
+Routing groups, filters, error handlers, JSON codecs, SSE, templates, static files, route introspection, the test harness, and server tuning are all in the [documentation](https://benelog.github.io/spider-silk).
 
 Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to serve a request.
 

@@ -25,3 +25,4 @@ implementation('{project-group}:spider-silk-core') {
 
 jte compiles templates at runtime by default, which requires a JDK on the deployment machine.
 For production, precompile with the https://jte.gg/pre-compiling/[jte Gradle plugin] and pass the engine through the `JteTemplates(TemplateEngine)` constructor.
+The suffix applies either way, so no handler changes.

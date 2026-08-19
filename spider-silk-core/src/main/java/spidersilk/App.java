@@ -19,13 +19,11 @@ import spidersilk.server.WebServerFactory;
  * There is no annotation scanning and no reflection: only what you register runs.
  *
  * <pre>{@code
- * App app = new App()
- *         .templates(new JteTemplates("jte"))
- *         .staticFiles("/public");
+ * App app = new App();   // jte over classpath:/jte, and classpath:/public served at /
  *
- * app.get("/decks/{deckId}", ctx -> {
- *     long deckId = ctx.pathParamLong("deckId");
- *     ctx.render("deck.jte", model);
+ * app.get("/decks/{deckId}", req -> {
+ *     long deckId = req.pathParamLong("deckId");
+ *     return WebResponse.template("deck", model);   // classpath:/jte/deck.jte
  * });
  *
  * app.start(8080);
@@ -45,7 +43,7 @@ public final class App {
     final Set<SseStream> openStreams = ConcurrentHashMap.newKeySet();
 
     TemplateRenderer templates;
-    StaticFiles staticFiles;
+    StaticFiles staticFiles = new StaticFiles(StaticFiles.DEFAULT_ROOT);
     RequestLogger requestLogger;
 
     private WebServerFactory serverFactory = (app, port) -> new JettyServer(app).port(port);
@@ -118,7 +116,7 @@ public final class App {
      * dispatcher walks, read back as data.
      *
      * <pre>{@code
-     * app.get("/_routes", req -> WebResponse.template("routes.jte", Map.of("routes", app.routes())));
+     * app.get("/_routes", req -> WebResponse.template("routes", Map.of("routes", app.routes())));
      * }</pre>
      *
      * <p>What was registered, and only that: the HEAD and OPTIONS answers
@@ -170,7 +168,7 @@ public final class App {
      *
      * <pre>{@code
      * app.error(HttpStatus.NOT_FOUND,
-     *         req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
+     *         req -> WebResponse.template("not-found", Map.of("path", req.path())));
      * }</pre>
      *
      * <p>A response that already carries a body is left alone. What the handler
@@ -205,13 +203,36 @@ public final class App {
         return this;
     }
 
-    /** The template engine used by {@link WebResponse#template}. */
+    /**
+     * The template engine used by {@link WebResponse#template}, in place of the
+     * default — {@link JteTemplates} over {@code classpath:/jte}, appending
+     * {@code ".jte"} to the name.
+     *
+     * <pre>{@code
+     * app.templates(new JteTemplates("templates").suffix(".html"));
+     * }</pre>
+     */
     public App templates(TemplateRenderer renderer) {
-        this.templates = renderer;
+        this.templates = Objects.requireNonNull(renderer, "renderer");
         return this;
     }
 
-    /** The classpath root to serve static files from, e.g. "/public". */
+    /**
+     * The template engine, built on first render if nobody supplied one. jte
+     * compiles into a directory it creates, so the default is not built for an
+     * app that never renders a template.
+     */
+    synchronized TemplateRenderer templateRenderer() {
+        if (templates == null) {
+            templates = new JteTemplates(JteTemplates.DEFAULT_ROOT);
+        }
+        return templates;
+    }
+
+    /**
+     * The classpath root to serve static files from, in place of the default
+     * {@code "/public"}.
+     */
     public App staticFiles(String classpathRoot) {
         return staticFiles(new StaticFiles(classpathRoot));
     }

@@ -5,7 +5,7 @@ package spidersilk;
  * so no reflection is needed.
  *
  * <pre>{@code
- * app.get("/decks/{deckId}", req -> WebResponse.template("deck.jte", model));
+ * app.get("/decks/{deckId}", req -> WebResponse.template("deck", model));
  * }</pre>
  *
  * <p>Returning the response rather than writing it means the compiler checks

@@ -19,6 +19,16 @@ class StaticFilesTest {
     private static final String CSS = "body { color: #2b303b; }\n";
 
     @Test
+    void classpathPublicIsServedWithoutBeingConfigured() {
+        WebTest.test(new App(), client -> {
+            HttpResponse<String> response = client.get("/style.css");
+
+            assertEquals(200, response.statusCode());
+            assertEquals(CSS, response.body());
+        });
+    }
+
+    @Test
     void servesAFileWithLengthAndValidators() {
         WebTest.test(new App().staticFiles("/public"), client -> {
             HttpResponse<String> response = client.get("/style.css");
@@ -148,8 +158,10 @@ class StaticFilesTest {
     }
 
     @Test
-    void anAppWithoutStaticFilesStillRoutes() {
-        WebTest.test(new App().get("/", req -> WebResponse.text("ok")), client -> {
+    void aRootWithNothingInItStillRoutes() {
+        App app = new App().staticFiles("/nowhere").get("/", req -> WebResponse.text("ok"));
+
+        WebTest.test(app, client -> {
             assertEquals("ok", client.get("/").body());
             assertEquals(404, client.get("/style.css").statusCode());
         });

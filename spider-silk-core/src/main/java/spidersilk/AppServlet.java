@@ -89,7 +89,7 @@ public class AppServlet extends HttpServlet {
                     response = required(match.handler().handle(current), "Handler", method, path);
                     response = runAfter(segments, current, response);
                 }
-            } else if (isReadMethod(method) && app.staticFiles != null) {
+            } else if (isReadMethod(method)) {
                 WebResponse file = app.staticFiles.resolve(path, req);
                 if (file != null) {
                     return file;
@@ -198,12 +198,8 @@ public class AppServlet extends HttpServlet {
         if (!(response.body() instanceof WebResponse.Template template)) {
             return response;
         }
-        if (app.templates == null) {
-            throw new IllegalStateException(
-                    "No template engine configured. Call App.templates(...).");
-        }
         StringWriter out = new StringWriter();
-        app.templates.render(template.name(), template.model(), out);
+        app.templateRenderer().render(template.name(), template.model(), out);
         return response.body(new WebResponse.Text(out.toString()));
     }
 
