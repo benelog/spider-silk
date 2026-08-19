@@ -78,4 +78,32 @@ class WebResponseTest {
         assertEquals(List.of("Allow", "X-Kept", "Content-Type"),
                 List.copyOf(answer.headers().keySet()));
     }
+
+    /** 302, not 301: the default has to be the one that can be taken back. */
+    @Test
+    void aRedirectDefaultsToFound() {
+        WebResponse response = WebResponse.redirect("/decks/3");
+
+        assertEquals(HttpStatus.FOUND, response.status());
+        assertEquals("/decks/3", response.header("Location"));
+    }
+
+    @Test
+    void aRedirectCanNameItsOwnStatus() {
+        assertEquals(HttpStatus.MOVED_PERMANENTLY,
+                WebResponse.redirect("/new", HttpStatus.MOVED_PERMANENTLY).status());
+        assertEquals(HttpStatus.SEE_OTHER,
+                WebResponse.redirect("/decks", HttpStatus.SEE_OTHER).status());
+        assertEquals(HttpStatus.PERMANENT_REDIRECT,
+                WebResponse.redirect("/new", HttpStatus.PERMANENT_REDIRECT).status());
+    }
+
+    /** A Location header on a 200 is not a redirect, so the status is checked. */
+    @Test
+    void aRedirectAtANonRedirectStatusIsRejected() {
+        assertThrows(IllegalArgumentException.class,
+                () -> WebResponse.redirect("/decks", HttpStatus.OK));
+        assertThrows(IllegalArgumentException.class,
+                () -> WebResponse.redirect("/decks", HttpStatus.NOT_FOUND));
+    }
 }

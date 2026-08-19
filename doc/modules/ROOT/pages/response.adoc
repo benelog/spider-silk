@@ -27,6 +27,28 @@ assertEquals("{\"id\":1}", ((WebResponse.Text) response.body()).content());
 
 A status is an `HttpStatus` constant, so a code that does not exist cannot be written, and `HttpStatus.of(int)` looks one up when the number only arrives at runtime.
 
+== Redirects
+
+`redirect(location)` answers **302 Found**, and the `Location` header goes out as given — a path like `/decks/3` is what an application normally wants, and is what HTTP allows.
+
+[source,java]
+----
+WebResponse.redirect("/decks/" + deck.id());                             // 302
+WebResponse.redirect("/decks", HttpStatus.SEE_OTHER);                    // 303, after a POST
+WebResponse.redirect("/new-home", HttpStatus.MOVED_PERMANENTLY);         // 301, moved for good
+WebResponse.redirect("/api/v2/decks", HttpStatus.PERMANENT_REDIRECT);    // 308, keeps the method
+----
+
+302 is the default because a redirect is reversible only while it is temporary: a 301 is cached by browsers and intermediaries, often indefinitely, so a wrong one keeps sending visitors to the wrong place long after the code is fixed.
+It is also what `HttpServletResponse.sendRedirect` sends and what Javalin, Spark, Spring MVC, Express, Rails, and Django all default to.
+
+The second argument is how you say otherwise, and it takes an `HttpStatus` rather than an int for the same reason every other status does.
+It rejects anything that is not a 3xx: a `Location` header on a 200 is not a redirect, and failing at the call is better than shipping a response no client will follow.
+
+Two of the four are worth knowing by name.
+303 is what a redirect after a POST means — 302 is doing that job in practice, and saying 303 says it exactly.
+307 and 308 are the pair that keep the request method: a browser following a 301 or 302 after a POST will usually issue a GET, and those two forbid the change.
+
 == The lambda families
 
 The last three bodies take a lambda of their own, and the suffix says which family it belongs to.

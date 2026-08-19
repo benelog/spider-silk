@@ -37,8 +37,9 @@ What is still open lives in [PLAN.md](../PLAN.md).
 | 21 | `HttpStatus`: an enum, not an int | ✅ shipped |
 | 22 | `spider-silk-tomcat`, with Jetty still the default | ✅ shipped |
 | 23 | `spider-silk-undertow`, the third server | ✅ shipped |
+| 24 | `redirect` defaults to 302, and only accepts a 3xx | ✅ shipped |
 
-Twenty-four of the twenty-five shipped.
+Twenty-five of the twenty-six shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -294,6 +295,20 @@ That is a deployment fact, not an engineering one, and it belongs in the manual 
 One structural note.
 Each server module carries its own copy of the acceptance tests, deliberately: they assert what *core* promises against each container in turn.
 Factoring them into one parameterised suite would mean a shared module that every server module depends on — a dependency built to save duplication in tests.
+
+## 24 · The redirect default
+
+### 24. `redirect` defaults to 302, and only accepts a 3xx
+
+The choice between 301 and 302 is not symmetric, and that asymmetry decides it: a 302 can be taken back, a 301 cannot.
+Browsers and intermediaries cache a 301 — often indefinitely — so a wrong one keeps sending visitors to the wrong place long after the code is fixed, with no way to call it back.
+Every comparable default agrees: `HttpServletResponse.sendRedirect`, Javalin, Spark, Spring MVC, Express, Rails, and Django all send 302, so a framework defaulting to 301 would be surprising in the one direction that cannot be undone.
+
+`redirect(location, HttpStatus)` is how an application says otherwise, and it takes the enum for decision 21's reason.
+It rejects a status outside 3xx: a `Location` header on a 200 is not a redirect, and failing at the call beats shipping a response no client will follow.
+
+No `redirectPermanent(...)` convenience method.
+`redirect(url, HttpStatus.MOVED_PERMANENTLY)` already names the status out loud, and a second spelling would only hide which one was chosen — the same argument that kept `virtualThreads()` out in decision 16.
 
 ## Rejected — decisions, with the reason
 

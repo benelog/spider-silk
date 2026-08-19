@@ -225,17 +225,39 @@ public final class WebResponse {
      * A redirect, by default a 302. The {@code Location} header goes out as
      * given: a path like {@code "/decks/3"} is what an application normally
      * wants, and is what HTTP allows.
+     *
+     * <p>302 rather than 301 because a redirect is reversible only while it is
+     * temporary. A 301 is cached by browsers and intermediaries — often
+     * indefinitely — so a wrong one keeps sending visitors to the wrong place
+     * long after the code is fixed, and there is no way to call it back. It is
+     * also what the servlet API's own {@code sendRedirect} sends, and what
+     * Javalin, Spark, Spring MVC, Express, Rails, and Django all default to; a
+     * framework that defaulted to 301 would be surprising in the one direction
+     * that cannot be undone.
+     *
+     * <p>Say {@link #redirect(String, HttpStatus)} when the answer is something
+     * else: {@code MOVED_PERMANENTLY} once a URL really has moved for good,
+     * {@code SEE_OTHER} after a POST — the status 303 exists for exactly that
+     * and is what 302 is doing in practice — or {@code TEMPORARY_REDIRECT} /
+     * {@code PERMANENT_REDIRECT} when the method must survive the redirect.
      */
     public static WebResponse redirect(String location) {
         return redirect(location, HttpStatus.FOUND);
     }
 
     /**
-     * A redirect with a status of its own — {@code MOVED_PERMANENTLY} for
-     * permanent, {@code SEE_OTHER} after a POST.
+     * A redirect at the status you name.
+     *
+     * @throws IllegalArgumentException if the status is not a 3xx, since a
+     *         {@code Location} header on anything else is not a redirect
      */
     public static WebResponse redirect(String location, HttpStatus status) {
-        return empty(status).header("Location", Objects.requireNonNull(location, "location"));
+        Objects.requireNonNull(location, "location");
+        Objects.requireNonNull(status, "status");
+        if (status.code() < 300 || status.code() > 399) {
+            throw new IllegalArgumentException("A redirect needs a 3xx status, not " + status);
+        }
+        return empty(status).header("Location", location);
     }
 
     /** No body, and no status of its own — 200 unless something sets one. */
