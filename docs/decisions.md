@@ -2,9 +2,9 @@
 
 Why Spider Silk has the shape it has, item by item.
 
-This started as the plan that fell out of [positioning.md](positioning.md), numbered by *when a user hits the gap* rather than by effort.
-The items shipped; what was worth keeping is the reasoning, so this is now a decision log rather than a backlog.
-The numbers are load-bearing — the write-ups cross-reference each other by number, and the [rejected list](#rejected--decisions-with-the-reason) at the end closes questions that would otherwise be asked again.
+This is the reasoning behind the framework, not a description of it — what each thing *does* is the [manual](https://benelog.github.io/spider-silk).
+What is kept here is the decision, why it went that way, and what was rejected on the way.
+The numbers are load-bearing: the write-ups cross-reference each other by number, and the [rejected list](#rejected--decisions-with-the-reason) at the end closes questions that would otherwise be asked again.
 
 What is still open lives in [PLAN.md](../PLAN.md).
 
@@ -46,7 +46,7 @@ What was one entry — "WebSocket / SSE" — split once the two halves were aske
 
 ### 1. Embedded Jetty and lifecycle
 
-`App.start(port)` binds and returns; Jetty's threads are non-daemon, so the JVM stays up without `join()`.
+`start(port)` binds and returns rather than blocking, because Jetty's threads are non-daemon and hold the JVM up on their own.
 `start(0)` plus `port()` is what makes tests portable.
 
 ### 2. Server seam
@@ -56,102 +56,76 @@ Deliberately *not* `ServiceLoader` — that is reflection, and discovery-by-clas
 
 ### 3. Jetty configuration
 
-Port, host, context path, sessions, thread pool, and multipart as methods; three customizers for everything else.
+The settings that usually need tuning are methods; three customizers cover everything else, running against the real Jetty objects.
 Sessions default on, because `req.flash`/`req.sessionAttr` need them.
 
 ### 4. Path-scoped filters
 
-`before(path, filter)`; a final `*` matches the prefix and everything under it.
-A before-filter that returns a response ends the request — a guard that turned the caller away must not be followed by the handler answering anyway — and returning `null` continues to the route.
-Item 18 turned that into a signature rather than a convention: the halt used to be inferred from a `bodyWritten` flag on the context, and it is now the difference between returning a value and returning nothing.
-Deliberate edge: an answer of `WebResponse.empty(401)` still halts, since it *is* an answer; what does not halt is a filter that only reads.
-`throw new HttpException(...)` is the status-only rejection path, and `error(401, ...)` renders it.
+A before-filter that returns a response ends the request — a guard that turned the caller away must not be followed by the handler answering anyway.
+Item 18 made that a signature rather than a convention: the halt used to be inferred from a `bodyWritten` flag, and is now the difference between returning a value and returning nothing.
+Deliberate edge: `WebResponse.empty(401)` still halts, since it *is* an answer; what does not halt is a filter that only reads.
 
 ### 5. Route groups
 
-`app.path("/api", api -> ...)`, nestable, with the group passed as an argument.
+`app.path("/api", api -> ...)` passes the group as an argument.
 Spark's static-import equivalent keeps the prefix in process-global state, which rules out two apps per JVM.
 
 ### 6. Status-code error handlers
 
 One place to render a 404 or 500, whatever set the status.
-A response that already carries a body is left alone, which the sealed `WebResponse.Body` says outright rather than by wrapping the servlet response.
+A response that already carries a body is left alone, which the sealed `WebResponse.Body` states outright rather than by sniffing the servlet response.
 
 ### 7. Test harness
 
-`WebTest.test(app, client -> ...)`: port 0, cookies kept, server stopped in a `finally`.
-Returns raw `HttpResponse`, so the project's own assertion library stays in charge.
+`WebTest.test(app, client -> ...)` returns the JDK's raw `HttpResponse`, so the project's own assertion library stays in charge.
 
 ## 8–12 · JSON, static files, the request API, logging, shutdown
 
 ### 9. Static file caching
-
-`StaticFiles` now sends `Content-Length`, `ETag`, and `Last-Modified`, and answers `If-None-Match` / `If-Modified-Since` with a bodyless 304.
-The default `Cache-Control` is `no-cache` — cache, but revalidate — with `maxAge(Duration)` for fingerprinted names and `cacheControl(String)` as the escape hatch.
-`hostedPath` moves the files under a prefix.
-Directories are refused, and routes still win over files.
 
 Deliberately left out: pre-compressed variants (`.gz`/`.br`) and an external-directory location.
 Both are real, neither is needed until someone deploys behind something that is not already doing it.
 
 ### 8. `JsonCodec<T>` seam
 
-```java
-@FunctionalInterface
-interface JsonWriter<T> { Json.JsonValue write(T value); }
-
-@FunctionalInterface
-interface JsonReader<T> { T read(Json.JsonValue json); }
-
-interface JsonCodec<T> extends JsonWriter<T>, JsonReader<T> { }
-```
-
-plus `WebResponse.json(value, writer)` and `req.bodyJson(reader)`.
 Codecs stay hand-written, so the mapping is still visible; they just stopped being re-inlined in every handler.
 The four decisions:
 
 - **Two interfaces, not one with two methods.**
-  Most codecs are write-only — `DeckSummary` and `CardWithTags` never come back in — and a combined interface makes those fill `read` with `UnsupportedOperationException`.
-  Split, each half is a SAM and therefore a lambda: `JsonWriter<DeckSummary> w = s -> Json.obj().put("id", s.id())...`.
-  A two-method interface cannot be written as a lambda at all — which is also why `JsonCodec.of(writer, reader)` exists: a codec is the one shape that would otherwise need an anonymous class.
-- **Codecs live in the web layer**, a `Codecs` holder beside the controllers, not on the record.
-  A codec on `Deck` would make `flashcard.domain` import `spidersilk.json.Json` — the domain would depend on the web framework to state its own wire format.
-  The wire format belongs to the tier that serves it.
+  Most codecs are write-only, and a combined interface would make those fill `read` with `UnsupportedOperationException`.
+  Split, each half is a SAM and therefore a lambda — which is also why `JsonCodec.of(writer, reader)` exists, since a two-method interface cannot be a lambda at all.
+- **Codecs live in the web layer**, not on the record.
+  A codec on `Deck` would make the domain import `spidersilk.json.Json` — the domain depending on the web framework to state its own wire format.
   Core ships the interfaces only; where codecs sit is a convention the example demonstrates.
-- **Collections compose**: `JsonWriter.list(writer)`, `JsonReader.list(reader)`, and `JsonCodec.list(codec)` return the `List<T>` form.
-  Function composition, no reflection, and it collapsed the hand-rolled array loops in `ApiController.listDecks` and `listCards` — both handlers are now one line.
+- **Collections compose** through `JsonWriter.list(...)` and friends: function composition, no reflection.
 - **`read` throws, and `req.bodyJson(reader)` turns `IllegalArgumentException` into a 400.**
   The same contract as `pathParamLong`: it returns the value or it rejects the request.
   No `Result` or `Validator` type in core — business rules stay in the service layer, where they already throw.
-  `Json`'s own accessors already throw `IllegalArgumentException` on a missing key or a wrong type, so a reader gets the rejection for free by simply reading.
 
 ### 10a. Cookies and repeated parameters
 
-`cookie(name)` / `cookies()` to read; `cookie(name, value)`, `cookie(name, value, maxAge)`, and `cookie(Cookie)` to set; `removeCookie(name)`.
-The two- and three-argument forms default to `Path=/`, `HttpOnly`, and `SameSite=Lax`, since a cookie worth setting from the server is usually one a script has no business reading.
-`params(name)` returns every value of a repeated parameter and an empty list when there is none — an unchecked checkbox group is an answer, not a 400.
+The convenience cookie forms default to `Path=/`, `HttpOnly`, and `SameSite=Lax`, since a cookie worth setting from the server is usually one a script has no business reading.
+`params(name)` returns an empty list rather than throwing when nothing matched — an unchecked checkbox group is an answer, not a 400.
 
 ### 10b. The rest of the request API
 
-`queryParam`/`queryParams` read the query string, parsed here rather than through the servlet API, which merges it with the form body.
-`formParam`/`formParams` are what is left once the query values are taken out of the merged list — subtracted by count, not by position, so a name that appears in both places still splits correctly.
-HEAD runs the GET route and drops the body, so the headers — `Content-Length` included — are the ones the GET would have sent; this servlet overrides `service`, so `HttpServlet`'s own HEAD machinery never runs and the container is not relied on.
-Since item 18 the length is usually just the body's own: a `Text`, `Bytes`, or rendered `Template` knows its size without being produced, and only a `Stream` or a `Raw` body still runs through a counting wrapper.
-OPTIONS answers from `Router.allowedMethods` plus the HEAD and OPTIONS this servlet adds itself, and `head`/`options` register a route when the automatic answer is not the right one.
+The query string is parsed here rather than through the servlet API, which merges it with the form body; `formParam` is what is left once the query values are subtracted **by count, not by position**, so a name appearing in both places still splits correctly.
+HEAD runs the GET route and drops the body, so the headers are the ones the GET would have sent.
+`AppServlet` overrides `service` rather than relying on `HttpServlet`'s own HEAD machinery, so the behaviour is the framework's on any container.
+OPTIONS answers from the router, and `head`/`options` register a route for when the automatic answer is wrong.
 
 ### 11. Request logging hook
 
-`app.requestLogger((req, res, millis) -> ...)`.
 One lambda, no logging framework in core.
-It runs in a `finally` around the whole dispatch, *after* the error handler has had its turn, so the status it reports is the one that was sent rather than the one the router set.
+It runs in a `finally` around the whole dispatch, *after* the error handler, so the status it reports is the one that was sent rather than the one the router set.
 A logger that throws goes to the servlet log: the response is already out by then, and a broken logger must not become a broken response.
 
 ### 12. Graceful shutdown
 
-`stopTimeout` (five seconds) and `shutdownHook` (on), both with a method to turn them off.
-The interaction the note warned about turned out to be worse than "make the default modest": a stop timeout of *any* size made `stop()` wait out the whole timeout for idle keep-alive connections and then **throw** a `TimeoutException` — the project's own suite went from 0.75s to 6s and five tests failed.
-The fix is `ServerConnector.setShutdownIdleTimeout` (100ms): the drain then waits for requests in flight only, which is what it was ever supposed to mean, and five seconds costs an idle stop nothing.
-The hook is Jetty's own `setStopAtShutdown` rather than a thread of our own — one hook per JVM, deregistered on stop, so a suite that starts a server per test does not accumulate them.
+On by default, with a method to turn each half off.
+The discovery that shaped it: a stop timeout of *any* size made `stop()` wait out the whole timeout for **idle** keep-alive connections and then throw.
+`ServerConnector.setShutdownIdleTimeout` limits the drain to requests in flight, which is what it was ever supposed to mean.
+The hook is Jetty's own `setStopAtShutdown` rather than a thread of ours — one per JVM, deregistered on stop, so a suite that starts a server per test does not accumulate them.
 
 ## 13–16 · Introspection, routing index, streaming, threads
 
@@ -159,233 +133,167 @@ These are what decides whether this is more than a teaching framework.
 
 ### 13. Route introspection *(the differentiator)*
 
-`app.routes()` returns `List<Route>` — `record Route(String method, String path)` — with **no reflection at all**: it is the same list the dispatcher walks, read back as data.
-Javalin needs a plugin for this.
+`app.routes()` is the same list the dispatcher walks, read back as data — **no reflection at all**, where Javalin needs a plugin.
 The four decisions:
 
 - **Method and path, and nothing else.**
   The handler is left out: it is a lambda, so the only name it has is what reflection would dig out of its synthetic class.
-  `PathPattern` stays package-private too — the exposed data is plain strings, not a matching engine.
+  `PathPattern` stays package-private too — what is exposed is plain strings, not a matching engine.
 - **No description, no response types.**
-  The decisive fact is that `PathPattern`'s `{deckId}` *is* OpenAPI's path-template syntax verbatim, so `/api/decks/{deckId}/cards` drops into a `paths:` key untranslated — the minimal shape already yields a valid document.
-  Adding a description would mean a parameter on all seven registration methods on both `App` and `RouteGroup`, and documentation attached at the registration site is an annotation with the reflection taken out.
-  Deferring costs nothing: those overloads are purely additive if the need ever proves real.
+  `PathPattern`'s `{deckId}` *is* OpenAPI's path-template syntax verbatim, so the minimal shape already yields a valid document.
+  A description would mean a parameter on all seven registration methods on both `App` and `RouteGroup` — an annotation with the reflection taken out — and the overloads stay purely additive if the need proves real.
 - **The overview page and the OpenAPI export are not in core.**
-  Core hands out the list and stops.
-  An OpenAPI document is a spec format, not the web tier, and its version drift is not a web framework's to own — CLAUDE.md's rule.
-  The example is the demonstration: `/_routes` renders `routes.jte` and `/openapi.json` builds a 3.1 document through `flashcard.web.OpenApi`, together about forty lines.
-  Both are registered as lambdas over `app` itself, which is why they list the routes registered after them.
-  If the export earns its keep, it becomes a fourth module, the way `spider-silk-test` did.
+  A spec format is not the web tier, and its version drift is not a web framework's to own.
+  The example demonstrates both; if the export earns its keep, it becomes a module the way `spider-silk-test` did.
 - **Routes only** — not filters, not error handlers.
-  A second public record for "which guard covers this path" is nice-to-have, and additive later.
+  A record for "which guard covers this path" is nice-to-have, and additive later.
 
-Item 14's buckets lose registration order, so `Router` keeps a flat registration-order list beside the index; `routes()` is an immutable snapshot of it, taken per call.
-The automatic HEAD and OPTIONS answers do **not** appear — `routes()` lists what was registered, which is the honest answer for a framework whose pitch is that only what you register runs.
-A `*` route has no OpenAPI equivalent, so the example's export skips it.
+The automatic HEAD and OPTIONS answers do **not** appear: `routes()` lists what was registered, which is the honest answer for a framework whose pitch is that only what you register runs.
 
 ### 14. Router indexing
 
-Routes are grouped by method, then by first literal segment, with a bucket for the patterns that can match any first segment — one starting with a variable, or a bare `*`.
-A lookup merges the two candidate lists **by registration index**, so the tie-break is exactly what it was when `find` scanned everything: `/study/today` registered before `/study/{mode}` still wins, and so does `/{page}` registered before `/decks`.
-`allowedMethods` runs off the same index.
+Routes are bucketed by method and first literal segment, and a lookup merges the candidate lists **by registration index** — so the tie-break is exactly what it was when `find` scanned everything.
+That is the constraint the index had to preserve: `/study/today` registered before `/study/{mode}` still wins.
 
 ### 15a. SSE
 
-`WebResponse.sse(stream -> ...)` hands the handler an `SseStream` — `send(data)`, `send(event, data)`, `id(...)`, `comment(...)`, `isOpen()`, `close()` — and writes `text/event-stream` frames, flushed one event at a time.
-`text/event-stream` is plain HTTP: a content type, one `data:` line per event, a blank line to end it, and a flush.
-It goes through `AppServlet` unchanged, so a deployment on Tomcat gets it too — which is the whole reason this half is in and 15b is out.
+`text/event-stream` is plain HTTP, so it goes through `AppServlet` unchanged and a servlet deployment gets it too — which is the whole reason this half is in and 15b is out.
 Core adds the framing and nothing else; no new dependency.
 The five decisions:
 
-- **An SSE endpoint is a `get` route**, not a registration of its own.
-  `routes()` lists it, filters cover it, `requestLogger` reports it when the stream ends — which is exactly the argument that sinks 15b, so the implementation had to keep it true.
+- **An SSE endpoint is a `get` route**, not a registration of its own, so `routes()`, filters, and the request logger all still reach it.
+  That is exactly the argument that sinks 15b, so the implementation had to keep it true.
 - **The events are strings.**
-  `WebResponse.json(value, writer)`'s counterpart is `stream.send(writer.write(value).toJson())`, not an overload that takes a codec — the mapping stays visible at the call site, the same rule as everywhere else.
+  `stream.send(writer.write(value).toJson())` rather than an overload taking a codec — the mapping stays visible at the call site, the same rule as everywhere else.
 - **The stream is blocking and holds its thread.**
-  One open stream is one Jetty thread, which is the honest servlet answer and the one `AppServlet` can keep on Tomcat; `AsyncContext` would be a second dispatch model in core for a feature that has yet to prove it needs one.
-  The recipe for many streams is item 16's: a virtual-thread executor on the pool, where a parked thread costs almost nothing.
+  One open stream is one server thread, which is the honest servlet answer and the one `AppServlet` can keep on any container; `AsyncContext` would be a second dispatch model in core for a feature that has yet to prove it needs one.
+  The recipe for many streams is item 16's virtual threads, where a parked thread costs almost nothing.
 - **Ending a stream is never an error.**
-  A write to a stream that has gone throws `SseStream.Closed`, which the servlet catches by that one type and finishes the request normally.
-  A dedicated type rather than `UncheckedIOException`, so an IO failure in the handler's own code still reaches the exception handlers; and a write *after* `close()` throws the same `Closed` rather than an `IllegalStateException`, because otherwise every graceful shutdown would log a handler failure for each open stream.
-  `SseWriter` (named `SseHandler` until item 18's naming rule) is declared `throws Exception` for the `Thread.sleep` that every SSE loop contains — the same reason `Handler` throws.
+  A write to a stream that has gone throws `SseStream.Closed`, caught by that one type so an IO failure in the handler's own code still reaches the exception handlers.
+  A write *after* `close()` throws the same thing, because otherwise every graceful shutdown would log a handler failure per open stream.
 - **Graceful shutdown is resolved, not documented away.**
-  An open stream is a request in flight that never finishes, so item 12's five-second `stopTimeout` would wait it out and then report a failure to drain — exactly the failure `setShutdownIdleTimeout` fixed for idle keep-alive connections, except that this connection really is busy.
-  So `App` keeps a registry of open streams and closes them as the first statement of `stop()`, before Jetty is asked to drain anything; the test asserts the stop takes under three seconds and that the handler ended.
-  The writes are synchronized on the stream, because that close comes from another thread and must not cut a frame in half.
+  An open stream is a request in flight that never finishes, so item 12's drain would wait it out and report failure.
+  `App` closes registered streams as the first statement of `stop()`, and the writes are synchronized because that close comes from another thread and must not cut a frame in half.
 
-Two deliberate edges: a HEAD of an SSE route answers with the headers and never runs the handler, since a stream with the body thrown away would never end; and the heartbeat stays the application's, `stream.comment("ping")` on a timer, because Jetty's own 30-second connector idle timeout is a number core has no business choosing for anyone.
+Two deliberate edges: a HEAD of an SSE route answers with the headers and never runs the handler, since a stream with the body thrown away would never end; and the heartbeat stays the application's, because a connector idle timeout is a number core has no business choosing for anyone.
 
 ### 15b. WebSocket in core — *rejected*
 
 See [the table below](#rejected--decisions-with-the-reason).
-Jetty can do it, and `customizeContext` plus `JakartaWebSocketServletContainerInitializer` is the recipe for an application that needs it: the WebSocket dependency then sits in that application's build file, not in core's.
-If the recipe turns out to be worth wrapping, it becomes a `spider-silk-ws` module the way `spider-silk-test` did, where being Jetty-only is stated in the module's name rather than hidden in core.
+It stays a recipe an application writes itself, so the WebSocket dependency sits in that application's build file rather than core's.
+If the recipe proves worth wrapping, it becomes a `spider-silk-ws` module where being tied to one server is stated in the module's name.
 
 ### 16. Virtual threads
 
-Documented, not wrapped: `QueuedThreadPool.setVirtualThreadsExecutor(VirtualThreads.getDefault...)` passed to `threadPool(...)`, with a test asserting the handler really does run on a virtual thread.
-No `virtualThreads()` method — it would be two lines of Jetty's own API behind a name that hides which knob was turned, and the choice is not ours to make: it pays off only when handlers block, and `synchronized` around the blocking call takes the benefit back.
+Documented, not wrapped.
+No `virtualThreads()` method — it would be two lines of the server's own API behind a name that hides which knob was turned, and the choice is not ours to make: it pays off only when handlers block, and `synchronized` around the blocking call takes the benefit back.
 
 ## 17–20 · Structural
 
 ### 17. Split `spider-silk-test`
 
-`spidersilk.test` is its own module, depending on core and otherwise on the JDK alone; core's jar now carries no test code at all.
-Core's own tests are a consumer of it like anyone else — `testImplementation project(':spider-silk-test')`.
-That looks circular and is not: the arrow runs core's *test* source set → the harness → core's *main* source set, which Gradle resolves without complaint.
-
-Item 20 later added the servlet API to this module as `compileOnly`, the same way core takes it, so what the module puts on a consumer's classpath is still core and the JDK.
+The harness is its own module, so core's jar carries no test code at all.
+Core's own tests are a consumer of it like anyone else; that looks circular and is not, since the arrow runs core's *test* source set → the harness → core's *main* source set.
 
 ### 18. `WebContext` split into `WebRequest` and a sealed `WebResponse`
 
-`WebContext` had grown to 552 lines under nine section comments, because "the request, the response, the session, and every way of answering" is four responsibilities wearing one name.
-Splitting it along the HTTP metaphor was the obvious half; the other half was making `Handler` *return* the answer:
-
-```java
-WebResponse handle(WebRequest request) throws Exception
-```
-
-The compiler now checks that every branch answers, and answering twice stopped being expressible.
+"The request, the response, the session, and every way of answering" is four responsibilities wearing one name.
+Splitting it along the HTTP metaphor was the obvious half; the other half was making `Handler` *return* the answer, so the compiler checks that every branch answers and answering twice stopped being expressible.
 The five decisions:
 
 - **`WebRequest`/`WebResponse`, not `HttpRequest`/`HttpResponse`.**
-  `WebTest`'s own documented idiom asserts on `java.net.http.HttpResponse<String>`, so a `spidersilk.HttpResponse` would collide with the JDK inside this framework's own test style, and `HttpServletRequest` is one import away in the other direction.
-  `Web*` is also what the codebase already calls things — `WebServer`, `WebServerFactory`, `WebTest`.
+  `WebTest`'s own idiom asserts on `java.net.http.HttpResponse`, so the JDK name would collide inside this framework's own test style, and `HttpServletRequest` is one import away in the other direction.
 - **An envelope around a sealed `Body`, not a sealed response.**
-  Status, headers, and cookies are the same for every kind of answer, so they live once on `WebResponse`; what differs is the body, and *that* is the sealed type — `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw`.
-  A `switch` over the kinds needs no default case, and the `with`-style methods stay type-stable, which is what lets an `AfterFilter` be `WebResponse -> WebResponse` at all.
-  Sealing the response itself would have meant reimplementing `status`/`header`/`cookie` on seven records.
+  Status, headers, and cookies are the same for every kind of answer, so they live once; what differs is the body, and *that* is the sealed type.
+  A `switch` over the kinds needs no default case, and the `with`-style methods stay type-stable — which is what lets an `AfterFilter` be `WebResponse -> WebResponse` at all.
 - **Templates are rendered during dispatch, not while writing.**
-  This is the trap the return-based model sets: a body produced after dispatch has left its `try` block can no longer reach `app.exception(...)`, and `FlashcardApp` maps `IllegalArgumentException` there.
-  So a `Template` is materialized into `Text` inside dispatch, which keeps the exception routing and hands HEAD an exact `Content-Length` for free.
-  `Stream`, `Sse`, and `Raw` genuinely cannot be materialized, and their failures land in the servlet log with a best-effort 500 — the honest limit, since the headers are already committed by then.
-- **The filters changed shape with the handler.**
-  `BeforeFilter` returns a response or `null` to continue; `AfterFilter` takes the response and returns a replacement or `null` to keep it.
-  `null` rather than `Optional` because an observational filter stays a one-liner either way and `Optional.empty()` reads worse in the common case.
-  After-filters run only on a route that completed normally — not after a before-filter answered, not on an exception handler's output — which is what the javadoc already claimed and is now written down.
-- **`bodyWritten` is gone, and `StaticFiles` produces a response like anything else.**
-  "Did anyone answer yet" used to be a mutable flag the servlet sniffed; it is now `body() instanceof Empty`.
-  `StaticFiles.resolve` returns a streamed `WebResponse` instead of writing the servlet response itself, so a static hit flows through the request logger like every other answer.
+  This is the trap the return-based model sets: a body produced after dispatch has left its `try` block can no longer reach `app.exception(...)`.
+  `Stream`, `Sse`, and `Raw` genuinely cannot be materialized, and their failures land in the servlet log with a best-effort 500 — the honest limit, since the headers are already committed.
+- **Filters return `null` to continue**, rather than `Optional`: an observational filter stays a one-liner either way, and `Optional.empty()` reads worse in the common case.
+  After-filters run only on a route that completed normally — not after a before-filter answered, not on an exception handler's output.
 - **`…Handler` answers a request; `…Writer` fills a body.**
-  Splitting the response into kinds produced a second family of lambdas, and calling them all `Handler` made `RawHandler` read as a relative of `Handler` — a reviewer's first guess was that one extended the other.
-  So the suffix now carries the distinction: `Handler` and `ExceptionHandler` return a `WebResponse`, while `StreamWriter`, `SseWriter`, and `ServletWriter` return nothing and fill the body of a response already decided.
-  That renamed `RawHandler` to `ServletWriter` and `SseHandler` to `SseWriter`, and their method from `handle` to `write`.
-  `Handler` itself stayed: it is the central type, `App.error(int, Handler)` uses it too so `RouteHandler` would be inaccurate, and it is what Javalin and Helidon call the same thing.
+  Without the rule, `RawHandler` read as a relative of `Handler` and reviewers guessed one extended the other.
+  `Handler` itself stayed: it is the central type, `App.error(status, Handler)` uses it too, and it is what Javalin and Helidon call the same thing.
 
-What it cost: `AppServlet` split into a dispatch half and a write half, and the example app's controller tests stopped needing `MockHttpServletResponse` entirely — they call the handler and assert on the value it returned.
 Two behaviours changed on purpose: `redirect` sets a `Location` header rather than calling `sendRedirect`, and cookies moved to the response while the session and flash stayed on the request, since a session outlives the response and cannot be a value returned from one.
 
 ### 19. The example's routing table, in one place
 
-The example app had a `Controller` interface — one method, `register(App app)` — and seven classes implementing it, with `FlashcardContext` handing back `List<Controller>` for `createApp` to loop over.
-It read like good structure and was the wrong shape for this framework: the routing table was the *union* of what seven `register` methods each decided, so the honest answer to "what does this application answer?" was "read seven files".
+A `Controller` interface with `register(App)` read like good structure and was the wrong shape: the routing table became the *union* of what seven `register` methods each decided, so "what does this application answer?" was answered by reading seven files.
 That is what annotation scanning produces, arrived at by hand — and item 13's whole claim is that `app.routes()` is trustworthy because routing is an explicit list.
-So the interface is gone and `FlashcardApp.registerRoutes` is the list.
 The three decisions:
 
-- **A handler arrives in one of three shapes, chosen by how much there is to hold.**
-  A lambda when there is no state worth a class; an `Action` class implementing `Handler` when a class answers exactly one route, registered as itself; public methods registered by reference when one class answers several related routes.
-  `HomeController` and `StatsController` answered one route each and became `HomeAction` and `StatsAction`; `DeckController`, `StudyController`, `SmartDeckController`, and `ApiController` kept their methods and made them public.
-  `RoutesController` had nothing left but its OpenAPI builder once registration moved out, so it is now `OpenApi.document(routes)` and its two routes are lambdas over `app` itself.
+- **A handler arrives in one of three shapes, chosen by how much there is to hold**: a lambda when there is no state worth a class, an `Action` class when a class answers exactly one route, public methods registered by reference when one class answers several.
 - **The handler methods are public, and that is the trade.**
-  Registration from outside the class needs them visible, which is a real cost — a package-private method could only be called by the class's own `register`.
   It buys the property that mattered more: the path and the method that answers it sit on one line, in a list nothing else contributes to.
-- **`Action` is a class-naming convention, not a rename of `Handler`.**
-  The name is the A of the ADR (Action-Domain-Responder) pattern, where it reads as "one thing the application does", and Laravel's single action controllers use the same convention.
-  Renaming the *interface* to `Action` was considered and rejected — see the table below.
-
-The route set is unchanged — every registration moved across verbatim — and all 27 were re-checked against a running server.
+- **`Action` is a class-naming convention, not a rename of `Handler`** — see the table below for why the interface kept its name.
 
 ### 20. `TestRequest`, and no mock library
 
-Item 18's write-up ends with the example's controller tests no longer needing `MockHttpServletResponse`, because a handler returns its answer.
-The request half stayed behind: those tests still built a `MockHttpServletRequest`, which is why `example-flashcard` carried `spring-test` and `spring-web` in test scope for exactly one class.
-A framework whose pitch is that nothing is resolved by name at runtime was answering "how do I test a handler?" with "add two Spring artifacts", and the README never said so — it showed `new WebRequest(req, Map.of())` and left `req` undefined.
+Item 18 left handler tests needing no `MockHttpServletResponse`; the request half stayed behind, so a framework whose pitch is that nothing is resolved by name at runtime was answering "how do I test a handler?" with "add two Spring artifacts".
+The four decisions:
 
-`TestRequest.post("/api/decks").jsonBody("...").build()` is the answer, and the four decisions are where it lives, what it is not, what it stubs, and how faithfully:
-
-- **`spider-silk-test`, never core.**
-  CLAUDE.md's rule, and item 17's precedent: core's jar carries no test code.
-  The servlet API arrives as `compileOnly`, mirroring core exactly, so nothing is added to what the module puts on a consumer's classpath and item 17's "core, and otherwise the JDK only" stays true as written.
-  Depending on Jetty's transitive copy of the API would have been shorter and would have tied the test module to the server the `WebServer` seam exists to keep replaceable.
+- **`spider-silk-test`, never core**, with the servlet API `compileOnly` exactly as core takes it, so what the module puts on a consumer's classpath stays core and the JDK.
+  Depending on the bundled server's transitive copy would have tied the test module to the server the `WebServer` seam exists to keep replaceable.
 - **A builder for the request, not for `WebRequest` or `WebResponse`.**
-  Neither of those wants one: `WebResponse`'s `with`-style methods already are a builder, and adding a second type with a half-built state would break the `AfterFilter` shape item 18 bought.
-  `WebRequest` has two fields and is a read view — every accessor delegates to the `HttpServletRequest` underneath, so what actually needed building was *that*.
+  Neither wants one: `WebResponse`'s `with`-style methods already are a builder, and `WebRequest` is a read view over the servlet request — so what actually needed building was that.
 - **A hand-written stub, not a mock library.**
-  `WebRequest` reads twelve servlet methods and three on `HttpSession`; the stub answers those and throws from the rest, so a method added to `WebRequest` and missing here fails loudly on the first test that reaches it rather than returning a quiet null.
-  That is the same bet as the rest of the framework: a small explicit thing over a general mechanism.
+  It answers the servlet methods `WebRequest` reads and throws from the rest, so a method added to `WebRequest` and missing here fails loudly rather than returning a quiet null.
+  The same bet as the rest of the framework: a small explicit thing over a general mechanism.
 - **Faithful where a handler can tell the difference.**
-  `getParameterValues` returns query values then form values, which is what makes `formParams`' subtraction — item 10b's — behave as it does behind a container, and it is precisely what a mock holding one parameter map cannot show.
-  Header lookup ignores case.
-  `getPart` throws `ServletException` when nothing was uploaded and returns null when the name is absent, so both of `req.file(...)`'s 400s are reachable — which made `DeckController.importCsv` directly testable for the first time.
-  `getCookies` returns null rather than an empty array, and `getSession(false)` stays null until something asks for a session.
+  `getParameterValues` returns query values then form values, which is what makes 10b's subtraction behave as it does behind a container — precisely what a mock holding one parameter map cannot show.
 
-A query string in the path is rejected rather than parsed: `TestRequest.get("/decks?page=2")` throws and names `queryParam` instead, since a path that quietly kept its `?` would fail much later as a routing mismatch.
-Flash is left alone — `FLASH_ATTRIBUTE` is package-private in `spidersilk`, and a test module hard-coding that string would be a second copy of a private detail.
+A query string in the path is rejected rather than parsed, since a path that quietly kept its `?` would fail much later as a routing mismatch.
 
 ## 21 · The status type
 
 ### 21. `HttpStatus`: an enum, not an int
 
-Every status in the API is an `HttpStatus` constant — `WebResponse.status`, `empty`, `redirect`, `App.error`, `HttpException` — and the readable side too: `response.status()` answers the enum, and the one place that needs the number is the line that writes it, `res.setStatus(status.code())`.
-An int accepts `42` and `4040` as readily as `404`; the enum makes a status that does not exist unwritable, which is the same bet as `paramEnum` and the rest of the typed extraction — invalid states rejected at the type, not at runtime.
-
+An int accepts `42` and `4040` as readily as `404`; the enum makes a status that does not exist unwritable — the same bet as `paramEnum` and the rest of the typed extraction.
 Three calls inside that decision:
 
-- **The IANA registry, under RFC 9110 names.**
-  `CONTENT_TOO_LARGE` and `UNPROCESSABLE_CONTENT`, not the older `PAYLOAD_TOO_LARGE` and `UNPROCESSABLE_ENTITY` that Spring readers know — the current spec's names, chosen deliberately and said so in the Javadoc.
-  Deprecated and unused registrations (305, 306, 418) are left out, and the numbers were cross-checked against Jetty's `HttpStatus` constants rather than written from memory, since a transposed digit here is exactly the bug the type exists to prevent.
+- **The IANA registry, under RFC 9110 names**: `CONTENT_TOO_LARGE` and `UNPROCESSABLE_CONTENT`, not the older names Spring readers know.
+  Deprecated registrations are left out, and the numbers were cross-checked against an existing constant table rather than written from memory, since a transposed digit is exactly the bug the type exists to prevent.
 - **`of(int)` is the sanctioned runtime path, not a loophole.**
-  A handler mirroring an upstream answer or reading a code from configuration has a number, not a name; without a lookup the only way out would be `raw()`.
-  `of` throws `IllegalArgumentException` on a code the registry does not know, so the enforcement moves to the boundary instead of disappearing.
-- **The getter answers the enum too.**
-  A setter that takes `HttpStatus` and a getter that hands back `int` would be the asymmetry `paramEnum` avoids, so tests assert `assertEquals(HttpStatus.CREATED, response.status())` and a logger that wants the number says `status().code()`.
-  `WebTest`'s client is the JDK's `HttpClient`, so `statusCode()` there stays an int: the boundary is the framework's own API, not other people's.
+  A handler mirroring an upstream answer has a number, not a name; `of` throws on a code the registry does not know, so the enforcement moves to the boundary instead of disappearing.
+- **The getter answers the enum too**, because a setter taking `HttpStatus` and a getter handing back `int` would be the asymmetry `paramEnum` avoids.
+  `WebTest`'s client is the JDK's, so `statusCode()` there stays an int: the boundary is this framework's API, not other people's.
 
-## 22 · The second server
+## 22–23 · The other servers
 
 ### 22. `spider-silk-tomcat`, with Jetty still the default
 
-`TomcatServer` is decision 2 being cashed in: `WebServer` was made four methods so that a second server would be a small job, and this is the one that proves it.
-It is a module rather than a class in core, following 17 — being tied to one server is stated in the artifact's name, and core keeps depending on nothing but the servlet API and its own Jetty.
-`tomcat-embed-core` 10.1.x is the Servlet 6.0 line, matching core's servlet API and Jetty's `ee10`; Tomcat 11 is Servlet 6.1 and would be a version skew bought for nothing.
+Decision 2 cashed in: `WebServer` was made four methods so a second server would be a small job, and this is what proves it.
+A module rather than a class in core, following 17 — being tied to one server is stated in the artifact's name.
+The dependency tracks Servlet 6.0, matching core's servlet API, so the three servers stay on one specification level.
 
-Jetty stays the default, which is the actual decision here.
-Nothing about Tomcat is better for the framework's own purposes, and three things are worse for them: it wants a `catalina.base` on disk where Jetty runs diskless, its logging is JULI rather than slf4j, and — the one that cost real code — it has no graceful shutdown of its own.
-Decision 12 is Jetty's `stopTimeout` plus `setShutdownIdleTimeout`; on Tomcat the same guarantee is hand-rolled, pausing the connector and then shutting the request pool down within the timeout, which is what Spring Boot does for the same reason.
-The shutdown hook of 12 is the same story: Jetty's `setStopAtShutdown` deregisters itself, so ours has to be registered on start and removed again on stop to keep the property that a suite starting a server per test accumulates no hooks.
-Tomcat's threads are also daemons, so a non-daemon thread parked in `Server.await()` is what holds the JVM up — the thing decision 1 gets from Jetty for free.
-`TomcatServer` is 430 lines against `JettyServer`'s 286, and every one of those extra lines is one of these.
+Jetty stays the default, which is the actual decision.
+Tomcat wants a working directory on disk where Jetty runs diskless, logs through JULI rather than slf4j, and — the one that cost real code — has no graceful shutdown of its own, so decision 12's guarantee is rebuilt here by pausing the connector and draining the request pool.
+Its shutdown hook and its JVM lifetime are the same story: both are things decision 1 and decision 12 get from Jetty for free and have to be assembled for Tomcat.
 
 Two asymmetries are left visible rather than papered over.
-There is no `sessions(false)`: Tomcat's `StandardContext` installs a session manager on start and offers no way out, and a method that silently did nothing would be worse than its absence.
-And `stopTimeout` only has something to wait on while the connector runs a `ThreadPoolExecutor`, so `executor(...)` with the virtual-thread executor turns the drain into a no-op — said in the Javadoc rather than worked around, because the alternative is tracking in-flight requests ourselves, which is a second lifecycle model in a module that exists to have none.
+There is no `sessions(false)`, because Tomcat offers no way out of its session manager and a method that silently did nothing would be worse than its absence.
+And `stopTimeout` only has something to wait on while the connector runs a thread pool, so handing `executor(...)` a virtual-thread executor turns the drain into a no-op — said in the Javadoc rather than worked around, since the alternative is tracking in-flight requests ourselves, a second lifecycle model in a module that exists to have none.
 
-What Tomcat buys is not technical.
-It is the operational knowledge an organisation already has, the runtime Spring Boot defaults to for anyone migrating off it, and a security-advisory pipeline most enterprise processes already track.
+What Tomcat buys is not technical: the operational knowledge an organisation already has, the runtime Spring Boot defaults to for anyone migrating off it, and a security-advisory pipeline most enterprise processes already track.
 That is a real reason to want it and not a reason to make it the default, which is exactly what a seam is for.
-
-## 23 · The third server
 
 ### 23. `spider-silk-undertow`
 
-Two implementations prove a seam works; the third one tells you what it costs, which is why this was worth building rather than asserting.
-`undertow-servlet` 2.3.x is the Jakarta EE 10 line, Servlet 6.0, matching everything else — `undertow-core` has a 2.4.x, but the servlet half has not followed it.
+Two implementations prove a seam works; the third tells you what it costs, which is why this was built rather than asserted.
 
 Undertow turned out to be the *easiest* of the three to embed, which was not the expected answer.
-Its graceful shutdown is a first-class `GracefulShutdownHandler` that counts requests, so decision 12's guarantee is a wire-up rather than the reconstruction Tomcat needed — and because it counts requests rather than shutting a pool down, it is the only one of the three where the drain survives `executor(...)` being handed the virtual-thread executor.
-It needs no working directory, and JBoss Logging finds slf4j on the classpath by itself, so neither of Tomcat's two environmental costs applies.
-`UndertowServer` is 381 lines against Tomcat's 430 and Jetty's 286; the gap to Jetty is almost entirely the JVM-lifetime problem, which Undertow shares with Tomcat — neither keeps the process alive on its own, so both park a non-daemon thread that `stop()` releases.
+Its graceful shutdown is a first-class handler that counts requests, so decision 12's guarantee is a wire-up rather than the reconstruction Tomcat needed — and because it counts requests rather than shutting a pool down, it is the only one of the three where the drain survives being handed a virtual-thread executor.
+It needs no working directory, and its logging finds slf4j by itself, so neither of Tomcat's environmental costs applies.
 
 So the default did not move again, and the reason is worth being honest about: it is not technical.
-Jetty is still the one whose lifecycle is entirely its own, and 286 lines against 381 is a real difference in how much of this project's own code sits between an application and its server.
-Undertow's disadvantage is reach rather than design — it is a WildFly component rather than a standalone product, so the operational familiarity, the tooling, and the number of people who have debugged it in production are all thinner than Tomcat's.
+Jetty is still the one whose lifecycle is entirely its own, and that is a real difference in how much of this project's code sits between an application and its server.
+Undertow's disadvantage is reach rather than design — it is a WildFly component rather than a standalone product, so operational familiarity and tooling are thinner than Tomcat's.
 That is a deployment fact, not an engineering one, and it belongs in the manual as advice rather than in core as a default.
 
 One structural note.
-The test suites are now three copies of the same acceptance tests, one per server, and that is deliberate: they assert what *core* promises — routing, sessions, multipart, SSE, static files, port 0, the drain, the hook — against each container in turn.
-Factoring them into one parameterised suite would mean a shared module that every server module depends on, which is a dependency built to save duplication in tests.
-Seventeen tests copied twice is the cheaper of the two.
+Each server module carries its own copy of the acceptance tests, deliberately: they assert what *core* promises against each container in turn.
+Factoring them into one parameterised suite would mean a shared module that every server module depends on — a dependency built to save duplication in tests.
 
 ## Rejected — decisions, with the reason
 
@@ -396,10 +304,10 @@ If one is reopened, it is a change to what the framework is.
 |---|---|
 | `WebResponse.json(Object)`, `req.bodyAsClass(Foo.class)` | Reflection. The whole point is that the wire format changes only when someone edits it. |
 | Annotation-driven routing | Reflection, plus scanning. |
-| Renaming `Handler` to `Action` | In the MVC frameworks that made the name familiar, an `Action` is the opposite model: an object instantiated per request and populated by reflection, whose execute method returns a *result name* that XML or an annotation resolves into a view. `Handler` is a stateless function returning the response itself. The name would import expectations this framework refuses. It also breaks the suffix rule — `…Handler` answers a request, `…Writer` fills a body — leaving `ExceptionHandler` stranded, and an `error(404, ...)` page renderer is not an "action" in anyone's sense. `Action` stays what it is worth being: a convention for naming the classes that implement `Handler` directly. |
-| A `Controller` interface with `register(App)` in the example | The routing table becomes the union of what every implementation decided, so `app.routes()` is still honest but nothing else is: reading the application's routes means reading every controller. A registry of things that register themselves is the shape of the container this framework exists without. |
+| Renaming `Handler` to `Action` | In the MVC frameworks that made the name familiar, an `Action` is the opposite model: an object instantiated per request and populated by reflection, whose execute method returns a *result name* that XML or an annotation resolves into a view. `Handler` is a stateless function returning the response itself. The name would import expectations this framework refuses. It also breaks the suffix rule — `…Handler` answers a request, `…Writer` fills a body — leaving `ExceptionHandler` stranded. `Action` stays what it is worth being: a convention for naming the classes that implement `Handler` directly. |
+| A `Controller` interface with `register(App)` in the example | The routing table becomes the union of what every implementation decided, so reading the application's routes means reading every controller. A registry of things that register themselves is the shape of the container this framework exists without. |
 | A DI container | Not the web tier, and `FlashcardContext` shows the alternative. |
 | `ServiceLoader`-based server discovery | Classpath-driven binding is the magic this framework exists without. |
 | Javalin-style plugin registry | A registry of things that configure themselves is how a container starts. |
 | Spark's static-import DSL | Process-global mutable state: one app per JVM, no parallel tests. |
-| `app.ws(path, config)` in core | A WebSocket is a protocol upgrade, so it leaves servlet dispatch: the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` all stop applying to it. Core would be handing out an API that core's own features silently do not cover. It also ends the no-lock-in claim — `WebServer` is four methods precisely so Jetty is replaceable, and `AppServlet` on Tomcat cannot follow. `jakarta.websocket` is not the way out either: its default `Configurator` instantiates endpoints reflectively. Recipe now, `spider-silk-ws` module if it earns one. |
+| `app.ws(path, config)` in core | A WebSocket is a protocol upgrade, so it leaves servlet dispatch: the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` all stop applying to it. Core would be handing out an API that core's own features silently do not cover. It also ends the no-lock-in claim that `WebServer` exists for, since `AppServlet` on another container cannot follow. `jakarta.websocket` is no escape either: its default `Configurator` instantiates endpoints reflectively. Recipe now, `spider-silk-ws` module if it earns one. |
