@@ -14,13 +14,13 @@
 ** xref:static-files.adoc[Static Files]
 ** xref:sse.adoc[Server-Sent Events]
 
-* Running It
+* Servers and Deployment
 ** xref:server.adoc[The Server]
 ** xref:tomcat.adoc[Tomcat]
 ** xref:undertow.adoc[Undertow]
 ** xref:deployment.adoc[Deployment]
 
-* Seeing What It Does
+* Testing and Observability
 ** xref:testing.adoc[Testing]
 ** xref:route-introspection.adoc[Route Introspection]
 ** xref:request-logging.adoc[Request Logging]
