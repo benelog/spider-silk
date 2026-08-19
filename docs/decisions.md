@@ -288,7 +288,7 @@ The three decisions:
   Registration from outside the class needs them visible, which is a real cost — a package-private method could only be called by the class's own `register`.
   It buys the property that mattered more: the path and the method that answers it sit on one line, in a list nothing else contributes to.
 - **`Action` is a class-naming convention, not a rename of `Handler`.**
-  The name comes from WebWork and Struts 2, where it reads well for "one thing the application does", and it still does.
+  The name is the A of the ADR (Action-Domain-Responder) pattern, where it reads as "one thing the application does", and Laravel's single action controllers use the same convention.
   Renaming the *interface* to `Action` was considered and rejected — see the table below.
 
 The route set is unchanged — every registration moved across verbatim — and all 27 were re-checked against a running server.
@@ -329,7 +329,7 @@ If one is reopened, it is a change to what the framework is.
 |---|---|
 | `WebResponse.json(Object)`, `req.bodyAsClass(Foo.class)` | Reflection. The whole point is that the wire format changes only when someone edits it. |
 | Annotation-driven routing | Reflection, plus scanning. |
-| Renaming `Handler` to `Action` | Struts 2's `Action` is the opposite model: an object instantiated per request and populated by reflection, whose `execute()` returns a *result name* that XML or an annotation resolves into a view. `Handler` is a stateless function returning the response itself. The name would import expectations this framework refuses. It also breaks the suffix rule — `…Handler` answers a request, `…Writer` fills a body — leaving `ExceptionHandler` stranded, and an `error(404, ...)` page renderer is not an "action" in anyone's sense. `Action` stays what it is worth being: a convention for naming the classes that implement `Handler` directly. |
+| Renaming `Handler` to `Action` | In the MVC frameworks that made the name familiar, an `Action` is the opposite model: an object instantiated per request and populated by reflection, whose execute method returns a *result name* that XML or an annotation resolves into a view. `Handler` is a stateless function returning the response itself. The name would import expectations this framework refuses. It also breaks the suffix rule — `…Handler` answers a request, `…Writer` fills a body — leaving `ExceptionHandler` stranded, and an `error(404, ...)` page renderer is not an "action" in anyone's sense. `Action` stays what it is worth being: a convention for naming the classes that implement `Handler` directly. |
 | A `Controller` interface with `register(App)` in the example | The routing table becomes the union of what every implementation decided, so `app.routes()` is still honest but nothing else is: reading the application's routes means reading every controller. A registry of things that register themselves is the shape of the container this framework exists without. |
 | A DI container | Not the web tier, and `FlashcardContext` shows the alternative. |
 | `ServiceLoader`-based server discovery | Classpath-driven binding is the magic this framework exists without. |

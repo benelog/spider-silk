@@ -11,29 +11,20 @@
 
 # Spider Silk
 
-A very thin web framework on top of the Jakarta Servlet API.
+A thin web framework on top of the Jakarta Servlet API.
 
 Three core principles:
 
 - **No reflection.**
-  There is no annotation scanning, no proxies, no automatic binding.
-  Routes are registered as lambdas, and type conversion happens only through explicit methods such as `pathParamLong`.
-  What runs is exactly what you see in the code, stack traces stay short, and startup is fast.
-- **A handler is a function from a request to a response.**
+    * There is no annotation scanning, no proxies, no automatic binding.
+    * What runs is exactly what you see in the code, stack traces stay short, and startup is fast.
+* **The API is intuitively simple.**
+    * A handler is a function from a request to a response: `WebResponse handle(WebRequest request)`.
+    * `WebResponse` as the return type matches the intuition directly: a handler takes a request in and hands a response back.
+* **Better RESTful API support than raw servlets.**
+    * Per-method routing with path variables, typed parameter extraction, exception-to-status mapping.
 
-  ```java
-  @FunctionalInterface
-  public interface Handler {
-      WebResponse handle(WebRequest request) throws Exception;
-  }
-  ```
-
-  It answers by returning, not by writing, so the compiler checks that every branch answers and answering twice is not expressible.
-  `WebResponse` is an immutable value — a status, headers, and cookies around a sealed body — which is what lets an after-filter take one and hand back another, and what lets a test assert on a handler's answer without a servlet response to read it out of.
-- **Better RESTful API support than raw servlets.**
-  Per-method routing with path variables, typed parameter extraction, exception-to-status mapping, automatic 405 (Method Not Allowed) responses, and a reflection-free JSON builder/parser.
-
-The template engine is [jte](https://jte.gg). jte also compiles templates to Java code, which fits the framework's character.
+The default template engine is [jte](https://jte.gg). jte also compiles templates to Java code, which fits the framework's character.
 
 ## Modules
 
@@ -56,7 +47,7 @@ app.get("/decks/{deckId}", req -> {
     return WebResponse.render("deck.jte", model);
 });
 
-// JSON API — you state in code what goes out (no automatic serialization)
+// JSON API: you state in code what goes out (no automatic serialization)
 app.get("/api/decks", req -> WebResponse.json(
         Json.arr().add(Json.obj().put("id", 1L).put("name", "English"))));
 
@@ -65,7 +56,7 @@ app.post("/api/decks", req -> {
     return WebResponse.json(Json.obj().put("name", name)).status(201);
 });
 
-// Routes sharing a prefix — the group is an argument, not ambient state
+// Routes sharing a prefix: the group is an argument, not ambient state
 app.path("/api/decks", group -> {
     group.before(req -> requireApiKey(req));    // covers /api/decks and everything under it
     group.get("", api::listDecks);              // GET  /api/decks
@@ -82,7 +73,7 @@ app.error(404, req -> WebResponse.render("not-found.jte", Map.of("path", req.pat
 app.start(8080);                                // embedded Jetty, sessions on
 ```
 
-`start` returns once the port is bound, and the server's threads keep the JVM alive — `join()` is there if you want to block the main thread anyway.
+`start` returns once the port is bound, and the server's threads keep the JVM alive; `join()` is there if you want to block the main thread anyway.
 `stop()` shuts it down; `port()` reports the bound port, which is how you read back the one the OS picked for `start(0)` in a test.
 
 ### Three shapes a handler comes in
@@ -119,7 +110,7 @@ public class StatsAction implements Handler {
 app.get("/stats", context.statsAction());
 ```
 
-`Action` is WebWork and Struts 2's word for one thing the application does, and it still fits a class that is exactly one route.
+`Action` is the A of the ADR (Action-Domain-Responder) pattern: a web-tier class that answers exactly one request, the same convention as Laravel's single action controllers.
 The framework does not know the name: `Handler` is the interface, `…Action` is a naming convention for the classes that implement it directly.
 
 **Public methods, registered by reference**, when one class answers several related routes:
@@ -141,12 +132,12 @@ app.post("/decks/{deckId}/rename", decks::renameDeck);
 
 The methods are `public` because registration happens outside the class, and that is the point.
 There is no `Controller` interface and no `register(App)` method to implement, so every route the application answers is one statement in one list, and `app.routes()` reports exactly what is written there.
-A class that registers its own routes hides half the routing table inside itself, which is the thing annotation scanning does — just spelled out by hand.
+A class that registers its own routes hides half the routing table inside itself, which is the thing annotation scanning does, just spelled out by hand.
 
 ### Filters and errors
 
 `before`/`after` take an optional path.
-A trailing `*` covers the prefix *and* everything under it, so `/admin/*` guards `/admin` as well as `/admin/users` — which is what a guard almost always means:
+A trailing `*` covers the prefix *and* everything under it, so `/admin/*` guards `/admin` as well as `/admin/users`, which is what a guard almost always means:
 
 ```java
 app.before("/admin/*", req -> req.sessionAttr("user") == null
@@ -163,7 +154,7 @@ An after-filter takes the response the route returned and hands back a replaceme
 app.after((req, res) -> res.header("X-Request-Id", requestId()));
 ```
 
-`error(status, handler)` fills in the body for any response that ended on that status with no body — from the router, from an `HttpException`, or from a handler that returned `WebResponse.empty(403)`.
+`error(status, handler)` fills in the body for any response that ended on that status with no body, whether from the router, from an `HttpException`, or from a handler that returned `WebResponse.empty(403)`.
 A response that already carries a body is left alone.
 What the error handler returns keeps the headers the framework had already worked out, such as the `Allow` of a 405, and answers with the registered status unless it sets one of its own.
 Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.
@@ -197,12 +188,12 @@ app.post("/api/decks", req -> {
 ```
 
 Still no reflection: the mapping is code you wrote, so a field rename changes the wire format only if you edit it.
-`getString` throws `IllegalArgumentException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400 — a handler gets a whole value or none, the same contract as `pathParamLong`.
-For a key that is allowed to be absent, `optString`/`optLong`/`optDouble`/`optBoolean` answer a default instead — for a missing key and for an explicit JSON `null` alike.
+`getString` throws `IllegalArgumentException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400: a handler gets a whole value or none, the same contract as `pathParamLong`.
+For a key that is allowed to be absent, `optString`/`optLong`/`optDouble`/`optBoolean` answer a default instead, for a missing key and for an explicit JSON `null` alike.
 A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
 
 Most types only go out, which is why the two halves are separate interfaces rather than one with an unimplementable `read`.
-When a type does travel both ways, `JsonCodec<T>` is both at once — `JsonCodec.of(writer, reader)` to build one, `JsonCodec.list(codec)` for the list form.
+When a type does travel both ways, `JsonCodec<T>` is both at once: `JsonCodec.of(writer, reader)` to build one, `JsonCodec.list(codec)` for the list form.
 
 ### Cookies and repeated parameters
 
@@ -218,12 +209,12 @@ return WebResponse.html(page)
         .removeCookie("stale");
 ```
 
-A cookie set through the two-argument form gets `Path=/`, `HttpOnly`, and `SameSite=Lax` — what a cookie holding anything worth stealing should have.
+A cookie set through the two-argument form gets `Path=/`, `HttpOnly`, and `SameSite=Lax`, which is what a cookie holding anything worth stealing should have.
 `cookie(Cookie)` takes a hand-built `jakarta.servlet.http.Cookie` when you need `Secure`, a `Domain`, or `SameSite=None`.
 
-`params(name)` returns every value in request order, and an empty list when the parameter is absent — "no boxes checked" is an answer, not a 400.
+`params(name)` returns every value in request order, and an empty list when the parameter is absent: "no boxes checked" is an answer, not a 400.
 `param(name)` still returns the first value and still 400s when there is none.
-For an optional parameter with a type, `paramLong("page", 1)` and `paramEnum("direction", Direction.class, Direction.FRONT)` answer the default when the parameter is absent — and still 400 when it is present but unparseable, because the default covers absence, not garbage.
+For an optional parameter with a type, `paramLong("page", 1)` and `paramEnum("direction", Direction.class, Direction.FRONT)` answer the default when the parameter is absent, and still 400 when it is present but unparseable, because the default covers absence, not garbage.
 
 ### Query string vs. form body
 
@@ -239,7 +230,7 @@ List<String> tags = req.formParams("tag");
 ### HEAD and OPTIONS
 
 Both are answered without registering anything.
-A `HEAD` runs the `GET` route and drops the body, keeping the headers — including a `Content-Length` counted from what the `GET` would have sent.
+A `HEAD` runs the `GET` route and drops the body, keeping the headers, including a `Content-Length` counted from what the `GET` would have sent.
 An `OPTIONS` answers with the `Allow` header the path's routes imply, and a 404 when the path has none:
 
 ```
@@ -248,7 +239,7 @@ HTTP/1.1 200 OK
 Allow: GET, POST, HEAD, OPTIONS
 ```
 
-`app.head(...)` and `app.options(...)` register a route of their own when the automatic answer is not the one you want — a CORS preflight, usually.
+`app.head(...)` and `app.options(...)` register a route of their own when the automatic answer is not the one you want: a CORS preflight, usually.
 
 ### Server-Sent Events
 
@@ -276,7 +267,7 @@ data: {"count":12}
 `send(data)` sends an unnamed event, `send(event, data)` a named one, `id(...)` labels the event that follows so the browser can resume with `Last-Event-ID`, and `comment(text)` sends a heartbeat no listener sees.
 Data spanning several lines becomes one `data:` line each, which the client joins back together.
 
-It is an ordinary `get` route answering in a different shape — not a registration of its own — so `app.routes()` lists it, filters cover it, and the request logger reports it when the stream ends.
+It is an ordinary `get` route answering in a different shape, not a registration of its own, so `app.routes()` lists it, filters cover it, and the request logger reports it when the stream ends.
 That is the whole reason SSE is in core and WebSocket is not: a WebSocket upgrade leaves servlet dispatch and none of the above would still apply.
 It also means a deployment on a plain servlet container gets SSE too, since `AppServlet` needs nothing else.
 
@@ -286,7 +277,7 @@ That is the price of staying servlet-native, and the virtual-thread executor bel
 Ending a stream is not an error, and there are three ways it happens:
 
 - the handler returns,
-- the client goes away — the write that discovers it throws `SseStream.Closed`, which ends the handler where it stands,
+- the client goes away: the write that discovers it throws `SseStream.Closed`, which ends the handler where it stands,
 - `app.stop()` closes every stream still open, before Jetty is asked to drain, because a stream is a request in flight that would otherwise never finish.
 
 A stream quieter than Jetty's 30-second connector idle timeout is closed by the server; `stream.comment("ping")` on a timer is what keeps it alive, and proxies in front usually want the same.
@@ -299,14 +290,14 @@ app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
 ```
 
 One lambda, and no logging framework in core: which logger, at which level, and in which format is the application's call.
-It runs once per request after the response is complete, so the status it sees is the one that was actually sent — the error handler's, if one ran.
+It runs once per request after the response is complete, so the status it sees is the one that was actually sent: the error handler's, if one ran.
 A logger that throws is reported to the servlet log and leaves the response alone.
 
 ### Static files
 
 `staticFiles("/public")` serves `classpath:/public/*` at the root.
 Every response carries an `ETag` and `Last-Modified` derived from the resource, so a reload comes back as a bodyless 304 instead of the file again.
-The default `Cache-Control: no-cache` means "cache it, but check with me first" — right for names that never change.
+The default `Cache-Control: no-cache` means "cache it, but check with me first", which is right for names that never change.
 For fingerprinted names, say so:
 
 ```java
@@ -320,16 +311,16 @@ Directories are never served.
 
 ### Route introspection
 
-Routes are an explicit list, so the framework can hand it back — no annotation scanning, no plugin, no reflection.
+Routes are an explicit list, so the framework can hand it back: no annotation scanning, no plugin, no reflection.
 `app.routes()` is an immutable snapshot of `record Route(String method, String path)`, in registration order, which is also the order the router breaks ties in:
 
 ```java
 app.get("/_routes", req -> WebResponse.render("routes.jte", Map.of("routes", app.routes())));
 ```
 
-Because order breaks ties, a second route matching exactly the same requests — the same path, or the same shape with a variable renamed — could never run, so registering one throws `IllegalStateException` on the spot instead of leaving a dead entry in the table.
+Because order breaks ties, a second route matching exactly the same requests (the same path, or the same shape with a variable renamed) could never run, so registering one throws `IllegalStateException` on the spot instead of leaving a dead entry in the table.
 
-Group prefixes are already resolved, so a path reads as `/api/decks/{deckId}/cards` — which is OpenAPI's path-template syntax verbatim, so an export needs no translation:
+Group prefixes are already resolved, so a path reads as `/api/decks/{deckId}/cards`, which is OpenAPI's path-template syntax verbatim, so an export needs no translation:
 
 ```java
 for (Route route : app.routes()) {
@@ -338,7 +329,7 @@ for (Route route : app.routes()) {
 ```
 
 Method and path is all a route carries.
-The handler is left out — it is a lambda, and the only name it has is what reflection would dig out of its synthetic class — and so is any description, because documentation attached at the registration site is an annotation with the reflection taken out.
+The handler is left out (it is a lambda, and the only name it has is what reflection would dig out of its synthetic class), and so is any description, because documentation attached at the registration site is an annotation with the reflection taken out.
 What the routes are *for* is built on top of the list, which is plain data: the example app renders a `/_routes` overview page from it and builds an `/openapi.json` document in `OpenApi`, about forty lines in all.
 
 The automatic HEAD and OPTIONS answers are not listed.
@@ -352,7 +343,7 @@ The harness is its own module, so the production jar carries no test code:
 testImplementation project(':spider-silk-test')
 ```
 
-`WebTest` starts the app on a free port, hands you a client that keeps cookies, and stops it again — including when the body throws:
+`WebTest` starts the app on a free port, hands you a client that keeps cookies, and stops it again, including when the body throws:
 
 ```java
 @Test
@@ -365,10 +356,10 @@ void createsADeck() {
 }
 ```
 
-`get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and `postJson`, all return the raw `HttpResponse<String>` — assertions stay in whatever library the project already uses.
+`get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and `postJson`, all return the raw `HttpResponse<String>`, so assertions stay in whatever library the project already uses.
 `send(builder -> ...)` is the way out for anything else.
 
-When the handler itself is what is under test — not the routing that reaches it — `TestRequest` builds the argument and you call the method:
+When the handler itself is what is under test, not the routing that reaches it, `TestRequest` builds the argument and you call the method:
 
 ```java
 @Test
@@ -383,7 +374,7 @@ void createDeckRespondsWith201() {
 ```
 
 No port, no servlet container, and no mock library: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, and `sessionAttr` state what the request carries, and `build()` hands back a `WebRequest`.
-Path variables are supplied rather than matched, since no route is involved — `pathParam("deckId", "3")` is what the router would have resolved.
+Path variables are supplied rather than matched, since no route is involved: `pathParam("deckId", "3")` is what the router would have resolved.
 Everything a handler can tell apart still holds: a query parameter and a form field of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 the way a non-multipart request does.
 
 ## The Server
@@ -407,7 +398,7 @@ new JettyServer(app)
 ```
 
 Handlers can run on virtual threads.
-That is a thread pool setting, not a framework feature, so it stays two lines of Jetty's own API — platform threads keep running the selectors, the handlers get the virtual ones:
+That is a thread pool setting, not a framework feature, so it stays two lines of Jetty's own API: platform threads keep running the selectors, the handlers get the virtual ones:
 
 ```java
 QueuedThreadPool pool = new QueuedThreadPool();
@@ -417,11 +408,11 @@ app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool))
    .start(8080);
 ```
 
-Worth it only if the handlers block — on I/O, on a database.
+Worth it only if the handlers block: on I/O, on a database.
 A `synchronized` block around that blocking call pins the carrier thread and takes the benefit back.
 
 Shutdown is graceful out of the box: a JVM shutdown hook stops the server on Ctrl-C or SIGTERM, and `stop()` gives requests in flight five seconds to finish before dropping them.
-Idle keep-alive connections do not hold that up — they are closed as soon as the drain starts, so a stop with nothing running returns immediately.
+Idle keep-alive connections do not hold that up; they are closed as soon as the drain starts, so a stop with nothing running returns immediately.
 `stopTimeout(Duration.ZERO)` turns the drain off entirely.
 
 To keep `app.start(port)` as the entry point while still configuring the server, or to run a different server entirely, replace the factory:
@@ -434,7 +425,7 @@ app.server((a, port) -> new MyUndertowServer(a, port))   // implements WebServer
    .start(9000);
 ```
 
-`WebServer` is four methods — `start`, `stop`, `join`, `port` — so a second implementation is a small job.
+`WebServer` is four methods (`start`, `stop`, `join`, `port`), so a second implementation is a small job.
 
 Deploy to an external servlet container instead by skipping `start` and mapping `AppServlet` yourself:
 
@@ -446,7 +437,7 @@ context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 ### What App provides
 
 - Routes: `get`, `post`, `put`, `patch`, `delete`, and `path(prefix, group -> ...)`
-- Introspection: `routes()` — every registered route as `Route(method, path)`, in registration order
+- Introspection: `routes()` reports every registered route as `Route(method, path)`, in registration order
 - Filters: `before(filter)` / `before(path, filter)`, same for `after`
 - Errors: `exception(Type, handler)`, `error(status, handler)`, `notFound(handler)`
 - Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles)`
@@ -473,7 +464,7 @@ A response is an immutable value: every method below returns a new one, which is
 - Building on: `status`, `header`, `contentType`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
 - Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`
 
-`body()` is a sealed `WebResponse.Body` — `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw` — so a `switch` over it needs no default case, and a test can assert on the answer without a servlet response to read it out of:
+`body()` is a sealed `WebResponse.Body` (`Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw`), so a `switch` over it needs no default case, and a test can assert on the answer without a servlet response to read it out of:
 
 ```java
 WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
@@ -486,14 +477,14 @@ assertEquals("{\"id\":1}", ((WebResponse.Text) response.body()).content());
 ```
 
 The last three bodies take a lambda of their own, and the suffix says which family it belongs to.
-A `…Handler` answers a request with a `WebResponse` — that is `Handler` and `ExceptionHandler`.
-A `…Writer` returns nothing and fills the body of a response that has already been decided — `StreamWriter(OutputStream)`, `SseWriter(SseStream)`, and `ServletWriter(HttpServletRequest, HttpServletResponse)`.
+A `…Handler` answers a request with a `WebResponse`: that is `Handler` and `ExceptionHandler`.
+A `…Writer` returns nothing and fills the body of a response that has already been decided: `StreamWriter(OutputStream)`, `SseWriter(SseStream)`, and `ServletWriter(HttpServletRequest, HttpServletResponse)`.
 So `ServletWriter` is a sibling of `StreamWriter`, not a relative of `Handler`.
 
 ### The scope of "no reflection"
 
 The principle applies to the **framework core**: routing, parameter extraction, and JSON handling use no reflection anywhere.
-The example project's choice of spring-jdbc's `DataClassRowMapper` and the transaction internals do use reflection — that is the example's choice, and switching to repositories that handle JDBC directly would remove even that.
+The example project's choice of spring-jdbc's `DataClassRowMapper` and the transaction internals do use reflection; that is the example's choice, and switching to repositories that handle JDBC directly would remove even that.
 
 ## Example: Flashcard
 
@@ -503,12 +494,12 @@ The same features as ch07-jdbc-plus from `spring-jdbc-book` (decks, cards, tags,
   The executed SQL is visible in the code.
   Inserts are the exception: `SimpleJdbcInsert` reads the table metadata and returns the generated key, with `SimplePropertySqlParameterSource` taking the values straight off the domain record.
   `SmartDeckRepository` still spells its parameters out, because its `SmartCondition` enum has to reach the driver as `name()` rather than as an enum.
-- **DI**: no container — `FlashcardContext` wires everything by calling constructors directly, playing the role of Spring's ApplicationContext by hand.
+- **DI**: no container; `FlashcardContext` wires everything by calling constructors directly, playing the role of Spring's ApplicationContext by hand.
 - **Transactions**: instead of AOP, services call `Transactions.write()/read()`, a thin wrapper around `TransactionTemplate`.
   The wrapped block is exactly the transaction scope.
 - As a bonus, a JSON API (`/api/decks`, `/api/decks/{id}/cards`) sits on the same service layer to show the framework's REST support.
   Its wire format is in `flashcard.web.Codecs` as hand-written `JsonWriter`/`JsonReader` lambdas.
-- `/_routes` lists every route and `/openapi.json` is the same list as an OpenAPI 3.1 document — both built from `app.routes()`, which is what the framework exposing its routing table as data buys you.
+- `/_routes` lists every route and `/openapi.json` is the same list as an OpenAPI 3.1 document, both built from `app.routes()`, which is what the framework exposing its routing table as data buys you.
 - **Routing**: there is no `Controller` interface. `FlashcardApp.registerRoutes` is the whole table, and handlers arrive as an `Action` class, a public method reference, or a lambda.
 
 ### Run
