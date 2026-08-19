@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -300,8 +299,9 @@ class UndertowServerTest {
         server = new UndertowServer(new App()).port(0);
         server.start();
 
-        assertSame(server.undertow(), server.undertow());
         assertNotNull(server.undertow(), "undertow() should hand out the running server");
+        assertFalse(server.undertow().getListenerInfo().isEmpty(),
+                "the running server should have a listener bound");
     }
 
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {
