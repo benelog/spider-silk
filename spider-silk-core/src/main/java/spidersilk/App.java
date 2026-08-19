@@ -118,7 +118,7 @@ public final class App {
      * dispatcher walks, read back as data.
      *
      * <pre>{@code
-     * app.get("/_routes", req -> WebResponse.render("routes.jte", Map.of("routes", app.routes())));
+     * app.get("/_routes", req -> WebResponse.template("routes.jte", Map.of("routes", app.routes())));
      * }</pre>
      *
      * <p>What was registered, and only that: the HEAD and OPTIONS answers
@@ -169,7 +169,7 @@ public final class App {
      * {@code WebResponse.empty(404)}.
      *
      * <pre>{@code
-     * app.error(404, req -> WebResponse.render("not-found.jte", Map.of("path", req.path())));
+     * app.error(404, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
      * }</pre>
      *
      * <p>A response that already carries a body is left alone. What the handler

@@ -18,7 +18,7 @@ import spidersilk.json.JsonWriter;
  *
  * <pre>{@code
  * app.get("/decks/{deckId}", req ->
- *         WebResponse.render("deck.jte", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+ *         WebResponse.template("deck.jte", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
  *
  * app.post("/decks", req ->
  *         WebResponse.redirect("/decks/" + service.create(req.param("name")).id()));
@@ -136,15 +136,15 @@ public final class WebResponse {
     }
 
     /** A template with nothing to pass in. */
-    public static WebResponse render(String template) {
-        return render(template, Map.of());
+    public static WebResponse template(String template) {
+        return template(template, Map.of());
     }
 
     /**
      * A template rendered with the engine set via
      * {@link App#templates(TemplateRenderer)}.
      */
-    public static WebResponse render(String template, Map<String, Object> model) {
+    public static WebResponse template(String template, Map<String, Object> model) {
         return of(new Template(Objects.requireNonNull(template, "template"),
                 Objects.requireNonNull(model, "model")))
                 .contentType("text/html; charset=UTF-8");

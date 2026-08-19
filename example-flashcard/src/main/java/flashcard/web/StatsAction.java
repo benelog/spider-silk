@@ -20,6 +20,6 @@ public class StatsAction implements Handler {
     @Override
     public WebResponse handle(WebRequest req) {
         Map<String, Object> stats = Map.of("stats", statsService.overview());
-        return WebResponse.render("stats.jte", stats);
+        return WebResponse.template("stats.jte", stats);
     }
 }

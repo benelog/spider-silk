@@ -94,7 +94,7 @@ class ResponseBodiesTest {
         assertEquals("hello", describe(WebResponse.html("hello")));
         assertEquals("2 bytes", describe(WebResponse.bytes(new byte[2], "application/octet-stream")));
         assertEquals("template deck.jte",
-                describe(WebResponse.render("deck.jte", java.util.Map.of())));
+                describe(WebResponse.template("deck.jte", java.util.Map.of())));
         assertEquals("a stream", describe(WebResponse.stream("text/csv", out -> { })));
         assertEquals("an event stream", describe(WebResponse.sse(stream -> { })));
         assertEquals("written by hand", describe(WebResponse.raw((req, res) -> { })));

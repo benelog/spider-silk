@@ -44,7 +44,7 @@ App app = new App()
 // Server-side rendering
 app.get("/decks/{deckId}", req -> {
     long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
-    return WebResponse.render("deck.jte", model);
+    return WebResponse.template("deck.jte", model);
 });
 
 // JSON API: you state in code what goes out (no automatic serialization)
@@ -68,7 +68,7 @@ app.exception(IllegalArgumentException.class,
         (e, req) -> WebResponse.text(e.getMessage()).status(404));
 
 // One place for a styled error page, whatever produced the status
-app.error(404, req -> WebResponse.render("not-found.jte", Map.of("path", req.path())));
+app.error(404, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
 
 app.start(8080);                                // embedded Jetty, sessions on
 ```
@@ -101,7 +101,7 @@ public class StatsAction implements Handler {
 
     @Override
     public WebResponse handle(WebRequest req) {
-        return WebResponse.render("stats.jte", Map.of("stats", statsService.overview()));
+        return WebResponse.template("stats.jte", Map.of("stats", statsService.overview()));
     }
 }
 ```
@@ -315,7 +315,7 @@ Routes are an explicit list, so the framework can hand it back: no annotation sc
 `app.routes()` is an immutable snapshot of `record Route(String method, String path)`, in registration order, which is also the order the router breaks ties in:
 
 ```java
-app.get("/_routes", req -> WebResponse.render("routes.jte", Map.of("routes", app.routes())));
+app.get("/_routes", req -> WebResponse.template("routes.jte", Map.of("routes", app.routes())));
 ```
 
 Because order breaks ties, a second route matching exactly the same requests (the same path, or the same shape with a variable renamed) could never run, so registering one throws `IllegalStateException` on the spot instead of leaving a dead entry in the table.
@@ -459,7 +459,7 @@ context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 
 A response is an immutable value: every method below returns a new one, which is what lets an after-filter rewrite what a route answered.
 
-- Bodies: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `render(template)`, `render(template, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
+- Bodies: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
 - Statuses: `empty()`, `empty(status)`, `noContent()`, `redirect(location)`, `redirect(location, status)`
 - Building on: `status`, `header`, `contentType`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
 - Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`

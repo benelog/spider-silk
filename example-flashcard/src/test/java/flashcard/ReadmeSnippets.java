@@ -117,7 +117,7 @@ class ReadmeSnippets {
         // Server-side rendering
         app.get("/decks/{deckId}", req -> {
             long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
-            return WebResponse.render("deck.jte", model);
+            return WebResponse.template("deck.jte", model);
         });
 
         // JSON API — you state in code what goes out (no automatic serialization)
@@ -141,7 +141,7 @@ class ReadmeSnippets {
                 (e, req) -> WebResponse.text(e.getMessage()).status(404));
 
         // One place for a styled error page, whatever produced the status
-        app.error(404, req -> WebResponse.render("not-found.jte", Map.of("path", req.path())));
+        app.error(404, req -> WebResponse.template("not-found.jte", Map.of("path", req.path())));
     }
 
     // ---- blocks 3, 5, 7: the three shapes a handler comes in ----
@@ -235,7 +235,7 @@ class ReadmeSnippets {
 
     void introspection(App app) {
         app.get("/_routes",
-                req -> WebResponse.render("routes.jte", Map.of("routes", app.routes())));
+                req -> WebResponse.template("routes.jte", Map.of("routes", app.routes())));
 
         Json.JsonObject paths = Json.obj();
         for (Route route : app.routes()) {
