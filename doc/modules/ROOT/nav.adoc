@@ -1,14 +1,14 @@
 * xref:index.adoc[Introduction]
 * xref:install.adoc[Installation]
 
-* Handling a Request
+* Request Handling
 ** xref:handlers.adoc[Handlers]
 ** xref:request.adoc[The Request]
 ** xref:response.adoc[The Response]
 ** xref:filters-and-errors.adoc[Filters and Errors]
 ** xref:head-and-options.adoc[HEAD and OPTIONS]
 
-* Answering with Content
+* Response Bodies
 ** xref:json.adoc[JSON]
 ** xref:templates.adoc[Templates]
 ** xref:static-files.adoc[Static Files]
