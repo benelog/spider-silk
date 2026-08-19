@@ -28,7 +28,7 @@
   The same rule applies to the AsciiDoc pages under `doc/`.
 - **The manual lives in `doc/`, as an Antora component.**
   Pages are AsciiDoc under `doc/modules/ROOT/pages/`, one chapter per file, listed in `doc/modules/ROOT/nav.adoc`.
-  A new chapter is a new page plus a `nav.adoc` entry.
+  A new chapter is a new page plus a `nav.adoc` entry, nested under one of the existing groups (`**`, not `*`); only Introduction and Installation sit at the top level.
   `README.md` stays a Quick Start: installation, hello world, and links into the site.
   Do not grow the README back into the manual.
 - `docs/positioning.md` and `docs/decisions.md` stay Markdown; they are background, not the manual.
