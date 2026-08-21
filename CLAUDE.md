@@ -42,3 +42,10 @@ npm install && npm run docs   # builds the Antora site into build/site
 ```
 
 - H2 DB file location for the example app: `~/db/spider-silk/flashcard`
+
+## Issues and Commits
+
+- **A commit message never references an issue.**
+  No `#12`, no `Fixes #34`, no tracker URL: a commit message says what the change does and stops there.
+  The link runs the other way — once the commit is pushed, comment its SHA on the related issue.
+  The history then stays readable on its own if the issue tracker is ever replaced, and the mapping lives in the tracker, which is the thing a migration would carry across.
