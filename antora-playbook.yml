@@ -1,7 +1,7 @@
 site:
   title: Spider Silk
   url: https://spider-silk.benelog.net
-  start_page: spider-silk::index.adoc
+  start_page: ROOT::index.adoc
 
 content:
   sources:
