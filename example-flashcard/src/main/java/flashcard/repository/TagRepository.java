@@ -6,9 +6,10 @@ import java.util.Optional;
 
 import javax.sql.DataSource;
 
+import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SimplePropertySqlParameterSource;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.CardTagName;
@@ -16,13 +17,7 @@ import flashcard.domain.Tag;
 
 public class TagRepository {
 
-    private static final RowMapper<Tag> MAPPER = (rs, rowNum) -> new Tag(
-            rs.getObject("id", Long.class),
-            rs.getString("name"));
-
-    private static final RowMapper<CardTagName> CARD_TAG_MAPPER = (rs, rowNum) -> new CardTagName(
-            rs.getObject("card_id", Long.class),
-            rs.getString("tag_name"));
+    private static final RowMapper<Tag> MAPPER = DataClassRowMapper.newInstance(Tag.class);
 
     private final NamedParameterJdbcTemplate jdbc;
     private final SimpleJdbcInsert insert;
@@ -35,8 +30,8 @@ public class TagRepository {
     }
 
     public Tag insert(Tag tag) {
-        Long id = insert.executeAndReturnKey(new MapSqlParameterSource()
-                .addValue("name", tag.name())).longValue();
+        Long id = insert.executeAndReturnKey(
+                new SimplePropertySqlParameterSource(tag)).longValue();
         return new Tag(id, tag.name());
     }
 
@@ -57,7 +52,7 @@ public class TagRepository {
                     join tag on tag.id = card_tag.tag_id
                 where card.deck_id = :deckId
                 order by tag.name
-                """, Map.of("deckId", deckId), CARD_TAG_MAPPER);
+                """, Map.of("deckId", deckId), DataClassRowMapper.newInstance(CardTagName.class));
     }
 
     public List<String> findTagNamesByCardId(Long cardId) {

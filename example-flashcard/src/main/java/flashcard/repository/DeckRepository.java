@@ -1,16 +1,16 @@
 package flashcard.repository;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
 import javax.sql.DataSource;
 
+import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.jdbc.core.namedparam.SimplePropertySqlParameterSource;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.Deck;
@@ -19,22 +19,7 @@ import flashcard.domain.DeckSummary;
 
 public class DeckRepository {
 
-    private static final RowMapper<Deck> MAPPER = (rs, rowNum) -> new Deck(
-            rs.getObject("id", Long.class),
-            rs.getString("name"),
-            rs.getObject("created_at", LocalDateTime.class));
-
-    private static final RowMapper<DeckSummary> SUMMARY_MAPPER = (rs, rowNum) -> new DeckSummary(
-            rs.getObject("id", Long.class),
-            rs.getString("name"),
-            rs.getLong("card_count"),
-            rs.getLong("due_count"));
-
-    private static final RowMapper<DeckStat> STAT_MAPPER = (rs, rowNum) -> new DeckStat(
-            rs.getObject("deck_id", Long.class),
-            rs.getString("deck_name"),
-            rs.getLong("total_count"),
-            rs.getLong("correct_count"));
+    private static final RowMapper<Deck> MAPPER = DataClassRowMapper.newInstance(Deck.class);
 
     private final NamedParameterJdbcTemplate jdbc;
     private final SimpleJdbcInsert insert;
@@ -47,9 +32,8 @@ public class DeckRepository {
     }
 
     public Deck insert(Deck deck) {
-        Long id = insert.executeAndReturnKey(new MapSqlParameterSource()
-                .addValue("name", deck.name())
-                .addValue("created_at", deck.createdAt())).longValue();
+        Long id = insert.executeAndReturnKey(
+                new SimplePropertySqlParameterSource(deck)).longValue();
         return new Deck(id, deck.name(), deck.createdAt());
     }
 
@@ -84,7 +68,7 @@ public class DeckRepository {
                     left join review_state on review_state.card_id = card.id
                 group by deck.id, deck.name
                 order by deck.id
-                """, Map.of("today", today), SUMMARY_MAPPER);
+                """, Map.of("today", today), DataClassRowMapper.newInstance(DeckSummary.class));
     }
 
     /** Per-deck performance: grading count and correct count. */
@@ -100,6 +84,6 @@ public class DeckRepository {
                     left join review_log on review_log.card_id = card.id
                 group by deck.id, deck.name
                 order by deck.id
-                """, Map.of(), STAT_MAPPER);
+                """, Map.of(), DataClassRowMapper.newInstance(DeckStat.class));
     }
 }

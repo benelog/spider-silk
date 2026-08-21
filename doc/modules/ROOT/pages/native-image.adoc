@@ -29,8 +29,8 @@ dependencies {
 ----
 
 Row mapping::
-The repositories map rows with hand-written lambdas rather than spring-jdbc's `DataClassRowMapper`, which constructs records reflectively and would need every domain record listed in a reflection config.
-The same code that keeps the domain xref:reflection-scope.adoc[reflection-free] on the JVM is what keeps the config empty here.
+The repositories map rows with spring-jdbc's `DataClassRowMapper` and feed inserts through `SimplePropertySqlParameterSource`, both of which reach the domain records reflectively — the example's own choice, kept because so much existing JDBC code looks exactly like this.
+What that choice costs under native image is a reflection config listing every domain type, and the build derives that list from the package (see below) rather than maintaining it by hand.
 
 Resources and the driver::
 The rest is declared in the build: the classpath resources the app reads at runtime, and the reachability metadata for H2, which the plugin fetches from GraalVM's shared repository.
@@ -64,8 +64,8 @@ gradle :example-flashcard:nativeCompile
 example-flashcard/build/native/nativeCompile/flashcard
 ----
 
-Built with GraalVM CE 25, the binary comes out at 58MB and Jetty reports itself started after 34ms, against roughly 350ms for the same app on a JVM.
-Everything the example does — routing, jte templates, static files, sessions and flash, the JSON API, the OpenAPI export, H2 over spring-jdbc with transactions — runs in the binary with no reflection config written by hand: the only one in the image is the file the jte plugin generated.
+Built with GraalVM CE 25, the binary comes out at 61MB and Jetty reports itself started after roughly 35ms, against roughly 350ms for the same app on a JVM.
+Everything the example does — routing, jte templates, static files, sessions and flash, the JSON API, the OpenAPI export, H2 over spring-jdbc with transactions — runs in the binary with no reflection config written by hand: every entry in the image is generated, by the jte plugin for the template classes and by the build itself for the domain package, and not one of them names a framework class.
 `--no-fallback` keeps that honest, failing the build rather than quietly emitting a binary that still needs a JVM.
 
 The `--dev` template mode is the one thing that stays on the JVM, since hot-reloading a template means compiling it at runtime.
@@ -73,11 +73,11 @@ The `--dev` template mode is the one thing that stays on the JVM, since hot-relo
 == When a library reflects
 
 The framework will not be what stops you; a library that resolves classes by name at runtime will.
-The pattern is the one the example shows twice over: prefer the code path that says what it means — a hand-written mapper, a precompiled template — and where a library must reflect, hand `native-image` its config: from the library's own tooling like jte's extension, from GraalVM's metadata repository like H2's, or written yourself as below.
+Prefer the code path that says what it means — a precompiled template, a hand-written mapper — and where a library must reflect, hand `native-image` its config: from the library's own tooling like jte's extension, from GraalVM's metadata repository like H2's, or maintained for your own types as below.
 
 === Keeping DataClassRowMapper, measured
 
-Keeping spring-jdbc's `DataClassRowMapper` and `SimplePropertySqlParameterSource` instead of the hand-written mappers takes one file: a `reflect-config.json` under `src/main/resources/META-INF/native-image/<any-directory>/`, with an entry per domain type.
+What the example's `DataClassRowMapper` and `SimplePropertySqlParameterSource` need is one file: a `reflect-config.json` on the classpath under `META-INF/native-image/<any-directory>/`, with an entry per domain type — written by hand, or generated the way the example's build does.
 
 [source,json]
 ----
@@ -115,8 +115,8 @@ The tracing agent (`-agentlib:native-image-agent=config-output-dir=...`) can wri
 
 === Deriving the config from a package
 
-The forgotten-entry failure has a build-time fix: derive the config from the package instead of maintaining it by hand.
-A Gradle task can register every type in `flashcard.domain`, so a record added to the package cannot be missed:
+The forgotten-entry failure has a build-time fix, and it is the one the example ships: derive the config from the package instead of maintaining it by hand.
+This task in example-flashcard's build registers every type in `flashcard.domain`, so a record added to the package cannot be missed:
 
 [source,groovy]
 ----

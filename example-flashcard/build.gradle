@@ -51,3 +51,26 @@ graalvmNative {
         enabled = true
     }
 }
+
+// The repositories map rows with spring-jdbc's DataClassRowMapper, which
+// constructs the domain records reflectively, so a native image needs every
+// type in flashcard.domain registered for reflection. Deriving that list from
+// the source directory means a record added to the package cannot be forgotten.
+def domainReflectConfig = tasks.register('domainReflectConfig') {
+    def domainDir = file('src/main/java/flashcard/domain')
+    def outDir = layout.buildDirectory.dir('generated/reflect-config')
+    inputs.dir(domainDir)
+    outputs.dir(outDir)
+    doLast {
+        def entries = domainDir.listFiles()
+                .findAll { it.name.endsWith('.java') }
+                .collect { 'flashcard.domain.' + it.name.replace('.java', '') }
+                .sort()
+                .collect { ['name': it, 'allDeclaredConstructors': true,
+                            'allDeclaredMethods': true, 'allDeclaredFields': true] }
+        def json = outDir.get().file('META-INF/native-image/flashcard-domain/reflect-config.json').asFile
+        json.parentFile.mkdirs()
+        json.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(entries))
+    }
+}
+sourceSets.main.resources.srcDir(domainReflectConfig)

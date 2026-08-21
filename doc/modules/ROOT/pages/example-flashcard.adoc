@@ -6,8 +6,9 @@ The same features as ch07-jdbc-plus from `spring-jdbc-book` (decks, cards, tags,
 DB::
 Repositories use `NamedParameterJdbcTemplate` directly.
 The executed SQL is visible in the code.
-Inserts are the exception: `SimpleJdbcInsert` reads the table metadata from the database and returns the generated key.
-Row mappers and insert parameters are written out by hand rather than through `DataClassRowMapper`, so no reflection touches the domain records — which is what lets the app compile to a xref:native-image.adoc[native image] as it is.
+Inserts are the exception: `SimpleJdbcInsert` reads the table metadata and returns the generated key, with `SimplePropertySqlParameterSource` taking the values straight off the domain record.
+`SmartDeckRepository` still spells its parameters out, because its `SmartCondition` enum has to reach the driver as `name()` rather than as an enum.
+Row mapping goes through `DataClassRowMapper`; the reflection this pair needs under a xref:native-image.adoc[native image] is a config the build generates from the domain package.
 
 DI::
 No container; `FlashcardContext` wires everything by calling constructors directly, playing the role of Spring's ApplicationContext by hand.
