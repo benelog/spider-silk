@@ -1,0 +1,76 @@
+= GraalVM Native Image
+:navtitle: GraalVM Native Image
+
+A framework without reflection is a framework `native-image` can see through: routing is a list, handlers are lambdas the closed-world analysis follows, and there is no reflection config to write for core.
+What needs preparing is the parts that are not the framework, and the example project shows all of them: `gradle :example-flashcard:nativeCompile` builds a self-contained binary serving the same app.
+
+== What the example prepares
+
+Templates::
+A native binary carries no compiler, so jte's default of compiling templates at runtime is not an option.
+The jte Gradle plugin's `generate()` turns each template into a Java class at build time (xref:deployment.adoc[Deployment]), and its `NativeResourcesExtension` writes the reflection config for those generated classes, which jte loads by name:
++
+[source,groovy]
+----
+plugins {
+    id 'gg.jte.gradle' version '3.2.4'
+}
+
+jte {
+    sourceDirectory = file('src/main/resources/jte').toPath()
+    contentType = gg.jte.ContentType.Html
+    generate()
+    jteExtension 'gg.jte.nativeimage.NativeResourcesExtension'
+}
+
+dependencies {
+    jteGenerate 'gg.jte:jte-native-resources:3.2.4'
+}
+----
+
+Row mapping::
+The repositories map rows with hand-written lambdas rather than spring-jdbc's `DataClassRowMapper`, which constructs records reflectively and would need every domain record listed in a reflection config.
+The same code that keeps the domain xref:reflection-scope.adoc[reflection-free] on the JVM is what keeps the config empty here.
+
+Resources and the driver::
+The rest is declared in the build: the classpath resources the app reads at runtime, and the reachability metadata for H2, which the plugin fetches from GraalVM's shared repository.
++
+[source,groovy]
+----
+plugins {
+    id 'org.graalvm.buildtools.native' version '1.1.10'
+}
+
+graalvmNative {
+    binaries {
+        main {
+            imageName = 'flashcard'
+            buildArgs.add('--no-fallback')
+            resources.includedPatterns.addAll(['schema\\.sql', 'public/.*'])
+        }
+    }
+    metadataRepository {
+        enabled = true
+    }
+}
+----
+
+== Build and run
+
+[source,bash]
+----
+# needs a GraalVM JDK, e.g. `sdk install java 25.2.4-graalce`
+gradle :example-flashcard:nativeCompile
+example-flashcard/build/native/nativeCompile/flashcard
+----
+
+Built with GraalVM CE 25, the binary comes out at 58MB and Jetty reports itself started after 34ms, against roughly 350ms for the same app on a JVM.
+Everything the example does — routing, jte templates, static files, sessions and flash, the JSON API, the OpenAPI export, H2 over spring-jdbc with transactions — runs in the binary with no reflection config written by hand: the only one in the image is the file the jte plugin generated.
+`--no-fallback` keeps that honest, failing the build rather than quietly emitting a binary that still needs a JVM.
+
+The `--dev` template mode is the one thing that stays on the JVM, since hot-reloading a template means compiling it at runtime.
+
+== In an app of your own
+
+The framework will not be what stops you; a library that resolves classes by name at runtime will.
+The pattern is the one the example shows twice over: prefer the code path that says what it means — a hand-written mapper, a precompiled template — and where a library must reflect, hand `native-image` its config: from the library's own tooling like jte's extension, from GraalVM's metadata repository like H2's, or from a run with the tracing agent as the last resort.

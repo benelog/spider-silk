@@ -46,7 +46,27 @@ Anything else is the one-liner above; a module only earns its place when there i
 
 Rendering happens while the handler's exception handling still applies, so a template that throws reaches `app.exception(...)` like any other failure, and a `HEAD` of a rendered page reports the length the `GET` would have sent.
 
-== Precompiled templates
+== Development and production
 
-jte compiles at runtime by default, which needs a JDK on the deployment machine.
-xref:deployment.adoc[Deployment] covers precompiling for production.
+jte compiles templates at runtime by default, reading them from the classpath: nothing to configure, but it needs a JDK on the deployment machine, and an edited template is not seen until the classpath copy is rebuilt.
+The engine has a mode for each side of that trade, and `JteTemplates` has a constructor for each.
+
+Development resolves templates from the source directory instead of the classpath:
+
+[source,java]
+----
+app.templates(new JteTemplates(
+        new DirectoryCodeResolver(Path.of("src/main/resources/jte"))));
+----
+
+Before each render, jte checks the modification timestamp of the template file and everything it depends on, and recompiles what changed — saving a `.jte` file and refreshing the browser is the whole loop.
+
+Production precompiles every template at build time with the https://jte.gg/pre-compiling/[jte Gradle plugin] and hands the engine the result:
+
+[source,java]
+----
+app.templates(new JteTemplates(TemplateEngine.createPrecompiled(ContentType.Html)));
+----
+
+The jar then renders from compiled classes: no runtime compiler, no JDK on the machine, and a template that does not compile fails the build instead of the request.
+xref:deployment.adoc[Deployment] has the Gradle side, the example project wires both modes behind a `--dev` flag, and a xref:native-image.adoc[native image] has no compiler at runtime at all, so there this mode is the only one.

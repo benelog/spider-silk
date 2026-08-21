@@ -1,18 +1,22 @@
 plugins {
     id 'application'
     id 'gg.jte.gradle' version '3.2.4'
+    id 'org.graalvm.buildtools.native' version '1.1.10'
 }
 
 // Precompiles every .jte template into a Java class at build time, so the jar
-// renders without the runtime compiler or a JDK.
+// (and the native image) renders without the runtime compiler or a JDK.
 // FlashcardApp's --dev flag bypasses this and hot-reloads the .jte sources.
 jte {
     sourceDirectory = file('src/main/resources/jte').toPath()
     contentType = gg.jte.ContentType.Html
     generate()
+    jteExtension 'gg.jte.nativeimage.NativeResourcesExtension'
 }
 
 dependencies {
+    jteGenerate 'gg.jte:jte-native-resources:3.2.4'
+
     implementation project(':spider-silk-core')
     implementation 'org.springframework:spring-jdbc:6.2.19'
     implementation 'com.h2database:h2:2.3.232'
@@ -28,4 +32,22 @@ dependencies {
 
 application {
     mainClass = 'flashcard.FlashcardApp'
+}
+
+// `gradle nativeCompile` builds build/native/nativeCompile/flashcard with GraalVM.
+// The jte plugin above already emits the reflection config for the precompiled
+// template classes; what is declared here is the rest: the resources the app
+// reads from the classpath, and the reachability metadata for H2 that the
+// plugin downloads from the shared repository.
+graalvmNative {
+    binaries {
+        main {
+            imageName = 'flashcard'
+            buildArgs.add('--no-fallback')
+            resources.includedPatterns.addAll(['schema\\.sql', 'public/.*'])
+        }
+    }
+    metadataRepository {
+        enabled = true
+    }
 }

@@ -22,6 +22,7 @@
 ** xref:tomcat.adoc[Tomcat]
 ** xref:undertow.adoc[Undertow]
 ** xref:deployment.adoc[Deployment]
+** xref:native-image.adoc[GraalVM Native Image]
 
 * Testing and Observability
 ** xref:testing.adoc[Testing]
