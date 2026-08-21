@@ -1,0 +1,17 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':spider-silk-core')
+
+    // api, not implementation: the Handlebars-taking constructor hands out
+    // Handlebars' own types, so a consumer configuring helpers or a cache needs
+    // them on its compile classpath.
+    api 'com.github.jknack:handlebars:4.5.4'
+
+    testImplementation project(':spider-silk-test')
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

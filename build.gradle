@@ -21,7 +21,8 @@ subprojects {
 // Published to GitHub Packages: the framework and its test harness, not the example.
 configure(subprojects.findAll {
     it.name in ['spider-silk-core', 'spider-silk-test', 'spider-silk-tomcat',
-            'spider-silk-undertow']
+            'spider-silk-undertow', 'spider-silk-freemarker', 'spider-silk-handlebars',
+            'spider-silk-thymeleaf']
 }) {
     apply plugin: 'maven-publish'
 

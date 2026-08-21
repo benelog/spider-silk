@@ -1,0 +1,79 @@
+= Thymeleaf
+:navtitle: Thymeleaf
+
+`spider-silk-thymeleaf` renders with https://www.thymeleaf.org[Thymeleaf] instead of the jte bundled with core.
+It is a separate module for the same reason xref:tomcat.adoc[Tomcat] is: being tied to one engine is a thing worth saying in the artifact's name, and core stays a web tier with one template dependency rather than three.
+
+== Installation
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation('{project-group}:spider-silk-thymeleaf:{project-version}') {
+        exclude group: 'gg.jte'    // core's jte, unused here
+    }
+}
+----
+
+The module depends on Thymeleaf 3.1.x, the line that dropped the servlet API from `thymeleaf` core, so nothing here pulls a second servlet level onto the classpath.
+
+Excluding jte is optional; it only keeps an unused engine off the classpath.
+
+== Rendering
+
+[source,java]
+----
+new App()
+        .templates(new ThymeleafTemplates("thymeleaf"))
+        .get("/decks/{deckId}", req ->
+                WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+----
+
+That renders `classpath:/thymeleaf/deck.html`, parsed as UTF-8 HTML with the parsed template cached.
+The model's keys are the variables a template reads, so `${deck.title}` reaches `Map.of("deck", ...)`.
+
+`th:text` escapes and `th:utext` does not, which is Thymeleaf's own default and the reason nothing has to be configured for it here.
+
+== What a model is, and what it is not
+
+This is the servlet-free half of Thymeleaf: a template name, a model, and the writer to render into.
+There is no `WebContext`, so the expressions a Spring MVC page reaches for — `#request`, `#session`, `@bean` — are not there.
+A model entry is: whatever the handler puts in the `Map` is what the page can read.
+
+== A root or a suffix of your own
+
+[source,java]
+----
+app.templates(new ThymeleafTemplates("thymeleaf")   // classpath:/thymeleaf
+        .suffix(".th.html"));                       // .../deck.th.html
+----
+
+The suffix is appended, never checked for, so a name that still carries its extension is looked up with the suffix twice over.
+The resolver's own suffix is left empty, so `suffix` is the only one in play.
+
+`locale(Locale)` sets what `#{...}` messages and `#numbers` format against; the default is the JVM's, since a `TemplateRenderer` is handed a model and not a request.
+
+== Dialects and resolvers
+
+The other constructor takes a configured `TemplateEngine`, which is where a file-system resolver, a message source, or a dialect goes:
+
+[source,java]
+----
+ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
+resolver.setPrefix("thymeleaf/");
+resolver.setSuffix("");                 // ThymeleafTemplates appends its own
+resolver.setTemplateMode(TemplateMode.HTML);
+resolver.setCacheable(false);           // reload while developing
+
+TemplateEngine engine = new TemplateEngine();
+engine.setTemplateResolver(resolver);
+
+app.templates(new ThymeleafTemplates(engine));
+----
+
+Leave the resolver's suffix empty, as above, or it appends `.html` on top of the one `ThymeleafTemplates` already added.
+
+== Reflection
+
+Thymeleaf evaluates `${deck.title}` through OGNL, which is reflective.
+That is the module's reflection, not core's — see xref:reflection-scope.adoc[The Scope of "No Reflection"].

@@ -1,0 +1,17 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':spider-silk-core')
+
+    // api, not implementation: the Configuration-taking constructor hands out
+    // FreeMarker's own types, so a consumer setting an object wrapper or a
+    // shared variable needs them on its compile classpath.
+    api 'org.freemarker:freemarker:2.3.34'
+
+    testImplementation project(':spider-silk-test')
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

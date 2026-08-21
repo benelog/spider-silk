@@ -1,0 +1,74 @@
+= FreeMarker
+:navtitle: FreeMarker
+
+`spider-silk-freemarker` renders with https://freemarker.apache.org[FreeMarker] instead of the jte bundled with core.
+It is a separate module for the same reason xref:tomcat.adoc[Tomcat] is: being tied to one engine is a thing worth saying in the artifact's name, and core stays a web tier with one template dependency rather than four.
+
+== Installation
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation('{project-group}:spider-silk-freemarker:{project-version}') {
+        exclude group: 'gg.jte'    // core's jte, unused here
+    }
+}
+----
+
+Excluding jte is optional; it only keeps an unused engine off the classpath.
+
+== Rendering
+
+[source,java]
+----
+new App()
+        .templates(new FreeMarkerTemplates("freemarker"))
+        .get("/decks/{deckId}", req ->
+                WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+----
+
+That renders `classpath:/freemarker/deck.ftlh`, read as UTF-8 with the parsed template cached.
+The model is the data model, so `${deck.title}` reaches `Map.of("deck", ...)`.
+
+== Escaping is a decision here
+
+FreeMarker escapes nothing until an output format says to, which is the one place it differs from the other three engines and the main reason this module exists rather than a one-liner.
+`new FreeMarkerTemplates(root)` sets `HTMLOutputFormat`, so `${}` is HTML-escaped and `${x?no_esc}` is the way out.
+
+The default suffix is `.ftlh`, the extension FreeMarker reads as "this one is HTML" on its own, so the escaping is stated twice over — once in the configuration, once in every template's name.
+A suffix of your own loses the second half, but the configuration still holds:
+
+[source,java]
+----
+app.templates(new FreeMarkerTemplates("freemarker")     // classpath:/freemarker
+        .suffix(".ftl"));                               // .../deck.ftl, still escaped
+----
+
+The suffix is appended, never checked for, so a name that still carries its extension is looked up with the suffix twice over.
+The classpath loader appends no extension of its own, so `suffix` is the only one in play.
+
+== A configuration of your own
+
+The other constructor takes a `Configuration`, which is where an object wrapper, shared variables, or a file-system loader go.
+It is handed over whole: the escaping, the exception handling, and the encoding are yours to set again.
+
+[source,java]
+----
+Configuration configuration = new Configuration(Configuration.VERSION_2_3_34);
+configuration.setTemplateLoader(new ClassTemplateLoader(loader, "freemarker"));
+configuration.setDefaultEncoding("UTF-8");
+configuration.setOutputFormat(HTMLOutputFormat.INSTANCE);                        // or nothing is escaped
+configuration.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
+configuration.setSharedVariable("siteName", "Spider Silk");
+
+app.templates(new FreeMarkerTemplates(configuration));
+----
+
+`RETHROW_HANDLER` is what the built-in configuration uses, and what a server wants: a template that fails reaches `app.exception(...)` instead of writing a stack trace into a half-rendered page.
+FreeMarker's own default, `DEBUG_HANDLER`, does the latter.
+
+== Reflection
+
+FreeMarker reads `${deck.title}` through its object wrapper, which is reflective for a record or a bean.
+That is the module's reflection, not core's — see xref:reflection-scope.adoc[The Scope of "No Reflection"].
+Keeping the model a `Map` of values a template already holds keeps even that out of the picture.

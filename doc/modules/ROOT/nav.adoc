@@ -11,6 +11,9 @@
 * Response Bodies
 ** xref:json.adoc[JSON]
 ** xref:templates.adoc[Templates]
+** xref:freemarker.adoc[FreeMarker]
+** xref:handlebars.adoc[Handlebars]
+** xref:thymeleaf.adoc[Thymeleaf]
 ** xref:static-files.adoc[Static Files]
 ** xref:sse.adoc[Server-Sent Events]
 

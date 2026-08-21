@@ -33,6 +33,17 @@ An engine that is not jte is that one method, and `templates(renderer)` puts it 
 app.templates((template, model, out) -> mustache.compile(template + ".mustache").execute(out, model));
 ----
 
+Three engines come as modules of their own, with the root, the suffix, and the escaping already settled: xref:freemarker.adoc[FreeMarker], xref:handlebars.adoc[Handlebars], and xref:thymeleaf.adoc[Thymeleaf].
+
+[source,java]
+----
+app.templates(new FreeMarkerTemplates("freemarker"));   // classpath:/freemarker/deck.ftlh
+app.templates(new HandlebarsTemplates("hbs"));          // classpath:/hbs/deck.hbs
+app.templates(new ThymeleafTemplates("thymeleaf"));     // classpath:/thymeleaf/deck.html
+----
+
+Anything else is the one-liner above; a module only earns its place when there is something to settle beyond `compile(name).render(model)`.
+
 Rendering happens while the handler's exception handling still applies, so a template that throws reaches `app.exception(...)` like any other failure, and a `HEAD` of a rendered page reports the length the `GET` would have sent.
 
 == Precompiled templates

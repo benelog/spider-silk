@@ -1,0 +1,19 @@
+plugins {
+    id 'java-library'
+}
+
+dependencies {
+    api project(':spider-silk-core')
+
+    // api, not implementation: the TemplateEngine-taking constructor hands out
+    // Thymeleaf's own types, so a consumer configuring resolvers or dialects
+    // needs them on its compile classpath.
+    // 3.1.x is the line that dropped the servlet API from thymeleaf core, so
+    // nothing here pulls a second servlet level onto the classpath.
+    api 'org.thymeleaf:thymeleaf:3.1.5.RELEASE'
+
+    testImplementation project(':spider-silk-test')
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

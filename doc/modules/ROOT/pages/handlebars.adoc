@@ -1,0 +1,69 @@
+= Handlebars
+:navtitle: Handlebars
+
+`spider-silk-handlebars` renders with https://github.com/jknack/handlebars.java[Handlebars.java] instead of the jte bundled with core.
+It is a separate module for the same reason xref:tomcat.adoc[Tomcat] is: being tied to one engine is a thing worth saying in the artifact's name, and core stays a web tier with one template dependency rather than three.
+
+== Installation
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation('{project-group}:spider-silk-handlebars:{project-version}') {
+        exclude group: 'gg.jte'    // core's jte, unused here
+    }
+}
+----
+
+Excluding jte is optional; it only keeps an unused engine off the classpath.
+Leave it in and both work side by side — `templates(renderer)` takes whichever you hand it.
+
+== Rendering
+
+[source,java]
+----
+new App()
+        .templates(new HandlebarsTemplates("hbs"))
+        .get("/decks/{deckId}", req ->
+                WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+----
+
+That renders `classpath:/hbs/deck.hbs`.
+The model's keys are the names a template reads, so `+{{deck.title}}+` reaches `Map.of("deck", ...)`.
+
+`+{{name}}+` is HTML-escaped and `+{{{name}}}+` is not, which is Handlebars' own default and the reason nothing has to be configured for it here.
+
+== A root or a suffix of your own
+
+[source,java]
+----
+app.templates(new HandlebarsTemplates("hbs")    // classpath:/hbs
+        .suffix(".html"));                      // .../deck.html
+----
+
+The suffix is appended, never checked for, so a name that still carries its extension is looked up with the suffix twice over.
+The classpath loader appends no extension of its own, so `suffix` is the only one in play.
+
+== Helpers and a cache
+
+The other constructor takes a configured `Handlebars`, which is where helpers, a different escaping strategy, or a partial loader go:
+
+[source,java]
+----
+Handlebars handlebars = new Handlebars(new ClassPathTemplateLoader("/hbs", ""))
+        .with(new ConcurrentMapTemplateCache())
+        .registerHelper("upper", (value, options) -> value.toString().toUpperCase());
+
+app.templates(new HandlebarsTemplates(handlebars));
+----
+
+Pass the loader an empty suffix, as above, or it appends `.hbs` on top of the one `HandlebarsTemplates` already added.
+
+`new HandlebarsTemplates("hbs")` caches compiled templates in a `ConcurrentMapTemplateCache`; Handlebars' own default is to compile on every render, which is a per-request parse in production.
+Hand in a `Handlebars` of your own to choose differently.
+
+== Reflection
+
+Handlebars resolves `+{{deck.title}}+` against a `Map` first, but falls back to reflection for a record or a bean.
+That is the module's reflection, not core's — see xref:reflection-scope.adoc[The Scope of "No Reflection"].
+Keeping the model a `Map` of values a template already holds keeps even that out of the picture.

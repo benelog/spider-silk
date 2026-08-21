@@ -3,4 +3,7 @@
 
 The principle applies to the *framework core*: routing, parameter extraction, and JSON handling use no reflection anywhere.
 
+A template engine in a module of its own answers for itself: xref:handlebars.adoc[Handlebars] falls back to reflection for a record or a bean, xref:freemarker.adoc[FreeMarker] reads one through its object wrapper, and xref:thymeleaf.adoc[Thymeleaf] evaluates every expression through OGNL.
+That is one more reason each lives outside core — take the module and you have taken its reflection with it, and an app that stays on the default jte never does.
+
 The example project's choice of spring-jdbc's `DataClassRowMapper` and the transaction internals do use reflection; that is the example's choice, and switching to repositories that handle JDBC directly would remove even that.
