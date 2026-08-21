@@ -6,15 +6,20 @@ import java.util.Map;
 
 import javax.sql.DataSource;
 
-import org.springframework.jdbc.core.DataClassRowMapper;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-import org.springframework.jdbc.core.namedparam.SimplePropertySqlParameterSource;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
 import flashcard.domain.DailyStat;
 import flashcard.domain.ReviewLog;
 
 public class ReviewLogRepository {
+
+    private static final RowMapper<DailyStat> DAILY_STAT_MAPPER = (rs, rowNum) -> new DailyStat(
+            rs.getObject("study_date", LocalDate.class),
+            rs.getLong("correct_count"),
+            rs.getLong("wrong_count"));
 
     private final NamedParameterJdbcTemplate jdbc;
     private final SimpleJdbcInsert insert;
@@ -27,7 +32,12 @@ public class ReviewLogRepository {
     }
 
     public void insert(ReviewLog log) {
-        insert.execute(new SimplePropertySqlParameterSource(log));
+        insert.execute(new MapSqlParameterSource()
+                .addValue("card_id", log.cardId())
+                .addValue("correct", log.correct())
+                .addValue("retry_round", log.retryRound())
+                .addValue("reviewed_at", log.reviewedAt())
+                .addValue("study_date", log.studyDate()));
     }
 
     /** Correct/wrong counts per day. Feeds the bar chart on the stats screen. */
@@ -40,7 +50,7 @@ public class ReviewLogRepository {
                 where study_date >= :since
                 group by study_date
                 order by study_date
-                """, Map.of("since", since), DataClassRowMapper.newInstance(DailyStat.class));
+                """, Map.of("since", since), DAILY_STAT_MAPPER);
     }
 
     /** Study dates, newest first. Used to compute the study streak. */

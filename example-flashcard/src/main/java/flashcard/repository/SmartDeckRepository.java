@@ -6,18 +6,21 @@ import java.util.Optional;
 
 import javax.sql.DataSource;
 
-import org.springframework.jdbc.core.DataClassRowMapper;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.simple.SimpleJdbcInsert;
 
+import flashcard.domain.SmartCondition;
 import flashcard.domain.SmartDeck;
 
 public class SmartDeckRepository {
 
-    private static final RowMapper<SmartDeck> MAPPER =
-            DataClassRowMapper.newInstance(SmartDeck.class);
+    private static final RowMapper<SmartDeck> MAPPER = (rs, rowNum) -> new SmartDeck(
+            rs.getObject("id", Long.class),
+            rs.getString("name"),
+            SmartCondition.valueOf(rs.getString("condition_type")),
+            rs.getString("param"));
 
     private final NamedParameterJdbcTemplate jdbc;
     private final SimpleJdbcInsert insert;
@@ -33,7 +36,7 @@ public class SmartDeckRepository {
         Long id = insert.executeAndReturnKey(
                 new MapSqlParameterSource()
                         .addValue("name", smartDeck.name())
-                        .addValue("conditionType", smartDeck.conditionType().name())
+                        .addValue("condition_type", smartDeck.conditionType().name())
                         .addValue("param", smartDeck.param())).longValue();
         return new SmartDeck(id, smartDeck.name(),
                 smartDeck.conditionType(), smartDeck.param());
