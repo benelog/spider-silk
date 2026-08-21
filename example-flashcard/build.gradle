@@ -1,7 +1,17 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.google.cloud.tools:jib-native-image-extension-gradle:0.1.0'
+    }
+}
+
 plugins {
     id 'application'
     id 'gg.jte.gradle' version '3.2.4'
     id 'org.graalvm.buildtools.native' version '1.1.10'
+    id 'com.google.cloud.tools.jib' version '3.5.4'
 }
 
 // Precompiles every .jte template into a Java class at build time, so the jar
@@ -50,6 +60,38 @@ graalvmNative {
     metadataRepository {
         enabled = true
     }
+}
+
+// `gradle jibBuildTar` wraps the native binary above in a container image
+// without a Docker daemon: the tar under build/jib-image.tar is `docker load`
+// material for any machine, and `gradle jib` pushes the same image straight to
+// the registry given credentials. The native-image extension swaps Jib's usual
+// Java layers for the single binary and sets the entrypoint to /app/flashcard;
+// distroless/base supplies the glibc the dynamically linked binary expects.
+// H2 writes to the process home (/root/db in the container), so the data lives
+// and dies with the container unless a volume is mounted there.
+jib {
+    from {
+        image = 'gcr.io/distroless/base-debian12'
+    }
+    to {
+        image = 'ghcr.io/benelog/spider-silk-flashcard'
+    }
+    container {
+        ports = ['8080']
+    }
+    pluginExtensions {
+        pluginExtension {
+            implementation = 'com.google.cloud.tools.jib.gradle.extension.nativeimage.JibNativeImageExtension'
+            properties = [imageName: 'flashcard']
+        }
+    }
+}
+
+// The extension reads the binary when the image is assembled but declares no
+// task dependency on the compile that produces it.
+['jib', 'jibBuildTar', 'jibDockerBuild'].each { taskName ->
+    tasks.named(taskName) { dependsOn tasks.named('nativeCompile') }
 }
 
 // The repositories map rows with spring-jdbc's DataClassRowMapper, which

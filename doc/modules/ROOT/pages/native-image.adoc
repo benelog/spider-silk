@@ -70,6 +70,59 @@ Everything the example does — routing, jte templates, static files, sessions a
 
 The `--dev` template mode is the one thing that stays on the JVM, since hot-reloading a template means compiling it at runtime.
 
+== A container image, without Docker
+
+The binary is one file, and Jib puts that one file in a container image without a Docker daemon on the build machine: `gradle :example-flashcard:jibBuildTar` writes `build/jib-image.tar`, ready for any Docker host to load.
+The example wires it up with Jib's native-image extension, which replaces the Java layers Jib would normally assemble with a single layer holding the binary, sets its executable bit, and points the entrypoint at `/app/flashcard`:
+
+[source,groovy]
+----
+buildscript {
+    dependencies {
+        classpath 'com.google.cloud.tools:jib-native-image-extension-gradle:0.1.0'
+    }
+}
+
+plugins {
+    id 'com.google.cloud.tools.jib' version '3.5.4'
+}
+
+jib {
+    from {
+        image = 'gcr.io/distroless/base-debian12'
+    }
+    to {
+        image = 'ghcr.io/benelog/spider-silk-flashcard'
+    }
+    container {
+        ports = ['8080']
+    }
+    pluginExtensions {
+        pluginExtension {
+            implementation = 'com.google.cloud.tools.jib.gradle.extension.nativeimage.JibNativeImageExtension'
+            properties = [imageName: 'flashcard']
+        }
+    }
+}
+----
+
+`imageName` tells the extension which file to take from `build/native/nativeCompile` and must match the `graalvmNative` block's.
+The base image is chosen to fit what the binary still needs: `native-image` links glibc dynamically by default, and `distroless/base` is little more than glibc, CA certificates, and a filesystem skeleton — no shell, no package manager, and no JVM, since the JVM left at compile time.
+The whole tar, application and base image together, comes out at 32MB.
+
+[source,bash]
+----
+gradle :example-flashcard:jibBuildTar
+# then, on a machine that runs containers:
+docker load < example-flashcard/build/jib-image.tar
+docker run -p 8080:8080 ghcr.io/benelog/spider-silk-flashcard
+----
+
+The tar is only the daemonless route: `gradle jib` pushes the same image straight to the registry given credentials, and `gradle jibDockerBuild` loads it into a local daemon where one exists.
+Two properties of the result are worth knowing before shipping it.
+A native binary is compiled for one platform, so the image runs on the architecture that built it — there is no cross-compilation.
+And H2 keeps its database file under the process home, `/root/db` in this image, so the data lives and dies with the container unless a volume is mounted there.
+
 == When a library reflects
 
 The framework will not be what stops you; a library that resolves classes by name at runtime will.
