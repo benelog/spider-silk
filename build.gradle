@@ -31,6 +31,17 @@ configure(subprojects.findAll {
         withJavadocJar()
     }
 
+    // The module name is frozen API once released: spider-silk-core owns the
+    // spidersilk package, and each other module the subpackage it is named for.
+    jar {
+        manifest {
+            attributes('Automatic-Module-Name':
+                    project.name == 'spider-silk-core'
+                            ? 'spidersilk'
+                            : 'spidersilk.' + project.name.substring('spider-silk-'.length()))
+        }
+    }
+
     publishing {
         publications {
             maven(MavenPublication) {
