@@ -1,6 +1,6 @@
 site:
   title: Spider Silk
-  url: https://benelog.github.io/spider-silk
+  url: https://spider-silk.benelog.net
   start_page: spider-silk::index.adoc
 
 content:

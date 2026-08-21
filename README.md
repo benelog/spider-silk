@@ -24,7 +24,7 @@ Three core principles:
 * **Better RESTful API support than raw servlets.**
     * Per-method routing with path variables, typed parameter extraction, exception-to-status mapping.
 
-**Full documentation: [benelog.github.io/spider-silk](https://benelog.github.io/spider-silk)**
+**Full documentation: [spider-silk.benelog.net](https://spider-silk.benelog.net)**
 
 ## Quick Start
 
@@ -124,7 +124,7 @@ $ curl localhost:8080/hello/silk
 Hello, silk
 ```
 
-Routing groups, filters, error handlers, JSON codecs, SSE, templates, static files, route introspection, the test harness, and server tuning are all in the [documentation](https://benelog.github.io/spider-silk).
+Routing groups, filters, error handlers, JSON codecs, SSE, templates, static files, route introspection, the test harness, and server tuning are all in the [documentation](https://spider-silk.benelog.net).
 
 Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to serve a request.
 

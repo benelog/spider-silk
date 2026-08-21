@@ -2,7 +2,7 @@
 
 Why Spider Silk has the shape it has, item by item.
 
-This is the reasoning behind the framework, not a description of it — what each thing *does* is the [manual](https://benelog.github.io/spider-silk).
+This is the reasoning behind the framework, not a description of it — what each thing *does* is the [manual](https://spider-silk.benelog.net).
 What is kept here is the decision, why it went that way, and what was rejected on the way.
 The numbers are load-bearing: the write-ups cross-reference each other by number, and the [rejected list](#rejected--decisions-with-the-reason) at the end closes questions that would otherwise be asked again.
 
