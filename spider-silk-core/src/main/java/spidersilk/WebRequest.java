@@ -1,6 +1,7 @@
 package spidersilk;
 
 import java.io.IOException;
+import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -9,7 +10,6 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -252,9 +252,16 @@ public final class WebRequest {
 
     // ---- Body ----
 
+    /**
+     * The body as text, exactly as it arrived: line endings are not rewritten
+     * and a trailing newline is kept, so a signature over the raw body still
+     * verifies.
+     */
     public String body() {
         try {
-            return req.getReader().lines().collect(Collectors.joining("\n"));
+            StringWriter text = new StringWriter();
+            req.getReader().transferTo(text);
+            return text.toString();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

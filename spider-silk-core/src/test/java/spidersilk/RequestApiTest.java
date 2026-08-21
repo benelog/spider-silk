@@ -30,6 +30,15 @@ class RequestApiTest {
     }
 
     @Test
+    void bodyArrivesAsItWasSent() {
+        App app = new App().post("/echo", req -> WebResponse.text(
+                req.body().replace("\r", "\\r").replace("\n", "\\n")));
+
+        WebTest.test(app, client -> assertThat(client.post("/echo", "one\r\ntwo\n").body())
+                .isEqualTo("one\\r\\ntwo\\n"));
+    }
+
+    @Test
     void repeatedValuesAreSplitByWhereTheyCameFrom() {
         App app = new App().post("/submit", req -> WebResponse.text(
                 req.queryParams("tag") + " " + req.formParams("tag") + " " + req.params("tag")));
