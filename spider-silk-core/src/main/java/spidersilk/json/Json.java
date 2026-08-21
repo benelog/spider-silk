@@ -34,7 +34,10 @@ public final class Json {
         return new JsonArray();
     }
 
-    /** Parses JSON text. Throws IllegalArgumentException on invalid syntax. */
+    /**
+     * Parses JSON text. Throws IllegalArgumentException on invalid syntax, and
+     * on objects and arrays nested deeper than 256 levels.
+     */
     public static JsonValue parse(String text) {
         Parser parser = new Parser(text);
         JsonValue value = parser.parseValue();
@@ -326,8 +329,16 @@ public final class Json {
     /** A recursive descent parser. */
     private static final class Parser {
 
+        /**
+         * How deeply objects and arrays may nest. The parser recurses once per
+         * level, so a body nested past any depth the JDK stack can hold would
+         * fail as a StackOverflowError instead of a rejected request.
+         */
+        private static final int MAX_DEPTH = 256;
+
         private final String text;
         private int pos;
+        private int depth;
 
         Parser(String text) {
             this.text = text;
@@ -352,10 +363,12 @@ public final class Json {
 
         private JsonObject parseObject() {
             expect('{');
+            enter();
             JsonObject object = new JsonObject();
             skipWhitespace();
             if (peek() == '}') {
                 pos++;
+                depth--;
                 return object;
             }
             while (true) {
@@ -367,6 +380,7 @@ public final class Json {
                 skipWhitespace();
                 char c = next();
                 if (c == '}') {
+                    depth--;
                     return object;
                 }
                 if (c != ',') {
@@ -377,10 +391,12 @@ public final class Json {
 
         private JsonArray parseArray() {
             expect('[');
+            enter();
             JsonArray array = new JsonArray();
             skipWhitespace();
             if (peek() == ']') {
                 pos++;
+                depth--;
                 return array;
             }
             while (true) {
@@ -388,11 +404,18 @@ public final class Json {
                 skipWhitespace();
                 char c = next();
                 if (c == ']') {
+                    depth--;
                     return array;
                 }
                 if (c != ',') {
                     throw error("Expected ',' or ']'");
                 }
+            }
+        }
+
+        private void enter() {
+            if (++depth > MAX_DEPTH) {
+                throw error("Nested deeper than " + MAX_DEPTH + " levels");
             }
         }
 

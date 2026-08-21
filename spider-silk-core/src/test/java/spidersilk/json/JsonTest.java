@@ -3,6 +3,7 @@ package spidersilk.json;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class JsonTest {
@@ -77,6 +78,18 @@ class JsonTest {
         assertThatThrownBy(() -> Json.parse("[1,2")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> Json.parse("{} extra")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> Json.parse("tru")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejectsNestingDeeperThanItCanRecurseThrough() {
+        assertThatNoException().isThrownBy(() -> Json.parse("[".repeat(256) + "]".repeat(256)));
+
+        assertThatThrownBy(() -> Json.parse("[".repeat(50_000) + "]".repeat(50_000)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Nested deeper than");
+        assertThatThrownBy(() -> Json.parse("{\"a\":".repeat(50_000) + "1" + "}".repeat(50_000)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Nested deeper than");
     }
 
     @Test
