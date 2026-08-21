@@ -43,3 +43,43 @@ jte {
 `generate()` turns each template into a Java class compiled along with the application, and `TemplateEngine.createPrecompiled(ContentType.Html)` passed through the `JteTemplates(TemplateEngine)` constructor renders those classes.
 The suffix applies either way, so no handler changes.
 xref:templates.adoc[Templates] covers the development-mode counterpart, and a xref:native-image.adoc[native image] makes this mode a requirement rather than an optimization, since a native binary carries no compiler.
+
+== A container image, without Docker
+
+https://github.com/GoogleContainerTools/jib[Jib] builds a container image from the Gradle model alone, so the build machine needs no Docker daemon: `gradle :example-flashcard:jibBuildTar` writes `build/jib-image.tar`, ready for any Docker host to load.
+The example's configuration is the plugin, a JRE base, and the port:
+
+[source,groovy]
+----
+plugins {
+    id 'com.google.cloud.tools.jib' version '3.5.4'
+}
+
+jib {
+    from {
+        image = 'eclipse-temurin:21-jre'
+    }
+    to {
+        image = 'ghcr.io/benelog/spider-silk-flashcard'
+    }
+    container {
+        ports = ['8080']
+    }
+}
+----
+
+Jib layers the image the way the build is structured — dependencies, project modules, resources, classes — so an edit to the application code rewrites only the small layers on top, and it takes the entrypoint from the `application` block's `mainClass`.
+A JRE base suffices because the templates ride along as the precompiled classes from the section above; nothing in the image compiles at runtime.
+One wrinkle: Jib checks the app's `targetCompatibility` against the base image's Java version, and a build that targets 21 through `options.release` alone must restate it — `java { targetCompatibility = JavaVersion.VERSION_21 }` — or the check reads the toolchain's version and refuses the JRE 21 base.
+
+[source,bash]
+----
+gradle :example-flashcard:jibBuildTar
+# then, on a machine that runs containers:
+docker load < example-flashcard/build/jib-image.tar
+docker run -p 8080:8080 ghcr.io/benelog/spider-silk-flashcard
+----
+
+The tar is only the daemonless route: `gradle jib` pushes the same image straight to the registry given credentials, and `gradle jibDockerBuild` loads it into a local daemon where one exists.
+H2 keeps its database file under the process home, `/root/db` in this image, so the data lives and dies with the container unless a volume is mounted there.
+The same build containerizes the GraalVM binary instead when asked: `-Pnative` swaps the base image and the layers, and xref:native-image.adoc#container[the native image chapter] shows what changes.

@@ -44,6 +44,12 @@ application {
     mainClass = 'flashcard.FlashcardApp'
 }
 
+// The root build already compiles with --release 21; this restates it where
+// Jib looks when checking the app against the JRE 21 base image below.
+java {
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
 // `gradle nativeCompile` builds build/native/nativeCompile/flashcard with GraalVM.
 // The jte plugin above already emits the reflection config for the precompiled
 // template classes; what is declared here is the rest: the resources the app
@@ -62,17 +68,19 @@ graalvmNative {
     }
 }
 
-// `gradle jibBuildTar` wraps the native binary above in a container image
-// without a Docker daemon: the tar under build/jib-image.tar is `docker load`
-// material for any machine, and `gradle jib` pushes the same image straight to
-// the registry given credentials. The native-image extension swaps Jib's usual
-// Java layers for the single binary and sets the entrypoint to /app/flashcard;
-// distroless/base supplies the glibc the dynamically linked binary expects.
-// H2 writes to the process home (/root/db in the container), so the data lives
-// and dies with the container unless a volume is mounted there.
+// `gradle jibBuildTar` wraps the app in a container image without a Docker
+// daemon: build/jib-image.tar is `docker load` material for any machine, and
+// `gradle jib` pushes the same image straight to a registry given credentials.
+// The default is a JVM image, the jar's dependencies and classes layered onto
+// a JRE base. `-Pnative` swaps that for the binary above, tagged :native — the
+// extension replaces the Java layers with the single binary and points the
+// entrypoint at /app/flashcard, and distroless/base supplies the glibc the
+// dynamically linked binary expects. Either way H2 writes to the process home
+// (/root/db in the container), so the data lives and dies with the container
+// unless a volume is mounted there.
 jib {
     from {
-        image = 'gcr.io/distroless/base-debian12'
+        image = 'eclipse-temurin:21-jre'
     }
     to {
         image = 'ghcr.io/benelog/spider-silk-flashcard'
@@ -80,18 +88,24 @@ jib {
     container {
         ports = ['8080']
     }
-    pluginExtensions {
-        pluginExtension {
-            implementation = 'com.google.cloud.tools.jib.gradle.extension.nativeimage.JibNativeImageExtension'
-            properties = [imageName: 'flashcard']
-        }
-    }
 }
 
-// The extension reads the binary when the image is assembled but declares no
-// task dependency on the compile that produces it.
-['jib', 'jibBuildTar', 'jibDockerBuild'].each { taskName ->
-    tasks.named(taskName) { dependsOn tasks.named('nativeCompile') }
+if (providers.gradleProperty('native').present) {
+    jib {
+        from.image = 'gcr.io/distroless/base-debian12'
+        to.image = 'ghcr.io/benelog/spider-silk-flashcard:native'
+        pluginExtensions {
+            pluginExtension {
+                implementation = 'com.google.cloud.tools.jib.gradle.extension.nativeimage.JibNativeImageExtension'
+                properties = [imageName: 'flashcard']
+            }
+        }
+    }
+    // The extension reads the binary when the image is assembled but declares
+    // no task dependency on the compile that produces it.
+    ['jib', 'jibBuildTar', 'jibDockerBuild'].each { taskName ->
+        tasks.named(taskName) { dependsOn tasks.named('nativeCompile') }
+    }
 }
 
 // The repositories map rows with spring-jdbc's DataClassRowMapper, which

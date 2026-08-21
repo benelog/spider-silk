@@ -70,10 +70,11 @@ Everything the example does — routing, jte templates, static files, sessions a
 
 The `--dev` template mode is the one thing that stays on the JVM, since hot-reloading a template means compiling it at runtime.
 
-== A container image, without Docker
+[#container]
+== The binary in a container
 
-The binary is one file, and Jib puts that one file in a container image without a Docker daemon on the build machine: `gradle :example-flashcard:jibBuildTar` writes `build/jib-image.tar`, ready for any Docker host to load.
-The example wires it up with Jib's native-image extension, which replaces the Java layers Jib would normally assemble with a single layer holding the binary, sets its executable bit, and points the entrypoint at `/app/flashcard`:
+xref:deployment.adoc[Deployment] sets up Jib to containerize the app on a JRE base without a Docker daemon on the build machine; the binary is one file, and `-Pnative` re-aims that same build at it.
+The switch is a conditional in the example's build, plus Jib's native-image extension on the buildscript classpath:
 
 [source,groovy]
 ----
@@ -83,45 +84,32 @@ buildscript {
     }
 }
 
-plugins {
-    id 'com.google.cloud.tools.jib' version '3.5.4'
-}
-
-jib {
-    from {
-        image = 'gcr.io/distroless/base-debian12'
-    }
-    to {
-        image = 'ghcr.io/benelog/spider-silk-flashcard'
-    }
-    container {
-        ports = ['8080']
-    }
-    pluginExtensions {
-        pluginExtension {
-            implementation = 'com.google.cloud.tools.jib.gradle.extension.nativeimage.JibNativeImageExtension'
-            properties = [imageName: 'flashcard']
+if (providers.gradleProperty('native').present) {
+    jib {
+        from.image = 'gcr.io/distroless/base-debian12'
+        to.image = 'ghcr.io/benelog/spider-silk-flashcard:native'
+        pluginExtensions {
+            pluginExtension {
+                implementation = 'com.google.cloud.tools.jib.gradle.extension.nativeimage.JibNativeImageExtension'
+                properties = [imageName: 'flashcard']
+            }
         }
     }
 }
 ----
 
-`imageName` tells the extension which file to take from `build/native/nativeCompile` and must match the `graalvmNative` block's.
-The base image is chosen to fit what the binary still needs: `native-image` links glibc dynamically by default, and `distroless/base` is little more than glibc, CA certificates, and a filesystem skeleton — no shell, no package manager, and no JVM, since the JVM left at compile time.
-The whole tar, application and base image together, comes out at 32MB.
+The extension replaces the dependency and class layers Jib would assemble with a single layer holding the binary, sets its executable bit, and points the entrypoint at `/app/flashcard`; `imageName` tells it which file to take from `build/native/nativeCompile` and must match the `graalvmNative` block's.
+The base image shrinks along with the process: `native-image` links glibc dynamically by default, and `distroless/base` is little more than glibc, CA certificates, and a filesystem skeleton — no shell, no package manager, and no JVM, since the JVM left at compile time.
 
 [source,bash]
 ----
-gradle :example-flashcard:jibBuildTar
+gradle :example-flashcard:jibBuildTar -Pnative
 # then, on a machine that runs containers:
 docker load < example-flashcard/build/jib-image.tar
-docker run -p 8080:8080 ghcr.io/benelog/spider-silk-flashcard
+docker run -p 8080:8080 ghcr.io/benelog/spider-silk-flashcard:native
 ----
 
-The tar is only the daemonless route: `gradle jib` pushes the same image straight to the registry given credentials, and `gradle jibDockerBuild` loads it into a local daemon where one exists.
-Two properties of the result are worth knowing before shipping it.
-A native binary is compiled for one platform, so the image runs on the architecture that built it — there is no cross-compilation.
-And H2 keeps its database file under the process home, `/root/db` in this image, so the data lives and dies with the container unless a volume is mounted there.
+The tar comes out at 34MB against 124MB for the JVM image, and the trade is portability: Java bytecode runs on any architecture with a JRE image, while a native binary is compiled for one platform, so this image runs on the architecture that built it — there is no cross-compilation.
 
 == When a library reflects
 
