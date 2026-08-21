@@ -1,0 +1,88 @@
+= Routing
+:navtitle: Routing
+
+A route is a method, a path pattern, and a handler, registered as one statement: `get`, `post`, `put`, `patch`, `delete`, and — rarely, as the last section explains — `head` and `options`.
+Routing is an explicit list: there is no annotation scanning, so only what is registered runs, and xref:route-introspection.adoc[`app.routes()`] hands the list back as data.
+
+== Path patterns
+
+[source,java]
+----
+app.get("/decks", decks::list);                     // this path, exactly
+app.get("/decks/{deckId}", decks::show);            // {deckId} matches one segment
+app.before("/admin/*", req -> requireAdmin(req));   // /admin and everything under it
+----
+
+A pattern is compared segment by segment; there are no regular expressions.
+A `\{name}` segment matches exactly one segment, never a slash, so `/decks/\{deckId}` matches `/decks/3` but not `/decks` or `/decks/3/cards`.
+A trailing slash on the request is ignored: `/decks/` and `/decks` are the same path.
+
+A final `*` matches the rest of the path, including nothing at all, so `/admin/*` covers `/admin`, `/admin/users`, and `/admin/users/7` — which is what a filter path usually means, a prefix and the prefix itself.
+`*` is only allowed as the last segment.
+A route can carry one too; the matched remainder is not captured as a variable, so `req.path()` is how such a handler reads it.
+
+== Path variables
+
+What a `\{name}` segment matched is read by name, typed at the reading end:
+
+[source,java]
+----
+long deckId = req.pathParamLong("deckId");   // non-numeric input becomes a 400
+String name = req.pathParam("name");
+Direction direction = req.pathParamEnum("direction", Direction.class);
+----
+
+The value always exists when the handler runs — a request without the segment would not have matched the route — so the 400 covers the type, not the presence.
+
+== Groups
+
+Routes sharing a prefix register through `path`, and the group is an argument rather than ambient state:
+
+[source,java]
+----
+app.path("/api/decks", decks -> {
+    decks.before(req -> requireApiKey(req));    // guards /api/decks and everything under it
+    decks.get("", api::listDecks);              // GET  /api/decks
+    decks.get("/{deckId}", api::showDeck);      // GET  /api/decks/{deckId}
+    decks.path("/{deckId}/cards", cards ->     // groups nest, prefixes concatenate
+        cards.get("", api::listCards));         // GET  /api/decks/{deckId}/cards
+});
+----
+
+An empty path (or `"/"`) registers the prefix itself.
+A group's `before`/`after` with no path of its own filters the whole group.
+The prefix is resolved at registration, so `app.routes()` reports full paths: a group changes how routes are written, not what is registered.
+
+== Matching order
+
+Registration order breaks ties between overlapping patterns, so a literal route registered before a variable one keeps winning:
+
+[source,java]
+----
+app.get("/study/today", study::today);      // wins for /study/today
+app.get("/study/{mode}", study::byMode);    // everything else under /study
+----
+
+A second route matching exactly the same requests — the same path, or the same shape with a variable renamed — could never run, so registering one throws `IllegalStateException` on the spot instead of leaving a dead entry in the table.
+
+== When nothing matches
+
+A path no route knows answers 404; a path only other methods know answers 405, with an `Allow` header listing what would have worked.
+For a GET or HEAD, xref:static-files.adoc[static files] are consulted before the 404 — routes first, so a route can shadow a file.
+`notFound(handler)` is shorthand for `error(HttpStatus.NOT_FOUND, handler)`, and xref:filters-and-errors.adoc[Filters and Errors] covers how an error handler fills in the body.
+
+== HEAD and OPTIONS
+
+Both are answered without registering anything.
+A `HEAD` runs the `GET` route and drops the body, keeping the headers, including a `Content-Length` counted from what the `GET` would have sent.
+An `OPTIONS` answers with the `Allow` header the path's routes imply, and a 404 when the path has none:
+
+[source,bash]
+----
+$ curl -X OPTIONS -i localhost:8080/decks
+HTTP/1.1 200 OK
+Allow: GET, POST, HEAD, OPTIONS
+----
+
+`app.head(...)` and `app.options(...)` register a route of their own when the automatic answer is not the one you want: a CORS preflight, usually.
+Neither automatic answer appears in `app.routes()`, which reports only what was registered.

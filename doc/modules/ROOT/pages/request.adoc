@@ -1,23 +1,24 @@
 = The Request
 :navtitle: The Request
 
-== Cookies and repeated parameters
+== Cookies
 
 Cookies split along the same line the rest of the API does: the ones the client sent are read off the request, the ones the server sets are part of the response.
 
 [source,java]
 ----
-String theme = req.cookie("theme");                 // null when absent
-List<String> tags = req.params("tag");              // ?tag=java&tag=web, or a checkbox group
-
-return WebResponse.html(page)
-        .cookie("theme", "dark")                    // session cookie
-        .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
-        .removeCookie("stale");
+String theme = req.cookie("theme");         // null when absent
+Map<String, String> all = req.cookies();    // a repeated name keeps the first value
 ----
 
-A cookie set through the two-argument form gets `Path=/`, `HttpOnly`, and `SameSite=Lax`, which is what a cookie holding anything worth stealing should have.
-`cookie(Cookie)` takes a hand-built `jakarta.servlet.http.Cookie` when you need `Secure`, a `Domain`, or `SameSite=None`.
+Setting one is the response's side — `WebResponse.cookie(...)`, with the defaults xref:response.adoc#cookies[The Response] describes.
+
+== Repeated parameters
+
+[source,java]
+----
+List<String> tags = req.params("tag");      // ?tag=java&tag=web, or a checkbox group
+----
 
 `params(name)` returns every value in request order, and an empty list when the parameter is absent: "no boxes checked" is an answer, not a 400.
 `param(name)` still returns the first value and still 400s when there is none.
@@ -34,3 +35,21 @@ String page = req.queryParam("page");     // query string only, null when absent
 String name = req.formParam("name");      // form body only
 List<String> tags = req.formParams("tag");
 ----
+
+== File uploads
+
+`req.file(name)` reads a file out of a multipart form, answering 400 when the part is missing and 400 when the request is not multipart at all:
+
+[source,java]
+----
+app.post("/decks/{deckId}/import", req -> {
+    UploadedFile file = req.file("file");
+    int imported = deckService.importCsv(req.pathParamLong("deckId"), file.asText());
+    req.flash("message", "Imported " + imported + " cards.");
+    return WebResponse.redirect("/decks/" + req.pathParam("deckId"), HttpStatus.SEE_OTHER);
+});
+----
+
+`UploadedFile` answers `fileName()`, `contentType()`, `size()`, and the content as `bytes()` or as UTF-8 text with `asText()`.
+The limits — maximum sizes, and where a large upload is buffered — are the servlet container's multipart configuration, set on the server: `multipart(new MultipartConfigElement(...))` on `JettyServer`, xref:tomcat.adoc[TomcatServer], and xref:undertow.adoc[UndertowServer] alike.
+The default buffers to the system temp directory with no size cap and a 1MB in-memory threshold; `multipart(null)` turns multipart handling off.

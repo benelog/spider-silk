@@ -49,6 +49,21 @@ Two of the four are worth knowing by name.
 303 is what a redirect after a POST means — 302 is doing that job in practice, and saying 303 says it exactly.
 307 and 308 are the pair that keep the request method: a browser following a 301 or 302 after a POST will usually issue a GET, and those two forbid the change.
 
+[#cookies]
+== Cookies
+
+[source,java]
+----
+return WebResponse.html(page)
+        .cookie("theme", "dark")                    // session cookie
+        .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
+        .removeCookie("stale");
+----
+
+A cookie set through the two-argument form gets `Path=/`, `HttpOnly`, and `SameSite=Lax`, which is what a cookie holding anything worth stealing should have.
+`cookie(Cookie)` takes a hand-built `jakarta.servlet.http.Cookie` when you need `Secure`, a `Domain`, or `SameSite=None`.
+Reading the ones the client sent is the request's side: xref:request.adoc[The Request].
+
 == The lambda families
 
 The last three bodies take a lambda of their own, and the suffix says which family it belongs to.

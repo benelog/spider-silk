@@ -2,18 +2,19 @@
 * xref:install.adoc[Installation]
 
 * Request Handling
+** xref:routing.adoc[Routing]
 ** xref:handlers.adoc[Handlers]
 ** xref:request.adoc[The Request]
 ** xref:response.adoc[The Response]
 ** xref:filters-and-errors.adoc[Filters and Errors]
-** xref:head-and-options.adoc[HEAD and OPTIONS]
+** xref:sessions-and-flash.adoc[Sessions and Flash]
 
-* Response Bodies
+* Content
 ** xref:json.adoc[JSON]
 ** xref:templates.adoc[Templates]
-** xref:freemarker.adoc[FreeMarker]
-** xref:handlebars.adoc[Handlebars]
-** xref:thymeleaf.adoc[Thymeleaf]
+*** xref:freemarker.adoc[FreeMarker]
+*** xref:handlebars.adoc[Handlebars]
+*** xref:thymeleaf.adoc[Thymeleaf]
 ** xref:static-files.adoc[Static Files]
 ** xref:sse.adoc[Server-Sent Events]
 

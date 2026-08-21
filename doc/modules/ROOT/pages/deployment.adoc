@@ -25,24 +25,8 @@ implementation('{project-group}:spider-silk-core') {
 == Precompiled templates
 
 jte compiles templates at runtime by default, which requires a JDK on the deployment machine.
-For production, precompile with the https://jte.gg/pre-compiling/[jte Gradle plugin]:
-
-[source,groovy]
-----
-plugins {
-    id 'gg.jte.gradle' version '3.2.4'
-}
-
-jte {
-    sourceDirectory = file('src/main/resources/jte').toPath()
-    contentType = gg.jte.ContentType.Html
-    generate()
-}
-----
-
-`generate()` turns each template into a Java class compiled along with the application, and `TemplateEngine.createPrecompiled(ContentType.Html)` passed through the `JteTemplates(TemplateEngine)` constructor renders those classes.
-The suffix applies either way, so no handler changes.
-xref:templates.adoc[Templates] covers the development-mode counterpart, and a xref:native-image.adoc[native image] makes this mode a requirement rather than an optimization, since a native binary carries no compiler.
+A production build precompiles instead: the jte Gradle plugin turns each template into a Java class at build time, so the jar renders compiled classes and a template that does not compile fails the build rather than the request.
+The plugin configuration and the matching constructor are in xref:templates.adoc#production[Templates], alongside the development-mode counterpart; a xref:native-image.adoc[native image] makes this mode a requirement rather than an optimization, since a native binary carries no compiler.
 
 == A container image, without Docker
 

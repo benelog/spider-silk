@@ -3,7 +3,7 @@
 
 == What `App` provides
 
-* Routes: `get`, `post`, `put`, `patch`, `delete`, and `path(prefix, group -> ...)`
+* Routes: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, and `path(prefix, group -> ...)` — patterns and matching order in xref:routing.adoc[Routing]
 * Introspection: `routes()` reports every registered route as `Route(method, path)`, in registration order
 * Filters: `before(filter)` / `before(path, filter)`, same for `after`
 * Errors: `exception(Type, handler)`, `error(HttpStatus, handler)`, `notFound(handler)`

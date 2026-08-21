@@ -8,7 +8,7 @@ What needs preparing is the parts that are not the framework, and the example pr
 
 Templates::
 A native binary carries no compiler, so jte's default of compiling templates at runtime is not an option.
-The jte Gradle plugin's `generate()` turns each template into a Java class at build time (xref:deployment.adoc[Deployment]), and its `NativeResourcesExtension` writes the reflection config for those generated classes, which jte loads by name:
+The jte Gradle plugin's `generate()` turns each template into a Java class at build time (xref:templates.adoc#production[Templates]), and its `NativeResourcesExtension` writes the reflection config for those generated classes, which jte loads by name:
 +
 [source,groovy]
 ----
@@ -27,6 +27,9 @@ dependencies {
     jteGenerate 'gg.jte:jte-native-resources:3.2.4'
 }
 ----
++
+That config is the whole of jte's reflection: the engine looks a generated class up by name and invokes its `render` method, while the expressions inside a template run as compiled code that never reflects over the model — see xref:reflection-scope.adoc[The Scope of "No Reflection"].
+No model class, and no framework class, needs an entry.
 
 Row mapping::
 The repositories map rows with spring-jdbc's `DataClassRowMapper` and feed inserts through `SimplePropertySqlParameterSource`, both of which reach the domain records reflectively — the example's own choice, kept because so much existing JDBC code looks exactly like this.

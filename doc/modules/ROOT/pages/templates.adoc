@@ -46,6 +46,7 @@ Anything else is the one-liner above; a module only earns its place when there i
 
 Rendering happens while the handler's exception handling still applies, so a template that throws reaches `app.exception(...)` like any other failure, and a `HEAD` of a rendered page reports the length the `GET` would have sent.
 
+[#production]
 == Development and production
 
 jte compiles templates at runtime by default, reading them from the classpath: nothing to configure, but it needs a JDK on the deployment machine, and an edited template is not seen until the classpath copy is rebuilt.
@@ -61,7 +62,22 @@ app.templates(new JteTemplates(
 
 Before each render, jte checks the modification timestamp of the template file and everything it depends on, and recompiles what changed — saving a `.jte` file and refreshing the browser is the whole loop.
 
-Production precompiles every template at build time with the https://jte.gg/pre-compiling/[jte Gradle plugin] and hands the engine the result:
+Production precompiles every template at build time with the https://jte.gg/pre-compiling/[jte Gradle plugin]:
+
+[source,groovy]
+----
+plugins {
+    id 'gg.jte.gradle' version '3.2.4'
+}
+
+jte {
+    sourceDirectory = file('src/main/resources/jte').toPath()
+    contentType = gg.jte.ContentType.Html
+    generate()
+}
+----
+
+`generate()` turns each template into a Java class compiled along with the application, and the matching constructor hands the engine those classes:
 
 [source,java]
 ----
@@ -69,4 +85,5 @@ app.templates(new JteTemplates(TemplateEngine.createPrecompiled(ContentType.Html
 ----
 
 The jar then renders from compiled classes: no runtime compiler, no JDK on the machine, and a template that does not compile fails the build instead of the request.
-xref:deployment.adoc[Deployment] has the Gradle side, the example project wires both modes behind a `--dev` flag, and a xref:native-image.adoc[native image] has no compiler at runtime at all, so there this mode is the only one.
+The suffix applies either way, so no handler changes.
+The example project wires both modes behind a `--dev` flag, and a xref:native-image.adoc[native image] has no compiler at runtime at all, so there this mode is the only one.

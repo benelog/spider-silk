@@ -26,6 +26,7 @@ app.after((req, res) -> res.header("X-Request-Id", requestId()));
 == Error handlers
 
 `error(status, handler)` fills in the body for any response that ended on that status with no body, whether from the router, from an `HttpException`, or from a handler that returned `WebResponse.empty(HttpStatus.FORBIDDEN)`.
+`notFound(handler)` is shorthand for `error(HttpStatus.NOT_FOUND, handler)`, so one registration styles the router's own 404 and every handler-made one alike.
 A response that already carries a body is left alone.
 What the error handler returns keeps the headers the framework had already worked out, such as the `Allow` of a 405, and answers with the registered status unless it sets one of its own.
 Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.
