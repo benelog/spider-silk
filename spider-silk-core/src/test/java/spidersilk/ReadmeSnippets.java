@@ -1,7 +1,6 @@
 package spidersilk;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Map;
 
@@ -20,8 +19,8 @@ class ReadmeSnippets {
     void createsADeck(App app) {
         WebTest.test(app, client -> {
             var created = client.postForm("/decks", Map.of("name", "English"));
-            assertEquals(302, created.statusCode());           // redirects are not followed
-            assertTrue(client.get("/api/decks").body().contains("English"));
+            assertThat(created.statusCode()).isEqualTo(302);   // redirects are not followed
+            assertThat(client.get("/api/decks").body()).contains("English");
         });
     }
 

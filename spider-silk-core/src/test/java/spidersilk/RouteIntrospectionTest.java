@@ -4,8 +4,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** {@code app.routes()}: the routing table read back as data, without reflection. */
 class RouteIntrospectionTest {
@@ -19,10 +19,10 @@ class RouteIntrospectionTest {
                 .get("/decks", noop)
                 .post("/decks", noop);
 
-        assertEquals(List.of(
+        assertThat(app.routes()).isEqualTo(List.of(
                 new Route("GET", "/{page}"),
                 new Route("GET", "/decks"),
-                new Route("POST", "/decks")), app.routes());
+                new Route("POST", "/decks")));
     }
 
     /** The order the router resolves ties in is the order routes() reports. */
@@ -33,8 +33,8 @@ class RouteIntrospectionTest {
                 .get("/{page}", noop)
                 .get("/study/{mode}", noop);
 
-        assertEquals(List.of("/study/today", "/{page}", "/study/{mode}"),
-                app.routes().stream().map(Route::path).toList());
+        assertThat(app.routes().stream().map(Route::path).toList())
+                .isEqualTo(List.of("/study/today", "/{page}", "/study/{mode}"));
     }
 
     @Test
@@ -43,8 +43,8 @@ class RouteIntrospectionTest {
                 .get("/decks", noop)
                 .path("/decks/{deckId}", deck -> deck.get("/cards", noop)));
 
-        assertEquals(List.of("/api/decks", "/api/decks/{deckId}/cards"),
-                app.routes().stream().map(Route::path).toList());
+        assertThat(app.routes().stream().map(Route::path).toList())
+                .isEqualTo(List.of("/api/decks", "/api/decks/{deckId}/cards"));
     }
 
     /** Only what was registered: the servlet's automatic HEAD and OPTIONS are not routes. */
@@ -52,7 +52,7 @@ class RouteIntrospectionTest {
     void automaticHeadAndOptionsAnswersAreNotListed() {
         App app = new App().get("/decks", noop);
 
-        assertEquals(List.of(new Route("GET", "/decks")), app.routes());
+        assertThat(app.routes()).isEqualTo(List.of(new Route("GET", "/decks")));
     }
 
     @Test
@@ -62,9 +62,9 @@ class RouteIntrospectionTest {
 
         app.get("/stats", noop);
 
-        assertEquals(1, before.size());
-        assertEquals(2, app.routes().size());
-        assertThrows(UnsupportedOperationException.class,
-                () -> before.add(new Route("GET", "/nowhere")));
+        assertThat(before).hasSize(1);
+        assertThat(app.routes()).hasSize(2);
+        assertThatThrownBy(() -> before.add(new Route("GET", "/nowhere")))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 }

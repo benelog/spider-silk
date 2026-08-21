@@ -1,7 +1,6 @@
 package spidersilk;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -26,7 +25,7 @@ class RequestApiTest {
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .POST(HttpRequest.BodyPublishers.ofString("source=body")));
 
-            assertEquals("query=url form=body", response.body());
+            assertThat(response.body()).isEqualTo("query=url form=body");
         });
     }
 
@@ -41,7 +40,7 @@ class RequestApiTest {
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .POST(HttpRequest.BodyPublishers.ofString("tag=c")));
 
-            assertEquals("[a, b] [c] [a, b, c]", response.body());
+            assertThat(response.body()).isEqualTo("[a, b] [c] [a, b, c]");
         });
     }
 
@@ -50,8 +49,9 @@ class RequestApiTest {
         App app = new App().post("/submit", req -> WebResponse.text(
                 "query=" + req.queryParam("name") + " form=" + req.formParam("name")));
 
-        WebTest.test(app, client -> assertEquals("query=null form=Ada",
-                client.postForm("/submit", Map.of("name", "Ada")).body()));
+        WebTest.test(app, client ->
+                assertThat(client.postForm("/submit", Map.of("name", "Ada")).body())
+                        .isEqualTo("query=null form=Ada"));
     }
 
     @Test
@@ -59,7 +59,7 @@ class RequestApiTest {
         App app = new App().get("/search", req -> WebResponse.text(req.queryParam("q")));
 
         WebTest.test(app, client ->
-                assertEquals("a b&c", client.get("/search?q=a+b%26c").body()));
+                assertThat(client.get("/search?q=a+b%26c").body()).isEqualTo("a b&c"));
     }
 
     @Test
@@ -68,11 +68,10 @@ class RequestApiTest {
 
         WebTest.test(app, client -> {
             var response = client.head("/decks");
-            assertEquals(200, response.statusCode());
-            assertEquals("", response.body());
-            assertEquals("7", response.headers().firstValue("Content-Length").orElseThrow());
-            assertTrue(response.headers().firstValue("Content-Type").orElseThrow()
-                    .startsWith("text/plain"));
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEmpty();
+            assertThat(response.headers().firstValue("Content-Length").orElseThrow()).isEqualTo("7");
+            assertThat(response.headers().firstValue("Content-Type").orElseThrow()).startsWith("text/plain");
         });
     }
 
@@ -82,8 +81,9 @@ class RequestApiTest {
                 .get("/decks", req -> WebResponse.text("body"))
                 .head("/decks", req -> WebResponse.empty().header("X-Count", "2"));
 
-        WebTest.test(app, client -> assertEquals("2",
-                client.head("/decks").headers().firstValue("X-Count").orElseThrow()));
+        WebTest.test(app, client ->
+                assertThat(client.head("/decks").headers().firstValue("X-Count").orElseThrow())
+                        .isEqualTo("2"));
     }
 
     @Test
@@ -94,10 +94,10 @@ class RequestApiTest {
 
         WebTest.test(app, client -> {
             var response = client.options("/decks");
-            assertEquals(200, response.statusCode());
-            assertEquals("", response.body());
-            assertEquals(List.of("GET", "POST", "HEAD", "OPTIONS"),
-                    allowed(response.headers().firstValue("Allow").orElseThrow()));
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEmpty();
+            assertThat(allowed(response.headers().firstValue("Allow").orElseThrow()))
+                    .isEqualTo(List.of("GET", "POST", "HEAD", "OPTIONS"));
         });
     }
 
@@ -105,7 +105,8 @@ class RequestApiTest {
     void optionsOnAnUnknownPathIsStillA404() {
         App app = new App().get("/decks", req -> WebResponse.text("list"));
 
-        WebTest.test(app, client -> assertEquals(404, client.options("/missing").statusCode()));
+        WebTest.test(app, client ->
+                assertThat(client.options("/missing").statusCode()).isEqualTo(404));
     }
 
     @Test
@@ -115,8 +116,9 @@ class RequestApiTest {
                 .options("/decks",
                         req -> WebResponse.empty().header("Access-Control-Allow-Origin", "*"));
 
-        WebTest.test(app, client -> assertEquals("*", client.options("/decks").headers()
-                .firstValue("Access-Control-Allow-Origin").orElseThrow()));
+        WebTest.test(app, client ->
+                assertThat(client.options("/decks").headers().firstValue("Access-Control-Allow-Origin").orElseThrow())
+                        .isEqualTo("*"));
     }
 
     private static List<String> allowed(String header) {

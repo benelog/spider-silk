@@ -10,7 +10,8 @@ import flashcard.domain.Card;
 import flashcard.domain.Deck;
 import flashcard.domain.ReviewState;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 class ReviewStateRepositoryTest extends RepositoryTestSupport {
 
@@ -39,13 +40,18 @@ class ReviewStateRepositoryTest extends RepositoryTestSupport {
 
         reviewStateRepository.insert(new ReviewState(null, card.id(), 1, today, 3, 1, now));
 
-        assertEquals(card.id(), raw.queryForObject("select card_id from review_state", Long.class));
-        assertEquals(1, raw.queryForObject("select interval_days from review_state", Integer.class));
-        assertEquals(today, raw.queryForObject("select due_date from review_state", LocalDate.class));
-        assertEquals(3, raw.queryForObject("select correct_count from review_state", Integer.class));
-        assertEquals(1, raw.queryForObject("select wrong_count from review_state", Integer.class));
-        assertEquals(now,
-                raw.queryForObject("select last_reviewed_at from review_state", LocalDateTime.class));
+        assertThat(raw.queryForObject("select card_id from review_state", Long.class))
+                .isEqualTo(card.id());
+        assertThat(raw.queryForObject("select interval_days from review_state", Integer.class))
+                .isEqualTo(1);
+        assertThat(raw.queryForObject("select due_date from review_state", LocalDate.class))
+                .isEqualTo(today);
+        assertThat(raw.queryForObject("select correct_count from review_state", Integer.class))
+                .isEqualTo(3);
+        assertThat(raw.queryForObject("select wrong_count from review_state", Integer.class))
+                .isEqualTo(1);
+        assertThat(raw.queryForObject("select last_reviewed_at from review_state", LocalDateTime.class))
+                .isEqualTo(now);
     }
 
     /**
@@ -65,8 +71,9 @@ class ReviewStateRepositoryTest extends RepositoryTestSupport {
         reviewStateRepository.update(
                 new ReviewState(state.id(), updated.id(), 6, today.plusDays(6), 3, 2, later));
 
-        assertEquals(new ReviewState(state.id(), updated.id(), 6, today.plusDays(6), 3, 2, later),
-                reviewStateRepository.findByCardId(updated.id()).orElseThrow());
-        assertEquals(other, reviewStateRepository.findByCardId(untouched.id()).orElseThrow());
+        assertThat(reviewStateRepository.findByCardId(updated.id()).orElseThrow())
+                .isEqualTo(new ReviewState(state.id(), updated.id(), 6, today.plusDays(6), 3, 2, later));
+        assertThat(reviewStateRepository.findByCardId(untouched.id()).orElseThrow())
+                .isEqualTo(other);
     }
 }

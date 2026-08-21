@@ -4,49 +4,49 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 class PathPatternTest {
 
     @Test
     void matchesRootPath() {
         PathPattern pattern = new PathPattern("/");
-        assertEquals(Map.of(), pattern.match(PathPattern.split("/")));
+        assertThat(pattern.match(PathPattern.split("/"))).isEqualTo(Map.of());
     }
 
     @Test
     void matchesLiteralPath() {
         PathPattern pattern = new PathPattern("/stats");
-        assertEquals(Map.of(), pattern.match(PathPattern.split("/stats")));
-        assertNull(pattern.match(PathPattern.split("/decks")));
+        assertThat(pattern.match(PathPattern.split("/stats"))).isEqualTo(Map.of());
+        assertThat(pattern.match(PathPattern.split("/decks"))).isNull();
     }
 
     @Test
     void extractsPathVariables() {
         PathPattern pattern = new PathPattern("/decks/{deckId}/cards/{cardId}/edit");
         Map<String, String> params = pattern.match(PathPattern.split("/decks/3/cards/17/edit"));
-        assertEquals("3", params.get("deckId"));
-        assertEquals("17", params.get("cardId"));
+        assertThat(params.get("deckId")).isEqualTo("3");
+        assertThat(params.get("cardId")).isEqualTo("17");
     }
 
     @Test
     void rejectsDifferentSegmentCount() {
         PathPattern pattern = new PathPattern("/decks/{deckId}");
-        assertNull(pattern.match(PathPattern.split("/decks")));
-        assertNull(pattern.match(PathPattern.split("/decks/1/cards")));
+        assertThat(pattern.match(PathPattern.split("/decks"))).isNull();
+        assertThat(pattern.match(PathPattern.split("/decks/1/cards"))).isNull();
     }
 
     @Test
     void ignoresTrailingSlash() {
         PathPattern pattern = new PathPattern("/decks/{deckId}");
-        assertEquals(Map.of("deckId", "5"), pattern.match(PathPattern.split("/decks/5/")));
+        assertThat(pattern.match(PathPattern.split("/decks/5/"))).isEqualTo(Map.of("deckId", "5"));
     }
 
     @Test
     void treatsSegmentWithDotAsLiteral() {
         PathPattern pattern = new PathPattern("/decks/{deckId}/export.csv");
-        assertEquals(Map.of("deckId", "1"),
-                pattern.match(PathPattern.split("/decks/1/export.csv")));
+        assertThat(pattern.match(PathPattern.split("/decks/1/export.csv")))
+                .isEqualTo(Map.of("deckId", "1"));
     }
 }

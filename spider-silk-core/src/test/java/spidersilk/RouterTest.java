@@ -4,10 +4,8 @@ import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RouterTest {
 
@@ -20,11 +18,11 @@ class RouterTest {
         router.add("POST", "/decks", noop);
 
         Router.Match match = router.find("GET", "/decks/7");
-        assertNotNull(match);
-        assertEquals("7", match.pathParams().get("deckId"));
+        assertThat(match).isNotNull();
+        assertThat(match.pathParams().get("deckId")).isEqualTo("7");
 
-        assertNull(router.find("GET", "/decks"));
-        assertNotNull(router.find("POST", "/decks"));
+        assertThat(router.find("GET", "/decks")).isNull();
+        assertThat(router.find("POST", "/decks")).isNotNull();
     }
 
     @Test
@@ -34,7 +32,7 @@ class RouterTest {
         router.add("GET", "/study/today", first);
         router.add("GET", "/study/{mode}", noop);
 
-        assertEquals(first, router.find("GET", "/study/today").handler());
+        assertThat(router.find("GET", "/study/today").handler()).isEqualTo(first);
     }
 
     @Test
@@ -43,9 +41,9 @@ class RouterTest {
         router.add("POST", "/decks", noop);
         router.add("PUT", "/decks", noop);
 
-        assertNull(router.find("GET", "/decks"));
-        assertEquals(Set.of("POST", "PUT"), router.allowedMethods("/decks"));
-        assertEquals(Set.of(), router.allowedMethods("/nowhere"));
+        assertThat(router.find("GET", "/decks")).isNull();
+        assertThat(router.allowedMethods("/decks")).isEqualTo(Set.of("POST", "PUT"));
+        assertThat(router.allowedMethods("/nowhere")).isEqualTo(Set.of());
     }
 
     /** The index groups by first segment; a variable pattern still has to be considered. */
@@ -56,8 +54,8 @@ class RouterTest {
         router.add("GET", "/decks", noop);
         router.add("GET", "/{page}", byId);
 
-        assertEquals(byId, router.find("GET", "/about").handler());
-        assertNotNull(router.find("GET", "/decks"));
+        assertThat(router.find("GET", "/about").handler()).isEqualTo(byId);
+        assertThat(router.find("GET", "/decks")).isNotNull();
     }
 
     /** Registration order decides even when the two patterns land in different buckets. */
@@ -68,7 +66,7 @@ class RouterTest {
         router.add("GET", "/{page}", first);
         router.add("GET", "/decks", noop);
 
-        assertEquals(first, router.find("GET", "/decks").handler());
+        assertThat(router.find("GET", "/decks").handler()).isEqualTo(first);
     }
 
     @Test
@@ -78,8 +76,8 @@ class RouterTest {
         router.add("GET", "/", root);
         router.add("GET", "/decks", noop);
 
-        assertEquals(root, router.find("GET", "/").handler());
-        assertNull(router.find("GET", "/nowhere"));
+        assertThat(router.find("GET", "/").handler()).isEqualTo(root);
+        assertThat(router.find("GET", "/nowhere")).isNull();
     }
 
     /** A pattern that matches the rest of the path can start anywhere. */
@@ -89,8 +87,8 @@ class RouterTest {
         Handler everything = req -> null;
         router.add("GET", "/*", everything);
 
-        assertEquals(everything, router.find("GET", "/").handler());
-        assertEquals(everything, router.find("GET", "/anything/at/all").handler());
+        assertThat(router.find("GET", "/").handler()).isEqualTo(everything);
+        assertThat(router.find("GET", "/anything/at/all").handler()).isEqualTo(everything);
     }
 
     @Test
@@ -99,7 +97,7 @@ class RouterTest {
         router.add("POST", "/decks", noop);
         router.add("DELETE", "/{page}", noop);
 
-        assertEquals(Set.of("POST", "DELETE"), router.allowedMethods("/decks"));
+        assertThat(router.allowedMethods("/decks")).isEqualTo(Set.of("POST", "DELETE"));
     }
 
     /** A second route matching the same requests could never run, so it fails right away. */
@@ -108,9 +106,9 @@ class RouterTest {
         Router router = new Router();
         router.add("GET", "/decks", noop);
 
-        IllegalStateException duplicate = assertThrows(IllegalStateException.class,
-                () -> router.add("GET", "/decks", noop));
-        assertEquals("GET /decks is already registered", duplicate.getMessage());
+        assertThatThrownBy(() -> router.add("GET", "/decks", noop))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("GET /decks is already registered");
     }
 
     /** The same shape spelled differently — renamed variable, stray slashes — is still dead. */
@@ -119,10 +117,10 @@ class RouterTest {
         Router router = new Router();
         router.add("GET", "/decks/{deckId}", noop);
 
-        IllegalStateException renamed = assertThrows(IllegalStateException.class,
-                () -> router.add("GET", "decks/{id}/", noop));
-        assertEquals("GET decks/{id}/ is already registered as /decks/{deckId},"
-                + " which matches the same requests", renamed.getMessage());
+        assertThatThrownBy(() -> router.add("GET", "decks/{id}/", noop))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("GET decks/{id}/ is already registered as /decks/{deckId},"
+                        + " which matches the same requests");
     }
 
     @Test
@@ -133,6 +131,6 @@ class RouterTest {
         router.add("GET", "/decks/{deckId}", noop);
         router.add("GET", "/decks/new", noop);
 
-        assertEquals(4, router.routes().size());
+        assertThat(router.routes()).hasSize(4);
     }
 }

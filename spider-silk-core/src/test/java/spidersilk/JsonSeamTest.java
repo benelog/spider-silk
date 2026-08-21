@@ -9,8 +9,8 @@ import spidersilk.json.JsonReader;
 import spidersilk.json.JsonWriter;
 import spidersilk.test.WebTest;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 /** {@code WebResponse.json(value, writer)} and {@code req.bodyJson(reader)} over HTTP. */
 class JsonSeamTest {
@@ -31,10 +31,10 @@ class JsonSeamTest {
         WebTest.test(app, client -> {
             var response = client.get("/decks");
 
-            assertTrue(response.headers().firstValue("Content-Type").orElse("")
-                    .startsWith("application/json"));
-            assertEquals("[{\"id\":1,\"name\":\"English\"},{\"id\":2,\"name\":\"Spanish\"}]",
-                    response.body());
+            assertThat(response.headers().firstValue("Content-Type").orElse(""))
+                    .startsWith("application/json");
+            assertThat(response.body())
+                    .isEqualTo("[{\"id\":1,\"name\":\"English\"},{\"id\":2,\"name\":\"Spanish\"}]");
         });
     }
 
@@ -42,8 +42,9 @@ class JsonSeamTest {
     void aReaderBuildsTheRequestValue() {
         App app = new App().post("/decks", req -> WebResponse.text(req.bodyJson(DECK_NAME)));
 
-        WebTest.test(app, client -> assertEquals("English",
-                client.postJson("/decks", "{\"name\":\"English\"}").body()));
+        WebTest.test(app, client ->
+                assertThat(client.postJson("/decks", "{\"name\":\"English\"}").body())
+                        .isEqualTo("English"));
     }
 
     /** The reader throws IllegalArgumentException; the handler never sees a half-built value. */
@@ -52,9 +53,10 @@ class JsonSeamTest {
         App app = new App().post("/decks", req -> WebResponse.text(req.bodyJson(DECK_NAME)));
 
         WebTest.test(app, client -> {
-            assertEquals(400, client.postJson("/decks", "{\"title\":\"English\"}").statusCode());
-            assertEquals(400, client.postJson("/decks", "{\"name\":42}").statusCode());
-            assertEquals(400, client.postJson("/decks", "not-json").statusCode());
+            assertThat(client.postJson("/decks", "{\"title\":\"English\"}").statusCode())
+                    .isEqualTo(400);
+            assertThat(client.postJson("/decks", "{\"name\":42}").statusCode()).isEqualTo(400);
+            assertThat(client.postJson("/decks", "not-json").statusCode()).isEqualTo(400);
         });
     }
 }

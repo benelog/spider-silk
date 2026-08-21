@@ -11,9 +11,8 @@ import flashcard.domain.Deck;
 import flashcard.domain.ReviewState;
 import flashcard.domain.Tag;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 class CardRepositoryTest extends RepositoryTestSupport {
 
@@ -33,8 +32,8 @@ class CardRepositoryTest extends RepositoryTestSupport {
         Deck deck = deck();
         Card card = cardRepository.insert(Card.create(deck.id(), "apple", "a fruit", now));
 
-        assertNotNull(card.id());
-        assertEquals(List.of(card), cardRepository.findByDeckId(deck.id()));
+        assertThat(card.id()).isNotNull();
+        assertThat(cardRepository.findByDeckId(deck.id())).isEqualTo(List.of(card));
     }
 
     @Test
@@ -43,10 +42,10 @@ class CardRepositoryTest extends RepositoryTestSupport {
         Card card = cardRepository.insert(Card.create(deck.id(), "apple", "a fruit", now));
 
         cardRepository.update(card.edit("apple!", "a fruit!"));
-        assertEquals("apple!", cardRepository.findById(card.id()).orElseThrow().text());
+        assertThat(cardRepository.findById(card.id()).orElseThrow().text()).isEqualTo("apple!");
 
         cardRepository.deleteById(card.id());
-        assertTrue(cardRepository.findById(card.id()).isEmpty());
+        assertThat(cardRepository.findById(card.id())).isEmpty();
     }
 
     @Test
@@ -60,8 +59,8 @@ class CardRepositoryTest extends RepositoryTestSupport {
         reviewStateRepository.insert(
                 new ReviewState(null, notDue.id(), 6, today.plusDays(5), 1, 0, now));
 
-        assertEquals(List.of(due), cardRepository.findDue(today));
-        assertEquals(1, cardRepository.countDue(today));
+        assertThat(cardRepository.findDue(today)).isEqualTo(List.of(due));
+        assertThat(cardRepository.countDue(today)).isEqualTo(1);
     }
 
     @Test
@@ -74,8 +73,8 @@ class CardRepositoryTest extends RepositoryTestSupport {
                 new ReviewState(null, oftenWrong.id(), 1, null, 3, 2, now));
         reviewStateRepository.insert(new ReviewState(null, easy.id(), 6, null, 5, 0, now));
 
-        assertEquals(List.of(oftenWrong), cardRepository.findOftenWrong(3, 40));
-        assertEquals(1, cardRepository.countOftenWrong(3, 40));
+        assertThat(cardRepository.findOftenWrong(3, 40)).isEqualTo(List.of(oftenWrong));
+        assertThat(cardRepository.countOftenWrong(3, 40)).isEqualTo(1);
     }
 
     @Test
@@ -86,8 +85,8 @@ class CardRepositoryTest extends RepositoryTestSupport {
         tagRepository.attach(card.id(), tag.id());
         tagRepository.attach(card.id(), tag.id());   // merge makes duplicate calls safe
 
-        assertEquals(List.of(card), cardRepository.findByTagName("fruit"));
-        assertEquals(List.of("fruit"), tagRepository.findTagNamesByCardId(card.id()));
+        assertThat(cardRepository.findByTagName("fruit")).isEqualTo(List.of(card));
+        assertThat(tagRepository.findTagNamesByCardId(card.id())).isEqualTo(List.of("fruit"));
     }
 
     @Test
@@ -97,7 +96,7 @@ class CardRepositoryTest extends RepositoryTestSupport {
                 now.minusDays(10)));
         cardRepository.insert(Card.create(deck.id(), "new", "meaning", now));
 
-        assertEquals(List.of(stale), cardRepository.findStale(now.minusDays(7)));
-        assertEquals(1, cardRepository.countStale(now.minusDays(7)));
+        assertThat(cardRepository.findStale(now.minusDays(7))).isEqualTo(List.of(stale));
+        assertThat(cardRepository.countStale(now.minusDays(7))).isEqualTo(1);
     }
 }

@@ -1,7 +1,6 @@
 package spidersilk;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,7 +25,7 @@ class RequestLoggerTest {
             client.post("/decks");
         });
 
-        assertEquals(List.of("GET /decks -> 200", "POST /decks -> 405"), logged);
+        assertThat(logged).isEqualTo(List.of("GET /decks -> 200", "POST /decks -> 405"));
     }
 
     /** The status has to be the one that was sent, not the one before the error handler ran. */
@@ -40,7 +39,7 @@ class RequestLoggerTest {
 
         WebTest.test(app, client -> client.get("/missing"));
 
-        assertEquals(List.of(HttpStatus.GONE), statuses);
+        assertThat(statuses).isEqualTo(List.of(HttpStatus.GONE));
     }
 
     @Test
@@ -54,7 +53,7 @@ class RequestLoggerTest {
 
         WebTest.test(app, client -> client.get("/boom"));
 
-        assertEquals(List.of(HttpStatus.INTERNAL_SERVER_ERROR), statuses);
+        assertThat(statuses).isEqualTo(List.of(HttpStatus.INTERNAL_SERVER_ERROR));
     }
 
     @Test
@@ -69,8 +68,8 @@ class RequestLoggerTest {
 
         WebTest.test(app, client -> client.get("/slow"));
 
-        assertEquals(1, times.size());
-        assertTrue(times.get(0) >= 10, "expected at least 10ms, got " + times.get(0));
+        assertThat(times).hasSize(1);
+        assertThat(times.get(0)).isGreaterThanOrEqualTo(10);
     }
 
     /** Logging happens after the response is sent, so a broken logger cannot break it. */
@@ -84,8 +83,8 @@ class RequestLoggerTest {
 
         WebTest.test(app, client -> {
             var response = client.get("/");
-            assertEquals(200, response.statusCode());
-            assertEquals("ok", response.body());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("ok");
         });
     }
 }

@@ -1,7 +1,7 @@
 package spidersilk;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.StringWriter;
 import java.net.http.HttpResponse;
@@ -22,10 +22,10 @@ class TemplatesTest {
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.get("/hello");
 
-            assertEquals(200, response.statusCode());
-            assertEquals("<p>Hello, Silk!</p>\n", response.body());
-            assertEquals("text/html;charset=utf-8",
-                    response.headers().firstValue("Content-Type").orElseThrow());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("<p>Hello, Silk!</p>\n");
+            assertThat(response.headers().firstValue("Content-Type").orElseThrow())
+                    .isEqualTo("text/html;charset=utf-8");
         });
     }
 
@@ -35,7 +35,7 @@ class TemplatesTest {
                 req -> WebResponse.template("greeting", Map.of("name", "<script>")));
 
         WebTest.test(app, client ->
-                assertEquals("<p>Hello, &lt;script&gt;!</p>\n", client.get("/hello").body()));
+                assertThat(client.get("/hello").body()).isEqualTo("<p>Hello, &lt;script&gt;!</p>\n"));
     }
 
     @Test
@@ -45,16 +45,16 @@ class TemplatesTest {
                 .get("/hello", req -> WebResponse.template("greeting", Map.of("name", "Silk")));
 
         WebTest.test(app, client ->
-                assertEquals("<p>Howdy, Silk!</p>\n", client.get("/hello").body()));
+                assertThat(client.get("/hello").body()).isEqualTo("<p>Howdy, Silk!</p>\n"));
     }
 
     @Test
     void theSuffixIsAppendedNotChecked() {
         StringWriter out = new StringWriter();
 
-        assertTrue(assertThrowsRenderFailure(
-                () -> new JteTemplates("jte").render("greeting.jte", Map.of("name", "Silk"), out))
-                .contains("greeting.jte.jte"));
+        assertThatThrownBy(() -> new JteTemplates("jte")
+                .render("greeting.jte", Map.of("name", "Silk"), out))
+                .hasMessageContaining("greeting.jte.jte");
     }
 
     @Test
@@ -67,17 +67,9 @@ class TemplatesTest {
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.get("/hello");
 
-            assertEquals(400, response.statusCode());
-            assertEquals("caught", response.body());
+            assertThat(response.statusCode()).isEqualTo(400);
+            assertThat(response.body()).isEqualTo("caught");
         });
     }
 
-    private static String assertThrowsRenderFailure(Runnable render) {
-        try {
-            render.run();
-            throw new AssertionError("Expected the missing template to fail the render");
-        } catch (RuntimeException e) {
-            return String.valueOf(e.getMessage());
-        }
-    }
 }

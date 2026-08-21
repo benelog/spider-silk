@@ -7,9 +7,8 @@ import org.junit.jupiter.api.Test;
 import spidersilk.Route;
 import spidersilk.json.Json;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 /** The OpenAPI export is a pure function of app.routes(), so it needs no server. */
 class OpenApiTest {
@@ -26,11 +25,11 @@ class OpenApiTest {
         Json.JsonObject document = OpenApi.document(routes).asObject();
         Json.JsonObject decks = document.getObject("paths").getObject("/api/decks");
 
-        assertEquals("3.1.0", document.getString("openapi"));
-        assertTrue(decks.has("get"));
-        assertTrue(decks.has("post"));
-        assertEquals("OK", decks.getObject("get")
-                .getObject("responses").getObject("200").getString("description"));
+        assertThat(document.getString("openapi")).isEqualTo("3.1.0");
+        assertThat(decks.has("get")).isTrue();
+        assertThat(decks.has("post")).isTrue();
+        assertThat(decks.getObject("get").getObject("responses").getObject("200").getString("description"))
+                .isEqualTo("OK");
     }
 
     /** "{deckId}" is OpenAPI's own syntax, so the parameter falls out of the pattern. */
@@ -40,17 +39,17 @@ class OpenApiTest {
                 .getObject("paths").getObject("/api/decks/{deckId}/cards").getObject("get");
 
         Json.JsonObject parameter = operation.getArray("parameters").get(0).asObject();
-        assertEquals("deckId", parameter.getString("name"));
-        assertEquals("path", parameter.getString("in"));
-        assertTrue(parameter.getBoolean("required"));
+        assertThat(parameter.getString("name")).isEqualTo("deckId");
+        assertThat(parameter.getString("in")).isEqualTo("path");
+        assertThat(parameter.getBoolean("required")).isTrue();
     }
 
     @Test
     void leavesOutHtmlRoutesAndWildcards() {
         Json.JsonObject paths = OpenApi.document(routes).asObject().getObject("paths");
 
-        assertFalse(paths.has("/"));
-        assertFalse(paths.has("/api/*"));
-        assertFalse(paths.getObject("/api/decks").getObject("get").has("parameters"));
+        assertThat(paths.has("/")).isFalse();
+        assertThat(paths.has("/api/*")).isFalse();
+        assertThat(paths.getObject("/api/decks").getObject("get").has("parameters")).isFalse();
     }
 }

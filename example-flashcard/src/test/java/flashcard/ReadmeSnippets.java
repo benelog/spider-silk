@@ -31,7 +31,7 @@ import flashcard.web.ApiController;
 import flashcard.web.DeckController;
 import flashcard.web.OpenApi;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The README's Java blocks, kept where the compiler can see them.
@@ -280,8 +280,8 @@ class ReadmeSnippets {
                 .jsonBody("{\"name\": \"Spanish\"}")
                 .build());
 
-        assertEquals(HttpStatus.CREATED, response.status());
-        assertEquals("/api/decks/1", response.header("Location"));
-        assertEquals("{\"id\":1}", ((WebResponse.Text) response.body()).content());
+        assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.header("Location")).isEqualTo("/api/decks/1");
+        assertThat(((WebResponse.Text) response.body()).content()).isEqualTo("{\"id\":1}");
     }
 }

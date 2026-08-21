@@ -1,11 +1,6 @@
 package spidersilk.tomcat;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.net.URI;
@@ -62,22 +57,22 @@ class TomcatServerTest {
 
         HttpResponse<String> response = get("/hello/spider");
 
-        assertEquals(200, response.statusCode());
-        assertEquals("Hello spider", response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("Hello spider");
     }
 
     @Test
     void pickedPortIsReadable() {
         startOnTomcat(new App());
 
-        assertTrue(app.port() > 0, "port 0 should be replaced by the bound port");
+        assertThat(app.port()).as("port 0 should be replaced by the bound port").isPositive();
     }
 
     @Test
     void unmatchedPathFallsBackToNotFound() throws Exception {
         startOnTomcat(new App());
 
-        assertEquals(404, get("/nope").statusCode());
+        assertThat(get("/nope").statusCode()).isEqualTo(404);
     }
 
     /** Sessions come with Tomcat's context, so flash works with no configuration. */
@@ -88,7 +83,7 @@ class TomcatServerTest {
             return WebResponse.text("ok");
         }));
 
-        assertEquals(200, get("/flash").statusCode());
+        assertThat(get("/flash").statusCode()).isEqualTo(200);
     }
 
     /** req.file(...) needs a MultipartConfig on the servlet; the default supplies one. */
@@ -112,8 +107,8 @@ class TomcatServerTest {
         HttpResponse<String> response =
                 client.send(request, HttpResponse.BodyHandlers.ofString());
 
-        assertEquals(200, response.statusCode());
-        assertEquals("front,back", response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("front,back");
     }
 
     /**
@@ -131,14 +126,13 @@ class TomcatServerTest {
 
         HttpResponse<String> response = get("/events");
 
-        assertEquals(200, response.statusCode());
+        assertThat(response.statusCode()).isEqualTo(200);
         // Tomcat spells the charset "UTF-8" where Jetty writes "utf-8".
-        assertEquals("text/event-stream;charset=utf-8",
-                response.headers().firstValue("Content-Type").orElse("")
-                        .replace(" ", "").toLowerCase(Locale.ROOT));
-        assertTrue(response.body().contains("event: tick"), response.body());
-        assertTrue(response.body().contains("data: 1"), response.body());
-        assertTrue(response.body().contains("data: 2"), response.body());
+        assertThat(response.headers().firstValue("Content-Type").orElse("").replace(" ", "").toLowerCase(Locale.ROOT))
+                .isEqualTo("text/event-stream;charset=utf-8");
+        assertThat(response.body()).contains("event: tick");
+        assertThat(response.body()).contains("data: 1");
+        assertThat(response.body()).contains("data: 2");
     }
 
     /** Static files are read off the classpath by core, so they travel too. */
@@ -148,8 +142,8 @@ class TomcatServerTest {
 
         HttpResponse<String> response = get("/hello.txt");
 
-        assertEquals(200, response.statusCode());
-        assertEquals("a static file", response.body().strip());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body().strip()).isEqualTo("a static file");
     }
 
     @Test
@@ -159,8 +153,8 @@ class TomcatServerTest {
                 .contextPath("/app");
         server.start();
 
-        assertEquals(200, getFrom(server.port(), "/app/").statusCode());
-        assertEquals(404, getFrom(server.port(), "/").statusCode());
+        assertThat(getFrom(server.port(), "/app/").statusCode()).isEqualTo(200);
+        assertThat(getFrom(server.port(), "/").statusCode()).isEqualTo(404);
     }
 
     @Test
@@ -176,13 +170,16 @@ class TomcatServerTest {
 
         HttpResponse<String> response = getFrom(server.port(), "/");
 
-        assertEquals(200, response.statusCode());
-        assertEquals("silk", response.headers().firstValue("Server").orElse(null),
-                "the Connector customizer should have set the Server header");
-        assertSame(server.tomcat(), customizedTomcat.get(),
-                "the Tomcat customizer should have run against the real Tomcat");
-        assertEquals("", customizedContext.get().getPath(),
-                "the Context customizer should have run against the mounted context");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Server").orElse(null))
+                .as("the Connector customizer should have set the Server header")
+                .isEqualTo("silk");
+        assertThat(customizedTomcat.get())
+                .as("the Tomcat customizer should have run against the real Tomcat")
+                .isSameAs(server.tomcat());
+        assertThat(customizedContext.get().getPath())
+                .as("the Context customizer should have run against the mounted context")
+                .isEqualTo("");
     }
 
     /** Graceful shutdown: a request already running is finished, not dropped. */
@@ -199,28 +196,32 @@ class TomcatServerTest {
         CompletableFuture<HttpResponse<String>> inFlight = client.sendAsync(
                 HttpRequest.newBuilder(URI.create(url)).build(),
                 HttpResponse.BodyHandlers.ofString());
-        assertTrue(handlerEntered.await(2, TimeUnit.SECONDS), "the handler never started");
+        assertThat(handlerEntered.await(2, TimeUnit.SECONDS))
+                .as("the handler never started")
+                .isTrue();
 
         app.stop();
         app = null;
 
         HttpResponse<String> response = inFlight.get(5, TimeUnit.SECONDS);
-        assertEquals(200, response.statusCode());
-        assertEquals("finished", response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("finished");
     }
 
     /** An idle keep-alive connection must not hold the stop timeout hostage. */
     @Test
     void anIdleConnectionDoesNotDelayTheStop() throws Exception {
         startOnTomcat(new App().get("/", req -> WebResponse.text("ok")));
-        assertEquals(200, get("/").statusCode());   // leaves a keep-alive connection behind
+        assertThat(get("/").statusCode()).isEqualTo(200);   // leaves a keep-alive connection behind
 
         long startedAt = System.nanoTime();
         app.stop();
         app = null;
 
         long millis = (System.nanoTime() - startedAt) / 1_000_000;
-        assertTrue(millis < 2_000, "stop took " + millis + "ms with only an idle connection open");
+        assertThat(millis)
+                .as("stopping with only an idle connection open")
+                .isLessThan(2_000);
     }
 
     /** A suite that starts a server per test would rather not wait for the drain. */
@@ -230,14 +231,14 @@ class TomcatServerTest {
                 .port(0)
                 .stopTimeout(Duration.ZERO);
         server.start();
-        assertEquals(200, getFrom(server.port(), "/").statusCode());
+        assertThat(getFrom(server.port(), "/").statusCode()).isEqualTo(200);
 
         long startedAt = System.nanoTime();
         server.stop();
         server = null;
 
         long millis = (System.nanoTime() - startedAt) / 1_000_000;
-        assertTrue(millis < 2_000, "an immediate stop took " + millis + "ms");
+        assertThat(millis).isLessThan(2_000);
     }
 
     /** Ctrl-C stops the server, and the hook goes away again with it. */
@@ -246,13 +247,14 @@ class TomcatServerTest {
         server = new TomcatServer(new App()).port(0);
         server.start();
         Thread registered = server.shutdownHookThread();
-        assertNotNull(registered, "a shutdown hook should be registered by default");
+        assertThat(registered).as("a shutdown hook should be registered by default").isNotNull();
 
         server.stop();
         server = null;
 
-        assertFalse(Runtime.getRuntime().removeShutdownHook(registered),
-                "starting a server per test must not accumulate shutdown hooks");
+        assertThat(Runtime.getRuntime().removeShutdownHook(registered))
+                .as("starting a server per test must not accumulate shutdown hooks")
+                .isFalse();
     }
 
     @Test
@@ -260,7 +262,7 @@ class TomcatServerTest {
         server = new TomcatServer(new App()).port(0).shutdownHook(false);
         server.start();
 
-        assertNull(server.shutdownHookThread());
+        assertThat(server.shutdownHookThread()).isNull();
     }
 
     /** The default base directory is temporary, so nothing lands next to the build. */
@@ -270,8 +272,9 @@ class TomcatServerTest {
         server.start();
 
         String base = server.tomcat().getServer().getCatalinaBase().getAbsolutePath();
-        assertTrue(base.startsWith(System.getProperty("java.io.tmpdir")),
-                "the base directory should be a temporary one, but was " + base);
+        assertThat(base)
+                .as("the base directory should be a temporary one, but was " + base)
+                .startsWith(System.getProperty("java.io.tmpdir"));
     }
 
     /** The virtual-thread recipe: an executor, no API of our own. */
@@ -286,7 +289,7 @@ class TomcatServerTest {
                         .executor(Executors.newVirtualThreadPerTaskExecutor()))
                 .start(0);
 
-        assertEquals("virtual", get("/").body());
+        assertThat(get("/").body()).isEqualTo("virtual");
     }
 
     @Test
@@ -294,7 +297,7 @@ class TomcatServerTest {
         server = new TomcatServer(new App()).port(0);
         server.start();
 
-        assertNotNull(server.tomcat(), "tomcat() should hand out the running server");
+        assertThat(server.tomcat()).as("tomcat() should hand out the running server").isNotNull();
     }
 
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {

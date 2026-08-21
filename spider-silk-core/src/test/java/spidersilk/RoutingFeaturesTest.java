@@ -1,8 +1,7 @@
 package spidersilk;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -32,7 +31,7 @@ class RoutingFeaturesTest {
             client.get("/public");
         });
 
-        assertEquals(List.of("filter:/admin", "filter:/admin/users"), visited);
+        assertThat(visited).isEqualTo(List.of("filter:/admin", "filter:/admin/users"));
     }
 
     /** A guard that answered the request must stop the handler from also answering it. */
@@ -44,8 +43,8 @@ class RoutingFeaturesTest {
 
         WebTest.test(app, client -> {
             var response = client.get("/admin/users");
-            assertEquals(401, response.statusCode());
-            assertEquals("Unauthorized", response.body());
+            assertThat(response.statusCode()).isEqualTo(401);
+            assertThat(response.body()).isEqualTo("Unauthorized");
         });
     }
 
@@ -57,8 +56,8 @@ class RoutingFeaturesTest {
 
         WebTest.test(app, client -> {
             var response = client.get("/admin/users");
-            assertEquals(302, response.statusCode());
-            assertEquals("", response.body());
+            assertThat(response.statusCode()).isEqualTo(302);
+            assertThat(response.body()).isEmpty();
         });
     }
 
@@ -74,8 +73,8 @@ class RoutingFeaturesTest {
 
         WebTest.test(app, client -> {
             var response = client.get("/admin/users");
-            assertEquals(401, response.statusCode());
-            assertEquals("login required", response.body());
+            assertThat(response.statusCode()).isEqualTo(401);
+            assertThat(response.body()).isEqualTo("login required");
         });
     }
 
@@ -94,9 +93,9 @@ class RoutingFeaturesTest {
                 })
                 .get("/", req -> WebResponse.text("ok"));
 
-        WebTest.test(app, client -> assertEquals("ok", client.get("/").body()));
+        WebTest.test(app, client -> assertThat(client.get("/").body()).isEqualTo("ok"));
 
-        assertEquals(List.of("before", "after"), visited);
+        assertThat(visited).isEqualTo(List.of("before", "after"));
     }
 
     /** An after-filter answers with what it returns, which is how it rewrites a response. */
@@ -108,8 +107,9 @@ class RoutingFeaturesTest {
 
         WebTest.test(app, client -> {
             var response = client.get("/");
-            assertEquals("ok", response.body());
-            assertEquals("spider-silk", response.headers().firstValue("X-Served-By").orElseThrow());
+            assertThat(response.body()).isEqualTo("ok");
+            assertThat(response.headers().firstValue("X-Served-By").orElseThrow())
+                    .isEqualTo("spider-silk");
         });
     }
 
@@ -122,9 +122,9 @@ class RoutingFeaturesTest {
         });
 
         WebTest.test(app, client -> {
-            assertEquals("list", client.get("/api/decks").body());
-            assertEquals("created", client.post("/api/decks").body());
-            assertEquals("deck 7", client.get("/api/decks/7").body());
+            assertThat(client.get("/api/decks").body()).isEqualTo("list");
+            assertThat(client.post("/api/decks").body()).isEqualTo("created");
+            assertThat(client.get("/api/decks/7").body()).isEqualTo("deck 7");
         });
     }
 
@@ -133,7 +133,8 @@ class RoutingFeaturesTest {
         App app = new App().path("/api", api -> api.path("/decks",
                 decks -> decks.get("/{deckId}/cards", req -> WebResponse.text("cards"))));
 
-        WebTest.test(app, client -> assertEquals("cards", client.get("/api/decks/3/cards").body()));
+        WebTest.test(app, client ->
+                assertThat(client.get("/api/decks/3/cards").body()).isEqualTo("cards"));
     }
 
     @Test
@@ -155,7 +156,7 @@ class RoutingFeaturesTest {
             client.get("/other");
         });
 
-        assertEquals(List.of("/api", "/api/decks"), visited);
+        assertThat(visited).isEqualTo(List.of("/api", "/api/decks"));
     }
 
     @Test
@@ -166,8 +167,8 @@ class RoutingFeaturesTest {
 
         WebTest.test(app, client -> {
             var response = client.get("/missing");
-            assertEquals(404, response.statusCode());
-            assertEquals("<h1>no such page: /missing</h1>", response.body());
+            assertThat(response.statusCode()).isEqualTo(404);
+            assertThat(response.body()).isEqualTo("<h1>no such page: /missing</h1>");
         });
     }
 
@@ -177,7 +178,8 @@ class RoutingFeaturesTest {
                 .error(HttpStatus.FORBIDDEN, req -> WebResponse.text("forbidden page"))
                 .get("/secret", req -> WebResponse.empty(HttpStatus.FORBIDDEN));
 
-        WebTest.test(app, client -> assertEquals("forbidden page", client.get("/secret").body()));
+        WebTest.test(app, client ->
+                assertThat(client.get("/secret").body()).isEqualTo("forbidden page"));
     }
 
     @Test
@@ -189,9 +191,9 @@ class RoutingFeaturesTest {
 
         WebTest.test(app, client -> {
             var response = client.get("/decks/abc");
-            assertEquals(400, response.statusCode());
-            assertTrue(response.body().startsWith("bad request: Path variable {deckId}"),
-                    "got: " + response.body());
+            assertThat(response.statusCode()).isEqualTo(400);
+            assertThat(response.body())
+                    .startsWith("bad request: Path variable {deckId}");
         });
     }
 
@@ -201,7 +203,7 @@ class RoutingFeaturesTest {
                 .error(HttpStatus.NOT_FOUND, req -> WebResponse.text("replaced"))
                 .get("/gone", req -> WebResponse.text("my own 404").status(HttpStatus.NOT_FOUND));
 
-        WebTest.test(app, client -> assertEquals("my own 404", client.get("/gone").body()));
+        WebTest.test(app, client -> assertThat(client.get("/gone").body()).isEqualTo("my own 404"));
     }
 
     @Test
@@ -209,13 +211,13 @@ class RoutingFeaturesTest {
         App app = new App().get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> {
-            assertEquals("Not Found: /missing", client.get("/missing").body());
+            assertThat(client.get("/missing").body()).isEqualTo("Not Found: /missing");
 
             var notAllowed = client.post("/");
-            assertEquals(405, notAllowed.statusCode());
-            assertEquals("GET, HEAD, OPTIONS",
-                    notAllowed.headers().firstValue("Allow").orElseThrow());
-            assertEquals("Method Not Allowed: POST /", notAllowed.body());
+            assertThat(notAllowed.statusCode()).isEqualTo(405);
+            assertThat(notAllowed.headers().firstValue("Allow").orElseThrow())
+                    .isEqualTo("GET, HEAD, OPTIONS");
+            assertThat(notAllowed.body()).isEqualTo("Method Not Allowed: POST /");
         });
     }
 
@@ -228,10 +230,10 @@ class RoutingFeaturesTest {
 
         WebTest.test(app, client -> {
             var response = client.post("/");
-            assertEquals(405, response.statusCode());
-            assertEquals("no such method here", response.body());
-            assertEquals("GET, HEAD, OPTIONS",
-                    response.headers().firstValue("Allow").orElseThrow());
+            assertThat(response.statusCode()).isEqualTo(405);
+            assertThat(response.body()).isEqualTo("no such method here");
+            assertThat(response.headers().firstValue("Allow").orElseThrow())
+                    .isEqualTo("GET, HEAD, OPTIONS");
         });
     }
 
@@ -245,14 +247,14 @@ class RoutingFeaturesTest {
 
         WebTest.test(app, client -> {
             var response = client.get("/boom");
-            assertEquals(500, response.statusCode());
-            assertEquals("something broke", response.body());
+            assertThat(response.statusCode()).isEqualTo(500);
+            assertThat(response.body()).isEqualTo("something broke");
         });
     }
 
     @Test
     void wildcardIsOnlyAllowedAsTheLastSegment() {
-        assertThrows(IllegalArgumentException.class,
-                () -> new App().before("/*/edit", req -> null));
+        assertThatThrownBy(() -> new App().before("/*/edit", req -> null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

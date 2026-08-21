@@ -5,8 +5,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** The envelope itself: what a {@code with}-style method does to the one it replaces. */
 class WebResponseTest {
@@ -16,8 +16,8 @@ class WebResponseTest {
         WebResponse response = WebResponse.template("about");
 
         WebResponse.Template template = (WebResponse.Template) response.body();
-        assertEquals("about", template.name());
-        assertEquals(Map.of(), template.model());
+        assertThat(template.name()).isEqualTo("about");
+        assertThat(template.model()).isEqualTo(Map.of());
     }
 
     @Test
@@ -27,8 +27,8 @@ class WebResponseTest {
                 .header("X-Two", "2")
                 .header("X-Three", "3");
 
-        assertEquals(List.of("Content-Type", "X-One", "X-Two", "X-Three"),
-                List.copyOf(response.headers().keySet()));
+        assertThat(List.copyOf(response.headers().keySet()))
+                .isEqualTo(List.of("Content-Type", "X-One", "X-Two", "X-Three"));
     }
 
     @Test
@@ -38,17 +38,17 @@ class WebResponseTest {
                 .header("X-Two", "2")
                 .header("X-One", "again");
 
-        assertEquals("again", response.header("X-One"));
-        assertEquals(List.of("Content-Type", "X-One", "X-Two"),
-                List.copyOf(response.headers().keySet()));
+        assertThat(response.header("X-One")).isEqualTo("again");
+        assertThat(List.copyOf(response.headers().keySet()))
+                .isEqualTo(List.of("Content-Type", "X-One", "X-Two"));
     }
 
     @Test
     void theHeaderMapHandedOutCannotBeChanged() {
         WebResponse response = WebResponse.text("ok").header("X-One", "1");
 
-        assertThrows(UnsupportedOperationException.class,
-                () -> response.headers().put("X-Two", "2"));
+        assertThatThrownBy(() -> response.headers().put("X-Two", "2"))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 
     @Test
@@ -57,8 +57,8 @@ class WebResponseTest {
 
         WebResponse withHeader = original.header("X-One", "1");
 
-        assertEquals("1", withHeader.header("X-One"));
-        assertEquals(null, original.header("X-One"));
+        assertThat(withHeader.header("X-One")).isEqualTo("1");
+        assertThat(original.header("X-One")).isEqualTo(null);
     }
 
     /** An error handler's answer keeps what the framework had already worked out. */
@@ -73,10 +73,10 @@ class WebResponseTest {
                 .header("X-Kept", "replaced")
                 .over(base);
 
-        assertEquals("GET, POST", answer.header("Allow"));
-        assertEquals("replaced", answer.header("X-Kept"));
-        assertEquals(List.of("Allow", "X-Kept", "Content-Type"),
-                List.copyOf(answer.headers().keySet()));
+        assertThat(answer.header("Allow")).isEqualTo("GET, POST");
+        assertThat(answer.header("X-Kept")).isEqualTo("replaced");
+        assertThat(List.copyOf(answer.headers().keySet()))
+                .isEqualTo(List.of("Allow", "X-Kept", "Content-Type"));
     }
 
     /** 302, not 301: the default has to be the one that can be taken back. */
@@ -84,26 +84,26 @@ class WebResponseTest {
     void aRedirectDefaultsToFound() {
         WebResponse response = WebResponse.redirect("/decks/3");
 
-        assertEquals(HttpStatus.FOUND, response.status());
-        assertEquals("/decks/3", response.header("Location"));
+        assertThat(response.status()).isEqualTo(HttpStatus.FOUND);
+        assertThat(response.header("Location")).isEqualTo("/decks/3");
     }
 
     @Test
     void aRedirectCanNameItsOwnStatus() {
-        assertEquals(HttpStatus.MOVED_PERMANENTLY,
-                WebResponse.redirect("/new", HttpStatus.MOVED_PERMANENTLY).status());
-        assertEquals(HttpStatus.SEE_OTHER,
-                WebResponse.redirect("/decks", HttpStatus.SEE_OTHER).status());
-        assertEquals(HttpStatus.PERMANENT_REDIRECT,
-                WebResponse.redirect("/new", HttpStatus.PERMANENT_REDIRECT).status());
+        assertThat(WebResponse.redirect("/new", HttpStatus.MOVED_PERMANENTLY).status())
+                .isEqualTo(HttpStatus.MOVED_PERMANENTLY);
+        assertThat(WebResponse.redirect("/decks", HttpStatus.SEE_OTHER).status())
+                .isEqualTo(HttpStatus.SEE_OTHER);
+        assertThat(WebResponse.redirect("/new", HttpStatus.PERMANENT_REDIRECT).status())
+                .isEqualTo(HttpStatus.PERMANENT_REDIRECT);
     }
 
     /** A Location header on a 200 is not a redirect, so the status is checked. */
     @Test
     void aRedirectAtANonRedirectStatusIsRejected() {
-        assertThrows(IllegalArgumentException.class,
-                () -> WebResponse.redirect("/decks", HttpStatus.OK));
-        assertThrows(IllegalArgumentException.class,
-                () -> WebResponse.redirect("/decks", HttpStatus.NOT_FOUND));
+        assertThatThrownBy(() -> WebResponse.redirect("/decks", HttpStatus.OK))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> WebResponse.redirect("/decks", HttpStatus.NOT_FOUND))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

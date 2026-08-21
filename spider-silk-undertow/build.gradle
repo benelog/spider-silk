@@ -12,5 +12,6 @@ dependencies {
     api 'io.undertow:undertow-servlet:2.3.26.Final'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }

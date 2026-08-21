@@ -10,8 +10,8 @@ import flashcard.repository.DeckRepository;
 import flashcard.repository.RepositoryTestSupport;
 import flashcard.repository.TagRepository;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DeckServiceTest extends RepositoryTestSupport {
 
@@ -32,24 +32,25 @@ class DeckServiceTest extends RepositoryTestSupport {
                 run,move fast
                 """);
 
-        assertEquals(2, imported);
+        assertThat(imported).isEqualTo(2);
         var cards = cardService.cardsWithTags(deck.id());
-        assertEquals(2, cards.size());
-        assertEquals(List.of("basic", "fruit"), cards.get(0).tags());
+        assertThat(cards).hasSize(2);
+        assertThat(cards.get(0).tags()).isEqualTo(List.of("basic", "fruit"));
     }
 
     @Test
     void aMalformedLineRollsBackTheWholeImport() {
         Deck deck = deckService.createDeck("English");
 
-        assertThrows(CsvFormatException.class, () -> deckService.importCsv(deck.id(), """
+        assertThatThrownBy(() -> deckService.importCsv(deck.id(), """
                 apple,a round fruit
                 broken-line
-                """));
+                """))
+                .isInstanceOf(CsvFormatException.class);
 
         // TransactionTemplate rolled everything back on the runtime exception,
         // so even the first line was not stored
-        assertEquals(0, cardRepository.findByDeckId(deck.id()).size());
+        assertThat(cardRepository.findByDeckId(deck.id())).hasSize(0);
     }
 
     @Test
@@ -60,9 +61,9 @@ class DeckServiceTest extends RepositoryTestSupport {
         String csv = deckService.exportCsv(source.id());
 
         Deck target = deckService.createDeck("Copy");
-        assertEquals(1, deckService.importCsv(target.id(), csv));
+        assertThat(deckService.importCsv(target.id(), csv)).isEqualTo(1);
         var copied = cardService.cardsWithTags(target.id()).getFirst();
-        assertEquals("a, b", copied.card().text());
-        assertEquals(List.of("tag1", "tag2"), copied.tags());
+        assertThat(copied.card().text()).isEqualTo("a, b");
+        assertThat(copied.tags()).isEqualTo(List.of("tag1", "tag2"));
     }
 }

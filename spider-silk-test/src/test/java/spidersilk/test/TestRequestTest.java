@@ -8,10 +8,9 @@ import spidersilk.HttpException;
 import spidersilk.HttpStatus;
 import spidersilk.WebRequest;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** What a handler reads off a built request, and where it is meant to reject one. */
 class TestRequestTest {
@@ -20,15 +19,15 @@ class TestRequestTest {
     void answersTheMethodAndPath() {
         WebRequest request = TestRequest.post("/api/decks").build();
 
-        assertEquals("POST", request.method());
-        assertEquals("/api/decks", request.path());
+        assertThat(request.method()).isEqualTo("POST");
+        assertThat(request.path()).isEqualTo("/api/decks");
     }
 
     @Test
     void refusesAQueryStringInThePath() {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
-                () -> TestRequest.get("/decks?page=2"));
-        assertTrue(e.getMessage().contains("queryParam"), e.getMessage());
+        assertThatThrownBy(() -> TestRequest.get("/decks?page=2"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("queryParam");
     }
 
     // ---- Path variables ----
@@ -37,16 +36,16 @@ class TestRequestTest {
     void suppliesThePathVariablesARouteWouldHaveResolved() {
         WebRequest request = TestRequest.get("/decks/3").pathParam("deckId", "3").build();
 
-        assertEquals(3L, request.pathParamLong("deckId"));
+        assertThat(request.pathParamLong("deckId")).isEqualTo(3L);
     }
 
     @Test
     void aPathVariableThatIsNotANumberIsA400() {
         WebRequest request = TestRequest.get("/decks/x").pathParam("deckId", "x").build();
 
-        HttpException e = assertThrows(HttpException.class,
-                () -> request.pathParamLong("deckId"));
-        assertEquals(HttpStatus.BAD_REQUEST, e.status());
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> request.pathParamLong("deckId"))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 
     // ---- Parameters ----
@@ -55,7 +54,9 @@ class TestRequestTest {
     void aMissingRequiredParameterIsA400() {
         WebRequest request = TestRequest.post("/decks").build();
 
-        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(HttpException.class, () -> request.param("name")).status());
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> request.param("name"))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 
     @Test
@@ -65,8 +66,8 @@ class TestRequestTest {
                 .formParam("tag", "irregular")
                 .build();
 
-        assertEquals(List.of("verb", "irregular"), request.params("tag"));
-        assertEquals("verb", request.param("tag"));
+        assertThat(request.params("tag")).isEqualTo(List.of("verb", "irregular"));
+        assertThat(request.param("tag")).isEqualTo("verb");
     }
 
     /**
@@ -81,18 +82,18 @@ class TestRequestTest {
                 .formParam("name", "from-form")
                 .build();
 
-        assertEquals(List.of("from-query", "from-form"), request.params("name"));
-        assertEquals("from-query", request.queryParam("name"));
-        assertEquals("from-form", request.formParam("name"));
+        assertThat(request.params("name")).isEqualTo(List.of("from-query", "from-form"));
+        assertThat(request.queryParam("name")).isEqualTo("from-query");
+        assertThat(request.formParam("name")).isEqualTo("from-form");
     }
 
     @Test
     void aParameterSetOnlyOnOneSideIsAbsentFromTheOther() {
         WebRequest request = TestRequest.post("/decks").formParam("name", "English").build();
 
-        assertNull(request.queryParam("name"));
-        assertEquals("English", request.formParam("name"));
-        assertEquals("English", request.param("name"));
+        assertThat(request.queryParam("name")).isNull();
+        assertThat(request.formParam("name")).isEqualTo("English");
+        assertThat(request.param("name")).isEqualTo("English");
     }
 
     // ---- Headers ----
@@ -103,8 +104,8 @@ class TestRequestTest {
                 .header("X-Api-Key", "secret")
                 .build();
 
-        assertEquals("secret", request.header("x-api-key"));
-        assertNull(request.header("X-Other"));
+        assertThat(request.header("x-api-key")).isEqualTo("secret");
+        assertThat(request.header("X-Other")).isNull();
     }
 
     // ---- Body ----
@@ -113,7 +114,7 @@ class TestRequestTest {
     void readsTheBodyBack() {
         WebRequest request = TestRequest.post("/decks").body("plain text").build();
 
-        assertEquals("plain text", request.body());
+        assertThat(request.body()).isEqualTo("plain text");
     }
 
     @Test
@@ -122,8 +123,8 @@ class TestRequestTest {
                 .jsonBody("{\"name\": \"Spanish\"}")
                 .build();
 
-        assertEquals("application/json", request.header("Content-Type"));
-        assertEquals("Spanish", request.bodyJson().asObject().getString("name"));
+        assertThat(request.header("Content-Type")).isEqualTo("application/json");
+        assertThat(request.bodyJson().asObject().getString("name")).isEqualTo("Spanish");
     }
 
     @Test
@@ -132,9 +133,9 @@ class TestRequestTest {
                 .jsonBody("{\"title\": \"Spanish\"}")
                 .build();
 
-        HttpException e = assertThrows(HttpException.class,
-                () -> request.bodyJson(json -> json.asObject().getString("name")));
-        assertEquals(HttpStatus.BAD_REQUEST, e.status());
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> request.bodyJson(json -> json.asObject().getString("name")))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 
     // ---- Cookies ----
@@ -143,16 +144,16 @@ class TestRequestTest {
     void readsTheCookiesTheClientSent() {
         WebRequest request = TestRequest.get("/decks").cookie("theme", "dark").build();
 
-        assertEquals("dark", request.cookie("theme"));
-        assertEquals(1, request.cookies().size());
+        assertThat(request.cookie("theme")).isEqualTo("dark");
+        assertThat(request.cookies()).hasSize(1);
     }
 
     @Test
     void aRequestWithoutCookiesAnswersNull() {
         WebRequest request = TestRequest.get("/decks").build();
 
-        assertNull(request.cookie("theme"));
-        assertTrue(request.cookies().isEmpty());
+        assertThat(request.cookie("theme")).isNull();
+        assertThat(request.cookies()).isEmpty();
     }
 
     // ---- Session ----
@@ -161,14 +162,14 @@ class TestRequestTest {
     void readsASessionAttributePutThereInAdvance() {
         WebRequest request = TestRequest.get("/decks").sessionAttr("userId", 7L).build();
 
-        assertEquals(7L, (Long) request.sessionAttr("userId"));
+        assertThat((Long) request.sessionAttr("userId")).isEqualTo(7L);
     }
 
     @Test
     void aRequestWithoutASessionAnswersNullRatherThanCreatingOne() {
         WebRequest request = TestRequest.get("/decks").build();
 
-        assertNull(request.sessionAttr("userId"));
+        assertThat((Object) request.sessionAttr("userId")).isNull();
     }
 
     @Test
@@ -177,7 +178,7 @@ class TestRequestTest {
 
         request.sessionAttr("userId", 7L);
 
-        assertEquals(7L, (Long) request.sessionAttr("userId"));
+        assertThat((Long) request.sessionAttr("userId")).isEqualTo(7L);
     }
 
     // ---- Uploads ----
@@ -188,8 +189,8 @@ class TestRequestTest {
                 .file("file", "cards.csv", "front,back\nhola,hello\n")
                 .build();
 
-        assertEquals("cards.csv", request.file("file").fileName());
-        assertEquals("front,back\nhola,hello\n", request.file("file").asText());
+        assertThat(request.file("file").fileName()).isEqualTo("cards.csv");
+        assertThat(request.file("file").asText()).isEqualTo("front,back\nhola,hello\n");
     }
 
     @Test
@@ -198,7 +199,9 @@ class TestRequestTest {
                 .file("other", "cards.csv", "front,back\n")
                 .build();
 
-        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(HttpException.class, () -> request.file("file")).status());
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> request.file("file"))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 
     /** No file at all means the request is not multipart, which is the other 400. */
@@ -206,6 +209,8 @@ class TestRequestTest {
     void askingForAFileOnARequestWithNoneIsA400() {
         WebRequest request = TestRequest.post("/decks/3/import").build();
 
-        assertEquals(HttpStatus.BAD_REQUEST, assertThrows(HttpException.class, () -> request.file("file")).status());
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> request.file("file"))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 }

@@ -1,9 +1,7 @@
 package spidersilk.server;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.net.URI;
@@ -43,22 +41,22 @@ class JettyServerTest {
 
         HttpResponse<String> response = get("/hello/spider");
 
-        assertEquals(200, response.statusCode());
-        assertEquals("Hello spider", response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("Hello spider");
     }
 
     @Test
     void pickedPortIsReadable() {
         app = new App().start(0);
 
-        assertTrue(app.port() > 0, "port 0 should be replaced by the bound port");
+        assertThat(app.port()).as("port 0 should be replaced by the bound port").isPositive();
     }
 
     @Test
     void unmatchedPathFallsBackToNotFound() throws Exception {
         app = new App().start(0);
 
-        assertEquals(404, get("/nope").statusCode());
+        assertThat(get("/nope").statusCode()).isEqualTo(404);
     }
 
     /** Sessions are on by default, so flash works without any extra configuration. */
@@ -71,7 +69,7 @@ class JettyServerTest {
                 })
                 .start(0);
 
-        assertEquals(200, get("/flash").statusCode());
+        assertThat(get("/flash").statusCode()).isEqualTo(200);
     }
 
     /** req.file(...) needs a MultipartConfig on the servlet; the default supplies one. */
@@ -96,8 +94,8 @@ class JettyServerTest {
         HttpResponse<String> response =
                 client.send(request, HttpResponse.BodyHandlers.ofString());
 
-        assertEquals(200, response.statusCode());
-        assertEquals("front,back", response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("front,back");
     }
 
     @Test
@@ -113,11 +111,13 @@ class JettyServerTest {
                             .build(),
                     HttpResponse.BodyHandlers.ofString());
 
-            assertEquals(200, response.statusCode());
-            assertTrue(response.headers().firstValue("Server").isEmpty(),
-                    "Server header should be suppressed by the HttpConfiguration customizer");
-            assertEquals(true, jetty.jetty().getAttribute("customized"),
-                    "the Server customizer should have run against the real Server");
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.headers().firstValue("Server"))
+                    .as("Server header should be suppressed by the HttpConfiguration customizer")
+                    .isEmpty();
+            assertThat(jetty.jetty().getAttribute("customized"))
+                    .as("the Server customizer should have run against the real Server")
+                    .isEqualTo(true);
         } finally {
             jetty.stop();
         }
@@ -137,13 +137,15 @@ class JettyServerTest {
         CompletableFuture<HttpResponse<String>> inFlight = client.sendAsync(
                 HttpRequest.newBuilder(URI.create(url)).build(),
                 HttpResponse.BodyHandlers.ofString());
-        assertTrue(handlerEntered.await(2, TimeUnit.SECONDS), "the handler never started");
+        assertThat(handlerEntered.await(2, TimeUnit.SECONDS))
+                .as("the handler never started")
+                .isTrue();
 
         app.stop();
 
         HttpResponse<String> response = inFlight.get(2, TimeUnit.SECONDS);
-        assertEquals(200, response.statusCode());
-        assertEquals("finished", response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("finished");
     }
 
     @Test
@@ -151,8 +153,8 @@ class JettyServerTest {
         JettyServer jetty = new JettyServer(new App()).port(0);
         jetty.start();
         try {
-            assertEquals(JettyServer.DEFAULT_STOP_TIMEOUT.toMillis(),
-                    jetty.jetty().getStopTimeout());
+            assertThat(jetty.jetty().getStopTimeout())
+                    .isEqualTo(JettyServer.DEFAULT_STOP_TIMEOUT.toMillis());
         } finally {
             jetty.stop();
         }
@@ -164,7 +166,7 @@ class JettyServerTest {
         JettyServer jetty = new JettyServer(new App()).port(0).stopTimeout(Duration.ZERO);
         jetty.start();
         try {
-            assertEquals(0, jetty.jetty().getStopTimeout());
+            assertThat(jetty.jetty().getStopTimeout()).isEqualTo(0);
         } finally {
             jetty.stop();
         }
@@ -179,7 +181,7 @@ class JettyServerTest {
                 .customizeServer(server -> server.setStopTimeout(7_000));
         jetty.start();
         try {
-            assertEquals(7_000, jetty.jetty().getStopTimeout());
+            assertThat(jetty.jetty().getStopTimeout()).isEqualTo(7_000);
         } finally {
             jetty.stop();
         }
@@ -191,7 +193,7 @@ class JettyServerTest {
         JettyServer jetty = new JettyServer(new App()).port(0);
         jetty.start();
         try {
-            assertTrue(jetty.jetty().getStopAtShutdown());
+            assertThat(jetty.jetty().getStopAtShutdown()).isTrue();
         } finally {
             jetty.stop();
         }
@@ -202,7 +204,7 @@ class JettyServerTest {
         JettyServer jetty = new JettyServer(new App()).port(0).shutdownHook(false);
         jetty.start();
         try {
-            assertFalse(jetty.jetty().getStopAtShutdown());
+            assertThat(jetty.jetty().getStopAtShutdown()).isFalse();
         } finally {
             jetty.stop();
         }
@@ -212,14 +214,16 @@ class JettyServerTest {
     @Test
     void anIdleConnectionDoesNotDelayTheStop() throws Exception {
         app = new App().get("/", req -> WebResponse.text("ok")).start(0);
-        assertEquals(200, get("/").statusCode());   // leaves a keep-alive connection behind
+        assertThat(get("/").statusCode()).isEqualTo(200);   // leaves a keep-alive connection behind
 
         long startedAt = System.nanoTime();
         app.stop();
         app = null;
 
         long millis = (System.nanoTime() - startedAt) / 1_000_000;
-        assertTrue(millis < 1_000, "stop took " + millis + "ms with only an idle connection open");
+        assertThat(millis)
+                .as("stopping with only an idle connection open")
+                .isLessThan(1_000);
     }
 
     /**
@@ -237,7 +241,7 @@ class JettyServerTest {
                 .server((a, port) -> new JettyServer(a).port(port).threadPool(threadPool))
                 .start(0);
 
-        assertEquals("virtual", get("/").body());
+        assertThat(get("/").body()).isEqualTo("virtual");
     }
 
     @Test
@@ -245,13 +249,13 @@ class JettyServerTest {
         RecordingServer recording = new RecordingServer();
         app = new App().server((a, port) -> recording).start(1234);
 
-        assertTrue(recording.started);
-        assertEquals(1234, app.port());
+        assertThat(recording.started).isTrue();
+        assertThat(app.port()).isEqualTo(1234);
     }
 
     @Test
     void portBeforeStartIsRejected() {
-        assertThrows(IllegalStateException.class, () -> new App().port());
+        assertThatThrownBy(() -> new App().port()).isInstanceOf(IllegalStateException.class);
     }
 
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {

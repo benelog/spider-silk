@@ -1,7 +1,6 @@
 package flashcard;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -66,41 +65,53 @@ class ServerCompatibilityTest {
 
         // A jte template, rendered.
         HttpResponse<String> home = get("/");
-        assertEquals(200, home.statusCode(), name + " failed to render the home page");
-        assertTrue(home.body().contains("<html"), name + " served no HTML: " + home.body());
+        assertThat(home.statusCode()).as(name + " failed to render the home page").isEqualTo(200);
+        assertThat(home.body()).as(name + " served no HTML: " + home.body()).contains("<html");
 
         // A static file off the classpath, with the cache headers StaticFiles adds.
         HttpResponse<String> stylesheet = get("/style.css");
-        assertEquals(200, stylesheet.statusCode(), name + " failed to serve the stylesheet");
-        assertTrue(stylesheet.headers().firstValue("ETag").isPresent(),
-                name + " served the stylesheet without an ETag");
+        assertThat(stylesheet.statusCode())
+                .as(name + " failed to serve the stylesheet")
+                .isEqualTo(200);
+        assertThat(stylesheet.headers().firstValue("ETag"))
+                .as(name + " served the stylesheet without an ETag")
+                .isPresent();
 
         // A form post that answers with a redirect, then the page it points at.
         HttpResponse<String> created = postForm("/decks", "name=Servers");
-        assertEquals(302, created.statusCode(), name + " did not redirect after the form post");
+        assertThat(created.statusCode())
+                .as(name + " did not redirect after the form post")
+                .isEqualTo(302);
         String location = created.headers().firstValue("Location").orElseThrow();
-        assertEquals(200, get(location).statusCode(), name + " failed to serve " + location);
+        assertThat(get(location).statusCode())
+                .as(name + " failed to serve " + location)
+                .isEqualTo(200);
 
         // JSON, over the route group.
         HttpResponse<String> decks = get("/api/decks");
-        assertEquals(200, decks.statusCode(), name + " failed on the JSON API");
-        assertTrue(decks.body().contains("\"Servers\""),
-                name + " did not list the deck just created: " + decks.body());
+        assertThat(decks.statusCode()).as(name + " failed on the JSON API").isEqualTo(200);
+        assertThat(decks.body())
+                .as(name + " did not list the deck just created: " + decks.body())
+                .contains("\"Servers\"");
 
         // Route introspection, which is the same list on every server.
-        assertEquals(200, get("/openapi.json").statusCode(), name + " failed on /openapi.json");
-        assertEquals(200, get("/_routes").statusCode(), name + " failed on /_routes");
+        assertThat(get("/openapi.json").statusCode())
+                .as(name + " failed on /openapi.json")
+                .isEqualTo(200);
+        assertThat(get("/_routes").statusCode()).as(name + " failed on /_routes").isEqualTo(200);
 
         // A CSV upload, which is what the multipart config above is for. A failed
         // import also redirects — to "/" with a flash — so the deck is what says
         // the upload was actually read, and the cards prove it was parsed.
         HttpResponse<String> imported = postCsv(location + "/import", "front,back\nhello,안녕\n");
-        assertEquals(302, imported.statusCode(), name + " failed on the CSV import");
-        assertEquals(location, imported.headers().firstValue("Location").orElseThrow(),
-                name + " bounced the CSV import to the error page");
+        assertThat(imported.statusCode()).as(name + " failed on the CSV import").isEqualTo(302);
+        assertThat(imported.headers().firstValue("Location").orElseThrow())
+                .as(name + " bounced the CSV import to the error page")
+                .isEqualTo(location);
         HttpResponse<String> cards = get("/api/decks/" + deckId(location) + "/cards");
-        assertTrue(cards.body().contains("안녕"),
-                name + " did not import the card, or mangled its encoding: " + cards.body());
+        assertThat(cards.body())
+                .as(name + " did not import the card, or mangled its encoding: " + cards.body())
+                .contains("안녕");
     }
 
     private static String deckId(String deckPath) {

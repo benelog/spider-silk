@@ -14,7 +14,7 @@ import spidersilk.App;
  * void listsDecks() {
  *     WebTest.test(app, client -> {
  *         HttpResponse<String> response = client.get("/api/decks");
- *         assertEquals(200, response.statusCode());
+ *         assertThat(response.statusCode()).isEqualTo(200);
  *     });
  * }
  * }</pre>

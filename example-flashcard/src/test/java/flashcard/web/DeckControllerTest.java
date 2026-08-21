@@ -14,8 +14,8 @@ import flashcard.repository.TagRepository;
 import flashcard.service.CardService;
 import flashcard.service.DeckService;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 /**
  * Calls the handler methods directly and asserts on the response they return,
@@ -38,9 +38,10 @@ class DeckControllerTest extends RepositoryTestSupport {
                 .formParam("name", "English")
                 .build());
 
-        assertEquals(HttpStatus.FOUND, response.status());
-        assertTrue(response.header("Location").matches("/decks/\\d+"),
-                "unexpected redirect: " + response.header("Location"));
+        assertThat(response.status()).isEqualTo(HttpStatus.FOUND);
+        assertThat(response.header("Location"))
+                .as("unexpected redirect: " + response.header("Location"))
+                .matches("/decks/\\d+");
     }
 
     @Test
@@ -52,8 +53,8 @@ class DeckControllerTest extends RepositoryTestSupport {
                 .formParam("name", "New name")
                 .build());
 
-        assertEquals("New name", deckService.getDeck(deck.id()).name());
-        assertEquals("/decks/" + deck.id(), response.header("Location"));
+        assertThat(deckService.getDeck(deck.id()).name()).isEqualTo("New name");
+        assertThat(response.header("Location")).isEqualTo("/decks/" + deck.id());
     }
 
     @Test
@@ -66,7 +67,7 @@ class DeckControllerTest extends RepositoryTestSupport {
                         .file("file", "cards.csv", "hola,hello,greeting\nadios,goodbye\n")
                         .build());
 
-        assertEquals("/decks/" + deck.id(), response.header("Location"));
-        assertEquals(2, cardService.cardsWithTags(deck.id()).size());
+        assertThat(response.header("Location")).isEqualTo("/decks/" + deck.id());
+        assertThat(cardService.cardsWithTags(deck.id())).hasSize(2);
     }
 }

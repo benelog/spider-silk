@@ -1,8 +1,6 @@
 package spidersilk;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -33,12 +31,13 @@ class SseTest {
         WebTest.test(app, client -> {
             var response = client.get("/events");
 
-            assertEquals(200, response.statusCode());
-            assertTrue(response.headers().firstValue("Content-Type").orElseThrow()
-                    .startsWith("text/event-stream"));
-            assertEquals("no-cache", response.headers().firstValue("Cache-Control").orElseThrow());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.headers().firstValue("Content-Type").orElseThrow())
+                    .startsWith("text/event-stream");
+            assertThat(response.headers().firstValue("Cache-Control").orElseThrow())
+                    .isEqualTo("no-cache");
             // The id belongs to the event that follows it, and to no later one.
-            assertEquals("""
+            assertThat(response.body()).isEqualTo("""
                     id: 7
                     event: tick
                     data: first
@@ -48,7 +47,7 @@ class SseTest {
 
                     : keep-alive
 
-                    """, response.body());
+                    """);
         });
     }
 
@@ -65,12 +64,13 @@ class SseTest {
                 })
                 .get("/events", req -> WebResponse.sse(stream -> stream.send("one")));
 
-        assertEquals(List.of(new Route("GET", "/events")), app.routes());
+        assertThat(app.routes()).isEqualTo(List.of(new Route("GET", "/events")));
 
-        WebTest.test(app, client -> assertEquals("data: one\n\n", client.get("/events").body()));
+        WebTest.test(app, client ->
+                assertThat(client.get("/events").body()).isEqualTo("data: one\n\n"));
 
-        assertEquals(List.of("before /events"), filtered);
-        assertEquals(List.of(HttpStatus.OK), logged);
+        assertThat(filtered).isEqualTo(List.of("before /events"));
+        assertThat(logged).isEqualTo(List.of(HttpStatus.OK));
     }
 
     /** A stream with the body thrown away would never end, so HEAD stops at the headers. */
@@ -85,13 +85,13 @@ class SseTest {
         WebTest.test(app, client -> {
             var response = client.head("/events");
 
-            assertEquals(200, response.statusCode());
-            assertTrue(response.headers().firstValue("Content-Type").orElseThrow()
-                    .startsWith("text/event-stream"));
-            assertEquals("", response.body());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.headers().firstValue("Content-Type").orElseThrow())
+                    .startsWith("text/event-stream");
+            assertThat(response.body()).isEmpty();
         });
 
-        assertFalse(opened.get(), "HEAD must not run the stream handler");
+        assertThat(opened.get()).as("HEAD must not run the stream handler").isFalse();
     }
 
     /**
@@ -113,9 +113,11 @@ class SseTest {
             app.stop();
             long millis = (System.nanoTime() - startedAt) / 1_000_000;
 
-            assertTrue(handlerEnded.await(1, TimeUnit.SECONDS), "the handler should have ended");
-            assertTrue(app.openStreams.isEmpty(), "the registry should be empty");
-            assertTrue(millis < 3_000, "stopping took " + millis + "ms");
+            assertThat(handlerEnded.await(1, TimeUnit.SECONDS))
+                    .as("the handler should have ended")
+                    .isTrue();
+            assertThat(app.openStreams).as("the registry should be empty").isEmpty();
+            assertThat(millis).isLessThan(3_000);
         } finally {
             app.stop();
         }
@@ -134,8 +136,10 @@ class SseTest {
             readUntil(socket, "data: tick");
             socket.close();
 
-            assertTrue(handlerEnded.await(5, TimeUnit.SECONDS), "the handler should have ended");
-            assertTrue(app.openStreams.isEmpty(), "the registry should be empty");
+            assertThat(handlerEnded.await(5, TimeUnit.SECONDS))
+                    .as("the handler should have ended")
+                    .isTrue();
+            assertThat(app.openStreams).as("the registry should be empty").isEmpty();
         } finally {
             app.stop();
         }

@@ -12,9 +12,8 @@ import flashcard.domain.DailyStat;
 import flashcard.domain.Deck;
 import flashcard.domain.ReviewLog;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 class ReviewLogRepositoryTest extends RepositoryTestSupport {
 
@@ -43,13 +42,15 @@ class ReviewLogRepositoryTest extends RepositoryTestSupport {
 
         reviewLogRepository.insert(ReviewLog.of(card.id(), false, true, now));
 
-        assertEquals(card.id(), raw.queryForObject("select card_id from review_log", Long.class));
-        assertFalse(raw.queryForObject("select correct from review_log", Boolean.class));
-        assertTrue(raw.queryForObject("select retry_round from review_log", Boolean.class));
-        assertEquals(now,
-                raw.queryForObject("select reviewed_at from review_log", LocalDateTime.class));
-        assertEquals(now.toLocalDate(),
-                raw.queryForObject("select study_date from review_log", LocalDate.class));
+        assertThat(raw.queryForObject("select card_id from review_log", Long.class))
+                .isEqualTo(card.id());
+        assertThat(raw.queryForObject("select correct from review_log", Boolean.class)).isFalse();
+        assertThat(raw.queryForObject("select retry_round from review_log", Boolean.class))
+                .isTrue();
+        assertThat(raw.queryForObject("select reviewed_at from review_log", LocalDateTime.class))
+                .isEqualTo(now);
+        assertThat(raw.queryForObject("select study_date from review_log", LocalDate.class))
+                .isEqualTo(now.toLocalDate());
     }
 
     @Test
@@ -61,13 +62,12 @@ class ReviewLogRepositoryTest extends RepositoryTestSupport {
         reviewLogRepository.insert(ReviewLog.of(card.id(), true, false, now));
         reviewLogRepository.insert(ReviewLog.of(card.id(), false, true, now));
 
-        assertEquals(
-                List.of(new DailyStat(yesterday.toLocalDate(), 1, 0),
-                        new DailyStat(now.toLocalDate(), 1, 1)),
-                reviewLogRepository.findDailyStats(yesterday.toLocalDate()));
-        assertEquals(List.of(now.toLocalDate(), yesterday.toLocalDate()),
-                reviewLogRepository.findStudyDates());
-        assertEquals(3, reviewLogRepository.countAll());
-        assertEquals(2, reviewLogRepository.countCorrect());
+        assertThat(reviewLogRepository.findDailyStats(yesterday.toLocalDate())).isEqualTo(List.of(
+                new DailyStat(yesterday.toLocalDate(), 1, 0),
+                new DailyStat(now.toLocalDate(), 1, 1)));
+        assertThat(reviewLogRepository.findStudyDates())
+                .isEqualTo(List.of(now.toLocalDate(), yesterday.toLocalDate()));
+        assertThat(reviewLogRepository.countAll()).isEqualTo(3);
+        assertThat(reviewLogRepository.countCorrect()).isEqualTo(2);
     }
 }

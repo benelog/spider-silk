@@ -4,8 +4,8 @@ import java.time.LocalDateTime;
 
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 class ReviewStateTest {
 
@@ -14,9 +14,9 @@ class ReviewStateTest {
     @Test
     void initialStateHasNoReviewHistory() {
         ReviewState state = ReviewState.initial(1L);
-        assertEquals(0, state.intervalDays());
-        assertNull(state.dueDate());
-        assertEquals(0, state.totalCount());
+        assertThat(state.intervalDays()).isEqualTo(0);
+        assertThat(state.dueDate()).isNull();
+        assertThat(state.totalCount()).isEqualTo(0);
     }
 
     @Test
@@ -24,20 +24,20 @@ class ReviewStateTest {
         ReviewState state = ReviewState.initial(1L);
 
         state = state.reviewed(true, now);
-        assertEquals(1, state.intervalDays());
-        assertEquals(now.toLocalDate().plusDays(1), state.dueDate());
+        assertThat(state.intervalDays()).isEqualTo(1);
+        assertThat(state.dueDate()).isEqualTo(now.toLocalDate().plusDays(1));
 
         state = state.reviewed(true, now);
-        assertEquals(6, state.intervalDays());
+        assertThat(state.intervalDays()).isEqualTo(6);
 
         state = state.reviewed(true, now);
-        assertEquals(15, state.intervalDays());
+        assertThat(state.intervalDays()).isEqualTo(15);
 
         state = state.reviewed(true, now);
-        assertEquals(38, state.intervalDays());
+        assertThat(state.intervalDays()).isEqualTo(38);
 
-        assertEquals(4, state.correctCount());
-        assertEquals(0, state.wrongCount());
+        assertThat(state.correctCount()).isEqualTo(4);
+        assertThat(state.wrongCount()).isEqualTo(0);
     }
 
     @Test
@@ -47,10 +47,10 @@ class ReviewStateTest {
                 .reviewed(true, now)
                 .reviewed(false, now);
 
-        assertEquals(1, state.intervalDays());
-        assertEquals(now.toLocalDate().plusDays(1), state.dueDate());
-        assertEquals(2, state.correctCount());
-        assertEquals(1, state.wrongCount());
-        assertEquals(now, state.lastReviewedAt());
+        assertThat(state.intervalDays()).isEqualTo(1);
+        assertThat(state.dueDate()).isEqualTo(now.toLocalDate().plusDays(1));
+        assertThat(state.correctCount()).isEqualTo(2);
+        assertThat(state.wrongCount()).isEqualTo(1);
+        assertThat(state.lastReviewedAt()).isEqualTo(now);
     }
 }

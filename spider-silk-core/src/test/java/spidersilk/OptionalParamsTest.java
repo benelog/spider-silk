@@ -4,8 +4,8 @@ import org.junit.jupiter.api.Test;
 
 import spidersilk.test.TestRequest;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /** Optional typed parameters: absent answers the default, garbage still answers 400. */
 class OptionalParamsTest {
@@ -16,9 +16,9 @@ class OptionalParamsTest {
     void anAbsentParameterAnswersTheDefault() {
         WebRequest request = TestRequest.get("/decks").build();
 
-        assertEquals(1L, request.paramLong("page", 1));
-        assertEquals(Direction.FRONT,
-                request.paramEnum("direction", Direction.class, Direction.FRONT));
+        assertThat(request.paramLong("page", 1)).isEqualTo(1L);
+        assertThat(request.paramEnum("direction", Direction.class, Direction.FRONT))
+                .isEqualTo(Direction.FRONT);
     }
 
     @Test
@@ -28,9 +28,9 @@ class OptionalParamsTest {
                 .queryParam("direction", "BACK")
                 .build();
 
-        assertEquals(3L, request.paramLong("page", 1));
-        assertEquals(Direction.BACK,
-                request.paramEnum("direction", Direction.class, Direction.FRONT));
+        assertThat(request.paramLong("page", 1)).isEqualTo(3L);
+        assertThat(request.paramEnum("direction", Direction.class, Direction.FRONT))
+                .isEqualTo(Direction.BACK);
     }
 
     /** The default covers absence only: a value that is there but wrong is a 400. */
@@ -41,12 +41,12 @@ class OptionalParamsTest {
                 .queryParam("direction", "SIDEWAYS")
                 .build();
 
-        HttpException notANumber = assertThrows(HttpException.class,
-                () -> request.paramLong("page", 1));
-        assertEquals(HttpStatus.BAD_REQUEST, notANumber.status());
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> request.paramLong("page", 1))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
 
-        HttpException noSuchConstant = assertThrows(HttpException.class,
-                () -> request.paramEnum("direction", Direction.class, Direction.FRONT));
-        assertEquals(HttpStatus.BAD_REQUEST, noSuchConstant.status());
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> request.paramEnum("direction", Direction.class, Direction.FRONT))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 }

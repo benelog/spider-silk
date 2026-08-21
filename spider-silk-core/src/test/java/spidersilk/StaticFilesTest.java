@@ -1,8 +1,6 @@
 package spidersilk;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -23,8 +21,8 @@ class StaticFilesTest {
         WebTest.test(new App(), client -> {
             HttpResponse<String> response = client.get("/style.css");
 
-            assertEquals(200, response.statusCode());
-            assertEquals(CSS, response.body());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo(CSS);
         });
     }
 
@@ -33,16 +31,16 @@ class StaticFilesTest {
         WebTest.test(new App().staticFiles("/public"), client -> {
             HttpResponse<String> response = client.get("/style.css");
 
-            assertEquals(200, response.statusCode());
-            assertEquals(CSS, response.body());
-            assertEquals("text/css; charset=UTF-8",
-                    response.headers().firstValue("Content-Type").orElseThrow());
-            assertEquals(String.valueOf(CSS.length()),
-                    response.headers().firstValue("Content-Length").orElseThrow());
-            assertEquals("no-cache",
-                    response.headers().firstValue("Cache-Control").orElseThrow());
-            assertTrue(response.headers().firstValue("ETag").isPresent());
-            assertTrue(response.headers().firstValue("Last-Modified").isPresent());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo(CSS);
+            assertThat(response.headers().firstValue("Content-Type").orElseThrow())
+                    .isEqualTo("text/css; charset=UTF-8");
+            assertThat(response.headers().firstValue("Content-Length").orElseThrow())
+                    .isEqualTo(String.valueOf(CSS.length()));
+            assertThat(response.headers().firstValue("Cache-Control").orElseThrow())
+                    .isEqualTo("no-cache");
+            assertThat(response.headers().firstValue("ETag")).isPresent();
+            assertThat(response.headers().firstValue("Last-Modified")).isPresent();
         });
     }
 
@@ -56,8 +54,8 @@ class StaticFilesTest {
                     .header("If-None-Match", etag)
                     .GET());
 
-            assertEquals(304, response.statusCode());
-            assertEquals("", response.body());
+            assertThat(response.statusCode()).isEqualTo(304);
+            assertThat(response.body()).isEmpty();
         });
     }
 
@@ -69,8 +67,8 @@ class StaticFilesTest {
                     .header("If-None-Match", "\"something-else\"")
                     .GET());
 
-            assertEquals(200, response.statusCode());
-            assertEquals(CSS, response.body());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo(CSS);
         });
     }
 
@@ -85,7 +83,7 @@ class StaticFilesTest {
                     .header("If-Modified-Since", lastModified)
                     .GET());
 
-            assertEquals(304, response.statusCode());
+            assertThat(response.statusCode()).isEqualTo(304);
         });
     }
 
@@ -97,8 +95,8 @@ class StaticFilesTest {
                     .header("If-Modified-Since", "Tue, 01 Jan 2019 00:00:00 GMT")
                     .GET());
 
-            assertEquals(200, response.statusCode());
-            assertEquals(CSS, response.body());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo(CSS);
         });
     }
 
@@ -107,8 +105,9 @@ class StaticFilesTest {
         App app = new App().staticFiles(
                 new StaticFiles("/public").maxAge(Duration.ofDays(365)));
 
-        WebTest.test(app, client -> assertEquals("public, max-age=31536000",
-                client.get("/style.css").headers().firstValue("Cache-Control").orElseThrow()));
+        WebTest.test(app, client ->
+                assertThat(client.get("/style.css").headers().firstValue("Cache-Control").orElseThrow())
+                        .isEqualTo("public, max-age=31536000"));
     }
 
     @Test
@@ -117,23 +116,23 @@ class StaticFilesTest {
                 new StaticFiles("/public").hostedPath("/assets"));
 
         WebTest.test(app, client -> {
-            assertEquals(200, client.get("/assets/style.css").statusCode());
-            assertEquals(CSS, client.get("/assets/style.css").body());
-            assertEquals(404, client.get("/style.css").statusCode());
+            assertThat(client.get("/assets/style.css").statusCode()).isEqualTo(200);
+            assertThat(client.get("/assets/style.css").body()).isEqualTo(CSS);
+            assertThat(client.get("/style.css").statusCode()).isEqualTo(404);
         });
     }
 
     @Test
     void nestedFilesAreServed() {
         WebTest.test(new App().staticFiles("/public"),
-                client -> assertEquals("nested\n", client.get("/sub/nested.txt").body()));
+                client -> assertThat(client.get("/sub/nested.txt").body()).isEqualTo("nested\n"));
     }
 
     @Test
     void directoriesAreNotServed() {
         WebTest.test(new App().staticFiles("/public"), client -> {
-            assertEquals(404, client.get("/sub").statusCode());
-            assertEquals(404, client.get("/sub/").statusCode());
+            assertThat(client.get("/sub").statusCode()).isEqualTo(404);
+            assertThat(client.get("/sub/").statusCode()).isEqualTo(404);
         });
     }
 
@@ -143,8 +142,8 @@ class StaticFilesTest {
         WebTest.test(new App().staticFiles("/public"), client -> {
             HttpResponse<String> response = client.get("/../style.css");
 
-            assertTrue(response.statusCode() >= 400, "got: " + response.statusCode());
-            assertFalse(response.body().contains("#2b303b"));
+            assertThat(response.statusCode()).isGreaterThanOrEqualTo(400);
+            assertThat(response.body()).doesNotContain("#2b303b");
         });
     }
 
@@ -154,7 +153,8 @@ class StaticFilesTest {
                 .staticFiles("/public")
                 .get("/style.css", req -> WebResponse.text("from the route"));
 
-        WebTest.test(app, client -> assertEquals("from the route", client.get("/style.css").body()));
+        WebTest.test(app, client ->
+                assertThat(client.get("/style.css").body()).isEqualTo("from the route"));
     }
 
     @Test
@@ -162,8 +162,8 @@ class StaticFilesTest {
         App app = new App().staticFiles("/nowhere").get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> {
-            assertEquals("ok", client.get("/").body());
-            assertEquals(404, client.get("/style.css").statusCode());
+            assertThat(client.get("/").body()).isEqualTo("ok");
+            assertThat(client.get("/style.css").statusCode()).isEqualTo(404);
         });
     }
 
@@ -174,9 +174,9 @@ class StaticFilesTest {
                     .uri(URI.create(client.url("/style.css")))
                     .method("HEAD", HttpRequest.BodyPublishers.noBody()));
 
-            assertEquals(200, response.statusCode());
-            assertEquals("", response.body());
-            assertFalse(response.headers().firstValue("ETag").isEmpty());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEmpty();
+            assertThat(response.headers().firstValue("ETag")).isNotEmpty();
         });
     }
 }

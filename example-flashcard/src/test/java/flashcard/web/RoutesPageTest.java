@@ -9,7 +9,8 @@ import org.junit.jupiter.api.Test;
 import spidersilk.JteTemplates;
 import spidersilk.Route;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+
 
 /** The overview page renders straight from app.routes(), so a list is the whole model. */
 class RoutesPageTest {
@@ -23,10 +24,10 @@ class RoutesPageTest {
                 new Route("POST", "/api/decks/{deckId}/cards"))), html);
 
         String page = html.toString();
-        assertTrue(page.contains("2 registered"), page);
-        assertTrue(page.contains(">GET</span>"), page);
-        assertTrue(page.contains("<td>/api/decks</td>"), page);
-        assertTrue(page.contains(">POST</span>"), page);
-        assertTrue(page.contains("<td>/api/decks/{deckId}/cards</td>"), page);
+        assertThat(page).contains("2 registered");
+        assertThat(page).contains(">GET</span>");
+        assertThat(page).contains("<td>/api/decks</td>");
+        assertThat(page).contains(">POST</span>");
+        assertThat(page).contains("<td>/api/decks/{deckId}/cards</td>");
     }
 }

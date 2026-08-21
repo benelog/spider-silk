@@ -1,7 +1,6 @@
 package spidersilk;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.charset.StandardCharsets;
 
@@ -29,12 +28,12 @@ class ResponseBodiesTest {
         WebTest.test(app, client -> {
             var response = client.get("/export");
 
-            assertEquals(200, response.statusCode());
-            assertEquals("row,1\nrow,2\nrow,3\n", response.body());
-            assertTrue(response.headers().firstValue("Content-Type").orElseThrow()
-                    .startsWith("text/csv"));
-            assertEquals("attachment; filename=\"deck.csv\"",
-                    response.headers().firstValue("Content-Disposition").orElseThrow());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("row,1\nrow,2\nrow,3\n");
+            assertThat(response.headers().firstValue("Content-Type").orElseThrow())
+                    .startsWith("text/csv");
+            assertThat(response.headers().firstValue("Content-Disposition").orElseThrow())
+                    .isEqualTo("attachment; filename=\"deck.csv\"");
         });
     }
 
@@ -47,9 +46,10 @@ class ResponseBodiesTest {
         WebTest.test(app, client -> {
             var response = client.head("/export");
 
-            assertEquals(200, response.statusCode());
-            assertEquals("", response.body());
-            assertEquals("11", response.headers().firstValue("Content-Length").orElseThrow());
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEmpty();
+            assertThat(response.headers().firstValue("Content-Length").orElseThrow())
+                    .isEqualTo("11");
         });
     }
 
@@ -66,9 +66,10 @@ class ResponseBodiesTest {
         WebTest.test(app, client -> {
             var response = client.get("/hand-written");
 
-            assertEquals(201, response.statusCode());
-            assertEquals("written by hand", response.body());
-            assertEquals("open", response.headers().firstValue("X-Escape-Hatch").orElseThrow());
+            assertThat(response.statusCode()).isEqualTo(201);
+            assertThat(response.body()).isEqualTo("written by hand");
+            assertThat(response.headers().firstValue("X-Escape-Hatch").orElseThrow())
+                    .isEqualTo("open");
         });
     }
 
@@ -82,22 +83,24 @@ class ResponseBodiesTest {
         WebTest.test(app, client -> {
             var response = client.head("/hand-written");
 
-            assertEquals("", response.body());
-            assertEquals("15", response.headers().firstValue("Content-Length").orElseThrow());
+            assertThat(response.body()).isEmpty();
+            assertThat(response.headers().firstValue("Content-Length").orElseThrow())
+                    .isEqualTo("15");
         });
     }
 
     /** A sealed body means a switch over the kinds needs no default case. */
     @Test
     void theBodyKindsAreExhaustive() {
-        assertEquals("no body", describe(WebResponse.noContent()));
-        assertEquals("hello", describe(WebResponse.html("hello")));
-        assertEquals("2 bytes", describe(WebResponse.bytes(new byte[2], "application/octet-stream")));
-        assertEquals("template deck",
-                describe(WebResponse.template("deck", java.util.Map.of())));
-        assertEquals("a stream", describe(WebResponse.stream("text/csv", out -> { })));
-        assertEquals("an event stream", describe(WebResponse.sse(stream -> { })));
-        assertEquals("written by hand", describe(WebResponse.raw((req, res) -> { })));
+        assertThat(describe(WebResponse.noContent())).isEqualTo("no body");
+        assertThat(describe(WebResponse.html("hello"))).isEqualTo("hello");
+        assertThat(describe(WebResponse.bytes(new byte[2], "application/octet-stream")))
+                .isEqualTo("2 bytes");
+        assertThat(describe(WebResponse.template("deck", java.util.Map.of())))
+                .isEqualTo("template deck");
+        assertThat(describe(WebResponse.stream("text/csv", out -> { }))).isEqualTo("a stream");
+        assertThat(describe(WebResponse.sse(stream -> { }))).isEqualTo("an event stream");
+        assertThat(describe(WebResponse.raw((req, res) -> { }))).isEqualTo("written by hand");
     }
 
     private static String describe(WebResponse response) {

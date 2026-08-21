@@ -9,9 +9,8 @@ import flashcard.domain.Card;
 import flashcard.domain.CardWithTags;
 import flashcard.service.CsvCodec.CsvCard;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CsvCodecTest {
 
@@ -22,31 +21,31 @@ class CsvCodecTest {
                 run,move fast
                 """);
 
-        assertEquals(2, cards.size());
-        assertEquals(new CsvCard("apple", "a round fruit", List.of("fruit", "basic")),
-                cards.get(0));
-        assertEquals(new CsvCard("run", "move fast", List.of()), cards.get(1));
+        assertThat(cards).hasSize(2);
+        assertThat(cards.get(0))
+                .isEqualTo(new CsvCard("apple", "a round fruit", List.of("fruit", "basic")));
+        assertThat(cards.get(1)).isEqualTo(new CsvCard("run", "move fast", List.of()));
     }
 
     @Test
     void doubleQuotedValuesMayContainCommas() {
         List<CsvCard> cards = CsvCodec.parse("\"a, b\",\"say \"\"hi\"\"\",tag");
 
-        assertEquals("a, b", cards.get(0).text());
-        assertEquals("say \"hi\"", cards.get(0).meaning());
+        assertThat(cards.get(0).text()).isEqualTo("a, b");
+        assertThat(cards.get(0).meaning()).isEqualTo("say \"hi\"");
     }
 
     @Test
     void skipsBlankLines() {
         List<CsvCard> cards = CsvCodec.parse("a,1\n\n\nb,2\n");
-        assertEquals(2, cards.size());
+        assertThat(cards).hasSize(2);
     }
 
     @Test
     void throwsWithLineNumberWhenColumnsAreMissing() {
-        CsvFormatException e = assertThrows(CsvFormatException.class,
-                () -> CsvCodec.parse("a,1\nbroken\n"));
-        assertTrue(e.getMessage().contains("Line 2"));
+        assertThatThrownBy(() -> CsvCodec.parse("a,1\nbroken\n"))
+                .isInstanceOf(CsvFormatException.class)
+                .hasMessageContaining("Line 2");
     }
 
     @Test
@@ -55,7 +54,7 @@ class CsvCodecTest {
         String csv = CsvCodec.format(List.of(new CardWithTags(card, List.of("tag1", "tag2"))));
 
         List<CsvCard> parsed = CsvCodec.parse(csv);
-        assertEquals("a, b", parsed.get(0).text());
-        assertEquals(List.of("tag1", "tag2"), parsed.get(0).tags());
+        assertThat(parsed.get(0).text()).isEqualTo("a, b");
+        assertThat(parsed.get(0).tags()).isEqualTo(List.of("tag1", "tag2"));
     }
 }

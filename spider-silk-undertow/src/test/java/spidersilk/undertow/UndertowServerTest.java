@@ -1,10 +1,6 @@
 package spidersilk.undertow;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.IOException;
 import java.net.URI;
@@ -62,22 +58,22 @@ class UndertowServerTest {
 
         HttpResponse<String> response = get("/hello/spider");
 
-        assertEquals(200, response.statusCode());
-        assertEquals("Hello spider", response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("Hello spider");
     }
 
     @Test
     void pickedPortIsReadable() {
         startOnUndertow(new App());
 
-        assertTrue(app.port() > 0, "port 0 should be replaced by the bound port");
+        assertThat(app.port()).as("port 0 should be replaced by the bound port").isPositive();
     }
 
     @Test
     void unmatchedPathFallsBackToNotFound() throws Exception {
         startOnUndertow(new App());
 
-        assertEquals(404, get("/nope").statusCode());
+        assertThat(get("/nope").statusCode()).isEqualTo(404);
     }
 
     /** Sessions come with Undertow's deployment, so flash works with no configuration. */
@@ -88,7 +84,7 @@ class UndertowServerTest {
             return WebResponse.text("ok");
         }));
 
-        assertEquals(200, get("/flash").statusCode());
+        assertThat(get("/flash").statusCode()).isEqualTo(200);
     }
 
     /** req.file(...) needs a MultipartConfig on the servlet; the default supplies one. */
@@ -112,8 +108,8 @@ class UndertowServerTest {
         HttpResponse<String> response =
                 client.send(request, HttpResponse.BodyHandlers.ofString());
 
-        assertEquals(200, response.statusCode());
-        assertEquals("front,back", response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("front,back");
     }
 
     /** SSE is framing over the servlet response, so it travels to a third server too. */
@@ -127,13 +123,12 @@ class UndertowServerTest {
 
         HttpResponse<String> response = get("/events");
 
-        assertEquals(200, response.statusCode());
-        assertEquals("text/event-stream;charset=utf-8",
-                response.headers().firstValue("Content-Type").orElse("")
-                        .replace(" ", "").toLowerCase(Locale.ROOT));
-        assertTrue(response.body().contains("event: tick"), response.body());
-        assertTrue(response.body().contains("data: 1"), response.body());
-        assertTrue(response.body().contains("data: 2"), response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Content-Type").orElse("").replace(" ", "").toLowerCase(Locale.ROOT))
+                .isEqualTo("text/event-stream;charset=utf-8");
+        assertThat(response.body()).contains("event: tick");
+        assertThat(response.body()).contains("data: 1");
+        assertThat(response.body()).contains("data: 2");
     }
 
     /** Static files are read off the classpath by core, so they travel too. */
@@ -143,8 +138,8 @@ class UndertowServerTest {
 
         HttpResponse<String> response = get("/hello.txt");
 
-        assertEquals(200, response.statusCode());
-        assertEquals("a static file", response.body().strip());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body().strip()).isEqualTo("a static file");
     }
 
     @Test
@@ -154,8 +149,8 @@ class UndertowServerTest {
                 .contextPath("/app");
         server.start();
 
-        assertEquals(200, getFrom(server.port(), "/app/").statusCode());
-        assertEquals(404, getFrom(server.port(), "/").statusCode());
+        assertThat(getFrom(server.port(), "/app/").statusCode()).isEqualTo(200);
+        assertThat(getFrom(server.port(), "/").statusCode()).isEqualTo(404);
     }
 
     @Test
@@ -173,12 +168,16 @@ class UndertowServerTest {
 
         HttpResponse<String> response = getFrom(server.port(), "/");
 
-        assertEquals(200, response.statusCode());
-        assertTrue(response.headers().firstValue("Date").isEmpty(),
-                "the Builder customizer should have suppressed the Date header");
-        assertNotNull(customizedBuilder.get(), "the Builder customizer should have run");
-        assertEquals("/", customizedDeployment.get().getContextPath(),
-                "the Deployment customizer should have run against the real deployment");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.headers().firstValue("Date"))
+                .as("the Builder customizer should have suppressed the Date header")
+                .isEmpty();
+        assertThat(customizedBuilder.get())
+                .as("the Builder customizer should have run")
+                .isNotNull();
+        assertThat(customizedDeployment.get().getContextPath())
+                .as("the Deployment customizer should have run against the real deployment")
+                .isEqualTo("/");
     }
 
     /** Graceful shutdown: a request already running is finished, not dropped. */
@@ -195,28 +194,32 @@ class UndertowServerTest {
         CompletableFuture<HttpResponse<String>> inFlight = client.sendAsync(
                 HttpRequest.newBuilder(URI.create(url)).build(),
                 HttpResponse.BodyHandlers.ofString());
-        assertTrue(handlerEntered.await(2, TimeUnit.SECONDS), "the handler never started");
+        assertThat(handlerEntered.await(2, TimeUnit.SECONDS))
+                .as("the handler never started")
+                .isTrue();
 
         app.stop();
         app = null;
 
         HttpResponse<String> response = inFlight.get(5, TimeUnit.SECONDS);
-        assertEquals(200, response.statusCode());
-        assertEquals("finished", response.body());
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("finished");
     }
 
     /** An idle keep-alive connection must not hold the stop timeout hostage. */
     @Test
     void anIdleConnectionDoesNotDelayTheStop() throws Exception {
         startOnUndertow(new App().get("/", req -> WebResponse.text("ok")));
-        assertEquals(200, get("/").statusCode());   // leaves a keep-alive connection behind
+        assertThat(get("/").statusCode()).isEqualTo(200);   // leaves a keep-alive connection behind
 
         long startedAt = System.nanoTime();
         app.stop();
         app = null;
 
         long millis = (System.nanoTime() - startedAt) / 1_000_000;
-        assertTrue(millis < 2_000, "stop took " + millis + "ms with only an idle connection open");
+        assertThat(millis)
+                .as("stopping with only an idle connection open")
+                .isLessThan(2_000);
     }
 
     /** A suite that starts a server per test would rather not wait for the drain. */
@@ -226,14 +229,14 @@ class UndertowServerTest {
                 .port(0)
                 .stopTimeout(Duration.ZERO);
         server.start();
-        assertEquals(200, getFrom(server.port(), "/").statusCode());
+        assertThat(getFrom(server.port(), "/").statusCode()).isEqualTo(200);
 
         long startedAt = System.nanoTime();
         server.stop();
         server = null;
 
         long millis = (System.nanoTime() - startedAt) / 1_000_000;
-        assertTrue(millis < 2_000, "an immediate stop took " + millis + "ms");
+        assertThat(millis).isLessThan(2_000);
     }
 
     /** Ctrl-C stops the server, and the hook goes away again with it. */
@@ -242,13 +245,14 @@ class UndertowServerTest {
         server = new UndertowServer(new App()).port(0);
         server.start();
         Thread registered = server.shutdownHookThread();
-        assertNotNull(registered, "a shutdown hook should be registered by default");
+        assertThat(registered).as("a shutdown hook should be registered by default").isNotNull();
 
         server.stop();
         server = null;
 
-        assertFalse(Runtime.getRuntime().removeShutdownHook(registered),
-                "starting a server per test must not accumulate shutdown hooks");
+        assertThat(Runtime.getRuntime().removeShutdownHook(registered))
+                .as("starting a server per test must not accumulate shutdown hooks")
+                .isFalse();
     }
 
     @Test
@@ -256,7 +260,7 @@ class UndertowServerTest {
         server = new UndertowServer(new App()).port(0).shutdownHook(false);
         server.start();
 
-        assertNull(server.shutdownHookThread());
+        assertThat(server.shutdownHookThread()).isNull();
     }
 
     /**
@@ -274,7 +278,7 @@ class UndertowServerTest {
                         .executor(Executors.newVirtualThreadPerTaskExecutor()))
                 .start(0);
 
-        assertEquals("virtual", get("/").body());
+        assertThat(get("/").body()).isEqualTo("virtual");
     }
 
     /** Two servers in one JVM: the deployment name must not collide. */
@@ -287,8 +291,8 @@ class UndertowServerTest {
                 new UndertowServer(new App().get("/", req -> WebResponse.text("second"))).port(0);
         second.start();
         try {
-            assertEquals("first", getFrom(server.port(), "/").body());
-            assertEquals("second", getFrom(second.port(), "/").body());
+            assertThat(getFrom(server.port(), "/").body()).isEqualTo("first");
+            assertThat(getFrom(second.port(), "/").body()).isEqualTo("second");
         } finally {
             second.stop();
         }
@@ -299,9 +303,12 @@ class UndertowServerTest {
         server = new UndertowServer(new App()).port(0);
         server.start();
 
-        assertNotNull(server.undertow(), "undertow() should hand out the running server");
-        assertFalse(server.undertow().getListenerInfo().isEmpty(),
-                "the running server should have a listener bound");
+        assertThat(server.undertow())
+                .as("undertow() should hand out the running server")
+                .isNotNull();
+        assertThat(server.undertow().getListenerInfo())
+                .as("the running server should have a listener bound")
+                .isNotEmpty();
     }
 
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {

@@ -1,7 +1,6 @@
 package spidersilk;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -29,7 +28,7 @@ class CookiesAndParamsTest {
 
         WebTest.test(app, client -> {
             client.get("/set");
-            assertEquals("dark", client.get("/read").body());
+            assertThat(client.get("/read").body()).isEqualTo("dark");
         });
     }
 
@@ -37,7 +36,7 @@ class CookiesAndParamsTest {
     void anAbsentCookieIsNull() {
         App app = new App().get("/read", req -> WebResponse.text(String.valueOf(req.cookie("nope"))));
 
-        WebTest.test(app, client -> assertEquals("null", client.get("/read").body()));
+        WebTest.test(app, client -> assertThat(client.get("/read").body()).isEqualTo("null"));
     }
 
     @Test
@@ -50,7 +49,7 @@ class CookiesAndParamsTest {
                     .header("Cookie", "a=1; b=2")
                     .GET());
 
-            assertEquals("{a=1, b=2}", response.body());
+            assertThat(response.body()).isEqualTo("{a=1, b=2}");
         });
     }
 
@@ -62,10 +61,10 @@ class CookiesAndParamsTest {
             String setCookie = client.get("/set").headers()
                     .firstValue("Set-Cookie").orElseThrow();
 
-            assertTrue(setCookie.startsWith("theme=dark"), setCookie);
-            assertTrue(setCookie.contains("Path=/"), setCookie);
-            assertTrue(setCookie.contains("HttpOnly"), setCookie);
-            assertTrue(setCookie.contains("SameSite=Lax"), setCookie);
+            assertThat(setCookie).startsWith("theme=dark");
+            assertThat(setCookie).contains("Path=/");
+            assertThat(setCookie).contains("HttpOnly");
+            assertThat(setCookie).contains("SameSite=Lax");
         });
     }
 
@@ -78,7 +77,7 @@ class CookiesAndParamsTest {
             String setCookie = client.get("/set").headers()
                     .firstValue("Set-Cookie").orElseThrow();
 
-            assertTrue(setCookie.contains("Max-Age=604800"), setCookie);
+            assertThat(setCookie).contains("Max-Age=604800");
         });
     }
 
@@ -90,7 +89,7 @@ class CookiesAndParamsTest {
             String setCookie = client.get("/logout").headers()
                     .firstValue("Set-Cookie").orElseThrow();
 
-            assertTrue(setCookie.contains("Max-Age=0"), setCookie);
+            assertThat(setCookie).contains("Max-Age=0");
         });
     }
 
@@ -109,9 +108,9 @@ class CookiesAndParamsTest {
             String setCookie = client.get("/set").headers()
                     .firstValue("Set-Cookie").orElseThrow();
 
-            assertTrue(setCookie.contains("Path=/api"), setCookie);
-            assertTrue(setCookie.contains("Secure"), setCookie);
-            assertTrue(setCookie.contains("SameSite=None"), setCookie);
+            assertThat(setCookie).contains("Path=/api");
+            assertThat(setCookie).contains("Secure");
+            assertThat(setCookie).contains("SameSite=None");
         });
     }
 
@@ -122,7 +121,7 @@ class CookiesAndParamsTest {
         App app = new App().get("/search", req -> WebResponse.text(req.params("tag").toString()));
 
         WebTest.test(app, client ->
-                assertEquals("[java, web, jvm]", client.get("/search?tag=java&tag=web&tag=jvm").body()));
+                assertThat(client.get("/search?tag=java&tag=web&tag=jvm").body()).isEqualTo("[java, web, jvm]"));
     }
 
     @Test
@@ -135,7 +134,7 @@ class CookiesAndParamsTest {
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .POST(HttpRequest.BodyPublishers.ofString("tag=a&tag=b")));
 
-            assertEquals("[a, b]", response.body());
+            assertThat(response.body()).isEqualTo("[a, b]");
         });
     }
 
@@ -143,7 +142,7 @@ class CookiesAndParamsTest {
     void anAbsentParameterIsAnEmptyListRatherThanAnError() {
         App app = new App().get("/search", req -> WebResponse.text(req.params("tag").toString()));
 
-        WebTest.test(app, client -> assertEquals("[]", client.get("/search").body()));
+        WebTest.test(app, client -> assertThat(client.get("/search").body()).isEqualTo("[]"));
     }
 
     @Test
@@ -152,15 +151,16 @@ class CookiesAndParamsTest {
                 WebResponse.text(req.param("tag") + " of " + req.params("tag").size()));
 
         WebTest.test(app, client ->
-                assertEquals("java of 2", client.get("/search?tag=java&tag=web").body()));
+                assertThat(client.get("/search?tag=java&tag=web").body()).isEqualTo("java of 2"));
     }
 
     @Test
     void aFormPostedThroughTheTestClientRoundTrips() {
         App app = new App().post("/decks", req -> WebResponse.text(req.param("name")));
 
-        WebTest.test(app, client -> assertEquals("English",
-                client.postForm("/decks", Map.of("name", "English")).body()));
+        WebTest.test(app, client ->
+                assertThat(client.postForm("/decks", Map.of("name", "English")).body())
+                        .isEqualTo("English"));
     }
 
     @Test
@@ -175,6 +175,7 @@ class CookiesAndParamsTest {
             }
         });
 
-        WebTest.test(app, client -> assertEquals("immutable", client.get("/search?tag=a").body()));
+        WebTest.test(app, client ->
+                assertThat(client.get("/search?tag=a").body()).isEqualTo("immutable"));
     }
 }

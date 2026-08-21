@@ -15,8 +15,8 @@ import flashcard.repository.TagRepository;
 import flashcard.service.CardService;
 import flashcard.service.DeckService;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 /**
  * Calls the handler methods directly and asserts on the response they return,
@@ -40,9 +40,9 @@ class ApiControllerTest extends RepositoryTestSupport {
         WebResponse response = controller.listDecks(TestRequest.get("/api/decks").build());
 
         Json.JsonArray decks = Json.parse(body(response)).asArray();
-        assertEquals(1, decks.size());
-        assertEquals("English", decks.get(0).asObject().getString("name"));
-        assertEquals(0, decks.get(0).asObject().getLong("cardCount"));
+        assertThat(decks).hasSize(1);
+        assertThat(decks.get(0).asObject().getString("name")).isEqualTo("English");
+        assertThat(decks.get(0).asObject().getLong("cardCount")).isEqualTo(0);
     }
 
     @Test
@@ -51,29 +51,29 @@ class ApiControllerTest extends RepositoryTestSupport {
                 .jsonBody("{\"name\": \"Spanish\"}")
                 .build());
 
-        assertEquals(HttpStatus.CREATED, response.status());
+        assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
         long id = Json.parse(body(response)).asObject().getLong("id");
-        assertEquals("/api/decks/" + id, response.header("Location"));
-        assertEquals("Spanish", deckService.getDeck(id).name());
+        assertThat(response.header("Location")).isEqualTo("/api/decks/" + id);
+        assertThat(deckService.getDeck(id).name()).isEqualTo("Spanish");
     }
 
     @Test
     void createDeckRejectsMalformedBodyWith400() {
-        HttpException e = assertThrows(HttpException.class,
-                () -> controller.createDeck(TestRequest.post("/api/decks")
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> controller.createDeck(TestRequest.post("/api/decks")
                         .jsonBody("not-json")
-                        .build()));
-        assertEquals(HttpStatus.BAD_REQUEST, e.status());
+                        .build()))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 
     /** The reader throws on the missing key; bodyJson(reader) turns that into a 400. */
     @Test
     void createDeckRejectsABodyWithoutANameWith400() {
-        HttpException e = assertThrows(HttpException.class,
-                () -> controller.createDeck(TestRequest.post("/api/decks")
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> controller.createDeck(TestRequest.post("/api/decks")
                         .jsonBody("{\"title\": \"Spanish\"}")
-                        .build()));
-        assertEquals(HttpStatus.BAD_REQUEST, e.status());
+                        .build()))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 
     /** A JSON response carries its document as text, which is what to assert on. */

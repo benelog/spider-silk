@@ -18,8 +18,8 @@ testImplementation '{project-group}:spider-silk-test:{project-version}'
 void createsADeck() {
     WebTest.test(app, client -> {
         var created = client.postForm("/decks", Map.of("name", "English"));
-        assertEquals(302, created.statusCode());           // redirects are not followed
-        assertTrue(client.get("/api/decks").body().contains("English"));
+        assertThat(created.statusCode()).isEqualTo(302);   // redirects are not followed
+        assertThat(client.get("/api/decks").body()).contains("English");
     });
 }
 ----
@@ -39,8 +39,8 @@ void createDeckRespondsWith201() {
             .jsonBody("{\"name\": \"Spanish\"}")
             .build());
 
-    assertEquals(HttpStatus.CREATED, response.status());
-    assertEquals("Spanish", deckService.getDeck(idFrom(response)).name());
+    assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
+    assertThat(deckService.getDeck(idFrom(response)).name()).isEqualTo("Spanish");
 }
 ----
 

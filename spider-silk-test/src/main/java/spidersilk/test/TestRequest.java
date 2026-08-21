@@ -28,7 +28,7 @@ import spidersilk.WebResponse;
  *             .jsonBody("{\"name\": \"Spanish\"}")
  *             .build());
  *
- *     assertEquals(HttpStatus.CREATED, response.status());
+ *     assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
  * }
  * }</pre>
  *
