@@ -6,7 +6,7 @@ This is the reasoning behind the framework, not a description of it — what eac
 What is kept here is the decision, why it went that way, and what was rejected on the way.
 The numbers are load-bearing: the write-ups cross-reference each other by number, and the [rejected list](#rejected--decisions-with-the-reason) at the end closes questions that would otherwise be asked again.
 
-What is still open lives in [PLAN.md](../PLAN.md).
+What is still open lives in the [issue tracker](https://github.com/benelog/spider-silk/issues), with the deferred list in [issue 8](https://github.com/benelog/spider-silk/issues/8).
 
 ## Index
 
