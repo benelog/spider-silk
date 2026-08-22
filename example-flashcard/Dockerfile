@@ -12,7 +12,7 @@
 # content changes only when bytecode or a resource does, never because an
 # archive was repackaged.
 
-FROM eclipse-temurin:21-jdk AS build
+FROM eclipse-temurin:24-jdk AS build
 WORKDIR /build
 
 # Build scripts only — a source edit leaves these layers, and the dependency
@@ -53,7 +53,7 @@ RUN set -e; lib=example-flashcard/build/install/example-flashcard/lib; \
     rm "$lib"/example-flashcard-*.jar; \
     mv "$lib"/*.jar /layers/dependencies/
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:24-jre
 WORKDIR /app
 
 # Four COPY instructions, least volatile first, each cached by content: a
