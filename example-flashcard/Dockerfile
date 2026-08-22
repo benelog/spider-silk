@@ -6,8 +6,11 @@
 #   docker build -f example-flashcard/Dockerfile -t spider-silk-flashcard .
 #
 # The stages are ordered for the layer cache: build scripts before sources,
-# dependency download before compilation, and the runtime image copies the
-# external jars apart from this build's own, mirroring how Jib layers it.
+# dependency download before compilation, and the runtime image is layered
+# the way Jib layers it — external jars, project jars, resources, classes —
+# with the application as loose .class files rather than a jar, so a layer's
+# content changes only when bytecode or a resource does, never because an
+# archive was repackaged.
 
 FROM eclipse-temurin:21-jdk AS build
 WORKDIR /build
@@ -22,6 +25,7 @@ WORKDIR /build
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle/ gradle/
 COPY spider-silk-gradle-plugin/ spider-silk-gradle-plugin/
+COPY spider-silk-maven-parent/ spider-silk-maven-parent/
 COPY spider-silk-core/build.gradle spider-silk-core/
 COPY spider-silk-test/build.gradle spider-silk-test/
 COPY spider-silk-tomcat/build.gradle spider-silk-tomcat/
@@ -37,28 +41,37 @@ COPY spider-silk-core/src spider-silk-core/src
 COPY example-flashcard/src example-flashcard/src
 RUN ./gradlew --no-daemon :example-flashcard:installDist
 
-# Sort the runtime classpath the way Jib layers it: the external jars in one
-# directory, this build's own in another, so the final stage can copy them as
-# separate layers. The spider-silk jars count as "this build's own" only
-# because the framework builds alongside the example; an application pulling
-# spider-silk from a repository would leave them on the external side, where
-# they change on a version bump rather than on every edit.
+# Sort the runtime classpath into Jib's tiers: external jars apart from the
+# spider-silk-core jar (the project dependency — its own tier, so a framework
+# edit leaves the larger external layer untouched). The application's own jar
+# is discarded: it ships as the loose classes and resources copied below.
+# An application pulling spider-silk from a repository has no core tier —
+# the framework jars are external there, changing only on a version bump.
 RUN set -e; lib=example-flashcard/build/install/example-flashcard/lib; \
-    mkdir -p /layers/dependencies /layers/project; \
-    mv "$lib"/spider-silk-*.jar "$lib"/example-flashcard*.jar /layers/project/; \
+    mkdir -p /layers/dependencies /layers/core; \
+    mv "$lib"/spider-silk-*.jar /layers/core/; \
+    rm "$lib"/example-flashcard-*.jar; \
     mv "$lib"/*.jar /layers/dependencies/
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 
-# Two COPY instructions on purpose: COPY caches by content, so a code change
-# rewrites only the second, small layer while the external jars stay cached —
-# even though the build stage above re-ran.
+# Four COPY instructions, least volatile first, each cached by content: a
+# code edit rewrites only the classes layer, and the big external-jar layer
+# survives everything short of a dependency bump. Loose classes keep that
+# honest even where an archive would not reproduce byte-for-byte: unchanged
+# bytecode is unchanged content, with no repackaging in between. One caveat
+# Jib does not have: Docker caches these instructions as a chain, so an edit
+# rewrites its own tier and the tiers after it — which is why the most
+# volatile tier sits last.
 COPY --from=build /layers/dependencies lib/
-COPY --from=build /layers/project lib/
+COPY --from=build /layers/core lib/
+COPY --from=build /build/example-flashcard/build/resources/main resources/
+COPY --from=build /build/example-flashcard/build/classes/java/main classes/
 
 EXPOSE 8080
-# The java launcher expands lib/* itself; no shell is involved. H2 writes its
-# database under the process home, /root/db here, so mount a volume there to
-# keep the data past the container.
-ENTRYPOINT ["java", "-cp", "/app/lib/*", "flashcard.FlashcardApp"]
+# The classpath states what the jar's manifest no longer can, in Jib's order;
+# java expands lib/* itself, no shell involved. H2 writes its database under
+# the process home, /root/db here, so mount a volume there to keep the data
+# past the container.
+ENTRYPOINT ["java", "-cp", "/app/resources:/app/classes:/app/lib/*", "flashcard.FlashcardApp"]
