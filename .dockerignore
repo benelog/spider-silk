@@ -1,0 +1,7 @@
+# Keeps the build context small and, more importantly, keeps generated files
+# out of the COPY layers: a leftover build/ directory would invalidate the
+# source layer on every build even when no source changed.
+.git
+.gradle
+**/build
+node_modules

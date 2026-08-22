@@ -44,6 +44,20 @@ application {
     mainClass = 'flashcard.FlashcardApp'
 }
 
+// The Dockerfile's warm-up layer runs this before any source is copied in, so
+// the downloaded dependencies survive source edits as a cached layer. The
+// component filter keeps it to external modules: the `dependencies` report
+// task stops at metadata without fetching a single application jar, and
+// resolving the classpath whole would drag spider-silk-core's compilation —
+// and therefore its sources — into the layer.
+tasks.register('resolveDependencies') {
+    doLast {
+        configurations.runtimeClasspath.incoming.artifactView {
+            componentFilter { it instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier }
+        }.files.files
+    }
+}
+
 // The root build already compiles with --release 21; this restates it where
 // Jib looks when checking the app against the JRE 21 base image below.
 java {
