@@ -35,7 +35,10 @@ RUN ./gradlew --no-daemon :example-flashcard:installDist
 
 # Sort the runtime classpath the way Jib layers it: the external jars in one
 # directory, this build's own in another, so the final stage can copy them as
-# separate layers.
+# separate layers. The spider-silk jars count as "this build's own" only
+# because the framework builds alongside the example; an application pulling
+# spider-silk from a repository would leave them on the external side, where
+# they change on a version bump rather than on every edit.
 RUN set -e; lib=example-flashcard/build/install/example-flashcard/lib; \
     mkdir -p /layers/dependencies /layers/project; \
     mv "$lib"/spider-silk-*.jar "$lib"/example-flashcard*.jar /layers/project/; \
