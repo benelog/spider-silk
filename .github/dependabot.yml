@@ -1,0 +1,50 @@
+# Jetty, jte, Tomcat, Undertow, FreeMarker, Handlebars, and Thymeleaf are
+# declared `api`, so their versions are the versions this framework's users
+# carry: an advisory against any of them is an advisory against Spider Silk.
+# These entries turn that into a pull request instead of a surprise.
+#
+# Two things this file cannot watch, and a human still has to:
+#   - the base images, which are string literals rather than dependencies
+#     (SpiderSilkPlugin.JRE_BASE_IMAGE and NATIVE_BASE_IMAGE, and the jib
+#     <from><image> in spider-silk-maven-parent/pom.xml);
+#   - the versions the Gradle plugin and the Maven parent pin in step, jte
+#     above all — Dependabot raises each side on its own, and Jib's is
+#     deliberately uneven (Maven 3.5.2 against Gradle 3.5.4).
+version: 2
+
+updates:
+  # "/*" covers every module directory; the root build.gradle declares no
+  # dependencies of its own, and the plugin, an included build, is a module
+  # directory like any other.
+  - package-ecosystem: gradle
+    directories:
+      - "/"
+      - "/*"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      # The same test dependencies sit in nine build files; one bump should
+      # not be nine pull requests.
+      test:
+        patterns:
+          - "org.junit*:*"
+          - "org.assertj:*"
+
+  # The published parent POM, whose plugin versions are the Maven half of the
+  # packaging conventions.
+  - package-ecosystem: maven
+    directory: /spider-silk-maven-parent
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+
+  # Antora, which builds the manual under doc/.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
