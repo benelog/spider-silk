@@ -51,15 +51,23 @@ A child that containerizes and precompiles jte declares both, and configuration 
 <build>
   <plugins>
     <plugin>
+      <groupId>org.apache.maven.plugins</groupId>
+      <artifactId>maven-jar-plugin</artifactId>
+      <configuration>
+        <archive>
+          <manifest>
+            <mainClass>flashcard.FlashcardApp</mainClass>
+          </manifest>
+        </archive>
+      </configuration>
+    </plugin>
+    <plugin>
       <groupId>com.google.cloud.tools</groupId>
       <artifactId>jib-maven-plugin</artifactId>
       <configuration>
         <to>
           <image>ghcr.io/benelog/spider-silk-flashcard:${spider-silk.image.tag}</image>
         </to>
-        <container>
-          <mainClass>flashcard.FlashcardApp</mainClass>
-        </container>
       </configuration>
     </plugin>
     <plugin>
@@ -74,12 +82,14 @@ A child that containerizes and precompiles jte declares both, and configuration 
 </build>
 ----
 
+The main class is declared once, in the jar manifest where a runnable jar wants it anyway: Jib infers its entrypoint from there, and `native-maven-plugin` reads the same entry for the binary — configuring it on either plugin instead would work, until the two drift.
+
 What the declarations inherit mirrors the Gradle plugin's conventions:
 
 * Jib builds on `eclipse-temurin:21-jre` and exposes port 8080; `mvn package jib:buildTar` writes `target/jib-image.tar` with no Docker daemon involved, layered as xref:deployment.adoc[Deployment] describes.
 * `maven.compiler.release` is set to 21, which doubles as where Jib reads the Java version it checks against the base image — the `targetCompatibility` wrinkle the Gradle plugin absorbs has no Maven counterpart to absorb.
 * jte precompiles every template under `src/main/resources/jte` at build time, native-image resources included, exactly as xref:templates.adoc#production[Templates] describes.
-* The native binary builds with `<fallback>false</fallback>` and the reachability metadata repository enabled, named `${spider-silk.native.image-name}` — the artifactId unless the property says otherwise.
+* The native binary builds with `<fallback>false</fallback>`, mostly static (`--static-nolibc`, so the `distroless/base` container owes it nothing but glibc), and the reachability metadata repository enabled, named `${spider-silk.native.image-name}` — the artifactId unless the property says otherwise.
 
 == The native profile
 

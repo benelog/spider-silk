@@ -40,23 +40,17 @@ The rest is declared in the build: the classpath resources the app reads at runt
 +
 [source,groovy]
 ----
-plugins {
-    id 'org.graalvm.buildtools.native' version '1.1.10'
-}
-
 graalvmNative {
     binaries {
         main {
             imageName = 'flashcard'
-            buildArgs.add('--no-fallback')
             resources.includedPatterns.addAll(['schema\\.sql', 'public/.*'])
         }
     }
-    metadataRepository {
-        enabled = true
-    }
 }
 ----
++
+The xref:gradle-plugin.adoc[spider-silk plugin] supplies the rest of the block: `--no-fallback`, the mostly-static `--static-nolibc` the container section below relies on, and the metadata repository — by hand, that is `buildArgs.add('--no-fallback')`, `buildArgs.add('--static-nolibc')`, and `metadataRepository { enabled = true }` under the `org.graalvm.buildtools.native` plugin.
 
 == Build and run
 
@@ -102,7 +96,8 @@ if (providers.gradleProperty('native').present) {
 ----
 
 The extension replaces the dependency and class layers Jib would assemble with a single layer holding the binary, sets its executable bit, and points the entrypoint at `/app/flashcard`; `imageName` tells it which file to take from `build/native/nativeCompile` and must match the `graalvmNative` block's.
-The base image shrinks along with the process: `native-image` links glibc dynamically by default, and `distroless/base` is little more than glibc, CA certificates, and a filesystem skeleton — no shell, no package manager, and no JVM, since the JVM left at compile time.
+The base image shrinks along with the process: the binary builds mostly static (`--static-nolibc`, a plugin default), everything but glibc linked in, and `distroless/base` is little more than that glibc, CA certificates, and a filesystem skeleton — no shell, no package manager, and no JVM, since the JVM left at compile time.
+The mostly-static link is what makes that base sufficient: linked dynamically, the binary also wants `libz`, which `distroless/base` does not carry, and the container dies on startup.
 
 [source,bash]
 ----

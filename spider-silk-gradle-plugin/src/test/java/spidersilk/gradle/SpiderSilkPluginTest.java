@@ -77,6 +77,7 @@ class SpiderSilkPluginTest {
         assertThat(output).contains("ports=[8080]");
         assertThat(output).contains("metadataRepository=true");
         assertThat(output).contains("--no-fallback");
+        assertThat(output).contains("--static-nolibc");
         assertThat(output).contains("targetCompatibility=21");
         assertThat(output).contains("jibDependsOnNativeCompile=false");
     }

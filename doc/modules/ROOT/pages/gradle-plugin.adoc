@@ -49,7 +49,7 @@ Applying the plugin applies `application`, https://github.com/GoogleContainerToo
 
 * Jib builds on `eclipse-temurin:21-jre` and exposes port 8080, layered the way xref:deployment.adoc[Deployment] describes.
 * `targetCompatibility` is derived from `options.release`, closing the gap where Jib would otherwise read the toolchain's version and refuse the JRE base.
-* The native binary builds `--no-fallback` — a fallback image is a JVM carrying the reflection the framework exists to avoid — with GraalVM's reachability metadata repository enabled for libraries like H2.
+* The native binary builds `--no-fallback` — a fallback image is a JVM carrying the reflection the framework exists to avoid — and mostly static (`--static-nolibc`), so the `distroless/base` container below owes it nothing but glibc; GraalVM's reachability metadata repository is enabled for libraries like H2.
 * A `resolveDependencies` task downloads the external runtime jars and nothing else, for xref:deployment.adoc#dockerfile[a Dockerfile's] dependency-cache layer.
 * `-Pnative` re-aims `jib`, `jibBuildTar`, and `jibDockerBuild` at the GraalVM binary: a `distroless/base` image in place of the JRE, `:native` appended to the configured image name so the JVM image is not overwritten, and the task dependency on `nativeCompile` wired — the switch xref:native-image.adoc#container[the native image chapter] shows in action.
 

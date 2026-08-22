@@ -141,6 +141,12 @@
           <configuration>
             <imageName>${spider-silk.native.image-name}</imageName>
             <fallback>false</fallback>
+            <buildArgs>
+              <!-- Mostly static: everything but glibc links in, so the binary
+                   needs nothing from the distroless/base image beyond glibc —
+                   dynamically linked, it would die on the libz that image lacks. -->
+              <buildArg>--static-nolibc</buildArg>
+            </buildArgs>
             <metadataRepository>
               <enabled>true</enabled>
             </metadataRepository>

@@ -53,6 +53,10 @@ public class SpiderSilkPlugin implements Plugin<Project> {
         graalvm.getBinaries().configureEach(binary -> {
             if (binary.getName().equals("main")) {
                 binary.getBuildArgs().add("--no-fallback");
+                // Mostly static: everything but glibc links in, so the binary
+                // needs nothing from the distroless/base image beyond glibc —
+                // dynamically linked, it would die on the libz that image lacks.
+                binary.getBuildArgs().add("--static-nolibc");
             }
         });
 
