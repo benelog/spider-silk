@@ -136,6 +136,9 @@ Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to
 | `spider-silk-test` | The `WebTest` harness and `TestRequest`, for test scope | core, and otherwise the JDK only (the servlet API compile-time only, as in core) |
 | `spider-silk-tomcat` | `TomcatServer`, for running the same app on an embedded Tomcat instead | core, `tomcat-embed-core` |
 | `spider-silk-undertow` | `UndertowServer`, the same for an embedded Undertow | core, `undertow-servlet` |
+| `spider-silk-freemarker` | `FreeMarkerTemplates`, for rendering FreeMarker templates | core, `freemarker` |
+| `spider-silk-handlebars` | `HandlebarsTemplates`, the same for Handlebars | core, `handlebars` |
+| `spider-silk-thymeleaf` | `ThymeleafTemplates`, the same for Thymeleaf | core, `thymeleaf` |
 | `example-flashcard` | Example: a flashcard study app | core, spring-jdbc, H2 |
 
 ## Further reading
