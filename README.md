@@ -143,6 +143,6 @@ Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to
 
 ## Further reading
 
-Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what that comparison says should change: [docs/positioning.md](docs/positioning.md).
+Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what it trades away to get there: [docs/positioning.md](docs/positioning.md).
 Why each piece has the shape it has, item by item, with the rejected list: [docs/decisions.md](docs/decisions.md).
 What was deliberately deferred, and what would make it worth doing: [issue 8](https://github.com/benelog/spider-silk/issues/8).

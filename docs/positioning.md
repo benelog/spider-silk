@@ -1,6 +1,6 @@
 # Positioning
 
-Where Spider Silk sits among lightweight JVM web frameworks, what it trades away to get there, and the improvements that comparison points at.
+Where Spider Silk sits among lightweight JVM web frameworks, and what it trades away to get there.
 
 ## The one-line position
 
@@ -41,8 +41,7 @@ Each requires reflection, which is the one thing the framework exists to avoid.
 | Core size | ~a dozen classes | large | medium | large | very large |
 | Maintenance | one author | active | dormant at 2.9.x (community fork at 3.x) | Oracle | Pivotal/Broadcom |
 
-Reference points for the API review below: [Javalin](https://javalin.io/documentation) and [Spark](https://sparkjava.com/documentation).
-Javalin is the closest competitor by shape — embedded Jetty, lambda routes, a config lambda — and the one worth borrowing from.
+Javalin is the closest neighbour by shape — embedded Jetty, lambda routes, a config lambda — and the one worth reading against.
 Spark is the ancestor of that style; its static-import DSL is the thing *not* to borrow, because process-global mutable state makes two apps in one JVM (and therefore parallel tests) impossible.
 
 ## Strengths, stated precisely
@@ -60,91 +59,40 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
 4. **Stack traces are short and honest.**
    No proxy frames, no filter chains you did not add.
 5. **No lock-in on the server.**
-   `AppServlet` runs on Tomcat; `WebServer` is four methods, so a second implementation is a small job.
-   That is no longer a claim: `spider-silk-tomcat` and `spider-silk-undertow` are the second and third implementations, both behind the same `WebServerFactory`, and swapping to either is one line.
+   `AppServlet` runs on any servlet container, and `WebServer` is four methods, so `spider-silk-tomcat` and `spider-silk-undertow` sit behind the same `WebServerFactory` as the default Jetty and swapping to either is one line.
    Jetty stays the default on the strength of its lifecycle being entirely its own — decisions 22 and 23 have the detail, including the finding that Undertow is the cheapest of the three to embed and loses on reach rather than on design.
    Javalin and Spark both marry Jetty.
-6. **Startup cost is close to zero** because there is nothing to scan.
+6. **Route introspection comes almost for free.**
+   `app.routes()` reads back the same list the dispatcher walks, as data, with no reflection at all; Javalin needs a plugin for the equivalent.
+7. **Startup cost is close to zero** because there is nothing to scan.
 
 ## Weaknesses, stated precisely
 
-The original assessment, in the order these were judged likely to hurt, with what has since shipped struck through.
-Keeping the fixed ones visible is the point: the list is a trajectory, not a to-do.
-What is genuinely still open is the verbosity of hand-written JSON (1), content negotiation (7), and the helper-and-community gap (10), plus the residue noted under 4 and 8.
-
-1. **JSON output is verbose.** Still true, and reduced rather than removed.
+1. **JSON output is verbose.**
    `Json.obj().put("id", d.id()).put("name", d.name())` for every DTO is the single biggest ergonomic gap versus a reflective `json(deck)`.
-   This is the cost of the core principle and does not go away, but `JsonWriter`/`JsonReader`/`JsonCodec` took it out of the handlers: the mapping is written once and reused, so what is left is one lambda per type rather than one tree per handler.
-2. ~~**No route grouping and no path-scoped filters.**~~ Fixed: `before(path, filter)` with trailing-`*` patterns, and nestable `path(prefix, group -> ...)` groups.
-   The group is an argument rather than Spark's ThreadLocal, so two apps in one JVM stay possible.
-3. ~~**No status-code handlers.**~~ Fixed: `error(status, handler)` alongside `exception(Type, handler)`, covering the router's own 404s and 405s as well as thrown `HttpException`s.
-4. ~~**Static file serving is minimal.**~~ Fixed: validators, conditional requests, and a hosted path prefix all ship.
-   Pre-compressed variants and external directories still do not.
-5. ~~**Linear route matching.**~~ Fixed: routes are indexed by method and first literal segment, and candidates merge by registration index so the tie-break is unchanged.
-6. ~~**No test harness.**~~ Fixed: `WebTest.test(app, client -> ...)` in a `spider-silk-test` module of its own, so the production jar carries no test code.
-7. **Thin request API.** Mostly fixed.
-   Cookies, repeated parameters, `formParam` distinct from the query string, and automatic HEAD/OPTIONS all ship.
-   Content negotiation does not, and is the one piece still missing.
-8. ~~**No WebSocket or SSE.**~~ Split in two, because the two halves answer "can `AppServlet` on Tomcat follow?" oppositely.
-   SSE can, and now ships: `WebResponse.sse(stream -> ...)` frames the events over the servlet response, so an SSE route is an ordinary `get` route that `routes()`, filters, and the request logger all still reach — and a servlet deployment gets it too.
-   WebSocket cannot: an upgrade leaves servlet dispatch, and with it the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest`.
-   It stays out of core as a Jetty recipe, and becomes a `spider-silk-ws` module only if the recipe earns one.
-9. ~~**No virtual-thread story.**~~ Fixed as documentation rather than API: a `QueuedThreadPool` with a virtual-thread executor, passed to `threadPool(...)`, with a test asserting handlers really run on one.
-   No `virtualThreads()` method, because it would hide which Jetty knob was turned and it only pays off when handlers block.
-10. **Ecosystem of one.** Partly fixed, and partly a decision.
-    The request logging hook ships, and `routes()` makes an OpenAPI export about forty lines — which the example app demonstrates rather than core shipping, since a spec format is not the web tier.
-    CORS, gzip, and security-header helpers still do not exist, and neither does a community.
+   This is the cost of the core principle and does not go away.
+   `JsonWriter`/`JsonReader`/`JsonCodec` take it out of the handlers — the mapping is written once and reused — so what is left is one lambda per type rather than one tree per handler.
+2. **No content negotiation.**
+   A handler that answers HTML to a browser and JSON to a client parses `Accept` itself.
+   Every other framework in the table does this for you.
+3. **No CORS, gzip, or security-header helpers.**
+   Javalin ships all three as bundled plugins; here each is a filter the application writes.
+4. **Static file serving stops short of pre-compressed variants and external directories.**
+   Validators, conditional requests, and a hosted path prefix ship; a `.gz`/`.br` sibling next to an asset is not looked for.
+5. **No WebSocket.**
+   An upgrade leaves servlet dispatch, and with it the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` — so it stays out of core as a Jetty recipe rather than an API core cannot reach.
+   SSE, which servlet dispatch *can* carry, ships as `WebResponse.sse(stream -> ...)` on an ordinary `get` route.
+6. **Ecosystem of one.**
+   One author, no community, no starters, and an OpenAPI export that the example app demonstrates rather than core shipping, since a spec format is not the web tier.
 
-## The API review: what to take from Javalin and Spark
+## What it deliberately does not adopt
 
-**Adopt** — fits the principles, clear win. All seven shipped:
+The neighbours in the table have four features that would be easy to copy and are refused on principle; [decisions.md](decisions.md) carries the reasoning for each.
 
-| Idea | Source | Note |
-|---|---|---|
-| `app.start(port)` / `stop()` / `port()` | both | **done** — embedded Jetty with a `WebServerFactory` seam |
-| `config.jetty.modifyServer/ModifyServletContextHandler/modifyHttpConfiguration` | Javalin | **done** — `customizeServer`/`customizeContext`/`customizeHttpConfiguration` |
-| `before(path, handler)` / `after(path, handler)` | both | **done** — trailing-`*` patterns over `PathPattern` |
-| `path("/api", () -> {...})` groups | both | **done** — nestable, with an explicit registrar argument, never Spark's ThreadLocal |
-| `error(status, handler)` | Javalin | **done** — complements `exception(...)`, and sees `req.errorMessage()` |
-| `JavalinTest.test(app, client -> ...)` | Javalin | **done** — `WebTest`, port-0 startup plus a tiny client, in its own module |
-| static files with hosted path + cache headers | both | **done** — `StaticFiles` with validators, 304s, `hostedPath`, `maxAge` |
-
-**Propose** — needed a design decision before building. All five have since been decided and shipped, and the decision is recorded with each:
-
-- A reflection-free typed JSON seam: `interface JsonCodec<T> { Json.JsonValue write(T); T read(Json.JsonValue); }` plus `WebResponse.json(value, codec)`.
-  **Done** — and split in two, because most codecs are write-only: `JsonWriter<T>` and `JsonReader<T>` are each a SAM and therefore a lambda, with `JsonCodec<T>` for the types that travel both ways.
-  Codecs stay hand-written — the mapping is still visible — but they became reusable instead of inlined in every handler.
-- Route introspection.
-  **Done** — `app.routes()` returns `List<Route>` with **no reflection at all**: it is the same list the dispatcher walks, read back as data.
-  Javalin needs a plugin for this; Spider Silk gets it almost for free, which is the differentiator worth leaning on.
-  The overview page and the OpenAPI export stayed out of core and live in the example app, because a spec format is not the web tier.
-- Virtual threads as a documented recipe on `JettyServer.threadPool(...)`, then possibly a one-liner.
-  **Done** as the recipe; the one-liner was rejected, since it would hide which knob was turned.
-- Graceful shutdown: a shutdown hook and a stop timeout, on by default.
-  **Done** — and it needed `ServerConnector.setShutdownIdleTimeout`, without which a stop waited out the whole timeout for *idle* keep-alive connections and then threw.
-- SSE as framing over the servlet response, exposed as `WebResponse.sse(stream -> ...)` on an ordinary `get` route.
-  **Done** — the transport is the response that was already there, so this was `Json`'s kind of work, a wire format written out, and it cost no new dependency.
-  (This entry started as "WebSocket support through Jetty, exposed as `app.ws(path, config)`"; the WebSocket half moved to the rejected list below.)
-
-**Reject on principle** — do not adopt, and say why in the docs:
-
-- `json(Object)` / `bodyAsClass(Foo.class)`: reflection.
-- `bodyValidator(...)` in its Javalin form: reflection.
+- `json(Object)` / `bodyAsClass(Foo.class)`, and `bodyValidator(...)` in its Javalin form: reflection.
 - Spark's static-import DSL: process-global state, no second app per JVM.
 - Javalin's plugin/bundled-plugins system: a registry of things that configure themselves is the beginning of a container.
 - `app.ws(path, config)` in core: a protocol upgrade leaves servlet dispatch, so core would be publishing an API that core's own routing, filters, error handlers, request logger, `routes()`, and test harness do not reach.
   It also ends strength 5 — `WebServer` is four methods precisely so Jetty is replaceable — and `jakarta.websocket` is no escape, since its default `Configurator` instantiates endpoints reflectively.
 
-## Priorities
-
-**P0 — the gaps a user hits in the first hour.**
-All shipped: embedded server and lifecycle, path-scoped filters, route groups, `error(status, handler)`, and a port-0 test harness.
-
-**P1 — the gaps a user hits in the first week.**
-All shipped: `JsonCodec<T>` seam, static file caching, cookies and multi-value parameters, the rest of the request API, request logging, graceful shutdown.
-
-**P2 — the gaps that decide whether it is more than a teaching framework.**
-Route introspection (overview page, OpenAPI export), router indexing, SSE, virtual threads.
-All shipped, and WebSocket in core is a decision rather than a gap.
-
-The reasoning behind each decision and the rejected list live in [decisions.md](decisions.md); what is still deferred lives in [issue 8](https://github.com/benelog/spider-silk/issues/8).
+The reasoning behind each decision and the rejected list live in [decisions.md](decisions.md); what is still open lives in the [issue tracker](https://github.com/benelog/spider-silk/issues).
