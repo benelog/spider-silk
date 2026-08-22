@@ -7,7 +7,7 @@ dependencies {
 
     // The servlet API the same way core takes it: compile-time only, so nothing
     // is added to what this module puts on a consumer's classpath.
-    compileOnly 'jakarta.servlet:jakarta.servlet-api:6.0.0'
+    compileOnly 'jakarta.servlet:jakarta.servlet-api:6.1.0'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
     testImplementation 'org.assertj:assertj-core:3.27.7'
