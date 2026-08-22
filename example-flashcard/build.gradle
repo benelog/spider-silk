@@ -17,7 +17,7 @@ dependencies {
     implementation project(':spider-silk-core')
     implementation 'org.springframework:spring-jdbc:6.2.19'
     implementation 'com.h2database:h2:2.3.232'
-    runtimeOnly 'org.slf4j:slf4j-simple:2.0.17'
+    runtimeOnly 'org.slf4j:slf4j-simple:2.0.18'
 
     testImplementation project(':spider-silk-test')
     testImplementation project(':spider-silk-tomcat')
