@@ -38,8 +38,9 @@ What is still open lives in [PLAN.md](../PLAN.md).
 | 22 | `spider-silk-tomcat`, with Jetty still the default | ✅ shipped |
 | 23 | `spider-silk-undertow`, the third server | ✅ shipped |
 | 24 | `redirect` defaults to 302, and only accepts a 3xx | ✅ shipped |
+| 25 | `spider-silk-gradle-plugin`: packaging conventions | ✅ shipped |
 
-Twenty-five of the twenty-six shipped.
+Twenty-six of the twenty-seven shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -309,6 +310,20 @@ It rejects a status outside 3xx: a `Location` header on a 200 is not a redirect,
 
 No `redirectPermanent(...)` convenience method.
 `redirect(url, HttpStatus.MOVED_PERMANENTLY)` already names the status out loud, and a second spelling would only hide which one was chosen — the same argument that kept `virtualThreads()` out in decision 16.
+
+## 25 · The Gradle plugin
+
+### 25. `spider-silk-gradle-plugin`: packaging conventions, in an included build
+
+The example's build file had grown a packaging block any application would copy verbatim: jte precompilation with its native-resources extension, Jib with a JRE base and a restated `targetCompatibility`, the `-Pnative` switch with the task dependency Jib's extension forgets to declare, and a `resolveDependencies` task for Dockerfile layer caching.
+Code copied unchanged into every consumer is a convention plugin by definition, so it became one: `io.github.benelog.spidersilk`, an included build so the example applies it exactly as a published application would.
+
+The no-reflection principle is about the runtime, and this framework already puts its magic at build time — precompiled templates, generated reflect-config — so a build-time convention plugin extends the pattern rather than breaking it.
+The line it holds: only packaging every application shares goes in; the example's `domainReflectConfig` stays out, because it is the price of that app's reflective row mapper, not a shared convention.
+Everything the plugin sets lands before the build script's own blocks run, so overriding is plain `jib { }` / `graalvmNative { }` configuration, and every convention has its expanded form in the manual for a build that would rather own it.
+
+The cost accepted: the plugin pins jte, Jib, and the GraalVM build tools, so their upgrades now arrive as plugin releases, and its DSL joins the API that freezes at 1.0.
+A Maven counterpart was deferred until a Maven user materializes, since it doubles the maintenance for a consumer that may not exist.
 
 ## Rejected — decisions, with the reason
 

@@ -1,3 +1,18 @@
+// spider-silk-gradle-plugin is an included build (see settings.gradle), not a
+// subproject, so the root's lifecycle tasks would pass it by; these delegates
+// keep `gradlew build`, `publishToMavenLocal`, and the publish the workflow
+// runs covering it too.
+apply plugin: 'base'
+tasks.named('build') {
+    dependsOn gradle.includedBuild('spider-silk-gradle-plugin').task(':build')
+}
+tasks.register('publishToMavenLocal') {
+    dependsOn gradle.includedBuild('spider-silk-gradle-plugin').task(':publishToMavenLocal')
+}
+tasks.register('publishAllPublicationsToGitHubPackagesRepository') {
+    dependsOn gradle.includedBuild('spider-silk-gradle-plugin').task(':publishAllPublicationsToGitHubPackagesRepository')
+}
+
 subprojects {
     apply plugin: 'java'
 

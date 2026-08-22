@@ -31,33 +31,29 @@ The plugin configuration and the matching constructor are in xref:templates.adoc
 == A container image, without Docker
 
 https://github.com/GoogleContainerTools/jib[Jib] builds a container image from the Gradle model alone, so the build machine needs no Docker daemon: `gradle :example-flashcard:jibBuildTar` writes `build/jib-image.tar`, ready for any Docker host to load.
-The example's configuration is the plugin, a JRE base, and the port:
+The example's configuration is the xref:gradle-plugin.adoc[spider-silk plugin], which brings Jib along with the JRE 21 base and port 8080 already set, leaving the image name:
 
 [source,groovy]
 ----
 plugins {
-    id 'com.google.cloud.tools.jib' version '3.5.4'
+    id 'io.github.benelog.spidersilk'
 }
 
 jib {
-    from {
-        image = 'eclipse-temurin:21-jre'
-    }
     to {
         image = 'ghcr.io/benelog/spider-silk-flashcard'
     }
-    container {
-        ports = ['8080']
-    }
 }
 ----
+
+Without the plugin, the same image is Jib's own plugin (`com.google.cloud.tools.jib`) with `from.image = 'eclipse-temurin:21-jre'` and `container.ports = ['8080']` added to the block above.
 
 Jib layers the image the way the build is structured, and the split is worth spelling out because it is what makes rebuilds and pushes cheap: external dependencies (the Jetty, Spring JDBC, and H2 jars), project dependencies (the `spider-silk-core` jar, on its own so a framework edit leaves the larger external layer untouched), resources, and classes, each a separate layer.
 An edit to the application code rewrites only the small classes layer on top; Jib also pins every timestamp to the epoch, so an unchanged layer reproduces bit-for-bit with the same digest and a registry push skips it instead of re-uploading.
 That `spider-silk-core` counts as a project dependency is a fact about this repository, where the example and the framework build together; an application that pulls spider-silk from a repository sees it as one more external jar, cached in the dependencies layer with Jetty and the rest and rewritten only on a version bump.
 The entrypoint comes from the `application` block's `mainClass`.
 A JRE base suffices because the templates ride along as the precompiled classes from the section above; nothing in the image compiles at runtime.
-One wrinkle: Jib checks the app's `targetCompatibility` against the base image's Java version, and a build that targets 21 through `options.release` alone must restate it — `java { targetCompatibility = JavaVersion.VERSION_21 }` — or the check reads the toolchain's version and refuses the JRE 21 base.
+One wrinkle, which the plugin absorbs: Jib checks the app's `targetCompatibility` against the base image's Java version, and a build that targets 21 through `options.release` alone leaves the toolchain's version there for the check to read and refuse the JRE 21 base; the plugin restates the release where Jib looks, which by hand is `java { targetCompatibility = JavaVersion.VERSION_21 }`.
 
 [source,bash]
 ----
@@ -84,7 +80,7 @@ docker run -p 8080:8080 spider-silk-flashcard
 
 The file earns its keep by reproducing by hand the layering Jib does for free, so every instruction is ordered for the layer cache.
 The build stage copies the Gradle scripts alone — every module's, since `settings.gradle` names them all — and downloads dependencies before any source enters the image, so a source edit re-runs compilation but never the download.
-That download is `resolveDependencies`, a task in the example's build that fetches the external runtime jars and nothing else; the stock `dependencies` report is not a substitute, as it stops at metadata and caches no application jar at all.
+That download is `resolveDependencies`, a task the xref:gradle-plugin.adoc[spider-silk plugin] registers to fetch the external runtime jars and nothing else; the stock `dependencies` report is not a substitute, as it stops at metadata and caches no application jar at all.
 The runtime stage then copies the external jars and the build's own jars as two separate `COPY` instructions, external first.
 Drawing that line for an application of your own, spider-silk's jars fall on the external side — they change on a version bump, not on your edits — and the last layer holds your build's jar alone; the sorting step keeps them together here only because the framework builds alongside the example.
 `COPY` caches by content, so although a code change re-runs the whole build stage, the external jars come out identical and their layer stays cached; only the last, small layer is rewritten — the same shape Jib produces above, arrived at by ordering.

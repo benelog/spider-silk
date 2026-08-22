@@ -77,7 +77,7 @@ The `--dev` template mode is the one thing that stays on the JVM, since hot-relo
 == The binary in a container
 
 xref:deployment.adoc[Deployment] sets up Jib to containerize the app on a JRE base without a Docker daemon on the build machine; the binary is one file, and `-Pnative` re-aims that same build at it.
-The switch is a conditional in the example's build, plus Jib's native-image extension on the buildscript classpath:
+The switch ships in the xref:gradle-plugin.adoc[spider-silk plugin], so the example's build carries nothing for it; expanded, it is a conditional over Jib's native-image extension, which needs the buildscript classpath:
 
 [source,groovy]
 ----

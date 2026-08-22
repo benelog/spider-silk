@@ -77,6 +77,7 @@ jte {
 }
 ----
 
+The xref:gradle-plugin.adoc[spider-silk plugin]'s `spiderSilk { jte() }` writes this exact block for you, with jte's native-image resources extension attached besides.
 `generate()` turns each template into a Java class compiled along with the application, and the matching constructor hands the engine those classes:
 
 [source,java]

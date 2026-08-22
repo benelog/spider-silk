@@ -1,0 +1,67 @@
+= The Gradle Plugin
+:navtitle: The Gradle Plugin
+
+An application that containerizes with Jib, precompiles its templates, and perhaps compiles to a native binary ends up restating the same packaging block in every build file.
+The `io.github.benelog.spidersilk` plugin carries that block, so the build states only what is the application's own: the main class, the image name, and the native binary's resources.
+
+[source,groovy,subs="attributes+"]
+----
+plugins {
+    id 'io.github.benelog.spidersilk' version '{project-version}'
+}
+
+spiderSilk {
+    jte()   // precompiled templates; leave out for FreeMarker, Handlebars, or Thymeleaf
+}
+
+application {
+    mainClass = 'flashcard.FlashcardApp'
+}
+
+jib {
+    to {
+        image = 'ghcr.io/benelog/spider-silk-flashcard'
+    }
+}
+----
+
+The plugin resolves from the same GitHub Packages repository as the jars, which for a plugin is declared in `settings.gradle`; the credentials are the ones xref:install.adoc[Installation] sets up.
+
+[source,groovy,subs="attributes+"]
+----
+pluginManagement {
+    repositories {
+        maven {
+            url = uri('https://maven.pkg.github.com/{project-repo}')
+            credentials {
+                username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
+                password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
+            }
+        }
+        gradlePluginPortal()
+    }
+}
+----
+
+== What applying it does
+
+Applying the plugin applies `application`, https://github.com/GoogleContainerTools/jib[Jib], and the https://graalvm.github.io/native-build-tools/[GraalVM native plugin], and sets the conventions the surrounding chapters walk through:
+
+* Jib builds on `eclipse-temurin:21-jre` and exposes port 8080, layered the way xref:deployment.adoc[Deployment] describes.
+* `targetCompatibility` is derived from `options.release`, closing the gap where Jib would otherwise read the toolchain's version and refuse the JRE base.
+* The native binary builds `--no-fallback` — a fallback image is a JVM carrying the reflection the framework exists to avoid — with GraalVM's reachability metadata repository enabled for libraries like H2.
+* A `resolveDependencies` task downloads the external runtime jars and nothing else, for xref:deployment.adoc#dockerfile[a Dockerfile's] dependency-cache layer.
+* `-Pnative` re-aims `jib`, `jibBuildTar`, and `jibDockerBuild` at the GraalVM binary: a `distroless/base` image in place of the JRE, `:native` appended to the configured image name so the JVM image is not overwritten, and the task dependency on `nativeCompile` wired — the switch xref:native-image.adoc#container[the native image chapter] shows in action.
+
+Every one of these lands before the build script's own blocks run, so overriding a convention is just configuring `jib`, `graalvmNative`, or `java` as usual.
+
+== spiderSilk.jte()
+
+`jte()` is the one opt-in, since not every application renders with jte.
+It sets up precompilation exactly as xref:templates.adoc#production[Templates] describes: every template under `src/main/resources/jte` becomes a Java class at build time, so the jar renders without a runtime compiler and a template that does not compile fails the build rather than the request.
+It also attaches jte's native-resources extension, which emits the reflection config a xref:native-image.adoc[native image] needs for the generated template classes.
+
+== What the plugin pins
+
+The plugin's version fixes the versions of what it applies — jte {jte-version}, Jib {jib-version}, and the GraalVM build tools {graalvm-buildtools-version} — and a toolchain bump arrives as a plugin release.
+Nothing the plugin does is beyond plain Gradle: each convention is a handful of lines in the open, and the chapters linked above show the expanded form for a build that would rather own them directly.

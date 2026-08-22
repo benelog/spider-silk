@@ -7,6 +7,10 @@ asciidoc:
     project-group: io.github.benelog.spidersilk
     project-version: 0.1.0-SNAPSHOT
     project-repo: benelog/spider-silk
+    # What the Gradle plugin pins; kept in step with spider-silk-gradle-plugin/build.gradle.
+    jte-version: 3.2.4
+    jib-version: 3.5.4
+    graalvm-buildtools-version: 1.1.10
     source-highlighter: highlight.js
 nav:
   - modules/ROOT/nav.adoc

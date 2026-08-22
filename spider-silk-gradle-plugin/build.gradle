@@ -1,0 +1,88 @@
+plugins {
+    id 'java-gradle-plugin'
+    id 'maven-publish'
+}
+
+group = 'io.github.benelog.spidersilk'
+version = '0.1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    gradlePluginPortal()
+}
+
+// The versions pinned here are the plugin's contract: an application that
+// applies it gets this jte, this Jib, and this native-image tooling, and a
+// bump here is a release of the plugin. The jte version tracks the one
+// spider-silk-core compiles against.
+dependencies {
+    implementation 'com.google.cloud.tools.jib:com.google.cloud.tools.jib.gradle.plugin:3.5.4'
+    implementation 'com.google.cloud.tools:jib-native-image-extension-gradle:0.1.0'
+    implementation 'gg.jte.gradle:gg.jte.gradle.gradle.plugin:3.2.4'
+    implementation 'gg.jte:jte-runtime:3.2.4' // gg.jte.ContentType, in JteExtension's signature but not on the plugin's compile classpath
+    implementation 'org.graalvm.buildtools.native:org.graalvm.buildtools.native.gradle.plugin:1.1.10'
+
+    testImplementation gradleTestKit()
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+gradlePlugin {
+    plugins {
+        spiderSilk {
+            id = 'io.github.benelog.spidersilk'
+            implementationClass = 'spidersilk.gradle.SpiderSilkPlugin'
+        }
+    }
+}
+
+// java-gradle-plugin generates the publications (the jar and the plugin
+// marker); what is added here is the POM detail and the same GitHub Packages
+// repository the framework jars publish to.
+publishing {
+    publications.withType(MavenPublication).configureEach {
+        pom {
+            name = 'spider-silk-gradle-plugin'
+            description = 'Packaging conventions for spider-silk applications: precompiled jte, Jib on a JRE base, and the -Pnative switch.'
+            url = 'https://github.com/benelog/spider-silk'
+            licenses {
+                license {
+                    name = 'The Apache License, Version 2.0'
+                    url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                }
+            }
+            developers {
+                developer {
+                    id = 'benelog'
+                    name = 'Sanghyuk Jung'
+                    url = 'https://github.com/benelog'
+                }
+            }
+            scm {
+                url = 'https://github.com/benelog/spider-silk'
+                connection = 'scm:git:https://github.com/benelog/spider-silk.git'
+                developerConnection = 'scm:git:git@github.com:benelog/spider-silk.git'
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'GitHubPackages'
+            url = uri('https://maven.pkg.github.com/benelog/spider-silk')
+            credentials {
+                username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
+                password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
+            }
+        }
+    }
+}

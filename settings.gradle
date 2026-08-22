@@ -1,3 +1,9 @@
+// The Gradle plugin is its own build, included here so example-flashcard can
+// apply it by id the way a published application would.
+pluginManagement {
+    includeBuild 'spider-silk-gradle-plugin'
+}
+
 rootProject.name = 'spider-silk'
 
 include 'spider-silk-core'

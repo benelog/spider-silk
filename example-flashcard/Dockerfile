@@ -15,9 +15,13 @@ WORKDIR /build
 # Build scripts only — a source edit leaves these layers, and the dependency
 # download below, untouched. settings.gradle names every module, so every
 # module's build script has to be here for configuration to succeed; COPY
-# flattens globs, hence one line per module.
+# flattens globs, hence one line per module. The spider-silk Gradle plugin is
+# an included build that settings.gradle references at configuration time, so
+# it comes along whole — an edit to the plugin invalidates the dependency
+# layer, which is rare and accepted.
 COPY gradlew settings.gradle build.gradle ./
 COPY gradle/ gradle/
+COPY spider-silk-gradle-plugin/ spider-silk-gradle-plugin/
 COPY spider-silk-core/build.gradle spider-silk-core/
 COPY spider-silk-test/build.gradle spider-silk-test/
 COPY spider-silk-tomcat/build.gradle spider-silk-tomcat/
