@@ -12,7 +12,7 @@ dependencies {
     // The harness lives in its own module now, so the production jar carries
     // no test code. Core's own tests are a consumer of it like any other.
     testImplementation project(':spider-silk-test')
-    testImplementation 'org.junit.jupiter:junit-jupiter:5.12.2'
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
     testImplementation 'org.assertj:assertj-core:3.27.7'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
