@@ -4,9 +4,10 @@
 # These entries turn that into a pull request instead of a surprise.
 #
 # Two things this file cannot watch, and a human still has to:
-#   - the base images, which are string literals rather than dependencies
-#     (SpiderSilkPlugin.JRE_BASE_IMAGE and NATIVE_BASE_IMAGE, and the jib
-#     <from><image> in spider-silk-maven-parent/pom.xml);
+#   - the base images the packaging conventions carry, which are string
+#     literals rather than dependencies (SpiderSilkPlugin.JRE_BASE_IMAGE and
+#     NATIVE_BASE_IMAGE, and the jib <from><image> in the Maven parent) — the
+#     docker entry below reaches example-flashcard's Dockerfile and no further;
 #   - the versions the Gradle plugin and the Maven parent pin in step, jte
 #     above all — Dependabot raises each side on its own, and Jib's is
 #     deliberately uneven (Maven 3.5.2 against Gradle 3.5.4).
@@ -46,5 +47,12 @@ updates:
   # Antora, which builds the manual under doc/.
   - package-ecosystem: npm
     directory: /
+    schedule:
+      interval: weekly
+
+  # The example application's Dockerfile, the one base image declared somewhere
+  # Dependabot can read it.
+  - package-ecosystem: docker
+    directory: /example-flashcard
     schedule:
       interval: weekly
