@@ -14,14 +14,18 @@ tasks.register('publishAllPublicationsToGitHubPackagesRepository') {
 }
 
 subprojects {
-    apply plugin: 'java'
-
     group = 'io.github.benelog.spidersilk'
     version = '0.1.0-SNAPSHOT'
 
     repositories {
         mavenCentral()
     }
+}
+
+// spider-silk-maven-parent publishes a hand-written POM and compiles nothing,
+// so it is the one subproject that is not a Java module.
+configure(subprojects.findAll { it.name != 'spider-silk-maven-parent' }) {
+    apply plugin: 'java'
 
     tasks.withType(JavaCompile).configureEach {
         options.encoding = 'UTF-8'

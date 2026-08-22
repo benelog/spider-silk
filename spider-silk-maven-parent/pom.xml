@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The Maven counterpart of spider-silk-gradle-plugin. Maven shares build
+  conventions by inheritance, not by plugin: a Mojo runs goals but cannot
+  declare other plugins' configuration, so the conventions live in this
+  parent's pluginManagement and profiles instead (docs/decisions.md #26).
+
+  This file is the published artifact, copied verbatim by the module's Gradle
+  build; its coordinates below must match the Gradle project's, and the build
+  fails the publication if they drift.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>io.github.benelog.spidersilk</groupId>
+  <artifactId>spider-silk-maven-parent</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>spider-silk-maven-parent</name>
+  <description>Packaging conventions for spider-silk applications built with Maven: precompiled jte, Jib on a JRE base, and the -Pnative profile.</description>
+  <url>https://github.com/benelog/spider-silk</url>
+
+  <licenses>
+    <license>
+      <name>The Apache License, Version 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>benelog</id>
+      <name>Sanghyuk Jung</name>
+      <url>https://github.com/benelog</url>
+    </developer>
+  </developers>
+
+  <scm>
+    <url>https://github.com/benelog/spider-silk</url>
+    <connection>scm:git:https://github.com/benelog/spider-silk.git</connection>
+    <developerConnection>scm:git:git@github.com:benelog/spider-silk.git</developerConnection>
+  </scm>
+
+  <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- maven.compiler.release is also where jib-maven-plugin reads the Java
+         version it checks against the base image, so the JRE 21 base below
+         needs no restating elsewhere. -->
+    <maven.compiler.release>21</maven.compiler.release>
+
+    <!-- The versions the parent pins, in step with spider-silk-gradle-plugin
+         where upstream allows: Jib's Maven plugin lags its Gradle plugin
+         (3.5.2 is the latest on Central against Gradle's 3.5.4). -->
+    <jte.version>3.2.4</jte.version>
+    <jib.version>3.5.2</jib.version>
+    <native-buildtools.version>1.1.10</native-buildtools.version>
+    <jib-native-image-extension.version>0.1.0</jib-native-image-extension.version>
+
+    <!-- An application that wants distinct JVM and native images writes
+         <to><image>registry/name:${spider-silk.image.tag}</image></to>;
+         the native profile then retags instead of overwriting. -->
+    <spider-silk.image.tag>latest</spider-silk.image.tag>
+    <!-- Must name the binary native-maven-plugin produces; override the
+         property rather than the plugins' configurations so the compile and
+         the containerization cannot disagree. -->
+    <spider-silk.native.image-name>${project.artifactId}</spider-silk.native.image-name>
+  </properties>
+
+  <build>
+    <pluginManagement>
+      <plugins>
+
+        <!-- Declaring jib-maven-plugin opts in: the base image, the port, and
+             the layer-friendly defaults come from here, leaving the child the
+             <to> image. -->
+        <plugin>
+          <groupId>com.google.cloud.tools</groupId>
+          <artifactId>jib-maven-plugin</artifactId>
+          <version>${jib.version}</version>
+          <configuration>
+            <from>
+              <image>eclipse-temurin:21-jre</image>
+            </from>
+            <container>
+              <ports>
+                <port>8080</port>
+              </ports>
+            </container>
+          </configuration>
+        </plugin>
+
+        <!-- Declaring jte-maven-plugin opts in to precompiled templates, the
+             spiderSilk { jte() } counterpart: every template under
+             src/main/resources/jte becomes a Java class at build time, with
+             the native-image resources extension attached. -->
+        <plugin>
+          <groupId>gg.jte</groupId>
+          <artifactId>jte-maven-plugin</artifactId>
+          <version>${jte.version}</version>
+          <configuration>
+            <sourceDirectory>${project.basedir}/src/main/resources/jte</sourceDirectory>
+            <contentType>Html</contentType>
+            <!-- Without this the extension writes its META-INF/native-image
+                 files into the generated-sources root, where only .java files
+                 survive into the jar. -->
+            <targetResourceDirectory>${project.build.outputDirectory}</targetResourceDirectory>
+            <extensions>
+              <extension>
+                <className>gg.jte.nativeimage.NativeResourcesExtension</className>
+              </extension>
+            </extensions>
+          </configuration>
+          <executions>
+            <execution>
+              <phase>generate-sources</phase>
+              <goals>
+                <goal>generate</goal>
+              </goals>
+            </execution>
+          </executions>
+          <dependencies>
+            <dependency>
+              <groupId>gg.jte</groupId>
+              <artifactId>jte-native-resources</artifactId>
+              <version>${jte.version}</version>
+            </dependency>
+          </dependencies>
+        </plugin>
+
+        <!-- Declaring native-maven-plugin opts in to the GraalVM binary.
+             No fallback: a fallback image is a JVM carrying the reflection
+             the framework exists to avoid. The metadata repository supplies
+             reachability metadata for libraries like H2. -->
+        <plugin>
+          <groupId>org.graalvm.buildtools</groupId>
+          <artifactId>native-maven-plugin</artifactId>
+          <version>${native-buildtools.version}</version>
+          <configuration>
+            <imageName>${spider-silk.native.image-name}</imageName>
+            <fallback>false</fallback>
+            <metadataRepository>
+              <enabled>true</enabled>
+            </metadataRepository>
+          </configuration>
+        </plugin>
+
+      </plugins>
+    </pluginManagement>
+  </build>
+
+  <profiles>
+    <!-- mvn -Pnative package jib:buildTar ships the binary instead of the
+         jar: the compile binds to package, and Jib swaps the JRE base for
+         distroless (little more than the glibc the binary links) with its
+         native-image extension pointed at the same binary name. -->
+    <profile>
+      <id>native</id>
+      <properties>
+        <spider-silk.image.tag>native</spider-silk.image.tag>
+      </properties>
+      <build>
+        <pluginManagement>
+          <plugins>
+            <plugin>
+              <groupId>org.graalvm.buildtools</groupId>
+              <artifactId>native-maven-plugin</artifactId>
+              <executions>
+                <execution>
+                  <id>build-native</id>
+                  <phase>package</phase>
+                  <goals>
+                    <goal>compile-no-fork</goal>
+                  </goals>
+                </execution>
+              </executions>
+            </plugin>
+            <plugin>
+              <groupId>com.google.cloud.tools</groupId>
+              <artifactId>jib-maven-plugin</artifactId>
+              <configuration>
+                <from>
+                  <image>gcr.io/distroless/base-debian12</image>
+                </from>
+                <pluginExtensions>
+                  <pluginExtension>
+                    <implementation>com.google.cloud.tools.jib.maven.extension.nativeimage.JibNativeImageExtension</implementation>
+                    <properties>
+                      <imageName>${spider-silk.native.image-name}</imageName>
+                    </properties>
+                  </pluginExtension>
+                </pluginExtensions>
+              </configuration>
+              <dependencies>
+                <dependency>
+                  <groupId>com.google.cloud.tools</groupId>
+                  <artifactId>jib-native-image-extension-maven</artifactId>
+                  <version>${jib-native-image-extension.version}</version>
+                </dependency>
+              </dependencies>
+            </plugin>
+          </plugins>
+        </pluginManagement>
+      </build>
+    </profile>
+  </profiles>
+
+</project>

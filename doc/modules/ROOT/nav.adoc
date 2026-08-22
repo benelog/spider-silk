@@ -24,6 +24,7 @@
 ** xref:undertow.adoc[Undertow]
 ** xref:deployment.adoc[Deployment]
 ** xref:gradle-plugin.adoc[The Gradle Plugin]
+** xref:maven-parent.adoc[The Maven Parent]
 ** xref:native-image.adoc[GraalVM Native Image]
 
 * Testing and Observability

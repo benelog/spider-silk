@@ -80,7 +80,8 @@ Declare the repository in `pom.xml`:
 </dependencies>
 ----
 
-The matching credentials go in `~/.m2/settings.xml`, under the same `id`:
+A build that also inherits the packaging conventions from xref:maven-parent.adoc[the Maven parent] must declare this repository in `~/.m2/settings.xml` instead, since Maven resolves a `<parent>` before it reads the pom's `<repositories>`.
+The matching credentials go in `~/.m2/settings.xml` either way, under the same `id`:
 
 [source,xml]
 ----

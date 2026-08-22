@@ -65,3 +65,4 @@ It also attaches jte's native-resources extension, which emits the reflection co
 
 The plugin's version fixes the versions of what it applies — jte {jte-version}, Jib {jib-version}, and the GraalVM build tools {graalvm-buildtools-version} — and a toolchain bump arrives as a plugin release.
 Nothing the plugin does is beyond plain Gradle: each convention is a handful of lines in the open, and the chapters linked above show the expanded form for a build that would rather own them directly.
+A Maven build gets the same conventions by inheritance instead: xref:maven-parent.adoc[The Maven Parent].

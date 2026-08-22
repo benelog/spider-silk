@@ -39,8 +39,9 @@ What is still open lives in [PLAN.md](../PLAN.md).
 | 23 | `spider-silk-undertow`, the third server | ✅ shipped |
 | 24 | `redirect` defaults to 302, and only accepts a 3xx | ✅ shipped |
 | 25 | `spider-silk-gradle-plugin`: packaging conventions | ✅ shipped |
+| 26 | `spider-silk-maven-parent`: a parent POM, not a Maven plugin | ✅ shipped |
 
-Twenty-six of the twenty-seven shipped.
+Twenty-seven of the twenty-eight shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -323,7 +324,19 @@ The line it holds: only packaging every application shares goes in; the example'
 Everything the plugin sets lands before the build script's own blocks run, so overriding is plain `jib { }` / `graalvmNative { }` configuration, and every convention has its expanded form in the manual for a build that would rather own it.
 
 The cost accepted: the plugin pins jte, Jib, and the GraalVM build tools, so their upgrades now arrive as plugin releases, and its DSL joins the API that freezes at 1.0.
-A Maven counterpart was deferred until a Maven user materializes, since it doubles the maintenance for a consumer that may not exist.
+A Maven counterpart was initially deferred, then shipped as decision 26.
+
+## 26 · The Maven counterpart
+
+### 26. `spider-silk-maven-parent`: a parent POM, not a Maven plugin
+
+Maven's counterpart of a Gradle convention plugin is not a Maven plugin: a Mojo runs goals, and cannot declare other plugins' configuration.
+Inheritance is where Maven puts build conventions, so decision 25's conventions ship for Maven as a parent POM — `pluginManagement` entries that stay inert until the child declares the plugin, which makes the declaration itself the opt-in, the way `spiderSilk { jte() }` is on the Gradle side.
+
+The one convention that could not carry over structurally is the `-Pnative` tag switch: a profile cannot append to a value the child wrote, so the parent defaults a `spider-silk.image.tag` property to `latest`, the `native` profile flips it, and the child places the placeholder in its image name — a documented convention where Gradle has an override.
+The parent POM is a hand-written file published verbatim by a Gradle module, with the publication failing if the file's coordinates and the module's ever drift; Gradle's POM DSL has no model for `pluginManagement` or profiles, and generating XML through it would only obscure a file whose whole value is being readable.
+
+The versions diverge where upstream does: Jib's Maven plugin stops at 3.5.2 on Central while its Gradle plugin is at 3.5.4, and the parent pins what exists rather than what would be symmetric.
 
 ## Rejected — decisions, with the reason
 

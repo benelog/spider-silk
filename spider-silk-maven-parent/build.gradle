@@ -1,0 +1,47 @@
+plugins {
+    id 'maven-publish'
+}
+
+// This module's artifact IS the checked-in pom.xml: a parent POM's
+// pluginManagement and profiles have no model in Gradle's pom DSL, so the
+// generated POM is replaced wholesale with the file. The one thing that can
+// then drift — the coordinates Gradle publishes under against the ones the
+// file declares — fails the publication instead of shipping broken.
+def parentPom = layout.projectDirectory.file('pom.xml').asFile
+
+tasks.withType(GenerateMavenPom).configureEach {
+    inputs.file(parentPom)
+    doLast {
+        def declared = new groovy.xml.XmlSlurper(false, false).parse(parentPom)
+        def declaredCoordinates = [declared.groupId.text(), declared.artifactId.text(), declared.version.text()]
+        def publishedCoordinates = [project.group.toString(), project.name, project.version.toString()]
+        if (declaredCoordinates != publishedCoordinates) {
+            throw new GradleException("pom.xml declares ${declaredCoordinates} but the publication is ${publishedCoordinates}")
+        }
+        destination.text = parentPom.text
+    }
+}
+
+// Gradle module metadata would shadow the hand-written POM for a Gradle
+// consumer; the parent exists for Maven builds only.
+tasks.withType(GenerateModuleMetadata).configureEach {
+    enabled = false
+}
+
+publishing {
+    publications {
+        maven(MavenPublication) {
+            // Coordinates only; the content comes from pom.xml above.
+        }
+    }
+    repositories {
+        maven {
+            name = 'GitHubPackages'
+            url = uri('https://maven.pkg.github.com/benelog/spider-silk')
+            credentials {
+                username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
+                password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
+            }
+        }
+    }
+}

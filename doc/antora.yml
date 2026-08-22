@@ -10,6 +10,7 @@ asciidoc:
     # What the Gradle plugin pins; kept in step with spider-silk-gradle-plugin/build.gradle.
     jte-version: 3.2.4
     jib-version: 3.5.4
+    jib-maven-version: 3.5.2
     graalvm-buildtools-version: 1.1.10
     source-highlighter: highlight.js
 nav:

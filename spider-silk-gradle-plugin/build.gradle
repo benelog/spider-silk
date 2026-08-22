@@ -14,7 +14,8 @@ repositories {
 // The versions pinned here are the plugin's contract: an application that
 // applies it gets this jte, this Jib, and this native-image tooling, and a
 // bump here is a release of the plugin. The jte version tracks the one
-// spider-silk-core compiles against.
+// spider-silk-core compiles against. spider-silk-maven-parent pins Jib's
+// Maven plugin separately — the two Jib plugins lag independently upstream.
 dependencies {
     implementation 'com.google.cloud.tools.jib:com.google.cloud.tools.jib.gradle.plugin:3.5.4'
     implementation 'com.google.cloud.tools:jib-native-image-extension-gradle:0.1.0'
