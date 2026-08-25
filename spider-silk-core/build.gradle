@@ -3,7 +3,7 @@ plugins {
 }
 
 dependencies {
-    compileOnly 'jakarta.servlet:jakarta.servlet-api:6.0.0'
+    compileOnly 'jakarta.servlet:jakarta.servlet-api:6.1.0'
     api 'gg.jte:jte:3.2.4'
     // The embedded server. api, not implementation: JettyServer's customizers
     // expose Jetty types. Deploying AppServlet to another container? Exclude it.
