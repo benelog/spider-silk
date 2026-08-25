@@ -20,8 +20,10 @@ import org.springframework.core.io.support.EncodedResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import spidersilk.App;
+import spidersilk.Cors;
 import spidersilk.HttpStatus;
 import spidersilk.JteTemplates;
+import spidersilk.SecurityHeaders;
 import spidersilk.TemplateRenderer;
 import spidersilk.WebResponse;
 import spidersilk.server.JettyServer;
@@ -87,6 +89,25 @@ public class FlashcardApp {
         // Templates and static files are left at their defaults:
         // jte over classpath:/jte, and classpath:/public served at the root.
         App app = new App();
+
+        // The three response-wide concerns, each a value App is handed. Nothing
+        // registers itself and nothing is on until it is named here.
+        app.securityHeaders(SecurityHeaders.defaults()
+                // This application loads nothing but its own stylesheet, so
+                // default-src 'self' holds. style-src is the exception: stats.jte
+                // sizes its chart bars with a style attribute, and a height
+                // computed per row cannot come out of a file. HSTS stays off,
+                // because main serves this over http://localhost.
+                .contentSecurityPolicy("default-src 'self'; style-src 'self' 'unsafe-inline'"));
+
+        // Pages, the stylesheet, the JSON API, and the CSV export are all text.
+        app.gzip();
+
+        // The OpenAPI document is the one thing here meant to be read by
+        // something that is not this application — a Swagger UI or a client
+        // generator, served from somewhere else. The rest of /api creates decks,
+        // and opening that to any origin would be a worse example than none.
+        app.cors(Cors.anyOrigin().forPath("/openapi.json"));
 
         // CSV format error: this handler runs after the transaction rolled back.
         app.exception(CsvFormatException.class, (e, req) -> {

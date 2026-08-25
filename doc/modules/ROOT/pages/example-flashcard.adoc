@@ -24,6 +24,13 @@ Its wire format is in `flashcard.web.Codecs` as hand-written `JsonWriter`/`JsonR
 Introspection::
 `/_routes` lists every route and `/openapi.json` is the same list as an OpenAPI 3.1 document, both built from `app.routes()`, which is what the framework exposing its routing table as data buys you.
 
+Every response::
+`FlashcardApp.createApp` names all three of xref:cors-compression-and-security-headers.adoc[the response-wide concerns], which is what they look like on a real application.
+`securityHeaders(...)` takes the defaults plus a policy this app can run under: `default-src 'self'` covers everything it loads, and `style-src` also allows inline because `stats.jte` sizes its chart bars with a style attribute, which no stylesheet can do.
+HSTS is deliberately absent, since `main` serves this over `http://localhost`.
+`gzip()` covers the pages, the stylesheet, the JSON, and the CSV export alike.
+`cors(...)` is scoped to `/openapi.json` alone — the one document here meant to be read by something that is not this application, such as a Swagger UI served elsewhere — and not to `/api/decks`, which creates decks.
+
 Routing::
 There is no `Controller` interface.
 `FlashcardApp.registerRoutes` is the whole table, and handlers arrive as an `Action` class, a public method reference, or a lambda.
