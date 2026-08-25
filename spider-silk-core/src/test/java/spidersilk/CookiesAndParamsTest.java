@@ -89,7 +89,12 @@ class CookiesAndParamsTest {
             String setCookie = client.get("/logout").headers()
                     .firstValue("Set-Cookie").orElseThrow();
 
-            assertThat(setCookie).contains("Max-Age=0");
+            assertThat(setCookie).startsWith("token=;");
+            // Both are RFC 6265 deletions, and which one a container writes is its own
+            // business: Jetty 12.1 switched from Max-Age=0 to the epoch Expires.
+            assertThat(setCookie).satisfiesAnyOf(
+                    header -> assertThat(header).contains("Max-Age=0"),
+                    header -> assertThat(header).contains("Expires=Thu, 01 Jan 1970"));
         });
     }
 
