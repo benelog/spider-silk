@@ -25,7 +25,7 @@ void createsADeck() {
 ----
 
 `get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and `postJson`, all return the raw `HttpResponse<String>`, so assertions stay in whatever library the project already uses.
-`send(builder -> ...)` is the way out for anything else.
+`send(builder -> ...)` is the way out for anything else, and `send(builder -> ..., bodyHandler)` reads the body some other way — as bytes, when the answer is xref:cors-compression-and-security-headers.adoc[compressed] and decoding it as text would destroy it.
 
 == The handler alone, with `TestRequest`
 
@@ -44,6 +44,6 @@ void createDeckRespondsWith201() {
 }
 ----
 
-No port, no servlet container, and no mock library: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, and `sessionAttr` state what the request carries, and `build()` hands back a `WebRequest`.
+No port, no servlet container, and no mock library: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, `secure()`, and `sessionAttr` state what the request carries, and `build()` hands back a `WebRequest`.
 Path variables are supplied rather than matched, since no route is involved: `pathParam("deckId", "3")` is what the router would have resolved.
 Everything a handler can tell apart still holds: a query parameter and a form field of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 the way a non-multipart request does.

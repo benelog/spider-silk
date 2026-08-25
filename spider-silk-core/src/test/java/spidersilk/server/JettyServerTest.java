@@ -3,15 +3,18 @@ package spidersilk.server;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.GZIPInputStream;
 
 import org.eclipse.jetty.util.VirtualThreads;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
@@ -57,6 +60,34 @@ class JettyServerTest {
         app = new App().start(0);
 
         assertThat(get("/nope").statusCode()).isEqualTo(404);
+    }
+
+    /**
+     * Compression is a transform over the {@link WebResponse}, not a feature of
+     * the container, and the streamed body is where that claim is testable: it
+     * wraps the servlet output stream this server handed over rather than
+     * writing a byte array that was finished beforehand.
+     */
+    @Test
+    void gzipCompressesAStreamedBodyOverHttp() throws Exception {
+        String csv = "front,back\n".repeat(200);
+        app = new App().gzip()
+                .get("/export", req -> WebResponse.stream("text/csv; charset=UTF-8",
+                        out -> out.write(csv.getBytes(StandardCharsets.UTF_8))))
+                .start(0);
+
+        HttpRequest request = HttpRequest
+                .newBuilder(URI.create("http://localhost:" + app.port() + "/export"))
+                .header("Accept-Encoding", "gzip")
+                .build();
+        HttpResponse<byte[]> response =
+                client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+
+        assertThat(response.headers().firstValue("Content-Encoding")).hasValue("gzip");
+        assertThat(response.body().length).isLessThan(csv.length());
+        try (GZIPInputStream in = new GZIPInputStream(new ByteArrayInputStream(response.body()))) {
+            assertThat(new String(in.readAllBytes(), StandardCharsets.UTF_8)).isEqualTo(csv);
+        }
     }
 
     /** Sessions are on by default, so flash works without any extra configuration. */

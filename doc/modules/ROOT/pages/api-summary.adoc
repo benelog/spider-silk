@@ -7,6 +7,7 @@
 * Introspection: `routes()` reports every registered route as `Route(method, path)`, in registration order
 * Filters: `before(filter)` / `before(path, filter)`, same for `after`
 * Errors: `exception(Type, handler)`, `error(HttpStatus, handler)`, `notFound(handler)`
+* Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)` — off until named, and applied to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
 * Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles)` — jte over `classpath:/jte` and `classpath:/public` at the root are the defaults, so neither has to be called; `FreeMarkerTemplates`, `HandlebarsTemplates`, and `ThymeleafTemplates` are `TemplateRenderer` implementations in modules of their own
 * Server: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`
 
@@ -26,7 +27,7 @@
 
 * Bodies: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
 * Statuses: `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`
-* Building on: `status`, `header`, `contentType`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
+* Building on: `status`, `header`, `contentType`, `vary(field)`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
 * Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`
 
 See xref:response.adoc[The Response] for the shape of `body()` and the lambda families.

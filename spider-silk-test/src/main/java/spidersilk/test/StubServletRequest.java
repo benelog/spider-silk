@@ -62,6 +62,7 @@ final class StubServletRequest implements HttpServletRequest {
 
     private final Map<String, Object> attributes = new LinkedHashMap<>();
     private HttpSession session;
+    private boolean secure;
 
     StubServletRequest(String method, String path, Map<String, List<String>> headers,
             Map<String, List<String>> queryParams, Map<String, List<String>> formParams,
@@ -354,7 +355,7 @@ final class StubServletRequest implements HttpServletRequest {
 
     @Override
     public String getScheme() {
-        return "http";
+        return secure ? "https" : "http";
     }
 
     @Override
@@ -399,7 +400,12 @@ final class StubServletRequest implements HttpServletRequest {
 
     @Override
     public boolean isSecure() {
-        return false;
+        return secure;
+    }
+
+    /** Whether this request arrived over TLS, which HSTS and Secure cookies ask. */
+    void secure(boolean secure) {
+        this.secure = secure;
     }
 
     @Override

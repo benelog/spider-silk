@@ -45,6 +45,9 @@ public final class App {
     TemplateRenderer templates;
     StaticFiles staticFiles = new StaticFiles(StaticFiles.DEFAULT_ROOT);
     RequestLogger requestLogger;
+    Cors cors;
+    Gzip gzip;
+    SecurityHeaders securityHeaders;
 
     private WebServerFactory serverFactory = (app, port) -> new JettyServer(app).port(port);
     private WebServer server;
@@ -240,6 +243,64 @@ public final class App {
     /** Static files with a hosted path or a cache policy of their own. */
     public App staticFiles(StaticFiles staticFiles) {
         this.staticFiles = Objects.requireNonNull(staticFiles, "staticFiles");
+        return this;
+    }
+
+    /**
+     * Which other origins may call this application.
+     *
+     * <pre>{@code
+     * app.cors(Cors.allowOrigin("https://app.example.com").forPath("/api/*"));
+     * }</pre>
+     *
+     * <p>Named here rather than registered as a filter, because the two things
+     * CORS has to reach are the two a filter cannot: the {@code OPTIONS} answer
+     * for a preflight, which no handler is registered for, and the error
+     * responses a cross-origin caller has to be able to read.
+     */
+    public App cors(Cors cors) {
+        this.cors = Objects.requireNonNull(cors, "cors");
+        return this;
+    }
+
+    /** Compresses every compressible response, with {@link Gzip#defaults()}. */
+    public App gzip() {
+        return gzip(Gzip.defaults());
+    }
+
+    /**
+     * Compression, tuned.
+     *
+     * <pre>{@code
+     * app.gzip(Gzip.defaults().minBytes(4096));
+     * }</pre>
+     *
+     * <p>Named here rather than registered as a filter: the largest thing most
+     * applications send is a static file, and a static file is answered before
+     * any filter runs.
+     */
+    public App gzip(Gzip gzip) {
+        this.gzip = Objects.requireNonNull(gzip, "gzip");
+        return this;
+    }
+
+    /** The headers of {@link SecurityHeaders#defaults()} on every response. */
+    public App securityHeaders() {
+        return securityHeaders(SecurityHeaders.defaults());
+    }
+
+    /**
+     * Security headers, adjusted.
+     *
+     * <pre>{@code
+     * app.securityHeaders(SecurityHeaders.defaults().hsts(Duration.ofDays(365)));
+     * }</pre>
+     *
+     * <p>Named here rather than registered as a filter, because a 404 is a page
+     * a browser renders like any other and no after-filter runs for one.
+     */
+    public App securityHeaders(SecurityHeaders securityHeaders) {
+        this.securityHeaders = Objects.requireNonNull(securityHeaders, "securityHeaders");
         return this;
     }
 

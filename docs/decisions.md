@@ -40,8 +40,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 24 | `redirect` defaults to 302, and only accepts a 3xx | ✅ shipped |
 | 25 | `spider-silk-gradle-plugin`: packaging conventions | ✅ shipped |
 | 26 | `spider-silk-maven-parent`: a parent POM, not a Maven plugin | ✅ shipped |
+| 27 | CORS, gzip, and security headers named on `App`, not filters or plugins | ✅ shipped |
 
-Twenty-seven of the twenty-eight shipped.
+Twenty-eight of the twenty-nine shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -338,6 +339,28 @@ The parent POM is a hand-written file published verbatim by a Gradle module, wit
 
 The versions diverge where upstream does: Jib's Maven plugin stops at 3.5.2 on Central while its Gradle plugin is at 3.5.4, and the parent pins what exists rather than what would be symmetric.
 
+## 27 · The three every deployment turns on
+
+### 27. CORS, gzip, and security headers: named on `App`, not filters and not plugins
+
+All three are the web tier, so all three are core-eligible, and the question the issue left open was what shape they take.
+A helper each, registered as an ordinary `before`/`after` filter, was the tempting answer and is the wrong one: a filter runs only once a route has matched, and what these three have to reach is precisely the answers where none did.
+A CORS preflight is an `OPTIONS` nobody registered a handler for — decision 10b's automatic answer.
+A cross-origin 404 has to carry the CORS headers, or the browser reports a CORS failure rather than the 404 that happened.
+Security headers belong on an error page like any other page, and the biggest thing most applications send is a static file, which decision 9 answers before routing gets as far as a filter.
+Making filters run for unmatched paths to fit them in would change what `before`/`after` mean for every application that already has one.
+
+So each is one named method on `App` taking one inert value — `cors(Cors)`, `gzip(Gzip)`, `securityHeaders(SecurityHeaders)` — applied in `AppServlet` between working the answer out and putting it on the wire, which is the one point every path meets.
+That is the shape decision 9's `staticFiles(StaticFiles)` and decision 11's `requestLogger` already have, and it is deliberately not Javalin's bundled-plugin registry: nothing registers itself, nothing is on until it is named, and reading the three lines is reading the whole of what they do.
+
+Compression is a transform over the sealed `WebResponse` of decision 18 rather than a servlet response wrapper, which is what decides its cases.
+A body already in memory is compressed there and then, so the length it announces is the length it sends; a `Stream` body wraps the output stream as it is written, so a large file never lands in memory whole and its `Content-Length` goes.
+SSE is excluded by what it is — a stream buffered until it is worth deflating is a stream that no longer arrives — and `Raw` by definition.
+It also had to agree with decision 9's validators: a compressed answer's `ETag` is marked weak, since the two bodies are the same file and not the same bytes, and `StaticFiles` already accepts the weak form back, so revalidation keeps working without an inbound rewrite.
+Every compressible answer carries `Vary: Accept-Encoding` whether or not it ended up compressed, which is what `WebResponse.vary(field)` exists for: `header(name, value)` overwrites, and CORS and compression each add a field to the same header.
+
+Gzip's stream wrapping is the one container-sensitive piece, so it is in the acceptance tests decision 22 and 23 mirror onto Tomcat and Undertow.
+
 ## Rejected — decisions, with the reason
 
 These are closed.
@@ -351,6 +374,6 @@ If one is reopened, it is a change to what the framework is.
 | A `Controller` interface with `register(App)` in the example | The routing table becomes the union of what every implementation decided, so reading the application's routes means reading every controller. A registry of things that register themselves is the shape of the container this framework exists without. |
 | A DI container | Not the web tier, and `FlashcardContext` shows the alternative. |
 | `ServiceLoader`-based server discovery | Classpath-driven binding is the magic this framework exists without. |
-| Javalin-style plugin registry | A registry of things that configure themselves is how a container starts. |
+| Javalin-style plugin registry | A registry of things that configure themselves is how a container starts. Decision 27 is what the alternative looks like: three named methods, each taking a value that does nothing until `App` is handed it. |
 | Spark's static-import DSL | Process-global mutable state: one app per JVM, no parallel tests. |
 | `app.ws(path, config)` in core | A WebSocket is a protocol upgrade, so it leaves servlet dispatch: the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` all stop applying to it. Core would be handing out an API that core's own features silently do not cover. It also ends the no-lock-in claim that `WebServer` exists for, since `AppServlet` on another container cannot follow. `jakarta.websocket` is no escape either: its default `Configurator` instantiates endpoints reflectively. Recipe now, `spider-silk-ws` module if it earns one. |

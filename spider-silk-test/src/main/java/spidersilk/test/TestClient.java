@@ -91,9 +91,17 @@ public final class TestClient {
 
     /** Builds and sends any request. Redirects are not followed, so 302s stay visible. */
     public HttpResponse<String> send(UnaryOperator<HttpRequest.Builder> build) {
+        return send(build, HttpResponse.BodyHandlers.ofString());
+    }
+
+    /**
+     * The same, reading the body some other way — as bytes, when the response is
+     * compressed or is a file and decoding it as text would destroy it.
+     */
+    public <T> HttpResponse<T> send(UnaryOperator<HttpRequest.Builder> build,
+            HttpResponse.BodyHandler<T> bodyHandler) {
         try {
-            return client.send(build.apply(HttpRequest.newBuilder()).build(),
-                    HttpResponse.BodyHandlers.ofString());
+            return client.send(build.apply(HttpRequest.newBuilder()).build(), bodyHandler);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } catch (InterruptedException e) {

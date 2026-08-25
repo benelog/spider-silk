@@ -324,6 +324,28 @@ public final class WebResponse {
         return header("Content-Type", contentType);
     }
 
+    /**
+     * Adds a field name to {@code Vary}, keeping the ones already there.
+     * Compression and CORS each make the answer depend on a request header —
+     * {@code Accept-Encoding} for one, {@code Origin} for the other — and a
+     * plain {@link #header(String, String)} would have the second erase the
+     * first, leaving a shared cache free to hand the wrong body to the next
+     * client. A field already listed is not repeated.
+     */
+    public WebResponse vary(String field) {
+        Objects.requireNonNull(field, "field");
+        String existing = header("Vary");
+        if (existing == null || existing.isBlank()) {
+            return header("Vary", field);
+        }
+        for (String listed : existing.split(",")) {
+            if (listed.trim().equalsIgnoreCase(field)) {
+                return this;
+            }
+        }
+        return header("Vary", existing + ", " + field);
+    }
+
     /** Sets Content-Disposition so the response downloads as a file. */
     public WebResponse attachment(String filename) {
         return header("Content-Disposition", "attachment; filename=\"%s\"".formatted(filename));
@@ -332,6 +354,38 @@ public final class WebResponse {
     /** The same response carrying a different body, which is what a filter rewrites. */
     public WebResponse body(Body body) {
         return new WebResponse(status, headers, cookies, Objects.requireNonNull(body, "body"));
+    }
+
+    /**
+     * The value of a header whatever its spelling. Field names are
+     * case-insensitive in HTTP, and {@link #header(String)} reads the map by
+     * the exact key it was set under, which is enough for a caller that set it
+     * and not enough for one asking what somebody else already set.
+     */
+    String headerIgnoringCase(String name) {
+        String exact = headers.get(name);
+        if (exact != null) {
+            return exact;
+        }
+        for (Map.Entry<String, String> header : headers.entrySet()) {
+            if (header.getKey().equalsIgnoreCase(name)) {
+                return header.getValue();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * This response without that header, whatever its spelling — what
+     * compressing a stream has to do to the {@code Content-Length} the
+     * uncompressed body had worked out.
+     */
+    WebResponse withoutHeader(String name) {
+        Map<String, String> copy = new LinkedHashMap<>(headers);
+        copy.keySet().removeIf(key -> key.equalsIgnoreCase(name));
+        return copy.size() == headers.size()
+                ? this
+                : new WebResponse(status, unmodifiable(copy), cookies, body);
     }
 
     /**

@@ -48,12 +48,38 @@ public class AppServlet extends HttpServlet {
         WebRequest request = new WebRequest(req, Map.of());
         WebResponse response = dispatch(request);
         try {
+            response = decorate(response, request);
             write(response, req, res, "HEAD".equals(req.getMethod()));
         } catch (Exception e) {
             writeFailed(e, res);
         } finally {
             logRequest(request, response, startedAt);
         }
+    }
+
+    /**
+     * The concerns that belong to every answer rather than to a route: CORS,
+     * security headers, compression. They run here rather than in an
+     * {@link AfterFilter} because here is the only place all the answers meet —
+     * {@link #dispatch} returns a static file without ever reaching a filter,
+     * and an error response never reaches one either.
+     *
+     * <p>The order is the order they depend on each other. CORS and the security
+     * headers add headers; compression runs last, because what it does depends
+     * on the content type and the length the other two have settled.
+     */
+    private WebResponse decorate(WebResponse response, WebRequest request) {
+        WebResponse decorated = response;
+        if (app.cors != null) {
+            decorated = app.cors.apply(decorated, request);
+        }
+        if (app.securityHeaders != null) {
+            decorated = app.securityHeaders.apply(decorated, request);
+        }
+        if (app.gzip != null) {
+            decorated = app.gzip.apply(decorated, request);
+        }
+        return decorated;
     }
 
     /** Reports the finished request, with the response it was finally answered with. */
@@ -126,7 +152,11 @@ public class AppServlet extends HttpServlet {
         }
         String allow = String.join(", ", allowed);
         if ("OPTIONS".equals(method)) {
-            return WebResponse.empty().header("Allow", allow).header("Content-Length", "0");
+            WebResponse answer =
+                    WebResponse.empty().header("Allow", allow).header("Content-Length", "0");
+            // A preflight is this same answer, told in the words CORS uses. The
+            // methods it may name are the ones the Allow header just worked out.
+            return app.cors == null ? answer : app.cors.preflight(answer, request, allow);
         }
         return fail(request, HttpStatus.METHOD_NOT_ALLOWED, "Method Not Allowed: " + method + " " + path)
                 .header("Allow", allow);

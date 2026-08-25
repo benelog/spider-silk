@@ -61,6 +61,7 @@ public final class TestRequest {
 
     private String body = "";
     private StubServletRequest.StubSession session;
+    private boolean secure;
 
     private TestRequest(String method, String path) {
         this.method = method;
@@ -136,6 +137,15 @@ public final class TestRequest {
     }
 
     /** A cookie the client sent. Setting one is {@link WebResponse#cookie}. */
+    /**
+     * Marks the request as having arrived over HTTPS, which is what
+     * {@code isSecure()} reports and what HSTS and a Secure cookie ask about.
+     */
+    public TestRequest secure() {
+        this.secure = true;
+        return this;
+    }
+
     public TestRequest cookie(String name, String value) {
         cookies.add(new Cookie(name, value));
         return this;
@@ -195,11 +205,11 @@ public final class TestRequest {
     public WebRequest build() {
         Map<String, List<String>> headerCopy = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         headerCopy.putAll(copyOf(headers));
-        return new WebRequest(
-                new StubServletRequest(method, path, headerCopy, copyOf(queryParams),
-                        copyOf(formParams), List.copyOf(cookies), Map.copyOf(parts),
-                        !parts.isEmpty(), body, session),
-                Map.copyOf(pathParams));
+        StubServletRequest raw = new StubServletRequest(method, path, headerCopy,
+                copyOf(queryParams), copyOf(formParams), List.copyOf(cookies), Map.copyOf(parts),
+                !parts.isEmpty(), body, session);
+        raw.secure(secure);
+        return new WebRequest(raw, Map.copyOf(pathParams));
     }
 
     /** Parameter names are case-sensitive; only the header map above is not. */

@@ -106,4 +106,23 @@ class WebResponseTest {
         assertThatThrownBy(() -> WebResponse.redirect("/decks", HttpStatus.NOT_FOUND))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    /** Two things keying the same cached answer on two different request headers. */
+    @Test
+    void varyCollectsFieldsRatherThanReplacingThem() {
+        WebResponse response = WebResponse.html("<p>hi</p>")
+                .vary("Accept-Encoding")
+                .vary("Origin");
+
+        assertThat(response.header("Vary")).isEqualTo("Accept-Encoding, Origin");
+    }
+
+    @Test
+    void varyDoesNotRepeatAFieldItAlreadyLists() {
+        WebResponse response = WebResponse.html("<p>hi</p>")
+                .header("Vary", "accept-encoding")
+                .vary("Accept-Encoding");
+
+        assertThat(response.header("Vary")).isEqualTo("accept-encoding");
+    }
 }
