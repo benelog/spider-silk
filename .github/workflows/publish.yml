@@ -3,11 +3,18 @@ name: Publish
 on:
   push:
     branches: [ main ]
-    paths:
-      - '**/*.java'
-      - '**/build.gradle'
-      - 'settings.gradle'
-      - '.github/workflows/publish.yml'
+    # Listed the other way round on purpose: an ignore list fails towards
+    # building, so a file type nobody thought of still gets compiled and
+    # tested. Everything here is prose or the doc site's own toolchain, none
+    # of which the Gradle build reads.
+    paths-ignore:
+      - 'doc/**'
+      - 'docs/**'
+      - '**.md'
+      - 'antora-playbook.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/docs.yml'
   workflow_dispatch:
 
 permissions:
