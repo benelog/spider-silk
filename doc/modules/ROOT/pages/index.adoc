@@ -87,4 +87,4 @@ Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and 
 
 Why each piece has the shape it has, item by item, with the rejected list: https://github.com/benelog/spider-silk/blob/main/docs/decisions.md[docs/decisions.md].
 
-What was deliberately deferred, and what would make it worth doing: https://github.com/benelog/spider-silk/issues/8[issue 8].
+What was deliberately deferred, one issue per item with the condition that would make it worth doing: https://github.com/benelog/spider-silk/issues[the issue tracker].
