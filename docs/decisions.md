@@ -29,6 +29,7 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 14 | Router indexed by method and first segment | ✅ shipped |
 | 15a | SSE: event framing over the servlet response | ✅ shipped |
 | 15b | WebSocket in core | ❌ rejected |
+| 15c | WebSocket as `spider-silk-ws`, outside core | ✅ shipped |
 | 16 | Virtual threads | ✅ shipped |
 | 17 | Split `spider-silk-test` out of core | ✅ shipped |
 | 18 | `WebContext` split into `WebRequest` + sealed `WebResponse` | ✅ shipped |
@@ -43,7 +44,7 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 27 | CORS, gzip, and security headers named on `App`, not filters or plugins | ✅ shipped |
 | 28 | Content negotiation: `accepts(...)` answers with a type, not a serializer | ✅ shipped |
 
-Twenty-nine of the thirty shipped.
+Thirty of the thirty-one shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -188,8 +189,35 @@ Two deliberate edges: a HEAD of an SSE route answers with the headers and never 
 ### 15b. WebSocket in core — *rejected*
 
 See [the table below](#rejected--decisions-with-the-reason).
-It stays a recipe an application writes itself, so the WebSocket dependency sits in that application's build file rather than core's.
-If the recipe proves worth wrapping, it becomes a `spider-silk-ws` module where being tied to one server is stated in the module's name.
+It is not in core and will not be; where it does live is 15c.
+
+### 15c. WebSocket as `spider-silk-ws`
+
+The half 15b rejected was `app.ws(path, config)` on `App`.
+What was left open was narrower: whether the Jetty recipe an application writes for itself is worth wrapping, and the answer is a module whose name carries the tie to one server, the way 22's `spider-silk-tomcat` does.
+`WebSockets` maps paths to a `WebSocketHandler`, and core does not change at all to allow it — the module is a `Consumer<Server>`, which is what item 3's `customizeServer` already took.
+
+Five decisions inside it:
+
+- **Jetty's `Handler`-level WebSocket, not the `ee10` one.**
+  The two artifacts share a name; the `ee10` one is the servlet-container integration and arrives with annotation scanning, ASM, CDI, and JNDI behind it.
+  Ten jars against thirty-four, and none of the ten does bytecode scanning — which is the difference between a module this framework can carry and one it cannot.
+- **`customizeServer`, not `customizeContext`.**
+  Jetty builds its WebSocket container from the `Server` — its buffer pool, its executor — and a context is not linked to a server until after the context customizers have run.
+  The hook that reads right in a sketch is not the one the API can actually use.
+- **The reflection is confined to one class.**
+  Jetty binds an endpoint's callbacks by looking its methods up and taking a `MethodHandle` to each, cached per endpoint class.
+  Every connection the module opens is the same class, its own `SessionListener` adapter, so that is the one class Jetty ever looks up and an application's `WebSocketHandler` is reached through an interface call.
+  Same confinement as jte's generated classes, arrived at the same way: not by avoiding the library's mechanism, but by making sure it never points at a class the application wrote.
+- **`Session` is Jetty's and is not wrapped.**
+  A facade would buy portability the module's own name has already ruled out, and would hide which Jetty knob was turned — item 16's argument, applied again.
+- **A refused upgrade is answered.**
+  Jetty's creator contract leaves that to the creator: return null and the handshake is never written, so the client waits on a response that never comes.
+  Returning null from a `WebSocketFactory` answers 403 instead, or the error status the factory set.
+  That, and mapping a path, is the whole of what the module does beyond passing Jetty through.
+
+What does not follow an upgrade is unchanged and is the point of 15b: the router, `before`/`after`, `error(status, ...)`, the request logger, `routes()`, and `WebTest` all stop at the servlet.
+The module's own tests say so from the other side — they start a real Jetty and talk to it with the JDK's `java.net.http.WebSocket` client, because no harness could stand in.
 
 ### 16. Virtual threads
 
@@ -406,4 +434,4 @@ If one is reopened, it is a change to what the framework is.
 | `ServiceLoader`-based server discovery | Classpath-driven binding is the magic this framework exists without. |
 | Javalin-style plugin registry | A registry of things that configure themselves is how a container starts. Decision 27 is what the alternative looks like: three named methods, each taking a value that does nothing until `App` is handed it. |
 | Spark's static-import DSL | Process-global mutable state: one app per JVM, no parallel tests. |
-| `app.ws(path, config)` in core | A WebSocket is a protocol upgrade, so it leaves servlet dispatch: the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` all stop applying to it. Core would be handing out an API that core's own features silently do not cover. It also ends the no-lock-in claim that `WebServer` exists for, since `AppServlet` on another container cannot follow. `jakarta.websocket` is no escape either: its default `Configurator` instantiates endpoints reflectively. Recipe now, `spider-silk-ws` module if it earns one. |
+| `app.ws(path, config)` in core | A WebSocket is a protocol upgrade, so it leaves servlet dispatch: the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` all stop applying to it. Core would be handing out an API that core's own features silently do not cover. It also ends the no-lock-in claim that `WebServer` exists for, since `AppServlet` on another container cannot follow. `jakarta.websocket` is no escape either: its default `Configurator` instantiates endpoints reflectively. It lives in `spider-silk-ws` instead, where the name carries the tie to Jetty — decision 15c. |

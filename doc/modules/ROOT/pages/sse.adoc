@@ -26,10 +26,12 @@ data: {"count":12}
 `send(data)` sends an unnamed event, `send(event, data)` a named one, `id(...)` labels the event that follows so the browser can resume with `Last-Event-ID`, and `comment(text)` sends a heartbeat no listener sees.
 Data spanning several lines becomes one `data:` line each, which the client joins back together.
 
+[#why-websocket-is-not-in-core]
 == Why SSE is in core and WebSocket is not
 
 It is an ordinary `get` route answering in a different shape, not a registration of its own, so `app.routes()` lists it, filters cover it, and the request logger reports it when the stream ends.
 That is the whole reason SSE is in core and WebSocket is not: a WebSocket upgrade leaves servlet dispatch and none of the above would still apply.
+Where a socket is what the application actually needs, xref:websocket.adoc[`spider-silk-ws`] maps one, on Jetty and under its own name.
 It also means a deployment on a plain servlet container gets SSE too, since `AppServlet` needs nothing else.
 
 == Threads and lifetime

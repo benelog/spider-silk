@@ -18,6 +18,7 @@
 *** xref:thymeleaf.adoc[Thymeleaf]
 ** xref:static-files.adoc[Static Files]
 ** xref:sse.adoc[Server-Sent Events]
+** xref:websocket.adoc[WebSocket]
 
 * Servers and Deployment
 ** xref:server.adoc[The Server]

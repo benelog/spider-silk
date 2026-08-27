@@ -139,6 +139,7 @@ Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to
 | `spider-silk-freemarker` | `FreeMarkerTemplates`, for rendering FreeMarker templates | core, `freemarker` |
 | `spider-silk-handlebars` | `HandlebarsTemplates`, the same for Handlebars | core, `handlebars` |
 | `spider-silk-thymeleaf` | `ThymeleafTemplates`, the same for Thymeleaf | core, `thymeleaf` |
+| `spider-silk-ws` | `WebSockets`, for WebSocket endpoints alongside the routes, on Jetty | core, `jetty-websocket-jetty-server` |
 | `example-flashcard` | Example: a flashcard study app | core, spring-jdbc, H2 |
 
 ## Further reading
