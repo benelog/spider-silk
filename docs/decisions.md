@@ -41,8 +41,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 25 | `spider-silk-gradle-plugin`: packaging conventions | ✅ shipped |
 | 26 | `spider-silk-maven-parent`: a parent POM, not a Maven plugin | ✅ shipped |
 | 27 | CORS, gzip, and security headers named on `App`, not filters or plugins | ✅ shipped |
+| 28 | Content negotiation: `accepts(...)` answers with a type, not a serializer | ✅ shipped |
 
-Twenty-eight of the twenty-nine shipped.
+Twenty-nine of the thirty shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -360,6 +361,32 @@ It also had to agree with decision 9's validators: a compressed answer's `ETag` 
 Every compressible answer carries `Vary: Accept-Encoding` whether or not it ended up compressed, which is what `WebResponse.vary(field)` exists for: `header(name, value)` overwrites, and CORS and compression each add a field to the same header.
 
 Gzip's stream wrapping is the one container-sensitive piece, so it is in the acceptance tests decision 22 and 23 mirror onto Tomcat and Undertow.
+
+## 28 · The Accept header
+
+### 28. Content negotiation: `accepts(...)` answers with a type, not a serializer
+
+The gap was real — a handler answering HTML to a browser and JSON to a client parsed `Accept` itself, quality values and all — and the shape it closed with is what keeps it out of the reflection the framework exists without.
+
+**`accepts(candidates...)` returns one of the strings it was handed.**
+Not a parsed media-type object, and not a serializer chosen on the handler's behalf: the answer is a value the handler wrote on that line, so the branch is an ordinary `switch` and the compiler still sees every case.
+The reflective half of what the other frameworks call content negotiation — picking a writer once the type is known — is decision 8's territory and stays refused.
+
+**It never returns null.**
+A caller that will take none of what is offered is a 406, the same contract as `param` answering 400 and `pathParamLong` throwing rather than handing a `null` onward — decision 10b's rule, applied to one more question.
+A caller that sent no `Accept` at all gets the first candidate, since the specification reads an absent header as "anything", which makes the argument list the order the *handler* prefers.
+
+**One parser, two headers.**
+`AcceptHeader` is package-private and answers `Accept-Encoding` for decision 27's `gzip()` as well, because both are the same grammar of comma-separated values with a `q=` weight.
+`q=0` is a refusal rather than an absence, and is honoured even where a wildcard would otherwise have covered the type.
+Ordering is by specificity where the weights tie — `text/html` before `text/*` before `*/*` — which only `acceptedTypes()` can observe, since `accepts` matches each candidate against the closest entry that names it.
+
+**Asking is what declares the dependency.**
+A handler that calls either method gets `Vary: Accept` on its answer without saying so, because the answer now depends on a request header and a shared cache must not hand JSON to the next browser.
+That is the same bookkeeping `gzip()` does for `Accept-Encoding`, and it is on the request rather than the response so that a handler cannot ask the question and forget the header.
+
+`acceptedTypes()` is the parsed view underneath, for the handler that has to decide something `accepts` cannot phrase.
+It is empty for a request with no `Accept` — a caller that will take anything, which is not a caller that will take nothing.
 
 ## Rejected — decisions, with the reason
 

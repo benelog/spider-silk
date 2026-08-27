@@ -64,7 +64,13 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
    Javalin and Spark both marry Jetty.
 6. **Route introspection comes almost for free.**
    `app.routes()` reads back the same list the dispatcher walks, as data, with no reflection at all; Javalin needs a plugin for the equivalent.
-7. **Startup cost is close to zero** because there is nothing to scan.
+7. **Content negotiation asks the handler's question.**
+   `req.accepts("text/html", "application/json")` answers with one of the strings that were passed in, so the branch is a `switch` over values written on that line; a caller that will take none of them gets a 406 rather than a null.
+   What stays out is the reflective half — nothing picks a serializer for you once the type is known.
+8. **The three every deployment turns on are named methods, not plugins.**
+   `cors(Cors)`, `gzip(Gzip)`, and `securityHeaders(SecurityHeaders)` each take one inert value, each is off until it is named, and each applies to every answer — a static file, an error page, and the automatic `OPTIONS` a preflight lands on — which is exactly what a `before`/`after` filter cannot reach.
+   Javalin ships the same three as bundled plugins, which is the registry decision 27 refuses.
+9. **Startup cost is close to zero** because there is nothing to scan.
 
 ## Weaknesses, stated precisely
 
@@ -72,17 +78,13 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
    `Json.obj().put("id", d.id()).put("name", d.name())` for every DTO is the single biggest ergonomic gap versus a reflective `json(deck)`.
    This is the cost of the core principle and does not go away.
    `JsonWriter`/`JsonReader`/`JsonCodec` take it out of the handlers — the mapping is written once and reused — so what is left is one lambda per type rather than one tree per handler.
-2. **No content negotiation.**
-   A handler that answers HTML to a browser and JSON to a client parses `Accept` itself.
-   Every other framework in the table does this for you.
-3. **No CORS, gzip, or security-header helpers.**
-   Javalin ships all three as bundled plugins; here each is a filter the application writes.
-4. **Static file serving stops short of pre-compressed variants and external directories.**
-   Validators, conditional requests, and a hosted path prefix ship; a `.gz`/`.br` sibling next to an asset is not looked for.
-5. **No WebSocket.**
+2. **Static file serving stops short of pre-compressed variants and external directories.**
+   Validators, conditional requests, and a hosted path prefix ship, and `gzip()` compresses an asset on its way out — but it compresses the same file again on every request, and a `.gz`/`.br` sibling next to it is not looked for.
+   Brotli is the half core cannot close on its own, since the JDK has no encoder: a pre-compressed `.br` is the only way core would ever answer one.
+3. **No WebSocket.**
    An upgrade leaves servlet dispatch, and with it the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` — so it stays out of core as a Jetty recipe rather than an API core cannot reach.
    SSE, which servlet dispatch *can* carry, ships as `WebResponse.sse(stream -> ...)` on an ordinary `get` route.
-6. **Ecosystem of one.**
+4. **Ecosystem of one.**
    One author, no community, no starters, and an OpenAPI export that the example app demonstrates rather than core shipping, since a spec format is not the web tier.
 
 ## What it deliberately does not adopt
