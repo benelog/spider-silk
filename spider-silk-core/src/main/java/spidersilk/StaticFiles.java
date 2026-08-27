@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -48,6 +49,11 @@ import jakarta.servlet.http.HttpServletRequest;
  * have, so {@link #directory(Path)} answers only for a regular file whose real
  * path — symbolic links resolved — lies under the root's real path. Anything
  * else is not a file this serves, and routing carries on as if it were absent.
+ *
+ * <p>{@link #precompressed()} answers with a {@code .br} or {@code .gz} sibling
+ * of the file when the client will take that encoding, which is the only way
+ * core answers brotli at all — the JDK ships no encoder — and the only way an
+ * asset is not deflated again on every request that asks for it.
  */
 public final class StaticFiles {
 
@@ -59,9 +65,20 @@ public final class StaticFiles {
     private static final DateTimeFormatter HTTP_DATE =
             DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US);
 
+    /**
+     * The encodings a sibling can carry, in the order they are preferred: brotli
+     * first, being the smaller of the two and the one nothing else can produce.
+     * The name on the left is the {@code Accept-Encoding} token, the one on the
+     * right the file extension — {@code gzip} and {@code .gz} are not the same
+     * spelling.
+     */
+    private static final List<Encoding> ENCODINGS =
+            List.of(new Encoding("br", ".br"), new Encoding("gzip", ".gz"));
+
     private final Source source;
     private String hostedPath = "";
     private String cacheControl = REVALIDATE;
+    private boolean precompressed;
 
     /** @param classpathRoot the classpath directory to serve, e.g. "/public" */
     public StaticFiles(String classpathRoot) {
@@ -110,6 +127,25 @@ public final class StaticFiles {
     }
 
     /**
+     * Answers with the {@code app.css.br} or {@code app.css.gz} a build left
+     * beside {@code app.css}, whenever the request will take that encoding.
+     * Brotli wins where both exist and the client takes both. The answer
+     * describes the original either way: its {@code Content-Type}, since a
+     * {@code .gz} extension is the encoding and not the type, and its
+     * validators, so a browser revalidating across encodings keeps its 304.
+     *
+     * <p>A sibling older than the file it sits next to is a build that did not
+     * rerun, and is passed over rather than served as content that no longer
+     * exists. Every answer from this root then carries
+     * {@code Vary: Accept-Encoding}, sibling found or not, so a shared cache
+     * never hands encoded bytes to a client that cannot read them.
+     */
+    public StaticFiles precompressed() {
+        this.precompressed = true;
+        return this;
+    }
+
+    /**
      * The response for the file this path names, or null when it names none and
      * routing should carry on. The body is a stream rather than a byte array, so
      * a large file never lands in memory whole.
@@ -126,26 +162,76 @@ public final class StaticFiles {
 
         long lastModified = resource.lastModified();
         long length = resource.length();
+        Encoded encoded = precompressed ? sibling(relative, lastModified, req) : null;
 
         WebResponse response = WebResponse.empty().header("Cache-Control", cacheControl);
+        if (precompressed) {
+            response = response.vary("Accept-Encoding");
+        }
         if (lastModified > 0) {
             String etag = etag(lastModified, length);
-            response = response.header("ETag", etag)
+            response = response.header("ETag", encoded == null ? etag : "W/" + etag)
                     .header("Last-Modified", httpDate(lastModified));
             if (isUnchanged(req, etag, lastModified)) {
                 resource.discard();
+                if (encoded != null) {
+                    encoded.resource().discard();
+                }
                 return response.status(HttpStatus.NOT_MODIFIED);
             }
         }
 
+        Resource body = encoded == null ? resource : encoded.resource();
+        if (encoded != null) {
+            resource.discard();
+            response = response.header("Content-Encoding", encoded.encoding());
+        }
+        long bodyLength = body.length();
         response = response
                 .body(new WebResponse.Stream(out -> {
-                    try (InputStream in = resource.open()) {
+                    try (InputStream in = body.open()) {
                         in.transferTo(out);
                     }
                 }))
                 .contentType(ContentTypes.byPath(relative));
-        return length >= 0 ? response.header("Content-Length", Long.toString(length)) : response;
+        return bodyLength >= 0
+                ? response.header("Content-Length", Long.toString(bodyLength))
+                : response;
+    }
+
+    /**
+     * The pre-compressed file sitting next to this one that the request will
+     * take, or null when the build left none, the client reads none, or the one
+     * that is there is older than the file it claims to be a copy of.
+     */
+    private Encoded sibling(String relative, long lastModified, HttpServletRequest req)
+            throws IOException {
+        String accepted = req.getHeader("Accept-Encoding");
+        for (Encoding encoding : ENCODINGS) {
+            if (!AcceptHeader.accepts(accepted, encoding.token())) {
+                continue;
+            }
+            Resource candidate = source.find(relative + encoding.extension());
+            if (candidate == null) {
+                continue;
+            }
+            if (isStale(candidate, lastModified)) {
+                candidate.discard();
+                continue;
+            }
+            return new Encoded(encoding.token(), candidate);
+        }
+        return null;
+    }
+
+    /**
+     * Whether the sibling is older than the file it sits next to, which is a
+     * build that compressed an earlier version and did not rerun. A time neither
+     * of them reports is no evidence of staleness, so the sibling still answers.
+     */
+    private boolean isStale(Resource sibling, long lastModified) {
+        long siblingModified = sibling.lastModified();
+        return lastModified > 0 && siblingModified > 0 && siblingModified < lastModified;
     }
 
     /**
@@ -209,6 +295,14 @@ public final class StaticFiles {
             throw new IllegalArgumentException("Path must start with \"/\": " + path);
         }
         return trimmed;
+    }
+
+    /** One encoding a sibling can carry: its header token and its extension. */
+    private record Encoding(String token, String extension) {
+    }
+
+    /** The sibling that answers, and the encoding to announce it under. */
+    private record Encoded(String encoding, Resource resource) {
     }
 
     /** Where the bytes come from: a classpath root or a directory. */

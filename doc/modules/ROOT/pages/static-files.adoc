@@ -35,6 +35,28 @@ The root is read per request rather than at construction, so a volume that is mo
 
 Called with no argument at all, `staticFiles()` serves nothing and leaves every path to routing.
 
+== A pre-compressed sibling
+
+`gzip()` deflates the same unchanging asset again on every request that asks for it, and brotli it cannot answer at all, because the JDK ships no encoder.
+A `.br` or `.gz` file that a build left next to the asset closes both halves, and `precompressed()` is what looks for it:
+
+[source,java]
+----
+app.gzip();                                             // still deflates what has no sibling
+app.staticFiles(new StaticFiles("/public")
+        .precompressed());                              // app.css.br / app.css.gz answer app.css
+----
+
+Brotli wins where both siblings exist and the client takes both: it is the smaller of the two, and the one nothing else here can produce.
+The answer describes the original either way — its `Content-Type`, since a `.gz` extension is the encoding and not the type, and its `ETag` and `Last-Modified`, so a browser revalidating across encodings keeps its 304.
+That tag is marked weak on an encoded answer, for the same reason `gzip()` marks its own.
+
+An asset with no sibling, or a client that reads neither encoding, is answered exactly as before, `gzip()` included.
+A sibling older than the file it sits next to is passed over: that is a build that did not rerun, and serving it would be serving content that no longer exists.
+Every answer from a root with `precompressed()` on carries `Vary: Accept-Encoding`, sibling found or not, so a shared cache never hands encoded bytes to a client that cannot read them.
+
+It is off until it is named, because a `.gz` left over from an older pipeline is a file nobody meant to serve.
+
 == Staying inside the directory
 
 A directory root is a path-traversal surface that a classpath lookup does not have, so the guard is explicit and does not lean on the container: a request is answered only when the file it resolves to, with every symbolic link followed, is a regular file whose real path lies under the root's own real path.

@@ -69,6 +69,7 @@ A `stream` body is compressed as it is written, which is what keeps a large file
 
 Server-Sent Events and `raw` responses are never compressed: an SSE stream buffered until it is worth deflating is an SSE stream that no longer arrives, and a raw handler owns its own bytes by definition.
 Neither is a type that is already compressed — JPEG, PNG, MP4, a zip archive — nor a response something else has already encoded.
+A xref:static-files.adoc[static file answered from a `.br` or `.gz` sibling] is one of those, and passes through untouched rather than being deflated twice.
 
 === What caching is told
 

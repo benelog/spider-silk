@@ -45,8 +45,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 28 | Content negotiation: `accepts(...)` answers with a type, not a serializer | ✅ shipped |
 | 29 | `spider-silk-openapi`: the route list as an OpenAPI document, outside core | ✅ shipped |
 | 30 | Route descriptions: an overload, not an annotation | ✅ shipped |
+| 31 | Pre-compressed `.br`/`.gz` siblings, named on `StaticFiles` | ✅ shipped |
 
-Thirty-two of the thirty-three shipped.
+Thirty-three of the thirty-four shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -484,6 +485,36 @@ Three decisions:
 `spider-silk-openapi` maps a non-empty description to the operation's `summary` and omits the field entirely when there is none, rather than writing an empty string a UI would render as a blank line.
 29's second bullet still holds as it was written: core did not change to let the export be a module.
 It changed here for a need of its own — the route list saying what a route is for — and the export reads that the way it reads everything else, off the list.
+
+## 31 · The pre-compressed sibling
+
+### 31. `.br` and `.gz` siblings: `precompressed()` on `StaticFiles`, not on by default
+
+Decision 27's `gzip()` deflates the same unchanging stylesheet again on every request that asks for it, and brotli it cannot answer at all, since the JDK ships no encoder.
+A `.br` or `.gz` file a build left next to the asset closes both halves at once, and is the only way core would ever answer brotli.
+Five decisions inside it:
+
+- **Off until it is named.**
+  This is the one that was genuinely open, because two rules pointed opposite ways: 27's is that nothing is on until it is named, and 9's `classpath:/public` is already served without being asked for.
+  The argument for a default is that placing an `app.css.br` *is* the naming, and it is a good argument — it lost to what happens to an application that upgrades.
+  A `.gz` left behind by a pipeline that no longer runs would start being served by a version bump, which is a content change nobody wrote; and every static request would pay up to two extra lookups to find the siblings that are usually not there.
+  So it is `precompressed()`, one more method on the value 9 already hands to `staticFiles(...)`.
+- **The validators come from the original, whichever body is sent.**
+  The two encodings are one resource, so the `ETag` is derived from the original's modification time and length and the `Last-Modified` is the original's, with the tag marked weak on an encoded answer — the same reading 27 gave its own compressed answers, and `StaticFiles` already accepted the weak form back.
+  A browser that cached the plain body and revalidates while accepting brotli keeps its 304.
+  `Content-Type` comes from the original name for the same reason read the other way: a `.gz` extension is the encoding, not the type.
+- **`Vary: Accept-Encoding` from `StaticFiles`, not from `Gzip`.**
+  27 puts the field on every compressible answer, and this is the case it could not reach: `Gzip` stops at the first sight of a `Content-Encoding`, so the answer it must not touch is exactly the answer it would never mark.
+  A root with `precompressed()` on therefore varies every answer itself, sibling found or not, and `WebResponse.vary` not repeating a field already listed is what lets both add it.
+- **A stale sibling is passed over rather than declared the build's problem.**
+  A `.gz` older than the file beside it is a build that did not rerun, and serving it is serving content that no longer exists — a wrong answer, not a slow one.
+  Both timestamps are already read, so comparing them costs nothing; a time neither file reports is no evidence of staleness and the sibling still answers.
+- **Brotli over gzip, fixed.**
+  Not by the client's `q=` ordering: brotli is the smaller of the two and the one core cannot produce any other way, so where both siblings exist and the client takes both, the choice is not the client's to reverse.
+  Whether it takes them at all is read through `AcceptHeader`, decision 28's one parser, rather than by reading `Accept-Encoding` a second way.
+
+Unlike 27's stream wrapping, none of this touches the output stream — it is a file's bytes and two headers — so it is not mirrored onto the Tomcat and Undertow acceptance tests of 22 and 23.
+The external-directory half that used to sit beside this in the deferred list shipped separately, as `StaticFiles.directory(path)`.
 
 ## Rejected — decisions, with the reason
 

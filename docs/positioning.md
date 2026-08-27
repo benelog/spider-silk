@@ -80,9 +80,9 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
    `Json.obj().put("id", d.id()).put("name", d.name())` for every DTO is the single biggest ergonomic gap versus a reflective `json(deck)`.
    This is the cost of the core principle and does not go away.
    `JsonWriter`/`JsonReader`/`JsonCodec` take it out of the handlers — the mapping is written once and reused — so what is left is one lambda per type rather than one tree per handler.
-2. **Static file serving stops short of pre-compressed variants and external directories.**
-   Validators, conditional requests, and a hosted path prefix ship, and `gzip()` compresses an asset on its way out — but it compresses the same file again on every request, and a `.gz`/`.br` sibling next to it is not looked for.
-   Brotli is the half core cannot close on its own, since the JDK has no encoder: a pre-compressed `.br` is the only way core would ever answer one.
+2. **Static file serving compresses nothing itself.**
+   Validators, conditional requests, a hosted path prefix, and a directory on disk all ship, and `precompressed()` answers with the `.br` or `.gz` a build left next to the asset — but core produces neither, so an asset with no sibling is deflated again by `gzip()` on every request that asks for it, and brotli is answerable only where a build wrote the file.
+   That is the JDK's boundary rather than a decision: it has no brotli encoder, and a bundled one would be a dependency in the artifact every application carries.
 3. **No WebSocket in core.**
    An upgrade leaves servlet dispatch, and with it the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` — so it stays out of core rather than becoming an API core's own features cannot reach.
    `spider-silk-jetty-websocket` maps one on Jetty, under a name that says which server it is tied to; none of that list follows an upgrade there either, and the module says so rather than papering over it.
