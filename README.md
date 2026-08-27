@@ -140,6 +140,7 @@ Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to
 | `spider-silk-handlebars` | `HandlebarsTemplates`, the same for Handlebars | core, `handlebars` |
 | `spider-silk-thymeleaf` | `ThymeleafTemplates`, the same for Thymeleaf | core, `thymeleaf` |
 | `spider-silk-ws` | `WebSockets`, for WebSocket endpoints alongside the routes, on Jetty | core, `jetty-websocket-jetty-server` |
+| `spider-silk-openapi` | `OpenApi`, for the route list as an OpenAPI 3.1 document | core only |
 | `example-flashcard` | Example: a flashcard study app | core, spring-jdbc, H2 |
 
 ## Further reading

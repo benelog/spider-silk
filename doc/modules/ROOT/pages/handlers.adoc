@@ -10,7 +10,8 @@ When there is no state worth a class:
 
 [source,java]
 ----
-app.get("/openapi.json", req -> WebResponse.json(OpenApi.document(app.routes())));
+app.get("/openapi.json", req -> WebResponse.json(
+        OpenApi.document("Flashcard API", "1.0.0", app.routes())));
 ----
 
 == An `Action` class

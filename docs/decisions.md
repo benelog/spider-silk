@@ -43,8 +43,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 26 | `spider-silk-maven-parent`: a parent POM, not a Maven plugin | ✅ shipped |
 | 27 | CORS, gzip, and security headers named on `App`, not filters or plugins | ✅ shipped |
 | 28 | Content negotiation: `accepts(...)` answers with a type, not a serializer | ✅ shipped |
+| 29 | `spider-silk-openapi`: the route list as an OpenAPI document, outside core | ✅ shipped |
 
-Thirty of the thirty-one shipped.
+Thirty-one of the thirty-two shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -150,7 +151,7 @@ The four decisions:
   A description would mean a parameter on all seven registration methods on both `App` and `RouteGroup` — an annotation with the reflection taken out — and the overloads stay purely additive if the need proves real.
 - **The overview page and the OpenAPI export are not in core.**
   A spec format is not the web tier, and its version drift is not a web framework's to own.
-  The example demonstrates both; if the export earns its keep, it becomes a module the way `spider-silk-test` did.
+  The export earned its keep and became a module rather than entering core — decision 29 — and the overview page stays the example's, since a page is a template and a look, which is nobody's to ship.
 - **A second list for the guards, not a richer route.**
   "Which guard covers this path" was left out at first as nice-to-have, and came back as `guards()`: the `before`/`after` filters and the `error(status, ...)` handlers, read off the same registrations and landing beside `routes()` without changing it.
   It is a sealed `Guard` of three records — `Before(path)`, `After(path)`, `Error(status)` — because a filter is scoped to a path and an error handler to a status, and one record with a component that is null half the time would report that dishonestly.
@@ -418,6 +419,31 @@ That is the same bookkeeping `gzip()` does for `Accept-Encoding`, and it is on t
 
 `acceptedTypes()` is the parsed view underneath, for the handler that has to decide something `accepts` cannot phrase.
 It is empty for a request with no `Accept` — a caller that will take anything, which is not a caller that will take nothing.
+
+## 29 · The OpenAPI export
+
+### 29. `spider-silk-openapi`, outside core
+
+Decision 13 left the export in the example with a condition on it: the reading was worth writing once, but not worth putting in the artifact every application depends on.
+15c had just settled the same question the same way — a module whose name carries what it is tied to — and this one is tied to a document format instead of a server.
+Four decisions inside it:
+
+- **A module, not a method on `App`.**
+  Pinning `3.1.0` inside core would sign core up to track someone else's document version forever, and an application that wants no spec at all would carry the pin anyway.
+  In a module the pin is a dependency an application chooses, which is what 17's split bought for the test harness.
+- **Core does not change by one line.**
+  That is the claim being proved rather than a convenience: `routes()` was already enough, since `{deckId}` *is* the path template and a `Route` is a record.
+  A module that needed a new accessor would have been evidence that 13's minimal shape was too minimal, and it needed none.
+- **`document(title, version, routes)` — a list, not the `App`.**
+  Which routes a document covers is the application's call, not the reader's: an app serving HTML alongside its API passes the `/api` routes, and this module cannot tell a page from an endpoint.
+  Taking the `App` would have made the guess mandatory and hidden it, so what the module takes is the list 13 exists to hand out.
+  Title and version are arguments for the same reason a default would be wrong: OpenAPI requires both, and neither is this module's to name.
+- **A wildcard throws rather than being skipped.**
+  The example used to drop `*` routes quietly, which is fine when the filter and the reader are the same forty lines and dishonest once they are not: a document silently missing a route claims the application answers less than it does.
+  Refusing it moves the filter to the call site, where it is visible, the same trade as `HttpStatus.of` throwing on a code the registry does not know.
+
+What is *not* in the document is the other half of the decision: no description, no request or response schema, no server list, no security scheme.
+None is derivable from a method and a path, so each would have to be declared at the registration site — which is 13's rejected description parameter, arriving by a different door.
 
 ## Rejected — decisions, with the reason
 

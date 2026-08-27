@@ -23,13 +23,13 @@ import spidersilk.json.Json;
 import spidersilk.json.JsonCodec;
 import spidersilk.json.JsonReader;
 import spidersilk.json.JsonWriter;
+import spidersilk.openapi.OpenApi;
 import spidersilk.server.JettyServer;
 import spidersilk.server.WebServer;
 import spidersilk.test.TestRequest;
 
 import flashcard.web.ApiController;
 import flashcard.web.DeckController;
-import flashcard.web.OpenApi;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -145,7 +145,8 @@ class ReadmeSnippets {
     // ---- blocks 3, 5, 7: the three shapes a handler comes in ----
 
     void threeShapes(App app) {
-        app.get("/openapi.json", req -> WebResponse.json(OpenApi.document(app.routes())));
+        app.get("/openapi.json", req -> WebResponse.json(
+                OpenApi.document("Flashcard API", "1.0.0", app.routes())));
 
         app.get("/stats", context.statsAction());
 

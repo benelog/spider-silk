@@ -15,6 +15,7 @@ spiderSilk {
 
 dependencies {
     implementation project(':spider-silk-core')
+    implementation project(':spider-silk-openapi')
     implementation 'org.springframework:spring-jdbc:7.0.9'
     implementation 'com.h2database:h2:2.4.240'
     runtimeOnly 'org.slf4j:slf4j-simple:2.0.18'

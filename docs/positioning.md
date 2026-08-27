@@ -87,7 +87,7 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
    `spider-silk-ws` maps one on Jetty, under a name that says which server it is tied to; none of that list follows an upgrade there either, and the module says so rather than papering over it.
    SSE, which servlet dispatch *can* carry, ships as `WebResponse.sse(stream -> ...)` on an ordinary `get` route.
 4. **Ecosystem of one.**
-   One author, no community, no starters, and an OpenAPI export that the example app demonstrates rather than core shipping, since a spec format is not the web tier.
+   One author, no community, no starters, and an OpenAPI export that is a module of its own rather than something core ships, since a spec format is not the web tier.
 
 ## What it deliberately does not adopt
 

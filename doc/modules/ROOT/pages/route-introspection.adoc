@@ -22,7 +22,7 @@ for (Route route : app.routes()) {
 
 Method and path is all a route carries.
 The handler is left out (it is a lambda, and the only name it has is what reflection would dig out of its synthetic class), and so is any description, because documentation attached at the registration site is an annotation with the reflection taken out.
-What the routes are _for_ is built on top of the list, which is plain data: the example app renders a `/_routes` overview page from it and builds an `/openapi.json` document in `OpenApi`, about forty lines in all.
+What the routes are _for_ is built on top of the list, which is plain data: the example app renders a `/_routes` overview page from it, and xref:openapi.adoc[`spider-silk-openapi`] turns the same list into an OpenAPI 3.1 document.
 
 The automatic HEAD and OPTIONS answers are not listed.
 `routes()` reports what was registered, which is the honest answer for a framework whose claim is that only what you register runs.
@@ -51,7 +51,7 @@ The list is grouped by when it runs — the before-filters, then the after-filte
 A filter's coverage is a pattern and not a path, and it is reported as one.
 `/admin/*` stays `/admin/*`, and covers `/admin` along with everything under it; `before(filter)` reports the `/*` it registers; a group's `decks.before(filter)` reports the resolved `/api/decks/*`.
 Matching a request against those patterns is the dispatcher's job, not this list's — what is exposed here is plain strings, the same as for routes.
-An audit of which paths a guard leaves open is built on top of the list, the way the OpenAPI export is built on `routes()`.
+An audit of which paths a guard leaves open is built on top of the list, the way xref:openapi.adoc[the OpenAPI export] is built on `routes()`.
 
 The `exception(Type, handler)` handlers are not listed.
 An exception handler is scoped to a type, so neither a path nor a status describes where it applies.

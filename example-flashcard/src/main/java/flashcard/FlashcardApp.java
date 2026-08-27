@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 import javax.sql.DataSource;
@@ -20,18 +21,19 @@ import org.springframework.core.io.support.EncodedResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import spidersilk.App;
+import spidersilk.Route;
 import spidersilk.Cors;
 import spidersilk.HttpStatus;
 import spidersilk.JteTemplates;
 import spidersilk.SecurityHeaders;
 import spidersilk.TemplateRenderer;
 import spidersilk.WebResponse;
+import spidersilk.openapi.OpenApi;
 import spidersilk.server.JettyServer;
 
 import flashcard.service.CsvFormatException;
 import flashcard.web.ApiController;
 import flashcard.web.DeckController;
-import flashcard.web.OpenApi;
 import flashcard.web.SmartDeckController;
 import flashcard.web.StudyController;
 
@@ -173,7 +175,20 @@ public class FlashcardApp {
         //    these read app.routes() per request, so they list the routes above.
         app.get("/_routes",
                 req -> WebResponse.template("routes", Map.of("routes", app.routes())));
-        app.get("/openapi.json", req -> WebResponse.json(OpenApi.document(app.routes())));
+        app.get("/openapi.json", req -> WebResponse.json(
+                OpenApi.document("Flashcard API", "1.0.0", documentedRoutes(app))));
+    }
+
+    /**
+     * Which routes the OpenAPI document covers: the /api ones, since the rest of
+     * this app serves HTML, and no wildcard, which has no path template. Both are
+     * this application's calls to make, which is why spider-silk-openapi takes a
+     * list rather than the App.
+     */
+    private static List<Route> documentedRoutes(App app) {
+        return app.routes().stream()
+                .filter(route -> route.path().startsWith("/api") && !route.path().contains("*"))
+                .toList();
     }
 
     /** CSV uploads are capped at 10MB, buffered in memory up to 1MB. */
