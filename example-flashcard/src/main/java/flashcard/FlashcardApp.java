@@ -164,11 +164,15 @@ public class FlashcardApp {
         app.post("/smart-decks", smartDecks::create);
         app.post("/smart-decks/{id}/delete", smartDecks::delete);
 
+        // The /api routes carry a description, because they are the ones read by
+        // something that is not this application: the description becomes the
+        // summary in /openapi.json. The pages above go without, since a path and
+        // a page are read together and the extra argument would say nothing new.
         ApiController api = context.apiController();
         app.path("/api/decks", group -> {
-            group.get("", api::listDecks);
-            group.post("", api::createDeck);
-            group.get("/{deckId}/cards", api::listCards);
+            group.get("", "List every deck with its card count", api::listDecks);
+            group.post("", "Create a deck", api::createDeck);
+            group.get("/{deckId}/cards", "List the cards of one deck", api::listCards);
         });
 
         // 3. A lambda, for a handler with no state worth a class of its own. Both of

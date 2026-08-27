@@ -55,6 +55,19 @@ class OpenApiTest {
         assertThat(parameter.getObject("schema").getString("type")).isEqualTo("string");
     }
 
+    /** The one thing a method and a path do not imply, carried through from registration. */
+    @Test
+    void carriesARouteDescriptionAsTheOperationSummary() {
+        List<Route> described = List.of(
+                new Route("GET", "/api/decks", "List every deck"),
+                new Route("POST", "/api/decks"));
+        Json.JsonObject decks = OpenApi.document("Flashcard API", "1.0.0", described)
+                .asObject().getObject("paths").getObject("/api/decks");
+
+        assertThat(decks.getObject("get").getString("summary")).isEqualTo("List every deck");
+        assertThat(decks.getObject("post").has("summary")).isFalse();
+    }
+
     @Test
     void leavesParametersOutOfAPathThatHasNone() {
         Json.JsonObject paths = OpenApi.document("Flashcard API", "1.0.0", routes).asObject()

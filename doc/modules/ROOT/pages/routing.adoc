@@ -3,6 +3,7 @@
 
 A route is a method, a path pattern, and a handler, registered as one statement: `get`, `post`, `put`, `patch`, `delete`, and — rarely, as the last section explains — `head` and `options`.
 Routing is an explicit list: there is no annotation scanning, so only what is registered runs, and xref:route-introspection.adoc[`app.routes()`] hands the list back as data.
+Each of those methods also takes a xref:route-introspection.adoc#descriptions[description] between the path and the handler, for what the path does not say.
 
 == Path patterns
 

@@ -44,8 +44,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 27 | CORS, gzip, and security headers named on `App`, not filters or plugins | ✅ shipped |
 | 28 | Content negotiation: `accepts(...)` answers with a type, not a serializer | ✅ shipped |
 | 29 | `spider-silk-openapi`: the route list as an OpenAPI document, outside core | ✅ shipped |
+| 30 | Route descriptions: an overload, not an annotation | ✅ shipped |
 
-Thirty-one of the thirty-two shipped.
+Thirty-two of the thirty-three shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -158,9 +159,11 @@ The four decisions:
 - **Method and path, and nothing else.**
   The handler is left out: it is a lambda, so the only name it has is what reflection would dig out of its synthetic class.
   `PathPattern` stays package-private too — what is exposed is plain strings, not a matching engine.
-- **No description, no response types.**
-  `PathPattern`'s `{deckId}` *is* OpenAPI's path-template syntax verbatim, so the minimal shape already yields a valid document.
-  A description would mean a parameter on all seven registration methods on both `App` and `RouteGroup` — an annotation with the reflection taken out — and the overloads stay purely additive if the need proves real.
+- **No description, no response types — at first.**
+  `PathPattern`'s `{deckId}` *is* OpenAPI's path-template syntax verbatim, so the minimal shape already yielded a valid document.
+  A description would mean a parameter on all seven registration methods on both `App` and `RouteGroup` — an annotation with the reflection taken out — so it waited on a need rather than on a nicer document, and the overloads were purely additive whenever that need arrived.
+  It arrived with 29: decision 30 added them, and the wait cost nothing, since neither `routes()` nor the export changed shape to take them.
+  Response types are still out, for the reason 29 gives.
 - **The overview page and the OpenAPI export are not in core.**
   A spec format is not the web tier, and its version drift is not a web framework's to own.
   The export earned its keep and became a module rather than entering core — decision 29 — and the overview page stays the example's, since a page is a template and a look, which is nobody's to ship.
@@ -454,8 +457,33 @@ Four decisions inside it:
   The example used to drop `*` routes quietly, which is fine when the filter and the reader are the same forty lines and dishonest once they are not: a document silently missing a route claims the application answers less than it does.
   Refusing it moves the filter to the call site, where it is visible, the same trade as `HttpStatus.of` throwing on a code the registry does not know.
 
-What is *not* in the document is the other half of the decision: no description, no request or response schema, no server list, no security scheme.
-None is derivable from a method and a path, so each would have to be declared at the registration site — which is 13's rejected description parameter, arriving by a different door.
+What is *not* in the document is the other half of the decision: no request or response schema, no server list, no security scheme.
+None is derivable from a route, so each would have to be declared at the registration site — which is the door 13's deferred description parameter came through, and decision 30 opened it exactly one line wide.
+
+## 30 · Route descriptions
+
+### 30. An overload, not an annotation
+
+13 deferred this with the condition written down: a description is worth a parameter on fourteen methods only when something reads it, not when it merely makes a nicer document.
+29 is what made something read it.
+The export turns the route list into the artifact a client generator or a Swagger UI consumes, and in that document the one field a reader looks at first — `summary` — was the one field nothing could fill, because a method and a path do not say what a route is *for*.
+Three decisions:
+
+- **A `String` between the path and the handler.**
+  `get(path, description, handler)` on `App` and on `RouteGroup`, seven methods each.
+  Last would read worse: the handler is a lambda or a method reference, and an argument after it pushes the closing brace away from the call.
+  The parameter is what an annotation would be with the reflection taken out — which is the point, not an accident: the text lives at the registration site either way, and the difference is whether reading it costs a classpath scan.
+- **A third component on `Route`, and `""` for a route without one.**
+  Not null: the guard write-up rejected a record whose component is null half the time, and this is the same rule read the other way round.
+  A `Guard` needed three records because a path and a status are different things; a described and an undescribed route are the same thing, one of them undocumented, so one record with a documented empty string reports it honestly and a reader prints `description()` without a null check.
+  `Route(method, path)` stays as a second constructor, so every existing fixture and reader compiles unchanged.
+- **The framework never reads it.**
+  Nothing in the dispatcher, the router index, or the duplicate check sees the string; `routes()` hands it back and that is all.
+  A description that changed behaviour would be a configuration language growing inside a documentation field.
+
+`spider-silk-openapi` maps a non-empty description to the operation's `summary` and omits the field entirely when there is none, rather than writing an empty string a UI would render as a blank line.
+29's second bullet still holds as it was written: core did not change to let the export be a module.
+It changed here for a need of its own — the route list saying what a route is for — and the export reads that the way it reads everything else, off the list.
 
 ## Rejected — decisions, with the reason
 

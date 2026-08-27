@@ -6,6 +6,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -18,7 +19,8 @@ import java.util.Set;
 final class Router {
 
     /** {@code order} is the registration index — the tie-breaker the index must not lose. */
-    record Entry(String method, String path, PathPattern pattern, Handler handler, int order) {
+    record Entry(String method, String path, String description, PathPattern pattern,
+            Handler handler, int order) {
     }
 
     record Match(Handler handler, Map<String, String> pathParams) {
@@ -32,8 +34,17 @@ final class Router {
     /** What each registration matches, keyed by "GET /decks/{}". Spots dead re-registrations. */
     private final Map<String, Entry> byShape = new HashMap<>();
 
+    /** A route with nothing said about what it is for. */
     void add(String method, String path, Handler handler) {
-        Entry entry = new Entry(method, path, new PathPattern(path), handler, registrations.size());
+        add(method, path, "", handler);
+    }
+
+    void add(String method, String path, String description, Handler handler) {
+        // At the registration site rather than in routes(), where the stack trace
+        // would name the reader instead of the line that left the argument out.
+        Objects.requireNonNull(description, "description");
+        Entry entry = new Entry(method, path, description, new PathPattern(path), handler,
+                registrations.size());
         Entry existing = byShape.putIfAbsent(method + " " + entry.pattern().canonicalForm(), entry);
         if (existing != null) {
             throw new IllegalStateException(duplicateMessage(entry, existing));
@@ -86,7 +97,9 @@ final class Router {
 
     /** An immutable snapshot of what was registered, in registration order. */
     List<Route> routes() {
-        return registrations.stream().map(entry -> new Route(entry.method(), entry.path())).toList();
+        return registrations.stream()
+                .map(entry -> new Route(entry.method(), entry.path(), entry.description()))
+                .toList();
     }
 
     /** The routes of one method, split by the first segment they can match. */

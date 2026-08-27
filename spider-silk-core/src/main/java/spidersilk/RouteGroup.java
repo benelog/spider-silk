@@ -36,8 +36,28 @@ public final class RouteGroup {
         return this;
     }
 
+    /**
+     * The same route, with one line saying what it is for — the group's
+     * counterpart of {@link App#get(String, String, Handler)}, which every
+     * registration method here has too:
+     *
+     * <pre>{@code
+     * decks.get("/{deckId}", "One deck and its cards", this::showDeck);
+     * }</pre>
+     */
+    public RouteGroup get(String path, String description, Handler handler) {
+        app.get(resolve(path), description, handler);
+        return this;
+    }
+
     public RouteGroup post(String path, Handler handler) {
         app.post(resolve(path), handler);
+        return this;
+    }
+
+    /** {@link #get(String, String, Handler)}, for POST. */
+    public RouteGroup post(String path, String description, Handler handler) {
+        app.post(resolve(path), description, handler);
         return this;
     }
 
@@ -46,8 +66,20 @@ public final class RouteGroup {
         return this;
     }
 
+    /** {@link #get(String, String, Handler)}, for PUT. */
+    public RouteGroup put(String path, String description, Handler handler) {
+        app.put(resolve(path), description, handler);
+        return this;
+    }
+
     public RouteGroup patch(String path, Handler handler) {
         app.patch(resolve(path), handler);
+        return this;
+    }
+
+    /** {@link #get(String, String, Handler)}, for PATCH. */
+    public RouteGroup patch(String path, String description, Handler handler) {
+        app.patch(resolve(path), description, handler);
         return this;
     }
 
@@ -56,13 +88,31 @@ public final class RouteGroup {
         return this;
     }
 
+    /** {@link #get(String, String, Handler)}, for DELETE. */
+    public RouteGroup delete(String path, String description, Handler handler) {
+        app.delete(resolve(path), description, handler);
+        return this;
+    }
+
     public RouteGroup head(String path, Handler handler) {
         app.head(resolve(path), handler);
         return this;
     }
 
+    /** {@link #get(String, String, Handler)}, for HEAD. */
+    public RouteGroup head(String path, String description, Handler handler) {
+        app.head(resolve(path), description, handler);
+        return this;
+    }
+
     public RouteGroup options(String path, Handler handler) {
         app.options(resolve(path), handler);
+        return this;
+    }
+
+    /** {@link #get(String, String, Handler)}, for OPTIONS. */
+    public RouteGroup options(String path, String description, Handler handler) {
+        app.options(resolve(path), description, handler);
         return this;
     }
 

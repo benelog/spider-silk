@@ -57,8 +57,33 @@ public final class App {
         return this;
     }
 
+    /**
+     * The same route, with one line saying what it is for, which
+     * {@link #routes()} reports and an OpenAPI export can carry:
+     *
+     * <pre>{@code
+     * app.get("/api/decks", "List every deck", this::listDecks);
+     * }</pre>
+     *
+     * <p>Every registration method has this overload. The description sits
+     * between the path and the handler so the handler stays the last argument,
+     * where a lambda reads. It is documentation written at the registration
+     * site rather than dug out of the handler, which is what keeps it a string
+     * argument instead of an annotation.
+     */
+    public App get(String path, String description, Handler handler) {
+        router.add("GET", path, description, handler);
+        return this;
+    }
+
     public App post(String path, Handler handler) {
         router.add("POST", path, handler);
+        return this;
+    }
+
+    /** {@link #get(String, String, Handler)}, for POST. */
+    public App post(String path, String description, Handler handler) {
+        router.add("POST", path, description, handler);
         return this;
     }
 
@@ -67,13 +92,31 @@ public final class App {
         return this;
     }
 
+    /** {@link #get(String, String, Handler)}, for PUT. */
+    public App put(String path, String description, Handler handler) {
+        router.add("PUT", path, description, handler);
+        return this;
+    }
+
     public App patch(String path, Handler handler) {
         router.add("PATCH", path, handler);
         return this;
     }
 
+    /** {@link #get(String, String, Handler)}, for PATCH. */
+    public App patch(String path, String description, Handler handler) {
+        router.add("PATCH", path, description, handler);
+        return this;
+    }
+
     public App delete(String path, Handler handler) {
         router.add("DELETE", path, handler);
+        return this;
+    }
+
+    /** {@link #get(String, String, Handler)}, for DELETE. */
+    public App delete(String path, String description, Handler handler) {
+        router.add("DELETE", path, description, handler);
         return this;
     }
 
@@ -86,12 +129,24 @@ public final class App {
         return this;
     }
 
+    /** {@link #get(String, String, Handler)}, for HEAD. */
+    public App head(String path, String description, Handler handler) {
+        router.add("HEAD", path, description, handler);
+        return this;
+    }
+
     /**
      * An OPTIONS of its own — a CORS preflight, usually. Without one, OPTIONS
      * is answered with the {@code Allow} header the path's routes imply.
      */
     public App options(String path, Handler handler) {
         router.add("OPTIONS", path, handler);
+        return this;
+    }
+
+    /** {@link #get(String, String, Handler)}, for OPTIONS. */
+    public App options(String path, String description, Handler handler) {
+        router.add("OPTIONS", path, description, handler);
         return this;
     }
 
@@ -124,8 +179,9 @@ public final class App {
      *
      * <p>What was registered, and only that: the HEAD and OPTIONS answers
      * {@link AppServlet} derives from a GET route are not listed, because
-     * nobody registered them. An overview page or an OpenAPI export is built
-     * from this snapshot rather than shipped in core.
+     * nobody registered them. Each {@link Route} carries the description its
+     * registration passed, or {@code ""} where none was. An overview page or an
+     * OpenAPI export is built from this snapshot rather than shipped in core.
      */
     public List<Route> routes() {
         return router.routes();

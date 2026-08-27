@@ -55,9 +55,23 @@ Every route becomes an operation under its path, keyed by the lowercased method,
 Every `\{name}` in a path becomes a required path parameter of type `string`, which OpenAPI insists on declaring.
 Each operation carries a `200` response described as `OK`.
 
+A route registered with a xref:route-introspection.adoc#descriptions[description] carries it as the operation's `summary`, which is the field a spec UI shows beside the route:
+
+[source,java]
+----
+app.get("/api/decks", "List every deck", api::listDecks);
+----
+
+[source,json]
+----
+{"paths": {"/api/decks": {"get": {"summary": "List every deck", "responses": {"200": {"description": "OK"}}}}}}
+----
+
+A route registered without one gets no `summary` at all, rather than an empty string that would render as a blank line.
+
 That is the whole of it, and it is a valid document.
-What is missing is missing on purpose: a description, a request or response schema, a server list, a security scheme.
-None of those is derivable from a method and a path, so each would have to be declared somewhere — and where to declare it is a question this module answers by not asking it.
+What is missing is missing on purpose: a request or response schema, a server list, a security scheme.
+None of those is derivable from a route, so each would have to be declared somewhere — and where to declare it is a question this module answers by not asking it.
 The automatic HEAD and OPTIONS answers are not listed either, for the reason `routes()` does not list them.
 
 == Testing it

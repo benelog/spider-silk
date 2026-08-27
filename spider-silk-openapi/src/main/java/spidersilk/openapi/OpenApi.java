@@ -24,10 +24,12 @@ import spidersilk.json.Json;
  * way {@code spider-silk-test} is.
  *
  * <p>The version this writes is pinned at {@code 3.1.0} and the shape is the
- * minimum a valid document needs. Anything richer — descriptions, request and
- * response schemas, servers, security schemes — is not derivable from a method
- * and a path, so it would have to be declared somewhere, and this module has no
- * opinion on where.
+ * minimum a valid document needs, plus the one thing the route list now carries
+ * that a method and a path do not imply: a route registered with a description
+ * becomes an operation {@code summary}. Anything richer — request and response
+ * schemas, servers, security schemes — is still not derivable from a route, so
+ * it would have to be declared somewhere, and this module has no opinion on
+ * where.
  */
 public final class OpenApi {
 
@@ -50,7 +52,11 @@ public final class OpenApi {
      *
      * <p>Every {@code {name}} in a path becomes a required path parameter,
      * which OpenAPI insists on declaring, and the paths come out in the order
-     * they were registered. A route whose pattern contains {@code *} throws:
+     * they were registered. A route registered with a description gets it as
+     * the operation's {@code summary} — the field a spec UI shows beside the
+     * route — and a route without one gets no {@code summary} at all, rather
+     * than an empty string that would render as a blank line.
+     * A route whose pattern contains {@code *} throws:
      * a wildcard has no OpenAPI equivalent, and dropping it quietly would
      * publish a document that claims the application answers less than it does.
      *
@@ -68,8 +74,8 @@ public final class OpenApi {
                                 + path + ". Leave it out of the list passed here.");
             }
             Json.JsonObject operations = paths.has(path) ? paths.getObject(path) : Json.obj();
-            paths.put(path,
-                    operations.put(route.method().toLowerCase(Locale.ROOT), operation(path)));
+            paths.put(path, operations.put(route.method().toLowerCase(Locale.ROOT),
+                    operation(path, route.description())));
         }
         return Json.obj()
                 .put("openapi", OPENAPI_VERSION)
@@ -77,9 +83,12 @@ public final class OpenApi {
                 .put("paths", paths);
     }
 
-    /** One operation: its path parameters, and the 200 every path answers with. */
-    private static Json.JsonObject operation(String path) {
+    /** One operation: its summary, its path parameters, and the 200 every path answers with. */
+    private static Json.JsonObject operation(String path, String description) {
         Json.JsonObject operation = Json.obj();
+        if (!description.isEmpty()) {
+            operation.put("summary", description);
+        }
         Json.JsonArray parameters = pathParameters(path);
         if (parameters.size() > 0) {
             operation.put("parameters", parameters);

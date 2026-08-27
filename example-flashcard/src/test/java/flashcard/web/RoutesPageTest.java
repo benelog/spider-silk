@@ -20,13 +20,14 @@ class RoutesPageTest {
         StringWriter html = new StringWriter();
 
         new JteTemplates("jte").render("routes", Map.of("routes", List.of(
-                new Route("GET", "/api/decks"),
+                new Route("GET", "/api/decks", "List every deck"),
                 new Route("POST", "/api/decks/{deckId}/cards"))), html);
 
         String page = html.toString();
         assertThat(page).contains("2 registered");
         assertThat(page).contains(">GET</span>");
         assertThat(page).contains("<td>/api/decks</td>");
+        assertThat(page).contains("List every deck");
         assertThat(page).contains(">POST</span>");
         assertThat(page).contains("<td>/api/decks/{deckId}/cards</td>");
     }

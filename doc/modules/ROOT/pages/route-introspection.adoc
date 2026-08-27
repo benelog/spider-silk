@@ -2,7 +2,7 @@
 :navtitle: Route Introspection
 
 Routes are an explicit list, so the framework can hand it back: no annotation scanning, no plugin, no reflection.
-`app.routes()` is an immutable snapshot of `record Route(String method, String path)`, in registration order, which is also the order the router breaks ties in:
+`app.routes()` is an immutable snapshot of `record Route(String method, String path, String description)`, in registration order, which is also the order the router breaks ties in:
 
 [source,java]
 ----
@@ -20,12 +20,35 @@ for (Route route : app.routes()) {
 }
 ----
 
-Method and path is all a route carries.
-The handler is left out (it is a lambda, and the only name it has is what reflection would dig out of its synthetic class), and so is any description, because documentation attached at the registration site is an annotation with the reflection taken out.
-What the routes are _for_ is built on top of the list, which is plain data: the example app renders a `/_routes` overview page from it, and xref:openapi.adoc[`spider-silk-openapi`] turns the same list into an OpenAPI 3.1 document.
+The handler is left out: it is a lambda, and the only name it has is what reflection would dig out of its synthetic class.
+What is built on top of the list is left out too, because the list is plain data: the example app renders a `/_routes` overview page from it, and xref:openapi.adoc[`spider-silk-openapi`] turns the same list into an OpenAPI 3.1 document.
 
 The automatic HEAD and OPTIONS answers are not listed.
 `routes()` reports what was registered, which is the honest answer for a framework whose claim is that only what you register runs.
+
+[#descriptions]
+== Descriptions
+
+What a route is _for_ is the one thing a method and a path do not say, and nothing but the registration knows it.
+Every registration method takes it as an optional second argument, on `App` and on a group alike:
+
+[source,java]
+----
+app.get("/api/decks", "List every deck", api::listDecks);
+
+app.path("/api/decks", decks -> {
+    decks.post("", "Create a deck", api::createDeck);
+    decks.get("/{deckId}/cards", "List the cards of one deck", api::listCards);
+});
+----
+
+It sits between the path and the handler so the handler stays last, where a lambda reads.
+A route registered without one reports `""` rather than null, so a reader can print `route.description()` without asking whether it is there.
+
+This is documentation written at the registration site, which is what an annotation is with the reflection taken out — deliberately, because the alternative is a second place to keep in step with the first.
+It stays a string argument and nothing more: the framework never reads it, and a route without one is registered, matched, and reported exactly as before.
+
+xref:openapi.adoc[`spider-silk-openapi`] writes a non-empty description as the operation's `summary`, and omits the field for a route that has none.
 
 [#guards]
 == Guards

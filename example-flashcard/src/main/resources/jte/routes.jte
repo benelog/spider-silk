@@ -18,13 +18,15 @@
 <p class="muted">${routes.size()} registered, read back from <code>app.routes()</code> with no
     annotation scanning. The order is registration order, which is also the order the router
     breaks ties in. The automatic HEAD and OPTIONS answers are missing because nobody
-    registered them.</p>
+    registered them. A description is whatever the registration passed as its second
+    argument, so the rows without one are routes that were registered without one.</p>
 
 <table class="stats">
     <thead>
     <tr>
         <th>Method</th>
         <th>Path</th>
+        <th>What it is for</th>
     </tr>
     </thead>
     <tbody>
@@ -32,6 +34,7 @@
     <tr>
         <td><span class="tag">${route.method()}</span></td>
         <td>${route.path()}</td>
+        <td class="muted">${route.description()}</td>
     </tr>
     @endfor
     </tbody>
