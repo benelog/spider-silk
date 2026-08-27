@@ -24,6 +24,7 @@ Its wire format is in `flashcard.web.Codecs` as hand-written `JsonWriter`/`JsonR
 Introspection::
 `/_routes` lists every route and `/openapi.json` is the same list as an OpenAPI 3.1 document, both built from `app.routes()`, which is what the framework exposing its routing table as data buys you.
 The document goes through xref:openapi.adoc[`spider-silk-openapi`], and the app decides what it covers: the `/api` routes, since everything else here answers with HTML.
+Those are also the only routes registered with a description, which the page shows in a column of its own and the document as each operation's `summary`.
 
 Every response::
 `FlashcardApp.createApp` names all three of xref:cors-compression-and-security-headers.adoc[the response-wide concerns], which is what they look like on a real application.

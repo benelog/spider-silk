@@ -156,8 +156,8 @@ These are what decides whether this is more than a teaching framework.
 `app.routes()` is the same list the dispatcher walks, read back as data — **no reflection at all**, where Javalin needs a plugin.
 The four decisions:
 
-- **Method and path, and nothing else.**
-  The handler is left out: it is a lambda, so the only name it has is what reflection would dig out of its synthetic class.
+- **The handler is left out.**
+  It is a lambda, so the only name it has is what reflection would dig out of its synthetic class.
   `PathPattern` stays package-private too — what is exposed is plain strings, not a matching engine.
 - **No description, no response types — at first.**
   `PathPattern`'s `{deckId}` *is* OpenAPI's path-template syntax verbatim, so the minimal shape already yielded a valid document.
