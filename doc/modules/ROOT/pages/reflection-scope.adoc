@@ -11,7 +11,7 @@ That confinement is what keeps the xref:native-image.adoc[native image] story me
 A template engine in a module of its own answers for itself: xref:handlebars.adoc[Handlebars] falls back to reflection for a record or a bean, xref:freemarker.adoc[FreeMarker] reads one through its object wrapper, and xref:thymeleaf.adoc[Thymeleaf] evaluates every expression through OGNL.
 That is one more reason each lives outside core — take the module and you have taken its reflection with it, and an app that stays on the default jte keeps its model access reflection-free.
 
-xref:websocket.adoc[`spider-silk-ws`] answers for itself the same way, and answers well: Jetty binds an endpoint's callbacks by taking a `MethodHandle` to each, cached per endpoint class, and every connection the module opens is one class it declares itself.
+xref:websocket.adoc[`spider-silk-jetty-websocket`] answers for itself the same way, and answers well: Jetty binds an endpoint's callbacks by taking a `MethodHandle` to each, cached per endpoint class, and every connection the module opens is one class it declares itself.
 That is the one class Jetty looks up — a `WebSocketHandler` an application writes is reached through an interface call and is never reflected over.
 
 The example project's repositories choose spring-jdbc's `DataClassRowMapper`, which constructs the domain records reflectively — the example's choice, not the framework's, and deliberately kept to show where the boundary runs.

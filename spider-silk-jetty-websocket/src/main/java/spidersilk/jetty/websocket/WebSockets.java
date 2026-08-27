@@ -1,4 +1,4 @@
-package spidersilk.ws;
+package spidersilk.jetty.websocket;
 
 import java.time.Duration;
 import java.util.ArrayList;

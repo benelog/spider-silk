@@ -1,7 +1,7 @@
 = WebSocket
 :navtitle: WebSocket
 
-`spider-silk-ws` maps WebSocket endpoints alongside an app's HTTP routes.
+`spider-silk-jetty-websocket` maps WebSocket endpoints alongside an app's HTTP routes.
 It is Jetty-only by construction, which is why it is a module with a name rather than a method on `App`: a WebSocket is a protocol upgrade, and an upgrade leaves servlet dispatch — see xref:sse.adoc#why-websocket-is-not-in-core[why SSE is in core and WebSocket is not].
 Core does not change to make this work; the module rides `JettyServer`'s existing `customizeServer` hook.
 
@@ -10,7 +10,7 @@ Core does not change to make this work; the module rides `JettyServer`'s existin
 [source,groovy,subs="attributes+"]
 ----
 dependencies {
-    implementation '{project-group}:spider-silk-ws:{project-version}'
+    implementation '{project-group}:spider-silk-jetty-websocket:{project-version}'
 }
 ----
 

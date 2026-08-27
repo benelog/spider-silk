@@ -29,7 +29,7 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 14 | Router indexed by method and first segment | ✅ shipped |
 | 15a | SSE: event framing over the servlet response | ✅ shipped |
 | 15b | WebSocket in core | ❌ rejected |
-| 15c | WebSocket as `spider-silk-ws`, outside core | ✅ shipped |
+| 15c | WebSocket as `spider-silk-jetty-websocket`, outside core | ✅ shipped |
 | 16 | Virtual threads | ✅ shipped |
 | 17 | Split `spider-silk-test` out of core | ✅ shipped |
 | 18 | `WebContext` split into `WebRequest` + sealed `WebResponse` | ✅ shipped |
@@ -192,7 +192,7 @@ Two deliberate edges: a HEAD of an SSE route answers with the headers and never 
 See [the table below](#rejected--decisions-with-the-reason).
 It is not in core and will not be; where it does live is 15c.
 
-### 15c. WebSocket as `spider-silk-ws`
+### 15c. WebSocket as `spider-silk-jetty-websocket`
 
 The half 15b rejected was `app.ws(path, config)` on `App`.
 What was left open was narrower: whether the Jetty recipe an application writes for itself is worth wrapping, and the answer is a module whose name carries the tie to one server, the way 22's `spider-silk-tomcat` does.
@@ -460,4 +460,4 @@ If one is reopened, it is a change to what the framework is.
 | `ServiceLoader`-based server discovery | Classpath-driven binding is the magic this framework exists without. |
 | Javalin-style plugin registry | A registry of things that configure themselves is how a container starts. Decision 27 is what the alternative looks like: three named methods, each taking a value that does nothing until `App` is handed it. |
 | Spark's static-import DSL | Process-global mutable state: one app per JVM, no parallel tests. |
-| `app.ws(path, config)` in core | A WebSocket is a protocol upgrade, so it leaves servlet dispatch: the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` all stop applying to it. Core would be handing out an API that core's own features silently do not cover. It also ends the no-lock-in claim that `WebServer` exists for, since `AppServlet` on another container cannot follow. `jakarta.websocket` is no escape either: its default `Configurator` instantiates endpoints reflectively. It lives in `spider-silk-ws` instead, where the name carries the tie to Jetty — decision 15c. |
+| `app.ws(path, config)` in core | A WebSocket is a protocol upgrade, so it leaves servlet dispatch: the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` all stop applying to it. Core would be handing out an API that core's own features silently do not cover. It also ends the no-lock-in claim that `WebServer` exists for, since `AppServlet` on another container cannot follow. `jakarta.websocket` is no escape either: its default `Configurator` instantiates endpoints reflectively. It lives in `spider-silk-jetty-websocket` instead, where the name carries the tie to Jetty — decision 15c. |

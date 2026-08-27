@@ -84,7 +84,7 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
    Brotli is the half core cannot close on its own, since the JDK has no encoder: a pre-compressed `.br` is the only way core would ever answer one.
 3. **No WebSocket in core.**
    An upgrade leaves servlet dispatch, and with it the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` — so it stays out of core rather than becoming an API core's own features cannot reach.
-   `spider-silk-ws` maps one on Jetty, under a name that says which server it is tied to; none of that list follows an upgrade there either, and the module says so rather than papering over it.
+   `spider-silk-jetty-websocket` maps one on Jetty, under a name that says which server it is tied to; none of that list follows an upgrade there either, and the module says so rather than papering over it.
    SSE, which servlet dispatch *can* carry, ships as `WebResponse.sse(stream -> ...)` on an ordinary `get` route.
 4. **Ecosystem of one.**
    One author, no community, no starters, and an OpenAPI export that is a module of its own rather than something core ships, since a spec format is not the web tier.
@@ -98,6 +98,6 @@ The neighbours in the table have four features that would be easy to copy and ar
 - Javalin's plugin/bundled-plugins system: a registry of things that configure themselves is the beginning of a container.
 - `app.ws(path, config)` in core: a protocol upgrade leaves servlet dispatch, so core would be publishing an API that core's own routing, filters, error handlers, request logger, `routes()`, and test harness do not reach.
   It also ends strength 5 — `WebServer` is four methods precisely so Jetty is replaceable — and `jakarta.websocket` is no escape, since its default `Configurator` instantiates endpoints reflectively.
-  A socket lives in `spider-silk-ws` instead, which is Jetty-only and named that way on purpose.
+  A socket lives in `spider-silk-jetty-websocket` instead, which is Jetty-only and named that way on purpose.
 
 The reasoning behind each decision and the rejected list live in [decisions.md](decisions.md); what is still open lives in the [issue tracker](https://github.com/benelog/spider-silk/issues).

@@ -1,4 +1,4 @@
-package spidersilk.ws;
+package spidersilk.jetty.websocket;
 
 import org.eclipse.jetty.websocket.server.ServerUpgradeRequest;
 import org.eclipse.jetty.websocket.server.ServerUpgradeResponse;
