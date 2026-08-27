@@ -58,6 +58,6 @@ That is also why `executor(...)` does not interfere with it, as it does on Tomca
 Undertow's worker threads do not hold the JVM up on their own, so `start()` parks a non-daemon thread that `stop()` releases — the same trick the Tomcat module needs, and what `join()` joins.
 
 There is no `sessions(boolean)`: an Undertow deployment always gets a session manager, and a method that silently did nothing would be worse than its absence.
-Static files still come off the classpath through core's own `StaticFiles`, so Undertow's resource manager is left empty on purpose.
+Static files still come through core's own `StaticFiles`, classpath root or directory alike, so Undertow's resource manager is left empty on purpose.
 
 Logging goes through JBoss Logging, which picks slf4j up off the classpath when it finds it — so an application already using slf4j gets Undertow's log lines without a bridge.

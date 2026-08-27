@@ -9,6 +9,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
@@ -22,8 +24,10 @@ import org.apache.catalina.Context;
 import org.apache.catalina.startup.Tomcat;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import spidersilk.App;
+import spidersilk.StaticFiles;
 import spidersilk.WebResponse;
 
 /**
@@ -174,6 +178,22 @@ class TomcatServerTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body().strip()).isEqualTo("a static file");
+    }
+
+    /** A directory root travels too, and so does the guard that keeps it enclosed. */
+    @Test
+    void aDirectoryRootIsServedAndCannotBeWalkedOutOf(@TempDir Path parent) throws Exception {
+        Path root = Files.createDirectory(parent.resolve("uploads"));
+        Files.writeString(root.resolve("avatar.txt"), "an upload\n");
+        Files.writeString(parent.resolve("secret.txt"), "not yours\n");
+        startOnTomcat(new App().staticFiles(StaticFiles.directory(root)));
+
+        assertThat(get("/avatar.txt").body().strip()).isEqualTo("an upload");
+        assertThat(get("/missing.txt").statusCode()).isEqualTo(404);
+
+        HttpResponse<String> traversal = get("/../secret.txt");
+        assertThat(traversal.statusCode()).isGreaterThanOrEqualTo(400);
+        assertThat(traversal.body()).doesNotContain("not yours");
     }
 
     @Test

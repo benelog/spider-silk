@@ -1,5 +1,6 @@
 package flashcard;
 
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
@@ -228,6 +229,11 @@ class ReadmeSnippets {
         app.staticFiles(new StaticFiles("/public")
                 .hostedPath("/assets")              // classpath:/public/* at /assets/*
                 .maxAge(Duration.ofDays(365)));     // only when the name carries a content hash
+
+        app.staticFiles(
+                new StaticFiles("/public"),                        // classpath:/public/* at /*
+                StaticFiles.directory(Path.of("/srv/uploads"))     // /srv/uploads/* at /uploads/*
+                        .hostedPath("/uploads"));
     }
 
     // ---- blocks 17, 18: route introspection ----

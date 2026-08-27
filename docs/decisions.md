@@ -90,8 +90,20 @@ A response that already carries a body is left alone, which the sealed `WebRespo
 
 ### 9. Static file caching
 
-Deliberately left out: pre-compressed variants (`.gz`/`.br`) and an external-directory location.
-Both are real, neither is needed until someone deploys behind something that is not already doing it.
+Deliberately left out: pre-compressed variants (`.gz`/`.br`).
+Real, and not needed until someone deploys behind something that is not already doing it.
+
+A directory on disk is in, as `StaticFiles.directory(path)`, because uploads and mounted volumes are not on the classpath and had no way in at all.
+Three things came with it:
+
+- **`staticFiles(StaticFiles...)`, not one root.**
+  The deployment that wants a directory is the one that already has assets in the jar, so a single slot would have made the two exclusive.
+  Roots are read in the order given and the first that holds the file answers; `staticFiles()` with nothing at all is how you turn file serving off.
+- **The traversal guard is ours, not the container's.**
+  Jetty and Tomcat answer a `..` with a 400 before the servlet sees it, Undertow does not, and none of that is core's promise to make, so the rule is enforced in `StaticFiles` and asserted in all three modules' acceptance tests: a regular file whose real path, symbolic links followed, lies under the root's own real path — and a 404 for everything else, which does not say which of the reasons it was.
+  Following links out of the root is therefore refused, which is the answer to "the uploads directory has a symlink in it" that needs no configuration flag.
+- **The root is read per request.**
+  A volume mounted after start-up needs no restart, and one that is never mounted 404s instead of failing to boot — the same posture the classpath root already had, where a root with nothing in it still routes.
 
 ### 8. `JsonCodec<T>` seam
 

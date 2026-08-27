@@ -43,7 +43,7 @@ public final class App {
     final Set<SseStream> openStreams = ConcurrentHashMap.newKeySet();
 
     TemplateRenderer templates;
-    StaticFiles staticFiles = new StaticFiles(StaticFiles.DEFAULT_ROOT);
+    List<StaticFiles> staticFiles = List.of(new StaticFiles(StaticFiles.DEFAULT_ROOT));
     RequestLogger requestLogger;
     Cors cors;
     Gzip gzip;
@@ -271,9 +271,25 @@ public final class App {
         return staticFiles(new StaticFiles(classpathRoot));
     }
 
-    /** Static files with a hosted path or a cache policy of their own. */
-    public App staticFiles(StaticFiles staticFiles) {
-        this.staticFiles = Objects.requireNonNull(staticFiles, "staticFiles");
+    /**
+     * Static files with a hosted path, a cache policy, or a root of their own,
+     * replacing the default {@code classpath:/public}.
+     *
+     * <p>Several roots are read in the order given, and the first that holds
+     * the file answers — which is how a directory on disk sits beside the
+     * assets that shipped in the jar:
+     *
+     * <pre>{@code
+     * app.staticFiles(
+     *         new StaticFiles("/public"),
+     *         StaticFiles.directory(uploads).hostedPath("/uploads"));
+     * }</pre>
+     *
+     * <p>Called with no argument at all, nothing is served as a file and every
+     * path is left to routing.
+     */
+    public App staticFiles(StaticFiles... staticFiles) {
+        this.staticFiles = List.of(Objects.requireNonNull(staticFiles, "staticFiles"));
         return this;
     }
 

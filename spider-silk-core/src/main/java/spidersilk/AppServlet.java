@@ -121,7 +121,7 @@ public class AppServlet extends HttpServlet {
                     response = runAfter(segments, current, response);
                 }
             } else if (isReadMethod(method)) {
-                WebResponse file = app.staticFiles.resolve(path, req);
+                WebResponse file = staticFile(path, req);
                 if (file != null) {
                     return file;
                 }
@@ -134,6 +134,17 @@ public class AppServlet extends HttpServlet {
             response = handleException(e, current);
         }
         return completeErrorResponse(response, current);
+    }
+
+    /** The first configured root that holds the file answers; null when none does. */
+    private WebResponse staticFile(String path, HttpServletRequest req) throws IOException {
+        for (StaticFiles files : app.staticFiles) {
+            WebResponse file = files.resolve(path, req);
+            if (file != null) {
+                return file;
+            }
+        }
+        return null;
     }
 
     /** A HEAD with no route of its own is answered by the GET route, minus the body. */

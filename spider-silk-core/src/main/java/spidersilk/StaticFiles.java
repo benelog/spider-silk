@@ -6,7 +6,9 @@ import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -17,8 +19,8 @@ import java.util.Objects;
 import jakarta.servlet.http.HttpServletRequest;
 
 /**
- * Files served straight off the classpath, with the caching headers that stop a
- * browser re-downloading the stylesheet on every page load.
+ * Files served off the classpath or off a directory, with the caching headers
+ * that stop a browser re-downloading the stylesheet on every page load.
  *
  * <p>{@code classpath:/public} is served at the root without being asked for;
  * this is for a directory, a hosted path, or a cache policy of your own.
@@ -29,6 +31,10 @@ import jakarta.servlet.http.HttpServletRequest;
  * app.staticFiles(new StaticFiles("/public")
  *         .hostedPath("/assets")                    // classpath:/public/* at /assets/*
  *         .maxAge(Duration.ofDays(365)));           // for fingerprinted file names
+ *
+ * app.staticFiles(                                  // both, in the order given
+ *         new StaticFiles("/public"),
+ *         StaticFiles.directory(Path.of("/srv/uploads")).hostedPath("/uploads"));
  * }</pre>
  *
  * <p>Every response carries an {@code ETag} and {@code Last-Modified} derived
@@ -37,6 +43,11 @@ import jakarta.servlet.http.HttpServletRequest;
  * "cache it, but check with me first" — correct for files whose name never
  * changes. {@link #maxAge(Duration)} is for the other kind, where the name
  * carries a content hash and the file at that name can never change.
+ *
+ * <p>A directory root is a path-traversal surface a classpath lookup does not
+ * have, so {@link #directory(Path)} answers only for a regular file whose real
+ * path — symbolic links resolved — lies under the root's real path. Anything
+ * else is not a file this serves, and routing carries on as if it were absent.
  */
 public final class StaticFiles {
 
@@ -48,14 +59,33 @@ public final class StaticFiles {
     private static final DateTimeFormatter HTTP_DATE =
             DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US);
 
-    private final String classpathRoot;
+    private final Source source;
     private String hostedPath = "";
     private String cacheControl = REVALIDATE;
 
     /** @param classpathRoot the classpath directory to serve, e.g. "/public" */
     public StaticFiles(String classpathRoot) {
-        this.classpathRoot = withoutTrailingSlash(
-                Objects.requireNonNull(classpathRoot, "classpathRoot"));
+        this(new ClasspathSource(withoutTrailingSlash(
+                Objects.requireNonNull(classpathRoot, "classpathRoot"))));
+    }
+
+    private StaticFiles(Source source) {
+        this.source = source;
+    }
+
+    /**
+     * Files served from a directory on disk rather than the classpath: an
+     * upload directory, a volume mounted beside the jar, whatever a separate
+     * build writes into.
+     *
+     * <p>The root is read per request, not at construction, so a volume that is
+     * mounted after the application starts needs no restart, and one that is
+     * never mounted answers 404 rather than failing to boot.
+     *
+     * @param root the directory to serve
+     */
+    public static StaticFiles directory(Path root) {
+        return new StaticFiles(new DirectorySource(Objects.requireNonNull(root, "root")));
     }
 
     /** The URL prefix the files appear under. The default, "/", is the root. */
@@ -89,14 +119,13 @@ public final class StaticFiles {
         if (relative == null) {
             return null;
         }
-        URL url = StaticFiles.class.getResource(classpathRoot + relative);
-        if (url == null || isDirectory(url)) {
+        Resource resource = source.find(relative);
+        if (resource == null) {
             return null;
         }
 
-        URLConnection connection = url.openConnection();
-        long lastModified = connection.getLastModified();
-        long length = connection.getContentLengthLong();
+        long lastModified = resource.lastModified();
+        long length = resource.length();
 
         WebResponse response = WebResponse.empty().header("Cache-Control", cacheControl);
         if (lastModified > 0) {
@@ -104,14 +133,14 @@ public final class StaticFiles {
             response = response.header("ETag", etag)
                     .header("Last-Modified", httpDate(lastModified));
             if (isUnchanged(req, etag, lastModified)) {
-                discard(connection);
+                resource.discard();
                 return response.status(HttpStatus.NOT_MODIFIED);
             }
         }
 
         response = response
                 .body(new WebResponse.Stream(out -> {
-                    try (InputStream in = connection.getInputStream()) {
+                    try (InputStream in = resource.open()) {
                         in.transferTo(out);
                     }
                 }))
@@ -137,23 +166,10 @@ public final class StaticFiles {
             return null;
         }
         String relative = path.substring(hostedPath.length());
-        // A bare directory is not a file, and neither is the hosted path itself.
         if (relative.isEmpty() || !relative.startsWith("/") || relative.endsWith("/")) {
             return null;
         }
         return relative;
-    }
-
-    /** An exploded classpath hands back directories too; a listing is not a file. */
-    private boolean isDirectory(URL url) {
-        if (!"file".equals(url.getProtocol())) {
-            return false;
-        }
-        try {
-            return Files.isDirectory(Path.of(url.toURI()));
-        } catch (URISyntaxException e) {
-            return false;
-        }
     }
 
     /**
@@ -173,11 +189,9 @@ public final class StaticFiles {
                     return true;
                 }
             }
-            // A validator was offered and did not match; the date is not consulted.
             return false;
         }
         long ifModifiedSince = ifModifiedSince(req);
-        // Last-Modified goes out with second precision, so compare at that precision.
         return ifModifiedSince >= 0 && lastModified / 1000 * 1000 <= ifModifiedSince;
     }
 
@@ -189,20 +203,138 @@ public final class StaticFiles {
         }
     }
 
-    /** Closes what reading the metadata opened, since the body is not being sent. */
-    private void discard(URLConnection connection) {
-        try (InputStream ignored = connection.getInputStream()) {
-            // opened only to be closed
-        } catch (IOException e) {
-            // nothing was sent; there is nothing to recover
-        }
-    }
-
     private static String withoutTrailingSlash(String path) {
         String trimmed = path.endsWith("/") ? path.substring(0, path.length() - 1) : path;
         if (!trimmed.isEmpty() && !trimmed.startsWith("/")) {
             throw new IllegalArgumentException("Path must start with \"/\": " + path);
         }
         return trimmed;
+    }
+
+    /** Where the bytes come from: a classpath root or a directory. */
+    private interface Source {
+
+        /**
+         * The file the given path — always starting with "/" — names under this
+         * root, or null when the root holds no such file.
+         */
+        Resource find(String relative) throws IOException;
+    }
+
+    /**
+     * One file a {@link Source} found: the validators it can be identified by,
+     * and a way to read it once.
+     */
+    private interface Resource {
+
+        long lastModified();
+
+        long length();
+
+        InputStream open() throws IOException;
+
+        /** Releases what reading the metadata opened, when the body is not sent. */
+        default void discard() {
+        }
+    }
+
+    private record ClasspathSource(String root) implements Source {
+
+        @Override
+        public Resource find(String relative) throws IOException {
+            URL url = StaticFiles.class.getResource(root + relative);
+            if (url == null || isDirectory(url)) {
+                return null;
+            }
+            return new UrlResource(url.openConnection());
+        }
+
+        /** An exploded classpath hands back directories too; a listing is not a file. */
+        private boolean isDirectory(URL url) {
+            if (!"file".equals(url.getProtocol())) {
+                return false;
+            }
+            try {
+                return Files.isDirectory(Path.of(url.toURI()));
+            } catch (URISyntaxException e) {
+                return false;
+            }
+        }
+    }
+
+    private record UrlResource(URLConnection connection) implements Resource {
+
+        @Override
+        public long lastModified() {
+            return connection.getLastModified();
+        }
+
+        @Override
+        public long length() {
+            return connection.getContentLengthLong();
+        }
+
+        @Override
+        public InputStream open() throws IOException {
+            return connection.getInputStream();
+        }
+
+        @Override
+        public void discard() {
+            try (InputStream ignored = connection.getInputStream()) {
+            } catch (IOException e) {
+            }
+        }
+    }
+
+    /**
+     * A directory root, which unlike the classpath can be walked out of. The
+     * guard is the real path: the file the request resolves to, with every
+     * symbolic link followed, has to still lie under the root's own real path.
+     */
+    private record DirectorySource(Path root) implements Source {
+
+        @Override
+        public Resource find(String relative) {
+            Path candidate;
+            try {
+                candidate = root.resolve(relative.substring(1));
+            } catch (InvalidPathException e) {
+                return null;
+            }
+            try {
+                Path real = candidate.toRealPath();
+                if (!real.startsWith(root.toRealPath())) {
+                    return null;
+                }
+                BasicFileAttributes attributes =
+                        Files.readAttributes(real, BasicFileAttributes.class);
+                return attributes.isRegularFile()
+                        ? new FileResource(real, attributes)
+                        : null;
+            } catch (IOException e) {
+                // No such file, an unreadable one, or a root that is not mounted:
+                // all of them mean this root does not answer for the path.
+                return null;
+            }
+        }
+    }
+
+    private record FileResource(Path path, BasicFileAttributes attributes) implements Resource {
+
+        @Override
+        public long lastModified() {
+            return attributes.lastModifiedTime().toMillis();
+        }
+
+        @Override
+        public long length() {
+            return attributes.size();
+        }
+
+        @Override
+        public InputStream open() throws IOException {
+            return Files.newInputStream(path);
+        }
     }
 }

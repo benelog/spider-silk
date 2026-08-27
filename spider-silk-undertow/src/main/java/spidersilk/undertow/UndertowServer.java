@@ -282,8 +282,8 @@ public final class UndertowServer implements WebServer {
                 .setClassLoader(getClass().getClassLoader())
                 .setContextPath(contextPath)
                 .setDeploymentName(DEPLOYMENT_NAME)
-                // Static files are read off the classpath by core's own
-                // StaticFiles, so Undertow is never asked to serve a resource.
+                // Static files are read by core's own StaticFiles, classpath
+                // root or directory alike, so Undertow is never asked for one.
                 .setResourceManager(ResourceManager.EMPTY_RESOURCE_MANAGER)
                 .addServlet(servlet);
         if (executor != null) {
