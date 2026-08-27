@@ -32,7 +32,7 @@ final class AcceptHeader {
     static List<String> preferences(String header) {
         List<Entry> entries = new ArrayList<>(parse(header));
         entries.sort(Comparator.comparingDouble(Entry::quality).reversed()
-                .thenComparing(entry -> -wildcards(entry.value()))
+                .thenComparingInt(entry -> wildcards(entry.value()))
                 .thenComparingInt(Entry::position));
         List<String> ordered = new ArrayList<>();
         for (Entry entry : entries) {

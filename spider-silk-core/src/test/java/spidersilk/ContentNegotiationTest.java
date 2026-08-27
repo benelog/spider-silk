@@ -110,6 +110,16 @@ class ContentNegotiationTest {
         });
     }
 
+    /** Types the caller wants equally are ordered by how closely they name one. */
+    @Test
+    void aWildcardComesAfterTheTypesItCoversWhenTheyAreWantedEqually() {
+        App app = new App().get("/types", req -> WebResponse.text(
+                String.join(" ", req.acceptedTypes())));
+
+        WebTest.test(app, client -> assertThat(get(client, "/types", "*/*, text/html, text/*")
+                .body()).isEqualTo("text/html text/* */*"));
+    }
+
     private static HttpResponse<String> get(TestClient client, String path, String accept) {
         return client.send(request -> request.uri(URI.create(client.url(path)))
                 .header("Accept", accept)
