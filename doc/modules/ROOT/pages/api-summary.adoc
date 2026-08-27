@@ -17,6 +17,7 @@
 * Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`
 * Parameters: `param` (400 when missing), `paramLong`, `paramEnum`, each with a `(..., default)` form for optional parameters; `paramBoolean(name, default)`; `params(name)` for repeated values
 * Query vs. form: `queryParam`, `queryParams`, `formParam`, `formParams`
+* Content negotiation: `accepts(types...)` answers with the type the caller prefers out of the ones offered, 406 when it will take none of them; `acceptedTypes()` for the parsed `Accept` header
 * Cookies the client sent: `cookie(name)`, `cookies()`
 * Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects), multipart upload via `file(name)`
 * Session: `sessionAttr(key)` / `sessionAttr(key, value)` / `removeSessionAttr`

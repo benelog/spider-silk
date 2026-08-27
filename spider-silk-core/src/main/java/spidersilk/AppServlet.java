@@ -64,12 +64,17 @@ public class AppServlet extends HttpServlet {
      * {@link #dispatch} returns a static file without ever reaching a filter,
      * and an error response never reaches one either.
      *
-     * <p>The order is the order they depend on each other. CORS and the security
-     * headers add headers; compression runs last, because what it does depends
-     * on the content type and the length the other two have settled.
+     * <p>The order is the order they depend on each other. A handler that asked
+     * {@link WebRequest#accepts} says so here, because only the servlet sees
+     * every answer that question shaped — the 406 among them. CORS and the
+     * security headers add headers; compression runs last, because what it does
+     * depends on the content type and the length the other two have settled.
      */
     private WebResponse decorate(WebResponse response, WebRequest request) {
         WebResponse decorated = response;
+        if (Boolean.TRUE.equals(request.raw().getAttribute(WebRequest.NEGOTIATED_ATTRIBUTE))) {
+            decorated = decorated.vary("Accept");
+        }
         if (app.cors != null) {
             decorated = app.cors.apply(decorated, request);
         }

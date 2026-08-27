@@ -157,26 +157,11 @@ public final class Gzip {
     /**
      * Whether the client listed gzip as something it can read. {@code gzip;q=0}
      * is a client saying the opposite, and {@code *} is one saying anything goes.
+     * The same reading of the same grammar {@link WebRequest#accepts} applies to
+     * {@code Accept}, so both go through {@link AcceptHeader}.
      */
     private static boolean acceptsGzip(WebRequest request) {
-        String accepted = request.header("Accept-Encoding");
-        if (accepted == null) {
-            return false;
-        }
-        for (String candidate : accepted.split(",")) {
-            String[] parts = candidate.trim().split(";");
-            String coding = parts[0].trim();
-            if (!coding.equalsIgnoreCase("gzip") && !coding.equals("*")) {
-                continue;
-            }
-            for (int i = 1; i < parts.length; i++) {
-                if (parts[i].trim().replace(" ", "").equals("q=0")) {
-                    return false;
-                }
-            }
-            return true;
-        }
-        return false;
+        return AcceptHeader.accepts(request.header("Accept-Encoding"), "gzip");
     }
 
     /** A body already in memory, compressed now so its length is known now. */

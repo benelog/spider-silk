@@ -36,6 +36,7 @@ import spidersilk.json.JsonReader;
 public final class WebRequest {
 
     static final String FLASH_ATTRIBUTE = "spidersilk.flash";
+    static final String NEGOTIATED_ATTRIBUTE = "spidersilk.negotiated";
 
     private final HttpServletRequest req;
     private final Map<String, String> pathParams;
@@ -65,6 +66,59 @@ public final class WebRequest {
 
     public String header(String name) {
         return req.getHeader(name);
+    }
+
+    /**
+     * The media type to answer with, out of the ones this handler can produce.
+     * The question a handler actually asks — "HTML or JSON here?" — answered
+     * against the {@code Accept} header, quality values and specificity applied:
+     *
+     * <pre>{@code
+     * app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
+     *     case "application/json" -> WebResponse.json(service.decks(), Codecs::writeDecks);
+     *     default -> WebResponse.template("decks", Map.of("decks", service.decks()));
+     * });
+     * }</pre>
+     *
+     * <p>The answer is one of the strings passed in, never null: a caller that
+     * will take none of them is a 406, the same contract as {@link #param(String)}
+     * answering 400 rather than null. A caller that sent no {@code Accept} at all
+     * gets the first candidate, so the list is written in the order the handler
+     * prefers.
+     *
+     * <p>Asking makes the answer depend on the request header, so the response
+     * carries {@code Vary: Accept} without the handler saying so — the same
+     * bookkeeping {@link App#gzip()} does for {@code Accept-Encoding}, and for
+     * the same reason: a shared cache must not hand JSON to the next browser.
+     */
+    public String accepts(String... candidates) {
+        if (candidates.length == 0) {
+            throw new IllegalArgumentException("accepts() needs at least one media type to offer");
+        }
+        negotiated();
+        String best = AcceptHeader.best(header("Accept"), List.of(candidates));
+        if (best == null) {
+            throw new HttpException(HttpStatus.NOT_ACCEPTABLE,
+                    "Not Acceptable: this endpoint answers " + String.join(", ", candidates));
+        }
+        return best;
+    }
+
+    /**
+     * The media types the caller asked for, in the order it prefers them, with
+     * the ones it refused dropped — the parsed view behind {@link #accepts},
+     * for a handler that has to decide something {@code accepts} cannot phrase.
+     * Empty when the request sent no {@code Accept}, which is a caller that will
+     * take anything rather than one that will take nothing.
+     */
+    public List<String> acceptedTypes() {
+        negotiated();
+        return AcceptHeader.preferences(header("Accept"));
+    }
+
+    /** Records that this answer depends on {@code Accept}, for {@link AppServlet} to declare. */
+    private void negotiated() {
+        req.setAttribute(NEGOTIATED_ATTRIBUTE, Boolean.TRUE);
     }
 
     /** Escape hatch when the raw request is needed. */

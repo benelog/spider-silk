@@ -36,6 +36,36 @@ String name = req.formParam("name");      // form body only
 List<String> tags = req.formParams("tag");
 ----
 
+== Content negotiation
+
+A handler that can answer more than one way asks which way the caller wants, and the framework reads `Accept` for it:
+
+[source,java]
+----
+app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
+    case "application/json" -> WebResponse.json(deckService.decks(), Codecs::writeDecks);
+    default -> WebResponse.template("decks", Map.of("decks", deckService.decks()));
+});
+----
+
+The answer is one of the strings passed in, so it reads back as a `case` label and no media type is spelled twice.
+Quality values and specificity are applied the way the specification asks: `text/html` is matched before `text/*`, which is matched before a bare wildcard, and a type the caller weighted `q=0` is one it refused even when a wildcard would otherwise have covered it.
+
+Two edges are worth stating, because they are the ones every hand-written parser gets wrong:
+
+* A request with no `Accept` at all is a caller that never said, not one that will take nothing — the first candidate wins, so the list is written in the order the handler prefers.
+* A caller that will take none of them is answered `406 Not Acceptable`, the same way `param(name)` answers 400 rather than returning null.
+
+A handler therefore never has a null branch to write.
+
+Asking the question makes the answer depend on a request header, so the response carries `Vary: Accept` without the handler saying so — including the 406, and including an answer that turned out to be the only type on offer.
+That is the same bookkeeping `app.gzip()` does for `Accept-Encoding`, for the same reason: a shared cache must not hand JSON to the next browser.
+
+For the rare decision `accepts` cannot phrase, `req.acceptedTypes()` is the parsed view behind it — the media types asked for, best first, the refused ones dropped, and empty when the request sent no `Accept`.
+
+`Accept-Language` and `Accept-Encoding` are not negotiated for you.
+Encoding is the compression layer's own business, and language would be a locale story core does not have.
+
 == File uploads
 
 `req.file(name)` reads a file out of a multipart form, answering 400 when the part is missing and 400 when the request is not multipart at all:
