@@ -25,7 +25,7 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 10b | `formParam` distinct from query, HEAD/OPTIONS | ✅ shipped |
 | 11 | Request logging hook | ✅ shipped |
 | 12 | Graceful shutdown on by default | ✅ shipped |
-| 13 | Route introspection → overview page, OpenAPI export | ✅ shipped |
+| 13 | Route introspection: `routes()` and `guards()` → overview page, OpenAPI export | ✅ shipped |
 | 14 | Router indexed by method and first segment | ✅ shipped |
 | 15a | SSE: event framing over the servlet response | ✅ shipped |
 | 15b | WebSocket in core | ❌ rejected |
@@ -150,8 +150,11 @@ The four decisions:
 - **The overview page and the OpenAPI export are not in core.**
   A spec format is not the web tier, and its version drift is not a web framework's to own.
   The example demonstrates both; if the export earns its keep, it becomes a module the way `spider-silk-test` did.
-- **Routes only** — not filters, not error handlers.
-  A record for "which guard covers this path" is nice-to-have, and additive later.
+- **A second list for the guards, not a richer route.**
+  "Which guard covers this path" was left out at first as nice-to-have, and came back as `guards()`: the `before`/`after` filters and the `error(status, ...)` handlers, read off the same registrations and landing beside `routes()` without changing it.
+  It is a sealed `Guard` of three records — `Before(path)`, `After(path)`, `Error(status)` — because a filter is scoped to a path and an error handler to a status, and one record with a component that is null half the time would report that dishonestly.
+  A filter's coverage is a pattern and not a path, so decision 4's trailing `*` is reported verbatim rather than expanded, and matching against it stays the dispatcher's job: still plain strings, still not a matching engine.
+  The `exception(Type, handler)` handlers stay out, since neither a path nor a status describes where a type-scoped handler applies.
 
 The automatic HEAD and OPTIONS answers do **not** appear: `routes()` lists what was registered, which is the honest answer for a framework whose pitch is that only what you register runs.
 

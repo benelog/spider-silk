@@ -26,3 +26,33 @@ What the routes are _for_ is built on top of the list, which is plain data: the 
 
 The automatic HEAD and OPTIONS answers are not listed.
 `routes()` reports what was registered, which is the honest answer for a framework whose claim is that only what you register runs.
+
+[#guards]
+== Guards
+
+`routes()` lists what answers a path.
+`app.guards()` lists what else runs around it: the `before`/`after` filters and the `error(status, ...)` handlers, read off the same registrations, as an immutable snapshot of a sealed `Guard`:
+
+[source,java]
+----
+for (Guard guard : app.guards()) {
+    String scope = switch (guard) {
+        case Guard.Before before -> "before " + before.path();
+        case Guard.After after -> "after " + after.path();
+        case Guard.Error error -> "error " + error.status().code();
+    };
+}
+----
+
+Three records rather than one with a kind, because a filter is scoped to a path and an error handler is scoped to a status, and a component that is null half the time would report that dishonestly.
+
+The list is grouped by when it runs — the before-filters, then the after-filters, then the error handlers — and within each group it is in registration order, which is the order they run in.
+
+A filter's coverage is a pattern and not a path, and it is reported as one.
+`/admin/*` stays `/admin/*`, and covers `/admin` along with everything under it; `before(filter)` reports the `/*` it registers; a group's `decks.before(filter)` reports the resolved `/api/decks/*`.
+Matching a request against those patterns is the dispatcher's job, not this list's — what is exposed here is plain strings, the same as for routes.
+An audit of which paths a guard leaves open is built on top of the list, the way the OpenAPI export is built on `routes()`.
+
+The `exception(Type, handler)` handlers are not listed.
+An exception handler is scoped to a type, so neither a path nor a status describes where it applies.
+Neither are CORS, compression, and the security headers: those are xref:cors-compression-and-security-headers.adoc[named on `App`] rather than registered as filters, precisely because they apply to answers no filter ever sees.

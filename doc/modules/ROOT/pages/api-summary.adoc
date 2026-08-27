@@ -4,7 +4,7 @@
 == What `App` provides
 
 * Routes: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, and `path(prefix, group -> ...)` — patterns and matching order in xref:routing.adoc[Routing]
-* Introspection: `routes()` reports every registered route as `Route(method, path)`, in registration order
+* Introspection: `routes()` reports every registered route as `Route(method, path)`, in registration order; `guards()` reports the filters and error handlers beside them as `Guard.Before(path)`, `Guard.After(path)`, `Guard.Error(status)`
 * Filters: `before(filter)` / `before(path, filter)`, same for `after`
 * Errors: `exception(Type, handler)`, `error(HttpStatus, handler)`, `notFound(handler)`
 * Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)` — off until named, and applied to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]

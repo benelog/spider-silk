@@ -64,6 +64,7 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
    Javalin and Spark both marry Jetty.
 6. **Route introspection comes almost for free.**
    `app.routes()` reads back the same list the dispatcher walks, as data, with no reflection at all; Javalin needs a plugin for the equivalent.
+   `app.guards()` is the same trick on the registrations beside it, so "which filter covers this path" and "which statuses have a body of their own" are answered off the table rather than by reading the startup code.
 7. **Content negotiation asks the handler's question.**
    `req.accepts("text/html", "application/json")` answers with one of the strings that were passed in, so the branch is a `switch` over values written on that line; a caller that will take none of them gets a 406 rather than a null.
    What stays out is the reflective half — nothing picks a serializer for you once the type is known.

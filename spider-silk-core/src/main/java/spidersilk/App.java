@@ -142,7 +142,7 @@ public final class App {
      * "/admin" as well as "/admin/users".
      */
     public App before(String path, BeforeFilter filter) {
-        beforeFilters.add(new BeforeEntry(new PathPattern(path), filter));
+        beforeFilters.add(new BeforeEntry(path, filter));
         return this;
     }
 
@@ -153,7 +153,7 @@ public final class App {
 
     /** A filter that runs after matching routes complete normally. */
     public App after(String path, AfterFilter filter) {
-        afterFilters.add(new AfterEntry(new PathPattern(path), filter));
+        afterFilters.add(new AfterEntry(path, filter));
         return this;
     }
 
@@ -187,6 +187,37 @@ public final class App {
     /** Shorthand for {@code error(HttpStatus.NOT_FOUND, handler)}. */
     public App notFound(Handler handler) {
         return error(HttpStatus.NOT_FOUND, handler);
+    }
+
+    /**
+     * Everything registered that runs around a route rather than being one:
+     * the {@link #before} and {@link #after} filters, and the
+     * {@link #error(HttpStatus, Handler)} bodies. It answers "which guard
+     * covers this path", which {@link #routes()} holds no part of.
+     *
+     * <p>Grouped by when it runs — the before-filters, then the after-filters,
+     * then the error handlers — and within each group in registration order,
+     * which is the order they run in.
+     *
+     * <p>A filter's coverage is a pattern and not a path, and it is reported as
+     * one: {@code "/admin/*"} stays {@code "/admin/*"} and covers
+     * {@code "/admin"} along with everything under it, and the no-path
+     * overloads report the {@code "/*"} they register. Matching a request
+     * against those patterns is the dispatcher's job, not this list's; an audit
+     * of which paths a guard leaves open is built on top of the list, the way
+     * an OpenAPI export is built on {@link #routes()}.
+     *
+     * <p>The {@link #exception(Class, ExceptionHandler)} handlers are not here:
+     * an exception handler is scoped to a type, so no path or status describes
+     * where it applies.
+     */
+    public List<Guard> guards() {
+        List<Guard> guards = new ArrayList<>(
+                beforeFilters.size() + afterFilters.size() + errorHandlers.size());
+        beforeFilters.forEach(entry -> guards.add(new Guard.Before(entry.path())));
+        afterFilters.forEach(entry -> guards.add(new Guard.After(entry.path())));
+        errorHandlers.keySet().forEach(status -> guards.add(new Guard.Error(status)));
+        return List.copyOf(guards);
     }
 
     /**

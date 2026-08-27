@@ -30,3 +30,5 @@ app.after((req, res) -> res.header("X-Request-Id", requestId()));
 A response that already carries a body is left alone.
 What the error handler returns keeps the headers the framework had already worked out, such as the `Allow` of a 405, and answers with the registered status unless it sets one of its own.
 Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.
+
+Both lists are readable back: `app.guards()` reports the filters and the error handlers the way `app.routes()` reports the routes, in xref:route-introspection.adoc#guards[Route Introspection].
