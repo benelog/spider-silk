@@ -14,7 +14,7 @@ tasks.register('publishAllPublicationsToGitHubPackagesRepository') {
 }
 
 subprojects {
-    group = 'io.github.benelog.spidersilk'
+    group = 'net.benelog.spidersilk'
     version = '0.1.0-SNAPSHOT'
 
     repositories {
@@ -50,14 +50,20 @@ configure(subprojects.findAll {
         withJavadocJar()
     }
 
-    // The module name is frozen API once released: spider-silk-core owns the
-    // spidersilk package, and each other module the subpackage it is named for.
+    // The module name is frozen API once released, and it is the module's package
+    // root: the name on the module path and the name in an import statement are
+    // the same string. spider-silk-core owns net.benelog.spidersilk, and each
+    // other module the subpackage it is named for, with a hyphen in the project
+    // name standing for the package separator it reads as —
+    // spider-silk-jetty-websocket holds net.benelog.spidersilk.jetty.websocket.
     jar {
         manifest {
             attributes('Automatic-Module-Name':
                     project.name == 'spider-silk-core'
-                            ? 'spidersilk'
-                            : 'spidersilk.' + project.name.substring('spider-silk-'.length()))
+                            ? 'net.benelog.spidersilk'
+                            : 'net.benelog.spidersilk.'
+                                    + project.name.substring('spider-silk-'.length())
+                                            .replace('-', '.'))
         }
     }
 

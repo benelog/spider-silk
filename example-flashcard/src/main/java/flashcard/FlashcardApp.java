@@ -20,16 +20,16 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.support.EncodedResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
-import spidersilk.App;
-import spidersilk.Route;
-import spidersilk.Cors;
-import spidersilk.HttpStatus;
-import spidersilk.JteTemplates;
-import spidersilk.SecurityHeaders;
-import spidersilk.TemplateRenderer;
-import spidersilk.WebResponse;
-import spidersilk.openapi.OpenApi;
-import spidersilk.server.JettyServer;
+import net.benelog.spidersilk.App;
+import net.benelog.spidersilk.Route;
+import net.benelog.spidersilk.Cors;
+import net.benelog.spidersilk.HttpStatus;
+import net.benelog.spidersilk.JteTemplates;
+import net.benelog.spidersilk.SecurityHeaders;
+import net.benelog.spidersilk.TemplateRenderer;
+import net.benelog.spidersilk.WebResponse;
+import net.benelog.spidersilk.openapi.OpenApi;
+import net.benelog.spidersilk.server.JettyServer;
 
 import flashcard.service.CsvFormatException;
 import flashcard.web.ApiController;

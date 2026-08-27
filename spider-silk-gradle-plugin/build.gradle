@@ -3,7 +3,7 @@ plugins {
     id 'maven-publish'
 }
 
-group = 'io.github.benelog.spidersilk'
+group = 'net.benelog.spidersilk'
 version = '0.1.0-SNAPSHOT'
 
 repositories {
@@ -41,8 +41,8 @@ tasks.withType(Test).configureEach {
 gradlePlugin {
     plugins {
         spiderSilk {
-            id = 'io.github.benelog.spidersilk'
-            implementationClass = 'spidersilk.gradle.SpiderSilkPlugin'
+            id = 'net.benelog.spidersilk'
+            implementationClass = 'net.benelog.spidersilk.gradle.SpiderSilkPlugin'
         }
     }
 }

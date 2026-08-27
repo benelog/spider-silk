@@ -12,8 +12,8 @@ import java.util.zip.GZIPInputStream;
 
 import org.junit.jupiter.api.Test;
 
-import spidersilk.test.TestClient;
-import spidersilk.test.WebTest;
+import net.benelog.spidersilk.test.TestClient;
+import net.benelog.spidersilk.test.WebTest;
 
 import flashcard.repository.RepositoryTestSupport;
 

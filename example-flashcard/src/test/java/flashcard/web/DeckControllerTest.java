@@ -2,9 +2,9 @@ package flashcard.web;
 
 import org.junit.jupiter.api.Test;
 
-import spidersilk.HttpStatus;
-import spidersilk.WebResponse;
-import spidersilk.test.TestRequest;
+import net.benelog.spidersilk.HttpStatus;
+import net.benelog.spidersilk.WebResponse;
+import net.benelog.spidersilk.test.TestRequest;
 
 import flashcard.domain.Deck;
 import flashcard.repository.CardRepository;

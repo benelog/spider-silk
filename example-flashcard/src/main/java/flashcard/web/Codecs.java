@@ -2,9 +2,9 @@ package flashcard.web;
 
 import java.util.List;
 
-import spidersilk.json.Json;
-import spidersilk.json.JsonReader;
-import spidersilk.json.JsonWriter;
+import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonReader;
+import net.benelog.spidersilk.json.JsonWriter;
 
 import flashcard.domain.CardWithTags;
 import flashcard.domain.Deck;
@@ -15,7 +15,7 @@ import flashcard.domain.DeckSummary;
  *
  * <p>These live in the web layer rather than on the records themselves: a codec
  * on {@link Deck} would make {@code flashcard.domain} import
- * {@code spidersilk.json}, so the domain would depend on the web framework to
+ * {@code net.benelog.spidersilk.json}, so the domain would depend on the web framework to
  * state its own wire format. The tier that serves the JSON owns it.
  *
  * <p>Most of them are write-only — a deck summary goes out and never comes

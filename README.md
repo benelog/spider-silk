@@ -49,8 +49,8 @@ repositories {
 }
 
 dependencies {
-    implementation 'io.github.benelog.spidersilk:spider-silk-core:0.1.0-SNAPSHOT'
-    testImplementation 'io.github.benelog.spidersilk:spider-silk-test:0.1.0-SNAPSHOT'
+    implementation 'net.benelog.spidersilk:spider-silk-core:0.1.0-SNAPSHOT'
+    testImplementation 'net.benelog.spidersilk:spider-silk-test:0.1.0-SNAPSHOT'
 }
 ```
 
@@ -76,12 +76,12 @@ gpr.token=ghp_yourPersonalAccessToken
 
 <dependencies>
   <dependency>
-    <groupId>io.github.benelog.spidersilk</groupId>
+    <groupId>net.benelog.spidersilk</groupId>
     <artifactId>spider-silk-core</artifactId>
     <version>0.1.0-SNAPSHOT</version>
   </dependency>
   <dependency>
-    <groupId>io.github.benelog.spidersilk</groupId>
+    <groupId>net.benelog.spidersilk</groupId>
     <artifactId>spider-silk-test</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <scope>test</scope>
@@ -106,8 +106,8 @@ The matching credentials go in `~/.m2/settings.xml`, under the same `id`:
 ### Hello, world
 
 ```java
-import spidersilk.App;
-import spidersilk.WebResponse;
+import net.benelog.spidersilk.App;
+import net.benelog.spidersilk.WebResponse;
 
 public class Main {
 

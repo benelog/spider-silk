@@ -46,8 +46,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 29 | `spider-silk-openapi`: the route list as an OpenAPI document, outside core | ✅ shipped |
 | 30 | Route descriptions: an overload, not an annotation | ✅ shipped |
 | 31 | Pre-compressed `.br`/`.gz` siblings, named on `StaticFiles` | ✅ shipped |
+| 32 | One name for the group id, the package root, and the module name | ✅ shipped |
 
-Thirty-three of the thirty-four shipped.
+Thirty-four of the thirty-five shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 What was one entry — "WebSocket / SSE" — split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, WebSocket is a protocol upgrade and does not.
 
@@ -116,7 +117,7 @@ The four decisions:
   Most codecs are write-only, and a combined interface would make those fill `read` with `UnsupportedOperationException`.
   Split, each half is a SAM and therefore a lambda — which is also why `JsonCodec.of(writer, reader)` exists, since a two-method interface cannot be a lambda at all.
 - **Codecs live in the web layer**, not on the record.
-  A codec on `Deck` would make the domain import `spidersilk.json.Json` — the domain depending on the web framework to state its own wire format.
+  A codec on `Deck` would make the domain import `net.benelog.spidersilk.json.Json` — the domain depending on the web framework to state its own wire format.
   Core ships the interfaces only; where codecs sit is a convention the example demonstrates.
 - **Collections compose** through `JsonWriter.list(...)` and friends: function composition, no reflection.
 - **`read` throws, and `req.bodyJson(reader)` turns `IllegalArgumentException` into a 400.**
@@ -367,7 +368,7 @@ No `redirectPermanent(...)` convenience method.
 ### 25. `spider-silk-gradle-plugin`: packaging conventions, in an included build
 
 The example's build file had grown a packaging block any application would copy verbatim: jte precompilation with its native-resources extension, Jib with a JRE base and a restated `targetCompatibility`, the `-Pnative` switch with the task dependency Jib's extension forgets to declare, and a `resolveDependencies` task for Dockerfile layer caching.
-Code copied unchanged into every consumer is a convention plugin by definition, so it became one: `io.github.benelog.spidersilk`, an included build so the example applies it exactly as a published application would.
+Code copied unchanged into every consumer is a convention plugin by definition, so it became one: `net.benelog.spidersilk`, an included build so the example applies it exactly as a published application would.
 
 The no-reflection principle is about the runtime, and this framework already puts its magic at build time — precompiled templates, generated reflect-config — so a build-time convention plugin extends the pattern rather than breaking it.
 The line it holds: only packaging every application shares goes in; the example's `domainReflectConfig` stays out, because it is the price of that app's reflective row mapper, not a shared convention.
@@ -515,6 +516,56 @@ Five decisions inside it:
 
 Unlike 27's stream wrapping, none of this touches the output stream — it is a file's bytes and two headers — so it is not mirrored onto the Tomcat and Undertow acceptance tests of 22 and 23.
 The external-directory half that used to sit beside this in the deferred list shipped separately, as `StaticFiles.directory(path)`.
+
+## 32 · The public surface, before 1.0
+
+### 32. One name — `net.benelog.spidersilk` — and a pass over what is public
+
+1.0 is the promise that what is public stays public and keeps its shape, so everything public becomes permanent on the day it is made.
+Nothing had ever been read with that in mind: a type was public because a caller in another package needed it, and a method was public because making it so was the shortest way past a compiler error.
+Two questions came out of that, and the second one had to wait for the first, since a package rename decides what half the answers are written in.
+
+**The name.**
+There were three of them for one thing: the group id `io.github.benelog.spidersilk`, the package root `spidersilk`, and a module name derived from the project name.
+They are now one string, `net.benelog.spidersilk`, and it is the group id, the package root, the `Automatic-Module-Name` in every manifest, and the Gradle plugin id.
+
+- **`net.benelog`, not `io.github.benelog`.**
+  `io.github.<user>` is the coordinate Maven Central lends to a publisher with no domain of its own, and this project has one: the manual is served from `spider-silk.benelog.net`.
+  A group id is a claim of ownership, and the domain is the thing owned; the GitHub handle is a name that moves if the account does.
+- **`net.benelog.spidersilk`, not `net.benelog`.**
+  The artifact ids already say `spider-silk-*`, so the shorter group would read fine — and it would put two group ids in one repository, because a Gradle plugin id has to be `net.benelog.spidersilk` whatever the jars use, and the plugin marker artifact's group *is* the plugin id.
+  A domain alone also stops distinguishing anything the moment a second project publishes under it.
+  Appending the project to the domain is what the multi-module projects a reader already knows do — `org.springframework.boot:spring-boot-*`, `org.eclipse.jetty:jetty-*` — and it is what makes the group id and the package root the same string, which is the whole point of the exercise.
+- **The module name is the package root, hyphens read as dots.**
+  It used to be `'spidersilk.' + project.name.substring('spider-silk-'.length())`, which for `spider-silk-jetty-websocket` produced `spidersilk.jetty-websocket` — not a legal Java module name, so that jar was unusable on the module path, while its package was `spidersilk.jetty.websocket` all along.
+  The hyphen in a project name is the package separator it reads as, so it is substituted for one: the name a build writes on the module path and the name a source file writes in an `import` are now the same string, which is the property that made the alignment worth doing.
+
+**What is public.**
+The pass found less to close than expected, because most of the surface was already deliberate, and the useful outcome was writing down *why* in the places where the answer is "it stays".
+
+- **`RouteGroup.resolve(String)` is private.**
+  The one method that was public for no reason: nothing outside the class ever called it, and it is how a group builds the path it hands to `App`, not something a caller holding a group has a use for.
+- **`WebRequest`'s constructor stays public, with the reason restated.**
+  It carried `Public so a test can build a request and call a handler method directly`, which names a caller instead of a contract — and a contract stated as "for tests" is one nobody can tell the boundaries of.
+  What is true is that anything holding a servlet request and knowing what the path variables should be can build the argument a handler takes; `TestRequest` in `spider-silk-test` is one such caller, in another module, which is why the constructor cannot be anything narrower.
+- **`raw()` stays, documented as what it costs.**
+  Core itself reads through it, and `WebResponse.raw(...)` already blesses raw servlet access on the way out, so removing the one on the way in would leave a one-directional escape hatch.
+  What it is missing is the warning: what is read through it is read behind the framework's back — `accepts` records that an answer varies by `Accept` and reading the header directly does not, a body consumed there is a body `body()` can no longer read — and a handler that uses it is tied to the servlet API rather than to this one.
+- **What escapes is frozen where freezing it is possible.**
+  Two leaks were real. `queryParams(name)` handed back the live `ArrayList` out of the map cached on the request, so a caller that altered it altered what every later read of that request saw; and `cookies()` built a fresh `LinkedHashMap` and handed it over unwrapped.
+  Both are frozen now — `Collections.unmodifiableMap` and not `Map.copyOf`, since the order the request sent them in is part of the answer.
+  Where the element is mutable by nature the javadoc says so instead: a `jakarta` `Cookie` is a mutable object and `WebResponse.cookies()` hands back the ones it was given, the `byte[]` of a `Bytes` body is held rather than copied because a download's second copy is exactly the cost the byte array was avoiding, and a `Template`'s model is held because a template model takes null values that the unmodifiable copies refuse.
+  A caveat a reader can act on beats a defensive copy that quietly doubles the memory of the one case that cannot afford it.
+- **`AppServlet` stays non-final, and now says why.**
+  A `web.xml` names a class and calls the no-argument constructor the container requires, so a subclass that builds its `App` and passes it up is the only way to deploy that way at all.
+  What the subclass gets is the servlet lifecycle and nothing else: `dispatch` and `write` are private, so the two halves of decision 18's split are not an extension point.
+- **`net.benelog.spidersilk.server` and `net.benelog.spidersilk.test` were read and left as they are.**
+  The server package is decision 2's seam — `WebServer`, `WebServerFactory`, and the bundled `JettyServer` — and it sitting in core while `TomcatServer` sits in a module named after its server is the asymmetry of *being the default*, not an oversight: core's server is core's, and the ones core does not bundle name what they are tied to.
+  In the test package `StubServletRequest` and `TestClient`'s constructor were already package-private, and the three public types are the three a test calls.
+
+**Not yet: japicmp or revapi.**
+Binary-compatibility tooling compares a build against a baseline, and there is no released baseline to compare against until 1.0 exists.
+It belongs to the release after this one, when the first frozen surface is on a repository somewhere.
 
 ## Rejected — decisions, with the reason
 

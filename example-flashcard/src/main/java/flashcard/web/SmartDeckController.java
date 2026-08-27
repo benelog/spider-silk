@@ -1,7 +1,7 @@
 package flashcard.web;
 
-import spidersilk.WebRequest;
-import spidersilk.WebResponse;
+import net.benelog.spidersilk.WebRequest;
+import net.benelog.spidersilk.WebResponse;
 
 import flashcard.domain.SmartCondition;
 import flashcard.service.SmartDeckService;

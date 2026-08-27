@@ -6,8 +6,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
-import spidersilk.JteTemplates;
-import spidersilk.Route;
+import net.benelog.spidersilk.JteTemplates;
+import net.benelog.spidersilk.Route;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

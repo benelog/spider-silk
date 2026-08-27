@@ -1,5 +1,5 @@
 plugins {
-    id 'io.github.benelog.spidersilk'
+    id 'net.benelog.spidersilk'
 }
 
 // The spider-silk plugin (an included build here, a published plugin for an

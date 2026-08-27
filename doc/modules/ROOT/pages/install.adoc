@@ -100,8 +100,8 @@ The matching credentials go in `~/.m2/settings.xml` either way, under the same `
 
 [source,java]
 ----
-import spidersilk.App;
-import spidersilk.WebResponse;
+import net.benelog.spidersilk.App;
+import net.benelog.spidersilk.WebResponse;
 
 public class Main {
 
@@ -125,3 +125,25 @@ To deploy on an external servlet container instead, see xref:deployment.adoc[Dep
 Templates render with jte out of the box; xref:freemarker.adoc[FreeMarker], xref:handlebars.adoc[Handlebars], and xref:thymeleaf.adoc[Thymeleaf] are modules of their own, added the same way.
 WebSocket endpoints are xref:websocket.adoc[`spider-silk-jetty-websocket`], a module of its own too, and Jetty-only.
 So is xref:openapi.adoc[`spider-silk-openapi`], which turns the route list into an OpenAPI document.
+
+[#names]
+== Coordinates, packages, and module names
+
+`{project-group}` is one string used three ways, on purpose.
+
+[cols="1,3",options="header"]
+|===
+| Where | What it is
+
+| Group id
+| `{project-group}`, with the module's own name as the artifact id — `{project-group}:spider-silk-core`
+
+| Package root
+| `{project-group}`, with core owning it and each other module a subpackage — `{project-group}.tomcat`, `{project-group}.jetty.websocket`
+
+| `Automatic-Module-Name`
+| The package root the jar carries, so `import` and the module path spell the same name — `{project-group}`, `{project-group}.tomcat`, `{project-group}.jetty.websocket`
+|===
+
+The xref:gradle-plugin.adoc[Gradle plugin] is applied by that same id, `{project-group}`, and the xref:maven-parent.adoc[Maven parent] is `{project-group}:spider-silk-maven-parent`.
+The reasoning is https://github.com/benelog/spider-silk/blob/main/docs/decisions.md[decision 32].

@@ -1,8 +1,8 @@
 package flashcard.web;
 
-import spidersilk.HttpStatus;
-import spidersilk.WebRequest;
-import spidersilk.WebResponse;
+import net.benelog.spidersilk.HttpStatus;
+import net.benelog.spidersilk.WebRequest;
+import net.benelog.spidersilk.WebResponse;
 
 import flashcard.domain.Deck;
 import flashcard.service.CardService;

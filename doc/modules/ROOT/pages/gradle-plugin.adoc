@@ -2,12 +2,12 @@
 :navtitle: The Gradle Plugin
 
 An application that containerizes with Jib, precompiles its templates, and perhaps compiles to a native binary ends up restating the same packaging block in every build file.
-The `io.github.benelog.spidersilk` plugin carries that block, so the build states only what is the application's own: the main class, the image name, and the native binary's resources.
+The `net.benelog.spidersilk` plugin carries that block, so the build states only what is the application's own: the main class, the image name, and the native binary's resources.
 
 [source,groovy,subs="attributes+"]
 ----
 plugins {
-    id 'io.github.benelog.spidersilk' version '{project-version}'
+    id 'net.benelog.spidersilk' version '{project-version}'
 }
 
 spiderSilk {

@@ -3,8 +3,8 @@ package flashcard.web;
 import java.util.HashMap;
 import java.util.Map;
 
-import spidersilk.WebRequest;
-import spidersilk.WebResponse;
+import net.benelog.spidersilk.WebRequest;
+import net.benelog.spidersilk.WebResponse;
 
 import flashcard.domain.Card;
 import flashcard.domain.SmartCondition;

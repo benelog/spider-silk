@@ -2,11 +2,11 @@ package flashcard.web;
 
 import org.junit.jupiter.api.Test;
 
-import spidersilk.HttpException;
-import spidersilk.HttpStatus;
-import spidersilk.WebResponse;
-import spidersilk.json.Json;
-import spidersilk.test.TestRequest;
+import net.benelog.spidersilk.HttpException;
+import net.benelog.spidersilk.HttpStatus;
+import net.benelog.spidersilk.WebResponse;
+import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.test.TestRequest;
 
 import flashcard.repository.CardRepository;
 import flashcard.repository.DeckRepository;

@@ -1,5 +1,5 @@
 @import java.util.List
-@import spidersilk.Route
+@import net.benelog.spidersilk.Route
 
 @param List<Route> routes
 

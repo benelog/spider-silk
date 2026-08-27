@@ -17,11 +17,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import spidersilk.App;
-import spidersilk.server.JettyServer;
-import spidersilk.server.WebServerFactory;
-import spidersilk.tomcat.TomcatServer;
-import spidersilk.undertow.UndertowServer;
+import net.benelog.spidersilk.App;
+import net.benelog.spidersilk.server.JettyServer;
+import net.benelog.spidersilk.server.WebServerFactory;
+import net.benelog.spidersilk.tomcat.TomcatServer;
+import net.benelog.spidersilk.undertow.UndertowServer;
 
 /**
  * The example app, served by each of the three servers in turn.

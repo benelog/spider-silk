@@ -3,9 +3,9 @@ package flashcard.web;
 import java.util.HashMap;
 import java.util.Map;
 
-import spidersilk.Handler;
-import spidersilk.WebRequest;
-import spidersilk.WebResponse;
+import net.benelog.spidersilk.Handler;
+import net.benelog.spidersilk.WebRequest;
+import net.benelog.spidersilk.WebResponse;
 
 import flashcard.service.DeckService;
 import flashcard.service.SmartDeckService;
