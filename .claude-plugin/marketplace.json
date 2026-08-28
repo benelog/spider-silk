@@ -1,0 +1,18 @@
+{
+  "name": "spider-silk",
+  "owner": {
+    "name": "Sanghyuk Jung",
+    "url": "https://github.com/benelog"
+  },
+  "metadata": {
+    "description": "Agent skill for the Spider Silk web framework",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "spider-silk",
+      "source": "./",
+      "description": "Build web applications with Spider Silk, the no-reflection Java web framework: dependency setup (GitHub Packages), routing, JSON, templates, testing, servers, and deployment."
+    }
+  ]
+}

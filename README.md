@@ -143,6 +143,18 @@ Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to
 | `spider-silk-openapi` | `OpenApi`, for the route list as an OpenAPI 3.1 document | core only |
 | `example-flashcard` | Example: a flashcard study app | core, spring-jdbc, H2 |
 
+## AI coding agents
+
+The repository ships an [Agent Skill](https://agentskills.io) that teaches coding agents the framework: [`skills/spider-silk/`](skills/spider-silk/SKILL.md).
+Claude Code installs it as a plugin:
+
+```
+/plugin marketplace add benelog/spider-silk
+/plugin install spider-silk@spider-silk
+```
+
+Codex, Cursor, and GitHub Copilot read the same directory once it is copied into their skill locations; the paths are in [the documentation](https://spider-silk.benelog.net/agent-skill.html).
+
 ## Further reading
 
 Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what it trades away to get there: [docs/positioning.md](docs/positioning.md).
