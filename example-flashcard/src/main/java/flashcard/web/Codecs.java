@@ -6,9 +6,11 @@ import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.json.JsonReader;
 import net.benelog.spidersilk.json.JsonWriter;
 
+import flashcard.domain.Card;
 import flashcard.domain.CardWithTags;
 import flashcard.domain.Deck;
 import flashcard.domain.DeckSummary;
+import flashcard.service.CardService.CardDraft;
 
 /**
  * The wire format of the JSON API, in one place.
@@ -52,4 +54,29 @@ final class Codecs {
             .put("tags", Json.arr().addAll(cardWithTags.tags()));
 
     static final JsonWriter<List<CardWithTags>> CARDS = JsonWriter.list(CARD);
+
+    /**
+     * One line of the NDJSON export. It is the card itself and not
+     * {@link #CARD}: an export streams a row at a time and cannot join the tags
+     * of each without a query per card.
+     *
+     * <p>{@code createdAt} goes out as its ISO-8601 text. {@code Json} takes
+     * strings, numbers, and booleans, so a date is a value the wire format
+     * decides on — here, explicitly, rather than through whatever a library
+     * would have picked.
+     */
+    static final JsonWriter<Card> CARD_ROW = card -> Json.obj()
+            .put("id", card.id())
+            .put("text", card.text())
+            .put("meaning", card.meaning())
+            .put("createdAt", card.createdAt().toString());
+
+    /**
+     * One line of the NDJSON import. {@code meaning} and {@code tags} are
+     * optional, so a line carrying only {@code text} is a whole card.
+     */
+    static final JsonReader<CardDraft> CARD_DRAFT = json -> new CardDraft(
+            json.asObject().getString("text"),
+            json.asObject().optString("meaning", ""),
+            json.asObject().optString("tags", ""));
 }

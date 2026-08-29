@@ -173,6 +173,10 @@ public class FlashcardApp {
             group.get("", "List every deck with its card count", api::listDecks);
             group.post("", "Create a deck", api::createDeck);
             group.get("/{deckId}/cards", "List the cards of one deck", api::listCards);
+            group.get("/{deckId}/cards.ndjson", "Export the cards of one deck as NDJSON",
+                    api::exportCards);
+            group.post("/{deckId}/cards.ndjson", "Import cards into one deck from NDJSON",
+                    api::importCards);
         });
 
         // 3. A lambda, for a handler with no state worth a class of its own. Both of
