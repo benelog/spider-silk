@@ -47,6 +47,7 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 30 | Route descriptions: an overload, not an annotation | ✅ shipped |
 | 31 | Pre-compressed `.br`/`.gz` siblings, named on `StaticFiles` | ✅ shipped |
 | 32 | One name for the group id, the package root, and the module name | ✅ shipped |
+| 33 | Streamed JSON and NDJSON, on the `Stream` body already there | ✅ shipped |
 
 Thirty-four of the thirty-five shipped.
 The remaining one is 15b, which is a decision rather than a gap.
@@ -566,6 +567,42 @@ The pass found less to close than expected, because most of the surface was alre
 **Not yet: japicmp or revapi.**
 Binary-compatibility tooling compares a build against a baseline, and there is no released baseline to compare against until 1.0 exists.
 It belongs to the release after this one, when the first frozen surface is on a repository somewhere.
+
+## 33 · JSON too big to hold
+
+### 33. Streamed JSON and NDJSON, on the `Stream` body already there
+
+`WebResponse.json(list, JsonWriter.list(w))` builds every element as a tree and then one string holding all of them, so a large answer is in memory twice before a byte of it is sent.
+That is the right trade for an answer that fits and the wrong one for an export.
+`jsonArray(sink -> ...)` and `ndjson(sink -> ...)` write the elements as they are produced, and `req.bodyNdjson(reader)` reads a body the same way.
+The decisions:
+
+- **No new `Body` kind.**
+  Both are a `WebResponse.stream(...)` body underneath, built by two static factories that supply the framing.
+  A seventh member of the sealed `Body` interface would have been a change every server module, every filter, and the compression had to answer for, in exchange for nothing the existing one does not already do.
+  What that inheritance costs is stated rather than fixed: the headers commit before the writer runs, a HEAD runs the writer to find the length, and gzip covers it — `application/x-ndjson` was added to `Gzip.DEFAULT_TYPES`.
+- **The framing belongs to the response, the mapping to the writer.**
+  A `JsonSink` takes one value at a time and the brackets, commas, and newlines are the factory's.
+  So the same hand-written `JsonWriter<T>` serves a held answer and a streamed one: this is a different way of framing output, not a different way of mapping it.
+- **`JsonSink.write` throws `UncheckedIOException`, not `IOException`.**
+  The values come from a database cursor, and a row callback is a `Consumer`.
+  A checked exception would have made `card -> sink.write(card, CARD)` illegal there and forced a wrapper at every call site — for an exception whose only meaning is that the client is gone and the response is already committed.
+  `req.body()` had set the precedent.
+- **NDJSON is bulk transfer; SSE stays the live one.**
+  Each line stands alone, so a consumer acts on record one without waiting for the last and a cut-off transfer leaves whole records rather than an unclosed document.
+  What it does not do is flush per value or reconnect, which is decision 15a's job and the boundary between the two.
+- **`bodyNdjson` is lazy, and says which line.**
+  A hundred thousand records are never a list, and a rejected line answers 400 naming it — the report a large body needs, which one big array cannot give.
+  The cost is that the failure happens where the stream is consumed, so it must be consumed before the response is returned; the javadoc says so.
+- **No streaming parser in core.**
+  `bodyJson()` builds the whole tree because a tree is what a hand-written `JsonReader` reads, and a pull parser would be a second JSON API to keep.
+  For a single document too large to hold, the answer is NDJSON; where the format is not the application's to choose, `bodyStream()` hands the bytes to a parser from another library.
+
+**And the seam for that library was written down.**
+`WebResponse.json(String)` and the new `bodyStream()`/`bodyReader()` are the whole of it, which the manual now has a page for.
+Hand-written mapping is core's decision for core, not for an application with a wire format it does not own.
+Worth recording is what an external binder does and does not keep: avaje-jsonb generates an adapter per type at compile time with no reflective fallback, so a native image needs no entry — but its field names still come from the record's components, so a rename changes the wire silently, which is the *stronger* promise the rejected `json(Object)` was rejected for.
+No reflection was never the whole rule; it was the mechanism by which the rule was kept.
 
 ## Rejected — decisions, with the reason
 
