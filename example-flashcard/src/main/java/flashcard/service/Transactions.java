@@ -45,4 +45,9 @@ public class Transactions {
     public <T> T read(Supplier<T> action) {
         return readTx.execute(status -> action.get());
     }
+
+    /** The same, for a read whose result goes somewhere else — a response stream. */
+    public void readVoid(Runnable action) {
+        readTx.executeWithoutResult(status -> action.run());
+    }
 }

@@ -1,5 +1,8 @@
 package flashcard.web;
 
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+
 import org.junit.jupiter.api.Test;
 
 import net.benelog.spidersilk.HttpException;
@@ -76,8 +79,72 @@ class ApiControllerTest extends RepositoryTestSupport {
                 .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 
+    @Test
+    void exportCardsWritesOneCardPerLine() throws Exception {
+        long deckId = deckService.createDeck("French").id();
+        cardService.addCard(deckId, "pomme", "apple", "fruit");
+        cardService.addCard(deckId, "poire", "pear", "");
+
+        WebResponse response = controller.exportCards(TestRequest.get("/api/decks/1/cards.ndjson")
+                .pathParam("deckId", String.valueOf(deckId))
+                .build());
+
+        assertThat(response.header("Content-Type")).isEqualTo("application/x-ndjson");
+        String[] lines = streamedBody(response).split("\n");
+        assertThat(lines).hasSize(2);
+        assertThat(Json.parse(lines[0]).asObject().getString("text")).isEqualTo("pomme");
+        assertThat(Json.parse(lines[1]).asObject().getString("text")).isEqualTo("poire");
+    }
+
+    @Test
+    void importCardsReadsOneCardPerLineAndSkipsBlankOnes() {
+        long deckId = deckService.createDeck("French").id();
+
+        WebResponse response = controller.importCards(
+                TestRequest.post("/api/decks/1/cards.ndjson")
+                        .pathParam("deckId", String.valueOf(deckId))
+                        .body("""
+                                {"text":"pomme","meaning":"apple","tags":"fruit"}
+
+                                {"text":"poire"}
+                                """)
+                        .build());
+
+        assertThat(Json.parse(body(response)).asObject().getLong("imported")).isEqualTo(2);
+        assertThat(cardService.cardsWithTags(deckId)).hasSize(2);
+    }
+
+    /** The whole import is one transaction, so a bad line leaves the deck as it was. */
+    @Test
+    void aRejectedLineIsA400AndRollsTheImportBack() {
+        long deckId = deckService.createDeck("French").id();
+
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> controller.importCards(
+                        TestRequest.post("/api/decks/1/cards.ndjson")
+                                .pathParam("deckId", String.valueOf(deckId))
+                                .body("""
+                                        {"text":"pomme"}
+                                        {"meaning":"pear"}
+                                        """)
+                                .build()))
+                .satisfies(e -> {
+                    assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(e.getMessage()).contains("Line 2");
+                });
+
+        assertThat(cardService.cardsWithTags(deckId)).isEmpty();
+    }
+
     /** A JSON response carries its document as text, which is what to assert on. */
     private static String body(WebResponse response) {
         return ((WebResponse.Text) response.body()).content();
+    }
+
+    /** A streamed body is produced by running its writer, which is what the servlet does. */
+    private static String streamedBody(WebResponse response) throws Exception {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ((WebResponse.Stream) response.body()).writer().write(out);
+        return out.toString(StandardCharsets.UTF_8);
     }
 }

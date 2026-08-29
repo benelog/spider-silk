@@ -5,10 +5,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 import javax.sql.DataSource;
 
 import org.springframework.jdbc.core.DataClassRowMapper;
+import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SimplePropertySqlParameterSource;
@@ -66,6 +68,21 @@ public class CardRepository {
                 from card
                 where id = :id
                 """.formatted(COLUMNS), Map.of("id", id), MAPPER).stream().findFirst();
+    }
+
+    /**
+     * The same query handed a row at a time instead of collected into a list.
+     * A RowCallbackHandler never builds the list, so the export of a deck with a
+     * hundred thousand cards costs one card of memory rather than all of them.
+     */
+    public void eachByDeckId(Long deckId, Consumer<Card> handler) {
+        jdbc.query("""
+                select %s
+                from card
+                where deck_id = :deckId
+                order by id
+                """.formatted(COLUMNS), Map.of("deckId", deckId),
+                (RowCallbackHandler) rs -> handler.accept(MAPPER.mapRow(rs, rs.getRow())));
     }
 
     public List<Card> findByDeckId(Long deckId) {

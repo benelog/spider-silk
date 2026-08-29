@@ -2,9 +2,12 @@ package flashcard.service;
 
 import java.time.LocalDateTime;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import flashcard.domain.Card;
 import flashcard.domain.CardTagName;
@@ -70,6 +73,44 @@ public class CardService {
                             tagsByCard.getOrDefault(card.id(), List.of())))
                     .toList();
         });
+    }
+
+    /** One card of an import, before it has an id. */
+    public record CardDraft(String text, String meaning, String tags) {
+    }
+
+    /**
+     * A bulk import read as it arrives: the drafts are a lazy stream over the
+     * request body, so a file of a hundred thousand cards is never a list.
+     *
+     * <p>The whole import is one transaction, which is what makes a malformed
+     * line safe: the exception it throws leaves this method, the transaction
+     * rolls back, and the client is told which line rather than being left with
+     * a deck half filled.
+     */
+    public int importCards(Long deckId, Stream<CardDraft> drafts) {
+        return tx.write(() -> {
+            int imported = 0;
+            Iterator<CardDraft> remaining = drafts.iterator();
+            while (remaining.hasNext()) {
+                CardDraft draft = remaining.next();
+                Card card = cardRepository.insert(
+                        Card.create(deckId, draft.text(), draft.meaning(), LocalDateTime.now()));
+                attachTags(card.id(), draft.tags());
+                imported++;
+            }
+            return imported;
+        });
+    }
+
+    /**
+     * Every card of a deck, handed over one at a time rather than returned as a
+     * list — the read side of the same idea, for an export that streams.
+     * Tags are left out: this is the bulk shape, and joining them per row is the
+     * N+1 query {@link #cardsWithTags} exists to avoid.
+     */
+    public void eachCard(Long deckId, Consumer<Card> handler) {
+        tx.readVoid(() -> cardRepository.eachByDeckId(deckId, handler));
     }
 
     public List<String> tagsOf(Long cardId) {
