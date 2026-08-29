@@ -1,0 +1,95 @@
+= Large JSON and NDJSON
+:navtitle: Large JSON and NDJSON
+
+`WebResponse.json(list, JsonWriter.list(CARD))` builds every element as a tree, then one string holding all of them, and only then writes a byte.
+A hundred thousand cards are therefore in memory twice before the client sees the first one.
+That is the right trade for an answer that fits — it is one line, and the length is known so the response can be sized — and the wrong one for an answer that does not.
+
+Two response kinds write the elements as they are produced instead.
+
+== A streamed array
+
+`WebResponse.jsonArray(sink -> ...)` answers with an ordinary JSON array — `application/json`, the same document a held one would have produced — written a value at a time:
+
+[source,java]
+----
+app.get("/api/decks/{deckId}/cards", req -> {
+    long deckId = req.pathParamLong("deckId");
+    return WebResponse.jsonArray(sink -> cardService.eachCard(deckId,
+            card -> sink.write(card, Codecs.CARD_ROW)));
+});
+----
+
+The brackets and the commas belong to the response, so the writer says only what the next element is, and the largest thing alive is one element.
+An array nothing was written to is still an array: `[]`.
+
+`sink.write(value, writer)` takes the same hand-written `JsonWriter<T>` as everything else — this is a different way of framing the output, not a different way of mapping it.
+Writing throws `UncheckedIOException` rather than a checked `IOException`, which is what lets `card -> sink.write(card, CARD)` be an ordinary `Consumer` and sit inside a row callback over a database cursor.
+
+== NDJSON
+
+`WebResponse.ndjson(sink -> ...)` writes one complete JSON value per line as `application/x-ndjson`:
+
+[source,java]
+----
+app.get("/api/decks/{deckId}/cards.ndjson", req -> {
+    long deckId = req.pathParamLong("deckId");
+    return WebResponse.ndjson(sink -> cardService.eachCard(deckId,
+            card -> sink.write(card, Codecs.CARD_ROW)));
+});
+----
+
+----
+{"id":1,"text":"pomme","meaning":"apple","createdAt":"2026-03-01T09:00:00"}
+{"id":2,"text":"poire","meaning":"pear","createdAt":"2026-03-01T09:01:00"}
+----
+
+The reason to prefer it over an array for bulk data is what a reader can do with a partial answer.
+Each line stands alone, so a consumer acts on record one without waiting for record one hundred thousand, and a transfer that is cut off leaves complete records rather than a document missing its closing bracket.
+A value can never contain a newline of its own: `Json` escapes one inside a string as `\n` and puts no whitespace between members.
+
+This is bulk transfer, not live events.
+It ends when the data ends, and nothing flushes between lines beyond what the container's buffer decides.
+A stream that stays open because more will happen later is xref:sse.adoc[Server-Sent Events], which flushes per event and reconnects.
+
+== Reading NDJSON
+
+`req.bodyNdjson(reader)` is the other direction, and it is lazy: the body is parsed as the stream is consumed, so an upload of a hundred thousand records is never a list.
+
+[source,java]
+----
+app.post("/api/decks/{deckId}/cards.ndjson", req -> {
+    long deckId = req.pathParamLong("deckId");
+    int imported = cardService.importCards(deckId, req.bodyNdjson(Codecs.CARD_DRAFT));
+    return WebResponse.json(Json.obj().put("imported", imported));
+});
+----
+
+Blank lines are skipped.
+A line that is not valid JSON, or that the reader rejects, answers 400 naming the line — which is the other reason to read NDJSON rather than one large array: the report says where the body went wrong, not just that it did.
+
+Because the stream is lazy, those failures happen where it is consumed.
+Consume it before returning the response.
+Inside a `stream` or `ndjson` writer the headers are already committed and a 400 can no longer be sent.
+
+Reading the whole import inside one transaction is what makes a malformed line safe: the exception leaves the service, the transaction rolls back, and the client is told which line rather than being left with a deck half filled.
+
+== What the streamed kinds inherit
+
+Both are a `WebResponse.stream(...)` body underneath — no new body kind, so nothing in the servers, the filters, or the compression had to learn about them.
+That inheritance is the whole list of caveats:
+
+* **The headers are committed before the writer runs.**
+  A failure partway through can no longer change the status into an error the client would understand.
+  Anything that can fail in a way the client should hear about — a missing deck, an unauthorized caller — belongs before the response is returned.
+  The example looks the deck up first for exactly this reason.
+* **A HEAD runs the writer.**
+  Only producing the body says how long it would have been, and running the writer is also what closes whatever it opened.
+* **gzip covers them.**
+  `application/json` and `application/x-ndjson` are both in `Gzip.DEFAULT_TYPES`, and a streamed body is compressed as it goes with the `Content-Length` dropped.
+
+== Reading a single large document
+
+There is no streaming *parser* in core: `req.bodyJson()` builds the whole tree, because a tree is what a hand-written `JsonReader` reads.
+For a single JSON document too large to hold, the shape to reach for is NDJSON — one value per line is a large body that never needs one.
+Where the format is not yours to choose, `req.bodyStream()` hands over the bytes unread for a streaming parser from another library: see xref:json-interop.adoc[External JSON Binding].

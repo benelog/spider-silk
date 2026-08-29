@@ -12,6 +12,8 @@
 
 * Content
 ** xref:json.adoc[JSON]
+*** xref:large-json.adoc[Large JSON and NDJSON]
+*** xref:json-interop.adoc[External JSON Binding]
 ** xref:templates.adoc[Templates]
 *** xref:freemarker.adoc[FreeMarker]
 *** xref:handlebars.adoc[Handlebars]

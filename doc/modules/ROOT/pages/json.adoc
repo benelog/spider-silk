@@ -43,3 +43,10 @@ A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
 
 Most types only go out, which is why the two halves are separate interfaces rather than one with an unimplementable `read`.
 When a type does travel both ways, `JsonCodec<T>` is both at once: `JsonCodec.of(writer, reader)` to build one, `JsonCodec.list(codec)` for the list form.
+
+== Where this stops being enough
+
+`WebResponse.json(value, writer)` builds the whole document in memory before sending any of it, which an answer of a hundred thousand rows cannot afford: xref:large-json.adoc[Large JSON and NDJSON] writes one value at a time instead, and reads a body the same way.
+
+Writing the mapping by hand is core's decision for core, not for the application.
+An app with a wire format it does not own can bind objects with a library through the same seam every other page uses: xref:json-interop.adoc[External JSON Binding].
