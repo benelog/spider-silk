@@ -1,5 +1,12 @@
 package net.benelog.spidersilk;
 
+import java.io.BufferedWriter;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.io.UncheckedIOException;
+import java.io.Writer;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -11,6 +18,8 @@ import java.util.Objects;
 import jakarta.servlet.http.Cookie;
 
 import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonSink;
+import net.benelog.spidersilk.json.JsonStreamWriter;
 import net.benelog.spidersilk.json.JsonWriter;
 
 /**
@@ -137,6 +146,74 @@ public final class WebResponse {
     /** A value written as JSON through a hand-written writer. */
     public static <T> WebResponse json(T value, JsonWriter<T> writer) {
         return json(writer.write(value));
+    }
+
+    /**
+     * A JSON array written one element at a time, for an answer too big to hold
+     * as a tree. The brackets and the commas are this method's; the writer says
+     * only what the next element is.
+     *
+     * <pre>{@code
+     * app.get("/api/decks/{deckId}/cards", req -> {
+     *     long deckId = req.pathParamLong("deckId");
+     *     return WebResponse.jsonArray(sink -> service.eachCard(deckId,
+     *             card -> sink.write(card, Codecs.CARD)));
+     * });
+     * }</pre>
+     *
+     * <p>What this buys is memory: {@code json(list, JsonWriter.list(w))} builds
+     * every element as a tree and then one string holding all of them, so a
+     * large answer is held twice before a byte of it is sent. Here the largest
+     * thing alive is one element.
+     *
+     * <p>It is a {@link #stream(String, StreamWriter)} body underneath, so the
+     * same rule applies: the headers are committed before the writer runs, and a
+     * failure partway through can no longer change the status into an error the
+     * client would understand. It also means a HEAD runs the writer to find the
+     * length, and that gzip covers it like any other JSON.
+     */
+    public static WebResponse jsonArray(JsonStreamWriter writer) {
+        Objects.requireNonNull(writer, "writer");
+        return stream("application/json", out -> {
+            Writer text = textWriter(out);
+            ArraySink sink = new ArraySink(text);
+            writer.write(sink);
+            sink.close();
+            text.flush();
+        });
+    }
+
+    /**
+     * Newline-delimited JSON: one complete JSON value per line,
+     * {@code application/x-ndjson}. A reader can act on each line as it lands
+     * without waiting for the end, and can stop reading without having parsed a
+     * document that was never closed — which a truncated JSON array cannot
+     * offer.
+     *
+     * <pre>{@code
+     * app.get("/api/decks/{deckId}/cards.ndjson", req -> {
+     *     long deckId = req.pathParamLong("deckId");
+     *     return WebResponse.ndjson(sink -> service.eachCard(deckId,
+     *             card -> sink.write(card, Codecs.CARD)));
+     * });
+     * }</pre>
+     *
+     * <p>This is bulk transfer, not live events: it ends when the data ends, and
+     * nothing flushes between lines beyond what the container's buffer decides.
+     * A stream that stays open because more will happen later is
+     * {@link #sse(SseWriter)}, which flushes per event and reconnects.
+     *
+     * <p>A value written here must not contain a newline of its own, and none
+     * can: {@code Json} escapes one inside a string as {@code \n} and puts no
+     * whitespace between members.
+     */
+    public static WebResponse ndjson(JsonStreamWriter writer) {
+        Objects.requireNonNull(writer, "writer");
+        return stream("application/x-ndjson", out -> {
+            Writer text = textWriter(out);
+            writer.write(new LinesSink(text));
+            text.flush();
+        });
     }
 
     public static WebResponse bytes(byte[] data, String contentType) {
@@ -461,6 +538,62 @@ public final class WebResponse {
      */
     private static Map<String, String> unmodifiable(Map<String, String> fresh) {
         return Collections.unmodifiableMap(fresh);
+    }
+
+    /**
+     * The response body is bytes and JSON is text, and the elements arrive one
+     * at a time — so the encoder is buffered rather than encoding each element
+     * on its own.
+     */
+    private static Writer textWriter(OutputStream out) {
+        return new BufferedWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8), 8192);
+    }
+
+    /** Framing for {@link #jsonArray}: the brackets, and a comma between elements. */
+    private static final class ArraySink implements JsonSink {
+
+        private final Writer out;
+        private boolean started;
+
+        ArraySink(Writer out) {
+            this.out = out;
+        }
+
+        @Override
+        public void write(Json.JsonValue value) {
+            try {
+                out.write(started ? ',' : '[');
+                started = true;
+                out.write(value.toJson());
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
+
+        /** An array nothing was written to is still an array: {@code []}. */
+        void close() throws IOException {
+            out.write(started ? "]" : "[]");
+        }
+    }
+
+    /** Framing for {@link #ndjson}: a newline after every value, including the last. */
+    private static final class LinesSink implements JsonSink {
+
+        private final Writer out;
+
+        LinesSink(Writer out) {
+            this.out = out;
+        }
+
+        @Override
+        public void write(Json.JsonValue value) {
+            try {
+                out.write(value.toJson());
+                out.write('\n');
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }
     }
 
     private static Cookie defaultCookie(String name, String value) {
