@@ -1,6 +1,8 @@
 package net.benelog.spidersilk;
 
+import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.net.URLDecoder;
@@ -11,6 +13,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Stream;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -368,6 +372,84 @@ public final class WebRequest {
             return reader.read(json);
         } catch (IllegalArgumentException e) {
             throw new HttpException(HttpStatus.BAD_REQUEST, "Request body was rejected: " + e.getMessage());
+        }
+    }
+
+    /**
+     * The body as bytes, unread — what a streaming parser from another library
+     * wants, so a large upload is never held as one String first.
+     *
+     * <pre>{@code
+     * try (JsonParser parser = jackson.createParser(req.bodyStream())) {
+     *     ...
+     * }
+     * }</pre>
+     *
+     * <p>The servlet API allows one or the other, not both: a request that has
+     * already gone through {@link #body()}, {@link #bodyJson()},
+     * {@link #bodyNdjson}, or {@link #param} — all of which read characters —
+     * throws {@link IllegalStateException} here, and the reverse holds too.
+     * Whichever a handler picks, it picks once.
+     */
+    public InputStream bodyStream() {
+        try {
+            return req.getInputStream();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * The body as characters, unread, decoded with the charset the request
+     * declared. The counterpart of {@link #bodyStream()} for a library that
+     * reads text, and subject to the same one-or-the-other rule.
+     */
+    public BufferedReader bodyReader() {
+        try {
+            return req.getReader();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * Newline-delimited JSON: one value per line, read lazily, so a body of a
+     * million records is never in memory at once.
+     *
+     * <pre>{@code
+     * app.post("/api/decks/{deckId}/cards", req -> {
+     *     long deckId = req.pathParamLong("deckId");
+     *     int imported = cardService.addAll(deckId, req.bodyNdjson(Codecs.NEW_CARD).toList());
+     *     return WebResponse.json(Json.obj().put("imported", imported));
+     * });
+     * }</pre>
+     *
+     * <p>Blank lines are skipped, and a line that is not valid JSON or that the
+     * reader rejects answers 400 naming the line — which is the reason to read
+     * NDJSON rather than one big array when the body is large: the report says
+     * where the body went wrong, not just that it did.
+     *
+     * <p>The stream is lazy, so those failures happen where it is consumed. Do
+     * that before returning the response: inside a
+     * {@link WebResponse#stream(String, StreamWriter)} writer the headers are
+     * already committed and a 400 can no longer be sent.
+     */
+    public <T> Stream<T> bodyNdjson(JsonReader<T> reader) {
+        AtomicLong line = new AtomicLong();
+        return bodyReader().lines().<T>mapMulti((text, values) -> {
+            long number = line.incrementAndGet();
+            if (!text.isBlank()) {
+                values.accept(readLine(text, number, reader));
+            }
+        });
+    }
+
+    private static <T> T readLine(String text, long number, JsonReader<T> reader) {
+        try {
+            return reader.read(Json.parse(text));
+        } catch (IllegalArgumentException e) {
+            throw new HttpException(HttpStatus.BAD_REQUEST,
+                    "Line %d of the NDJSON body was rejected: %s".formatted(number, e.getMessage()));
         }
     }
 

@@ -55,6 +55,7 @@ public final class Gzip {
     public static final List<String> DEFAULT_TYPES = List.of(
             "text/",
             "application/json",
+            "application/x-ndjson",
             "application/javascript",
             "application/xml",
             "application/xhtml+xml",

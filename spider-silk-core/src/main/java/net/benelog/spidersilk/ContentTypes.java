@@ -10,6 +10,7 @@ final class ContentTypes {
             Map.entry("css", "text/css; charset=UTF-8"),
             Map.entry("js", "application/javascript; charset=UTF-8"),
             Map.entry("json", "application/json"),
+            Map.entry("ndjson", "application/x-ndjson"),
             Map.entry("txt", "text/plain; charset=UTF-8"),
             Map.entry("csv", "text/csv; charset=UTF-8"),
             Map.entry("svg", "image/svg+xml"),
