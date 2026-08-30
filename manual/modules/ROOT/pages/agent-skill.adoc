@@ -1,8 +1,9 @@
 = The Agent Skill
 :navtitle: The Agent Skill
 
-An AI coding agent that has never seen Spider Silk guesses, and a framework this deliberate is a bad place to guess: the artifacts live on GitHub Packages rather than Maven Central, JSON mapping is written rather than reflected, and the `Controller` interface an agent invents out of habit is exactly what xref:handlers.adoc[Handlers] says not to build.
-So the repository carries an agent skill: `skills/spider-silk/` at the root, in the https://agentskills.io[Agent Skills] format — a `SKILL.md` the agent loads once a task touches the framework, and reference files it reads only as the task needs them.
+The repository carries an agent skill at `skills/spider-silk/`, in the https://agentskills.io[Agent Skills] format: a `SKILL.md` the agent loads once a task touches the framework, and reference files it reads only as the task needs them.
+An AI coding agent that has never seen Spider Silk guesses, and a framework this deliberate is a bad place to guess.
+The artifacts live on GitHub Packages rather than Maven Central, JSON mapping is written rather than reflected, and the `Controller` interface an agent invents out of habit is exactly what xref:handlers.adoc[Handlers] says not to build.
 The skill is distilled from this manual, and the manual stays the source of truth: a question the skill cannot settle is answered here, and a release that changes an API changes the skill alongside it.
 
 == Claude Code
@@ -17,7 +18,7 @@ The repository doubles as a plugin marketplace, so installation is two commands 
 
 The skill then loads on demand in every project, and `/plugin` is also where updating and removing it live.
 
-For a single project instead — a repository whose collaborators should get the skill by cloning, with no install step of their own — copy the skill directory into the project's `.claude/skills/`:
+Copy the skill directory into the project's `.claude/skills/` for a single project instead, so that collaborators get the skill by cloning and install nothing of their own:
 
 [source,bash,subs="attributes+"]
 ----
@@ -51,13 +52,15 @@ A tool that discovers `SKILL.md` files — https://agentskills.io keeps the list
 == What is in it
 
 `SKILL.md` carries what every task needs: the framework's principles stated as rules an agent must not code against, the GitHub Packages authentication that is the most common first-run failure, and the core API at a glance.
-Five reference files carry the rest, one per territory — setup, the web API, content, servers and deployment, and testing — so an agent reads only the territory its task touches.
+Five reference files carry the rest, one per territory: setup, the web API, content, servers and deployment, and testing.
+An agent then reads only the territory its task touches.
 Nothing in the skill is new information: every statement is this manual, compressed for an agent's context window instead of a reader's screen.
 
 == The measured effect
 
-The skill was benchmarked (2026-08) by running the same three tasks twice — once with the skill installed, once without — on three Claude models, Fable 5, Opus 5, and Sonnet 5, and grading every result against eighteen behavioural assertions per arm.
-The tasks: a notes API built from an empty directory, a content-negotiation-plus-API-key change to a working app, and an SSE endpoint whose literal path had to be registered ahead of an existing `\{id}` route.
+The skill was benchmarked in 2026-08 by running the same three tasks twice, once with the skill installed and once without, on three Claude models: Fable 5, Opus 5, and Sonnet 5.
+Every result was graded against eighteen behavioural assertions per arm.
+The tasks were a notes API built from an empty directory, a content-negotiation-plus-API-key change to a working app, and an SSE endpoint whose literal path had to be registered ahead of an existing `\{id}` route.
 
 Every assertion passed in every run, with the skill and without, on all three models.
 An agent without the skill is not helpless: given the published jars, every model reconstructed the API by unpacking the sources jar or running `javap` over `~/.m2`, and found its way to `accepts`, the before-filter's null contract, and `WebResponse.sse` on its own.
@@ -66,10 +69,10 @@ What the skill changes is what that reconstruction costs.
 With the skill the same tasks completed with 12% fewer tokens on Fable 5, 16% fewer on Opus 5, and 22% fewer on Sonnet 5.
 The saving grows as the model tier goes down, because the reconstruction is what gets more expensive: the skill-less baseline cost 80k tokens per task on Fable, 100k on Opus, and 130k on Sonnet.
 Wall-clock time moved only three to six percent, because Gradle dominates it.
-So even on the top model tier, where correctness converges, the skill's advantage is token savings: the excavation an agent would otherwise repeat in every project is done once, in the skill.
+Even on the top model tier, where correctness converges, the skill's advantage is token savings: the excavation an agent would otherwise repeat in every project is done once, in the skill.
 
 Two effects never reached the pass rate but are worth recording.
-The skill-less agents, told the benchmark machine held the artifacts in mavenLocal, shipped builds that resolve nowhere else; the skill's agents declared the GitHub Packages repository and its credential pattern alongside.
-And the one run that stumbled into the registration-order trap fixed it by matching the failure to the skill's own warning, where the skill-less runs had to derive the rule from scratch before writing code.
+The skill-less agents, told the benchmark machine held the artifacts in mavenLocal, shipped builds that resolve nowhere else, where the skill's agents declared the GitHub Packages repository and its credential pattern alongside.
+The one run that stumbled into the registration-order trap fixed it by matching the failure to the skill's own warning, where the skill-less runs had to derive the rule from scratch before writing code.
 
 The numbers are single runs of each task on one machine, so read them as a shape, not a measurement.

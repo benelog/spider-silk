@@ -1,8 +1,8 @@
 = Route Introspection
 :navtitle: Route Introspection
 
-Routes are an explicit list, so the framework can hand it back: no annotation scanning, no plugin, no reflection.
-`app.routes()` is an immutable snapshot of `record Route(String method, String path, String description)`, in registration order, which is also the order the router breaks ties in:
+`app.routes()` hands the routing table back as data: an immutable snapshot of `record Route(String method, String path, String description)`, in registration order, which is also the order the router breaks ties in.
+Routes are an explicit list, so no annotation scanning, no plugin, and no reflection is involved:
 
 [source,java]
 ----
@@ -20,7 +20,8 @@ for (Route route : app.routes()) {
 }
 ----
 
-The handler is left out: it is a lambda, and the only name it has is what reflection would dig out of its synthetic class.
+The handler is left out.
+It is a lambda, and the only name it has is what reflection would dig out of its synthetic class.
 What is built on top of the list is left out too, because the list is plain data: the example app renders a `/_routes` overview page from it, and xref:openapi.adoc[`spider-silk-openapi`] turns the same list into an OpenAPI 3.1 document.
 
 The automatic HEAD and OPTIONS answers are not listed.
@@ -29,7 +30,7 @@ The automatic HEAD and OPTIONS answers are not listed.
 [#descriptions]
 == Descriptions
 
-What a route is _for_ is the one thing a method and a path do not say, and nothing but the registration knows it.
+A description states what a route is _for_, which is the one thing a method and a path do not say, and which nothing but the registration knows.
 Every registration method takes it as an optional second argument, on `App` and on a group alike:
 
 [source,java]
@@ -45,7 +46,8 @@ app.path("/api/decks", decks -> {
 It sits between the path and the handler so the handler stays last, where a lambda reads.
 A route registered without one reports `""` rather than null, so a reader can print `route.description()` without asking whether it is there.
 
-This is documentation written at the registration site, which is what an annotation is with the reflection taken out — deliberately, because the alternative is a second place to keep in step with the first.
+This is documentation written at the registration site, which is what an annotation is with the reflection taken out.
+That is deliberate, because the alternative is a second place to keep in step with the first.
 It stays a string argument and nothing more: the framework never reads it, and a route without one is registered, matched, and reported exactly as before.
 
 xref:openapi.adoc[`spider-silk-openapi`] writes a non-empty description as the operation's `summary`, and omits the field for a route that has none.
@@ -67,13 +69,15 @@ for (Guard guard : app.guards()) {
 }
 ----
 
-Three records rather than one with a kind, because a filter is scoped to a path and an error handler is scoped to a status, and a component that is null half the time would report that dishonestly.
+There are three records rather than one with a kind field, because a filter is scoped to a path and an error handler is scoped to a status, and a component that is null half the time would report that dishonestly.
 
-The list is grouped by when it runs — the before-filters, then the after-filters, then the error handlers — and within each group it is in registration order, which is the order they run in.
+The list is grouped by when it runs: the before-filters, then the after-filters, then the error handlers.
+Within each group it is in registration order, which is the order they run in.
 
 A filter's coverage is a pattern and not a path, and it is reported as one.
-`/admin/*` stays `/admin/*`, and covers `/admin` along with everything under it; `before(filter)` reports the `/*` it registers; a group's `decks.before(filter)` reports the resolved `/api/decks/*`.
-Matching a request against those patterns is the dispatcher's job, not this list's — what is exposed here is plain strings, the same as for routes.
+`/admin/*` stays `/admin/*`, and covers `/admin` along with everything under it.
+`before(filter)` reports the `/*` it registers, and a group's `decks.before(filter)` reports the resolved `/api/decks/*`.
+Matching a request against those patterns is the dispatcher's job, not this list's: what is exposed here is plain strings, the same as for routes.
 An audit of which paths a guard leaves open is built on top of the list, the way xref:openapi.adoc[the OpenAPI export] is built on `routes()`.
 
 The `exception(Type, handler)` handlers are not listed.

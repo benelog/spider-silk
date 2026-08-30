@@ -2,10 +2,12 @@
 :navtitle: OpenAPI Export
 
 `spider-silk-openapi` turns xref:route-introspection.adoc[`app.routes()`] into an OpenAPI 3.1 document.
-It is a reader over that list and nothing else: core hands the routes out as plain data and does not change to allow this, because `PathPattern`'s `\{deckId}` already _is_ OpenAPI's path template, so there is nothing to translate and nothing to reflect over.
+It is a reader over that list and nothing else.
+Core hands the routes out as plain data and does not change to allow this: `PathPattern`'s `\{deckId}` already _is_ OpenAPI's path template, so there is nothing to translate and nothing to reflect over.
 
 That is also why it is a module rather than a method on `App`.
-A spec format is not the web tier, and a version this framework does not own should not be pinned inside the one artifact every application depends on — the same reasoning that keeps the `WebTest` harness in xref:testing.adoc[`spider-silk-test`].
+A spec format is not the web tier, and a version this framework does not own should not be pinned inside the one artifact every application depends on.
+That is the same reasoning that keeps the `WebTest` harness in xref:testing.adoc[`spider-silk-test`].
 
 == Installation
 
@@ -27,7 +29,8 @@ app.get("/openapi.json", req -> WebResponse.json(
 ----
 
 The title and version are arguments because OpenAPI requires both under `info`, and a default for either would be this module naming someone's API.
-`document` returns a `Json.JsonValue`, so it composes with everything else in xref:json.adoc[the JSON API] — writing it to a file at build time is the same call.
+`document` returns a `Json.JsonValue`, so it composes with everything else in xref:json.adoc[the JSON API].
+Writing it to a file at build time is the same call.
 
 The handler reads `app.routes()` per request, so it lists whatever was registered, including routes added after this line.
 
@@ -47,7 +50,8 @@ That selection stays the application's, which is the reason `routes()` hands bac
 This module has no way to tell an HTML page from an endpoint, and a guess dressed up as a default would be wrong in some application every time.
 
 A route whose pattern contains `*` throws `IllegalArgumentException`.
-A wildcard has no OpenAPI path template, and dropping it quietly would publish a document claiming the application answers less than it does — so it is refused, and leaving it out is a filter you write, visibly, next to the one above.
+A wildcard has no OpenAPI path template, and dropping it quietly would publish a document claiming the application answers less than it does.
+It is refused instead, and leaving it out is a filter you write, visibly, next to the one above.
 
 == What the document contains
 
@@ -70,8 +74,8 @@ app.get("/api/decks", "List every deck", api::listDecks);
 A route registered without one gets no `summary` at all, rather than an empty string that would render as a blank line.
 
 That is the whole of it, and it is a valid document.
-What is missing is missing on purpose: a request or response schema, a server list, a security scheme.
-None of those is derivable from a route, so each would have to be declared somewhere — and where to declare it is a question this module answers by not asking it.
+What is missing is missing on purpose: a request or response schema, a server list, and a security scheme.
+None of those is derivable from a route, so each would have to be declared somewhere, and where to declare it is a question this module answers by not asking it.
 The automatic HEAD and OPTIONS answers are not listed either, for the reason `routes()` does not list them.
 
 == Testing it
@@ -88,4 +92,5 @@ assertThat(paths.getObject("/api/decks/{deckId}/cards").getObject("get").getArra
 ----
 
 `Route` is a record, so a fixture is a constructor call.
-The example app's document is reachable at `/openapi.json`; see xref:example-flashcard.adoc[the example] for how it is scoped for CORS, since a spec document is the one thing there meant to be read by something that is not the application.
+The example app's document is reachable at `/openapi.json`.
+See xref:example-flashcard.adoc[the example] for how it is scoped for CORS, since a spec document is the one thing there meant to be read by something that is not the application.

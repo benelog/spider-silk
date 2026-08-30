@@ -1,14 +1,22 @@
 = API Summary
 :navtitle: API Summary
 
+This chapter lists the whole API surface, each entry pointing at the chapter that describes it.
+
 == What `App` provides
 
 * Routes: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, each also as `(path, description, handler)`, and `path(prefix, group -> ...)` — patterns and matching order in xref:routing.adoc[Routing]
-* Introspection: `routes()` reports every registered route as `Route(method, path, description)`, in registration order; `guards()` reports the filters and error handlers beside them as `Guard.Before(path)`, `Guard.After(path)`, `Guard.Error(status)`; xref:openapi.adoc[`spider-silk-openapi`] turns the route list into an OpenAPI 3.1 document
+* Introspection: `routes()` reports every registered route as `Route(method, path, description)`, in registration order.
+  `guards()` reports the filters and error handlers beside them as `Guard.Before(path)`, `Guard.After(path)`, and `Guard.Error(status)`.
+  xref:openapi.adoc[`spider-silk-openapi`] turns the route list into an OpenAPI 3.1 document
 * Filters: `before(filter)` / `before(path, filter)`, same for `after`
 * Errors: `exception(Type, handler)`, `error(HttpStatus, handler)`, `notFound(handler)`
-* Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)` — off until named, and applied to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
-* Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)` — jte over `classpath:/jte` and `classpath:/public` at the root are the defaults, so neither has to be called; `StaticFiles.directory(path)` serves a directory on disk instead of the classpath, several roots given at once are read in order, and `precompressed()` answers with a `.br` or `.gz` sibling where a build left one; `FreeMarkerTemplates`, `HandlebarsTemplates`, and `ThymeleafTemplates` are `TemplateRenderer` implementations in modules of their own
+* Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
+  Each is off until named, and applies to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
+* Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)`.
+  jte over `classpath:/jte` and `classpath:/public` at the root are the defaults, so neither has to be called.
+  `StaticFiles.directory(path)` serves a directory on disk instead of the classpath, several roots given at once are read in order, and `precompressed()` answers with a `.br` or `.gz` sibling where a build left one.
+  `FreeMarkerTemplates`, `HandlebarsTemplates`, and `ThymeleafTemplates` are `TemplateRenderer` implementations in modules of their own
 * Server: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`
 
 == What `WebRequest` provides
@@ -20,7 +28,8 @@
 * Content negotiation: `accepts(types...)` answers with the type the caller prefers out of the ones offered, 406 when it will take none of them; `acceptedTypes()` for the parsed `Accept` header
 * Cookies the client sent: `cookie(name)`, `cookies()`
 * Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects), multipart upload via `file(name)`
-* Body, unread: `bodyStream()` and `bodyReader()` hand it over for a parser from another library; `bodyNdjson(reader)` reads newline-delimited JSON lazily, 400 naming the line — see xref:large-json.adoc[Large JSON and NDJSON] and xref:json-interop.adoc[External JSON Binding]
+* Body, unread: `bodyStream()` and `bodyReader()` hand it over for a parser from another library.
+  `bodyNdjson(reader)` reads newline-delimited JSON lazily, and answers 400 naming the line; see xref:large-json.adoc[Large JSON and NDJSON] and xref:json-interop.adoc[External JSON Binding]
 * Session: `sessionAttr(key)` / `sessionAttr(key, value)` / `removeSessionAttr`
 * Flash: `flash(key, value)`, read exactly once with `flashed(key)` on the request after a redirect
 * Errors: `errorMessage()` inside an `error(status, handler)` handler
@@ -28,7 +37,8 @@
 == What `WebResponse` provides
 
 * Bodies: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
-* Bodies written a value at a time: `jsonArray(sink -> ...)` for an array too big to hold, `ndjson(sink -> ...)` for one value per line — both a `stream` body underneath, so the headers commit before the writer runs
+* Bodies written a value at a time: `jsonArray(sink -> ...)` for an array too big to hold, and `ndjson(sink -> ...)` for one value per line.
+  Both are a `stream` body underneath, so the headers commit before the writer runs
 * Statuses: `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`
 * Building on: `status`, `header`, `contentType`, `vary(field)`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
 * Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`
