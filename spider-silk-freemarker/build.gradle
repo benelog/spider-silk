@@ -8,7 +8,7 @@ dependencies {
     // api, not implementation: the Configuration-taking constructor hands out
     // FreeMarker's own types, so a consumer setting an object wrapper or a
     // shared variable needs them on its compile classpath.
-    api 'org.freemarker:freemarker:2.3.34'
+    api 'org.freemarker:freemarker:2.3.35'
 
     testImplementation project(':spider-silk-test')
     testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
