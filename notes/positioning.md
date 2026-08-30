@@ -6,11 +6,13 @@ Where Spider Silk sits among lightweight JVM web frameworks, and what it trades 
 
 > **Thin by design, strong by types.**
 
-That is the line the README and the manual lead with; what it stands for is a servlet-native web layer with no reflection anywhere, small enough to read in one sitting.
-"Thin" is the half that has to be argued, because the distinguishing claim is not "lightweight" — half a dozen frameworks are lightweight.
-It is that *nothing* between the socket and your handler is resolved at runtime by name: not routing, not parameter conversion, not JSON.
+That is the line the README and the manual lead with.
+It stands for a servlet-native web layer with no reflection anywhere, small enough to read in one sitting.
+"Thin" is the half that has to be argued, because the distinguishing claim is not "lightweight": half a dozen frameworks are lightweight.
+It is that *nothing* between the socket and your handler is resolved at runtime by name, not routing, not parameter conversion, and not JSON.
 Every dispatch is a lambda you registered on a line you can point at.
-"Strong" is the other half, argued [below](#strengths-stated-precisely): a handler answers by returning, so a branch that forgets to answer is a compile error rather than a blank response, and a path variable arrives as a `long` or not at all.
+"Strong" is the other half, argued [below](#strengths-stated-precisely).
+A handler answers by returning, so a branch that forgets to answer is a compile error rather than a blank response, and a path variable arrives as a `long` or not at all.
 
 **Who it is for**
 
@@ -22,9 +24,10 @@ Every dispatch is a lambda you registered on a line you can point at.
 
 - Large applications that want a component model, transactions, security, and messaging supplied by the framework.
 - High-concurrency reactive workloads.
-- Teams that need an ecosystem — starters, OpenAPI generators, hiring pool.
+- Teams that need an ecosystem: starters, OpenAPI generators, a hiring pool.
 
-**Non-goals** — annotation-driven routing, automatic POJO binding, a DI container, and the rest — are decisions rather than backlog items, and are listed [at the end](#what-it-deliberately-does-not-adopt).
+**Non-goals** are decisions rather than backlog items: annotation-driven routing, automatic POJO binding, a DI container, and the rest.
+They are listed [at the end](#what-it-deliberately-does-not-adopt).
 
 ## The landscape
 
@@ -41,8 +44,9 @@ Every dispatch is a lambda you registered on a line you can point at.
 | Core size | ~a dozen classes | large | medium | large | very large |
 | Maintenance | one author | active | dormant at 2.9.x (community fork at 3.x) | Oracle | Pivotal/Broadcom |
 
-Javalin is the closest neighbour by shape — embedded Jetty, lambda routes, a config lambda — and the one worth reading against.
-Spark is the ancestor of that style; its static-import DSL is the thing *not* to borrow, because process-global mutable state makes two apps in one JVM (and therefore parallel tests) impossible.
+Javalin is the closest neighbour by shape, and the one worth reading against: embedded Jetty, lambda routes, a config lambda.
+Spark is the ancestor of that style.
+Its static-import DSL is the thing *not* to borrow, because process-global mutable state makes two apps in one JVM, and therefore parallel tests, impossible.
 
 ## Strengths, stated precisely
 
@@ -51,9 +55,11 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
    Here the wire format is written out in the handler, so it changes only when someone edits it.
    The one place a model can still be reflected over is a template engine, and each answers for that itself: the default jte compiles `${deck.title}` to a method call, while taking the FreeMarker, Handlebars, or Thymeleaf module takes its reflection with it.
 2. **A handler answers by returning, so the compiler checks that it answered.**
-   `WebResponse handle(WebRequest)` makes a branch that forgets to respond a compile error and a double response unexpressible; the lambda-and-context frameworks in the table can only find both at runtime.
+   `WebResponse handle(WebRequest)` makes a branch that forgets to respond a compile error, and a double response unexpressible.
+   The lambda-and-context frameworks in the table can only find both at runtime.
    Spark returns a body but keeps status and headers on a mutable `Response`, so it gets half of this.
-   The response is an immutable value with a sealed body — `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw` — which is also what makes an after-filter a plain `WebResponse -> WebResponse` and lets a handler test assert on the answer with no servlet response to read it out of.
+   The response is an immutable value with a sealed body: `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, and `Raw`.
+   That is also what makes an after-filter a plain `WebResponse -> WebResponse`, and what lets a handler test assert on the answer with no servlet response to read it out of.
 3. **Errors are structural, not conventional.**
    `pathParamLong` returns a `long` or throws a 400.
    There is no binder that maps an unparseable value to `null` and lets it reach the service layer.
@@ -61,18 +67,22 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
    No proxy frames, no filter chains you did not add.
 5. **No lock-in on the server.**
    `AppServlet` runs on any servlet container, and `WebServer` is four methods, so `spider-silk-tomcat` and `spider-silk-undertow` sit behind the same `WebServerFactory` as the default Jetty and swapping to either is one line.
-   Jetty stays the default on the strength of its lifecycle being entirely its own; what each of the three costs to embed is decisions 22 and 23.
+   Jetty stays the default on the strength of its lifecycle being entirely its own.
+   What each of the three costs to embed is decisions 22 and 23.
    Javalin and Spark both marry Jetty.
 6. **Route introspection comes almost for free.**
-   `app.routes()` reads back the same list the dispatcher walks, as data, with no reflection at all; Javalin needs a plugin for the equivalent.
+   `app.routes()` reads back the same list the dispatcher walks, as data, with no reflection at all.
+   Javalin needs a plugin for the equivalent.
    `app.guards()` is the same trick on the registrations beside it, so "which filter covers this path" and "which statuses have a body of their own" are answered off the table rather than by reading the startup code.
    A route registered as `get(path, "List every deck", handler)` reports that line too, so `spider-silk-openapi` can write a `summary` a method and a path could never imply.
 7. **Content negotiation asks the handler's question.**
-   `req.accepts("text/html", "application/json")` answers with one of the strings that were passed in, so the branch is a `switch` over values written on that line; a caller that will take none of them gets a 406 rather than a null.
-   What stays out is the reflective half — nothing picks a serializer for you once the type is known.
+   `req.accepts("text/html", "application/json")` answers with one of the strings that were passed in, so the branch is a `switch` over values written on that line.
+   A caller that will take none of them gets a 406 rather than a null.
+   What stays out is the reflective half: nothing picks a serializer for you once the type is known.
 8. **The three every deployment turns on are named methods, not plugins.**
-   `cors(Cors)`, `gzip(Gzip)`, and `securityHeaders(SecurityHeaders)` each take one inert value, each is off until it is named, and each applies to every answer — a static file, an error page, and the automatic `OPTIONS` a preflight lands on.
-   Javalin ships the same three as bundled plugins, which is the registry decision 27 refuses; the same decision carries why they are named methods rather than `before`/`after` filters.
+   `cors(Cors)`, `gzip(Gzip)`, and `securityHeaders(SecurityHeaders)` each take one inert value, each is off until it is named, and each applies to every answer: a static file, an error page, and the automatic `OPTIONS` a preflight lands on.
+   Javalin ships the same three as bundled plugins, which is the registry decision 27 refuses.
+   The same decision carries why they are named methods rather than `before`/`after` filters.
 9. **Startup cost is close to zero** because there is nothing to scan.
 
 ## Weaknesses, stated precisely
@@ -80,12 +90,15 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
 1. **JSON output is verbose.**
    `Json.obj().put("id", d.id()).put("name", d.name())` for every DTO is the single biggest ergonomic gap versus a reflective `json(deck)`.
    This is the cost of the core principle and does not go away.
-   `JsonWriter`/`JsonReader`/`JsonCodec` take it out of the handlers — the mapping is written once and reused — so what is left is one lambda per type rather than one tree per handler.
+   `JsonWriter`, `JsonReader`, and `JsonCodec` take it out of the handlers: the mapping is written once and reused.
+   What is left is one lambda per type rather than one tree per handler.
 2. **Static file serving compresses nothing itself.**
-   Validators, conditional requests, a hosted path prefix, and a directory on disk all ship, and `precompressed()` answers with the `.br` or `.gz` a build left next to the asset — but core produces neither, so an asset with no sibling is deflated again by `gzip()` on every request that asks for it, and brotli is answerable only where a build wrote the file.
+   Validators, conditional requests, a hosted path prefix, and a directory on disk all ship, and `precompressed()` answers with the `.br` or `.gz` a build left next to the asset.
+   Core produces neither, though, so an asset with no sibling is deflated again by `gzip()` on every request that asks for it, and brotli is answerable only where a build wrote the file.
    That is the JDK's boundary rather than a decision: it has no brotli encoder, and a bundled one would be a dependency in the artifact every application carries.
 3. **No WebSocket in core.**
-   An upgrade leaves servlet dispatch, and with it the router, the filters, the error handlers, the request logger, `routes()`, and `WebTest` — decisions 15b and 15c have why that keeps it out of core.
+   An upgrade leaves servlet dispatch, and with it the router, the filters, the error handlers, the request logger, `routes()`, and `WebTest`.
+   Decisions 15b and 15c have why that keeps it out of core.
    `spider-silk-jetty-websocket` maps one on Jetty, under a name that says which server it is tied to, and states the same limit rather than papering over it.
    SSE, which servlet dispatch *can* carry, ships as `WebResponse.sse(stream -> ...)` on an ordinary `get` route.
 4. **Ecosystem of one.**
@@ -93,10 +106,11 @@ Spark is the ancestor of that style; its static-import DSL is the thing *not* to
 
 ## What it deliberately does not adopt
 
-These are decisions, not backlog items: some are features the neighbours in the table have and this framework refuses, some are shapes no one asked for.
-The reasoning for each is in [decisions.md](decisions.md), and its [rejected list](decisions.md#rejected--decisions-with-the-reason) is where they stay closed; what is still open lives in the [issue tracker](https://github.com/benelog/spider-silk/issues).
+These are decisions, not backlog items: some are features the neighbours in the table have and this framework refuses, and some are shapes no one asked for.
+The reasoning for each is in [decisions.md](decisions.md), and its [rejected list](decisions.md#rejected--decisions-with-the-reason) is where they stay closed.
+What is still open lives in the [issue tracker](https://github.com/benelog/spider-silk/issues).
 
-- Annotation-driven routing, automatic POJO binding — `json(Object)`, `bodyAsClass(Foo.class)`, and `bodyValidator(...)` in its Javalin form — and the classpath scanning either would need: all reflection, which is the one thing the framework exists to avoid.
+- Annotation-driven routing, automatic POJO binding (`json(Object)`, `bodyAsClass(Foo.class)`, and `bodyValidator(...)` in its Javalin form), and the classpath scanning either would need: all reflection, which is the one thing the framework exists to avoid.
 - A DI container, which is not the web tier, and `ServiceLoader`-based discovery of the server, which is binding by classpath.
 - Spark's static-import DSL: process-global state, no second app per JVM.
 - Javalin's plugin/bundled-plugins system: a registry of things that configure themselves is the beginning of a container, and strength 8 is what core does instead.
