@@ -5,23 +5,23 @@ image::logo.svg[Spider Silk,160]
 
 Thin by design, strong by types.
 
-A web framework on top of the Jakarta Servlet API.
+Spider Silk is a web framework built on the Jakarta Servlet API.
 
 == Three core principles
 
 No reflection.::
-There is no annotation scanning, no proxies, no automatic binding.
-What runs is exactly what you see in the code, stack traces stay short, and startup is fast.
+There is no annotation scanning, no proxies, and no automatic binding.
+What runs is what the code says, stack traces stay short, and startup stays fast.
 
 The API is intuitively simple.::
 A handler is a function from a request to a response: `WebResponse handle(WebRequest request)`.
-`WebResponse` as the return type matches the intuition directly: a handler takes a request in and hands a response back.
+That signature is the whole model.
 
 Better RESTful API support than raw servlets.::
-Per-method routing with path variables, typed parameter extraction, exception-to-status mapping.
+Routing is per method, paths carry variables, parameters are extracted with a declared type, and exceptions map to status codes.
 
 The default template engine is https://jte.gg[jte].
-jte also compiles templates to Java code, which fits the framework's character.
+jte compiles templates to Java source, which matches how the rest of the framework works.
 
 == Modules
 
@@ -48,13 +48,11 @@ jte also compiles templates to Java code, which fits the framework's character.
 ----
 App app = new App();    // jte over classpath:/jte, and classpath:/public served at /
 
-// Server-side rendering
 app.get("/decks/{deckId}", req -> {
     long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
     return WebResponse.template("deck", model); // classpath:/jte/deck.jte
 });
 
-// JSON API: you state in code what goes out (no automatic serialization)
 app.get("/api/decks", req -> WebResponse.json(
         Json.arr().add(Json.obj().put("id", 1L).put("name", "English"))));
 
@@ -63,30 +61,29 @@ app.post("/api/decks", req -> {
     return WebResponse.json(Json.obj().put("name", name)).status(HttpStatus.CREATED);
 });
 
-// Routes sharing a prefix: the group is an argument, not ambient state
 app.path("/api/decks", group -> {
     group.before(req -> requireApiKey(req));    // covers /api/decks and everything under it
     group.get("", api::listDecks);              // GET  /api/decks
     group.get("/{deckId}", api::showDeck);      // GET  /api/decks/{deckId}
 });
 
-// Exception-to-response mapping
 app.exception(IllegalArgumentException.class,
         (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
-// One place for a styled error page, whatever produced the status
 app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 
 app.start(8080);                                // embedded Jetty, sessions on
 ----
 
-`start` returns once the port is bound, and the server's threads keep the JVM alive; `join()` is there if you want to block the main thread anyway.
-`stop()` shuts it down; `port()` reports the bound port, which is how you read back the one the OS picked for `start(0)` in a test.
+`start` returns as soon as the port is bound.
+The server's threads keep the JVM alive from there, so `join()` is only needed when you want to block the main thread as well.
+`stop()` shuts the server down.
+`port()` reports the bound port, which is how a test reads back the port the OS picked for `start(0)`.
 
 == Positioning and roadmap
 
-Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what it trades away to get there: https://github.com/benelog/spider-silk/blob/main/notes/positioning.md[notes/positioning.md].
+https://github.com/benelog/spider-silk/blob/main/notes/positioning.md[notes/positioning.md] places Spider Silk next to Javalin, Spark, Helidon SE, and Spring Boot, and states what it trades away to get there.
 
-Why each piece has the shape it has, item by item, with the rejected list: https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[notes/decisions.md].
+https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[notes/decisions.md] gives the reasoning behind each piece, item by item, together with the list of what was rejected.
 
-What was deliberately deferred, one issue per item with the condition that would make it worth doing: https://github.com/benelog/spider-silk/issues[the issue tracker].
+https://github.com/benelog/spider-silk/issues[The issue tracker] records what was deliberately deferred, one issue per item, with the condition that would make it worth doing.
