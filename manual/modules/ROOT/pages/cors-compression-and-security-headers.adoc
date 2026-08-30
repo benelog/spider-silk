@@ -1,7 +1,8 @@
 = CORS, Compression, and Security Headers
 :navtitle: CORS, Compression, and Security
 
-These three are what almost every deployed application turns on, and each is named on `App` rather than registered as a filter:
+CORS, compression, and security headers are each named on `App` rather than registered as a filter.
+Almost every deployed application turns all three on:
 
 [source,java]
 ----
@@ -12,13 +13,15 @@ app.cors(Cors.allowOrigin("https://app.example.com").forPath("/api/*"))
 
 == Why not filters, and why not plugins
 
-A `before`/`after` filter runs only once a route has matched, and these three have to reach the answers where none did.
+A `before` or `after` filter runs only once a route has matched, and these three have to reach the answers where no route did.
 A CORS preflight is an `OPTIONS` nobody registered a handler for.
 A cross-origin 404 has to carry the CORS headers, or the browser reports a CORS failure instead of the 404 that actually happened.
-Security headers belong on an error page as much as on any other page, and the largest thing most applications send — the stylesheet — is a static file, answered before routing gets as far as a filter.
+Security headers belong on an error page as much as on any other page.
+The largest thing most applications send is the stylesheet, and that is a static file, answered before routing gets as far as a filter.
 
-So they run in `AppServlet` after the answer is worked out and before it goes on the wire, where every path meets: routes, static files, and errors alike.
-That is the same shape as `staticFiles(StaticFiles)` and `requestLogger(...)` — one named method taking one inert value — and deliberately not a plugin registry, which is a registry of things that configure themselves and the beginning of a container.
+They therefore run in `AppServlet`, after the answer is worked out and before it goes on the wire, which is where every path meets: routes, static files, and errors alike.
+Each is one named method taking one inert value, the same shape as `staticFiles(StaticFiles)` and `requestLogger(...)`.
+That is deliberately not a plugin registry: a registry of things that configure themselves is the beginning of a container.
 
 Nothing is on until it is named.
 An `App` that says none of the three behaves exactly as it did before they existed.
@@ -38,13 +41,16 @@ app.cors(Cors.allowOrigin("https://app.example.com", "https://admin.example.com"
 
 Two things then happen.
 Every response to a request carrying an `Origin` this allows gains `Access-Control-Allow-Origin`, plus `Vary: Origin` so a shared cache does not hand one origin's answer to another.
-A preflight — an `OPTIONS` with `Access-Control-Request-Method` — is answered on the spot, with `Access-Control-Allow-Methods` taken from the `Allow` header the router already works out for the path.
-Naming the methods yourself with `allowMethods(...)` is for the case where the answer should not follow the routing table.
+A preflight, an `OPTIONS` carrying `Access-Control-Request-Method`, is answered on the spot.
+`Access-Control-Allow-Methods` comes from the `Allow` header the router already works out for the path.
+Name the methods yourself with `allowMethods(...)` when the answer should not follow the routing table.
 
 `Cors.anyOrigin()` answers `*`, which is right for a public read-only API.
-It cannot be combined with `allowCredentials()`: a wildcard plus cookies is what the specification forbids outright, so the combination throws where it is written rather than failing silently in a browser.
+It cannot be combined with `allowCredentials()`.
+The specification forbids a wildcard plus cookies outright, so the combination throws where it is written rather than failing silently in a browser.
 
-Registering an `OPTIONS` route of your own takes the preflight back — a path with a handler for the method is answered by that handler, headers and all.
+Registering an `OPTIONS` route of your own takes the preflight back.
+A path with a handler for the method is answered by that handler, headers and all.
 A preflight for a path with no routes is still a 404.
 
 CORS is a rule the browser enforces on what a script may *read*.
@@ -64,17 +70,20 @@ app.gzip(Gzip.defaults()
 ----
 
 Compression is a transform over the `WebResponse`, not a wrapper around the servlet response.
-A body already in memory — `text`, `html`, `json`, `bytes`, a rendered template — is compressed there and then, so the length it announces is the length it sends.
-A `stream` body is compressed as it is written, which is what keeps a large file or a `stream(...)` download out of memory; its size is not known beforehand, so `minBytes` does not apply to one and its `Content-Length` is dropped.
+A body already in memory (`text`, `html`, `json`, `bytes`, or a rendered template) is compressed there and then, so the length it announces is the length it sends.
+A `stream` body is compressed as it is written, which is what keeps a large file or a `stream(...)` download out of memory.
+Its size is not known beforehand, so `minBytes` does not apply to one and its `Content-Length` is dropped.
 
-Server-Sent Events and `raw` responses are never compressed: an SSE stream buffered until it is worth deflating is an SSE stream that no longer arrives, and a raw handler owns its own bytes by definition.
-Neither is a type that is already compressed — JPEG, PNG, MP4, a zip archive — nor a response something else has already encoded.
+Server-Sent Events and `raw` responses are never compressed.
+An SSE stream buffered until it is worth deflating is an SSE stream that no longer arrives, and a raw handler owns its own bytes by definition.
+Neither is a type that is already compressed, such as JPEG, PNG, MP4, or a zip archive, nor a response something else has already encoded.
 A xref:static-files.adoc[static file answered from a `.br` or `.gz` sibling] is one of those, and passes through untouched rather than being deflated twice.
 
 === What caching is told
 
 Every compressible answer carries `Vary: Accept-Encoding`, whether it ended up compressed or not, so a cache never hands gzipped bytes to a client that cannot read them.
-A compressed answer's `ETag` — the one xref:static-files.adoc[static files] derive from the file — is marked weak, because the compressed and the uncompressed body are the same file and not the same bytes.
+A compressed answer's `ETag`, the one xref:static-files.adoc[static files] derive from the file, is marked weak.
+The compressed and the uncompressed body are the same file, and not the same bytes.
 A browser revalidating with the weak tag still gets its 304.
 
 == Security headers
@@ -100,9 +109,11 @@ app.securityHeaders(SecurityHeaders.defaults()
         .header("X-Robots-Tag", "noindex"));        // anything else, same point
 ----
 
-HSTS goes out only on a request that already arrived over HTTPS: a browser that learns it over plain HTTP learned it from whoever was in the way.
-Behind a TLS-terminating proxy that means the container has to be told to trust `X-Forwarded-Proto`, or the header never goes out at all.
-It is also the one header here that cannot be taken back — a browser told a year holds that for a year, whatever the server says next — so say a short duration first and lengthen it once nothing on the site needs HTTP.
+HSTS goes out only on a request that already arrived over HTTPS.
+A browser that learns it over plain HTTP learned it from whoever was in the way.
+Behind a TLS-terminating proxy, the container therefore has to be told to trust `X-Forwarded-Proto`, or the header never goes out at all.
+HSTS is also the one header here that cannot be taken back: a browser told a year holds that for a year, whatever the server says next.
+Set a short duration first, and lengthen it once nothing on the site needs HTTP.
 
 A response that set one of these headers itself keeps its own value, so the single page that has to be framed says so on its own response without turning the header off everywhere:
 

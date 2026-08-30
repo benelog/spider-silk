@@ -1,14 +1,17 @@
 = The Response
 :navtitle: The Response
 
-A response is an immutable value: every method returns a new one, which is what lets an after-filter rewrite what a route answered.
+A `WebResponse` is an immutable value.
+Every method returns a new response, which is what lets an after-filter rewrite what a route answered.
 
 == Bodies
 
 `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
-A template name carries no extension — the engine appends its own, as xref:templates.adoc[Templates] describes.
+A template name carries no extension.
+The engine appends its own, as xref:templates.adoc[Templates] describes.
 
-`body()` is a sealed `WebResponse.Body` (`Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw`), so a `switch` over it needs no default case, and a test can assert on the answer without a servlet response to read it out of:
+`body()` returns a sealed `WebResponse.Body`: `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, or `Raw`.
+A `switch` over it needs no default case, and a test can assert on the answer without a servlet response to read it out of:
 
 [source,java]
 ----
@@ -25,11 +28,13 @@ assertThat(((WebResponse.Text) response.body()).content()).isEqualTo("{\"id\":1}
 
 `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`.
 
-A status is an `HttpStatus` constant, so a code that does not exist cannot be written, and `HttpStatus.of(int)` looks one up when the number only arrives at runtime.
+A status is an `HttpStatus` constant, so a code that does not exist cannot be written.
+`HttpStatus.of(int)` looks one up when the number arrives only at runtime.
 
 == Redirects
 
-`redirect(location)` answers **302 Found**, and the `Location` header goes out as given — a path like `/decks/3` is what an application normally wants, and is what HTTP allows.
+`redirect(location)` answers **302 Found**, and the `Location` header goes out as given.
+A path like `/decks/3` is what an application normally wants, and is what HTTP allows.
 
 [source,java]
 ----
@@ -39,15 +44,19 @@ WebResponse.redirect("/new-home", HttpStatus.MOVED_PERMANENTLY);         // 301,
 WebResponse.redirect("/api/v2/decks", HttpStatus.PERMANENT_REDIRECT);    // 308, keeps the method
 ----
 
-302 is the default because a redirect is reversible only while it is temporary: a 301 is cached by browsers and intermediaries, often indefinitely, so a wrong one keeps sending visitors to the wrong place long after the code is fixed.
-It is also what `HttpServletResponse.sendRedirect` sends and what Javalin, Spark, Spring MVC, Express, Rails, and Django all default to.
+302 is the default because a redirect is reversible only while it is temporary.
+Browsers and intermediaries cache a 301, often indefinitely, so a wrong one keeps sending visitors to the wrong place long after the code is fixed.
+302 is also what `HttpServletResponse.sendRedirect` sends, and what Javalin, Spark, Spring MVC, Express, Rails, and Django all default to.
 
-The second argument is how you say otherwise, and it takes an `HttpStatus` rather than an int for the same reason every other status does.
-It rejects anything that is not a 3xx: a `Location` header on a 200 is not a redirect, and failing at the call is better than shipping a response no client will follow.
+The second argument states another status, and takes an `HttpStatus` rather than an int for the same reason every other status does.
+It rejects anything that is not a 3xx.
+A `Location` header on a 200 is not a redirect, and failing at the call is better than shipping a response no client will follow.
 
 Two of the four are worth knowing by name.
-303 is what a redirect after a POST means — 302 is doing that job in practice, and saying 303 says it exactly.
-307 and 308 are the pair that keep the request method: a browser following a 301 or 302 after a POST will usually issue a GET, and those two forbid the change.
+303 is what a redirect after a POST means.
+302 does that job in practice, and 303 says it exactly.
+307 and 308 keep the request method.
+A browser following a 301 or 302 after a POST will usually issue a GET, and those two forbid the change.
 
 [#cookies]
 == Cookies
@@ -60,13 +69,13 @@ return WebResponse.html(page)
         .removeCookie("stale");
 ----
 
-A cookie set through the two-argument form gets `Path=/`, `HttpOnly`, and `SameSite=Lax`, which is what a cookie holding anything worth stealing should have.
-`cookie(Cookie)` takes a hand-built `jakarta.servlet.http.Cookie` when you need `Secure`, a `Domain`, or `SameSite=None`.
-Reading the ones the client sent is the request's side: xref:request.adoc[The Request].
+The two-argument form sets `Path=/`, `HttpOnly`, and `SameSite=Lax`, which is what a cookie holding anything worth stealing should have.
+`cookie(Cookie)` takes a hand-built `jakarta.servlet.http.Cookie` for `Secure`, a `Domain`, or `SameSite=None`.
+xref:request.adoc[The Request] covers reading the cookies the client sent.
 
 == The lambda families
 
-The last three bodies take a lambda of their own, and the suffix says which family it belongs to.
-A `…Handler` answers a request with a `WebResponse`: that is `Handler` and `ExceptionHandler`.
+The last three bodies each take a lambda of their own, and the suffix names the family it belongs to.
+A `…Handler` answers a request with a `WebResponse`: `Handler` and `ExceptionHandler`.
 A `…Writer` returns nothing and fills the body of a response that has already been decided: `StreamWriter(OutputStream)`, `SseWriter(SseStream)`, and `ServletWriter(HttpServletRequest, HttpServletResponse)`.
-So `ServletWriter` is a sibling of `StreamWriter`, not a relative of `Handler`.
+`ServletWriter` is therefore a sibling of `StreamWriter`, not a relative of `Handler`.

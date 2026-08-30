@@ -1,9 +1,13 @@
 = The Request
 :navtitle: The Request
 
+`WebRequest` is the handler's view of what the client sent.
+The sections below cover the parts that need more than a getter: cookies, repeated parameters, the query-string and form-body split, and content negotiation.
+
 == Cookies
 
-Cookies split along the same line the rest of the API does: the ones the client sent are read off the request, the ones the server sets are part of the response.
+The request reads the cookies the client sent, and the response sets the ones the server sends.
+Cookies split along the same line as the rest of the API.
 
 [source,java]
 ----
@@ -11,23 +15,27 @@ String theme = req.cookie("theme");         // null when absent
 Map<String, String> all = req.cookies();    // a repeated name keeps the first value
 ----
 
-Setting one is the response's side — `WebResponse.cookie(...)`, with the defaults xref:response.adoc#cookies[The Response] describes.
+`WebResponse.cookie(...)` sets one, with the defaults xref:response.adoc#cookies[The Response] describes.
 
 == Repeated parameters
+
+`params(name)` reads every value a repeated parameter carries.
 
 [source,java]
 ----
 List<String> tags = req.params("tag");      // ?tag=java&tag=web, or a checkbox group
 ----
 
-`params(name)` returns every value in request order, and an empty list when the parameter is absent: "no boxes checked" is an answer, not a 400.
-`param(name)` still returns the first value and still 400s when there is none.
-For an optional parameter with a type, `paramLong("page", 1)` and `paramEnum("direction", Direction.class, Direction.FRONT)` answer the default when the parameter is absent, and still 400 when it is present but unparseable, because the default covers absence, not garbage.
+The values come back in request order, and an absent parameter gives an empty list: "no boxes checked" is an answer, not a 400.
+`param(name)` still returns the first value and still answers 400 when there is none.
+`paramLong("page", 1)` and `paramEnum("direction", Direction.class, Direction.FRONT)` supply a default for an optional typed parameter.
+The default covers absence only.
+A parameter that is present but unparseable is still a 400.
 
 == Query string vs. form body
 
-The servlet API merges the two, so `param("id")` answers to an `id` in the URL and an `id` in the form alike.
-When the difference matters, say which one:
+The servlet API merges the two, so `param("id")` answers an `id` in the URL and an `id` in the form alike.
+Name the source when the difference matters:
 
 [source,java]
 ----
@@ -38,7 +46,7 @@ List<String> tags = req.formParams("tag");
 
 == Content negotiation
 
-A handler that can answer more than one way asks which way the caller wants, and the framework reads `Accept` for it:
+`accepts` reads the `Accept` header and reports which of the media types a handler offers the caller wants:
 
 [source,java]
 ----
