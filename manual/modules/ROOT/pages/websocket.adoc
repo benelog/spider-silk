@@ -2,8 +2,9 @@
 :navtitle: WebSocket
 
 `spider-silk-jetty-websocket` maps WebSocket endpoints alongside an app's HTTP routes.
-It is Jetty-only by construction, which is why it is a module with a name rather than a method on `App`: a WebSocket is a protocol upgrade, and an upgrade leaves servlet dispatch — see xref:sse.adoc#why-websocket-is-not-in-core[why SSE is in core and WebSocket is not].
-Core does not change to make this work; the module rides `JettyServer`'s existing `customizeServer` hook.
+It is Jetty-only by construction, which is why it is a module with a name rather than a method on `App`.
+A WebSocket is a protocol upgrade, and an upgrade leaves servlet dispatch; see xref:sse.adoc#why-websocket-is-not-in-core[why SSE is in core and WebSocket is not].
+Core does not change to make this work, and the module rides `JettyServer`'s existing `customizeServer` hook.
 
 == Installation
 
@@ -15,7 +16,8 @@ dependencies {
 ----
 
 It brings `jetty-websocket-jetty-server`, Jetty's server-side WebSocket at the `Handler` level, pinned to the same Jetty version core uses.
-That is deliberate and not the `ee10` artifact of the same name: the `ee10` one is the servlet-container integration, and it arrives with annotation scanning, ASM, CDI, and JNDI in tow, none of which this framework wants near it.
+That is deliberate, and not the `ee10` artifact of the same name.
+The `ee10` one is the servlet-container integration, and it arrives with annotation scanning, ASM, CDI, and JNDI in tow, none of which this framework wants near it.
 
 == Mapping a path
 
@@ -33,7 +35,7 @@ The upgrade handler is inserted ahead of the servlet, so a request whose path ma
 Paths are relative to the server's context path, the same as a route is.
 
 `WebSockets` is a `Consumer<Server>`, which is exactly what xref:server.adoc[`customizeServer`] takes.
-It is that hook and not `customizeContext` because Jetty's WebSocket container is built from the `Server` — its buffer pool and its executor — and the context is not linked to a server until after the context customizers have run.
+It is that hook and not `customizeContext` because Jetty's WebSocket container is built from the `Server`, from its buffer pool and its executor, and the context is not linked to a server until after the context customizers have run.
 
 == The endpoint
 
@@ -56,14 +58,17 @@ final class EchoSocket implements WebSocketHandler {
 }
 ----
 
-Every method has a do-nothing default — `onOpen`, `onText`, `onBinary`, `onClose`, `onError` — so an implementation overrides only what it answers.
+Every method has a do-nothing default (`onOpen`, `onText`, `onBinary`, `onClose`, and `onError`), so an implementation overrides only what it answers.
 The `Session` is passed to each one rather than handed out once, so nothing has to be remembered in a field to reply.
 
-`Session` is Jetty's own and is not wrapped: the module is tied to Jetty by name, so hiding Jetty behind a facade would buy portability the name has already ruled out.
-`sendText` and `sendBinary` are asynchronous and take a `Callback`; `Callback.NOOP` is the fire-and-forget form, and a real one is how a send failure gets noticed.
-A handler never calls `session.demand()` — the module's endpoint is auto-demanding, so the next message is asked for as soon as the callback returns.
+`Session` is Jetty's own and is not wrapped.
+The module is tied to Jetty by name, so hiding Jetty behind a facade would buy portability the name has already ruled out.
+`sendText` and `sendBinary` are asynchronous and take a `Callback`.
+`Callback.NOOP` is the fire-and-forget form, and a real callback is how a send failure gets noticed.
+A handler never calls `session.demand()`, because the module's endpoint is auto-demanding: the next message is asked for as soon as the callback returns.
 
-The buffer passed to `onBinary` is Jetty's, and it goes back to the pool as soon as the method returns; anything kept beyond the call has to be copied.
+The buffer passed to `onBinary` is Jetty's, and it goes back to the pool as soon as the method returns.
+Copy anything that has to outlive the call.
 
 == Refusing an upgrade
 
@@ -83,7 +88,8 @@ new WebSockets().at("/chat", (request, response) -> {
 ----
 
 Returning null refuses the upgrade with 403, or with the status the factory set on the response if that is an error status.
-Jetty's own contract leaves a refused upgrade unanswered — the creator is expected to write the response and complete the callback itself, and a creator that forgets leaves the client waiting on a handshake that never comes.
+Jetty's own contract leaves a refused upgrade unanswered.
+The creator is expected to write the response and complete the callback itself, and a creator that forgets leaves the client waiting on a handshake that never comes.
 The module answers it, which is one of the few things it does beyond mapping a path.
 
 == Paths
@@ -112,8 +118,9 @@ new WebSockets()
         .customizeContainer(container -> container.setAutoFragment(false));
 ----
 
-Jetty closes a connection idle for 30 seconds by default, which a socket kept open across quiet stretches survives only if the two ends ping each other.
-`customizeContainer` runs against Jetty's `ServerWebSocketContainer` on every start, and is the way to reach the settings without a method of their own — frame size, buffer sizes, session listeners.
+Jetty closes a connection idle for 30 seconds by default.
+A socket kept open across quiet stretches survives that only if the two ends ping each other.
+`customizeContainer` runs against Jetty's `ServerWebSocketContainer` on every start, and reaches the settings that have no method of their own: frame size, buffer sizes, and session listeners.
 
 == What does not reach a socket
 
@@ -122,16 +129,18 @@ An upgrade leaves servlet dispatch for good, so none of the framework follows it
 * the router does not, and `app.routes()` does not list a socket,
 * `before` and `after` filters do not run,
 * `error(status, ...)` does not cover it,
-* the request logger never sees the connection, the upgrade included — the upgrade handler answers ahead of `AppServlet`, so the servlet never runs and there is nothing for it to report,
+* the request logger never sees the connection, the upgrade included, because the upgrade handler answers ahead of `AppServlet` and the servlet never runs,
 * `WebTest` cannot reach it at all, since it never starts a server.
 
 That list is the whole reason WebSocket is not in core: core would be publishing an API its own features silently do not cover.
-The module's tests say the same thing from the other side — they start a real Jetty on a free port and talk to it with the JDK's own `java.net.http.WebSocket` client, because there is no harness that could stand in.
+The module's tests say the same from the other side.
+They start a real Jetty on a free port and talk to it with the JDK's own `java.net.http.WebSocket` client, because there is no harness that could stand in.
 
-`app.stop()` closes the sockets still open; it does not hold the graceful drain open waiting for them, the way an SSE stream in flight would be waited on.
+`app.stop()` closes the sockets still open.
+It does not hold the graceful drain open waiting for them, the way an SSE stream in flight would be waited on.
 
 == Reflection
 
 Jetty binds an endpoint's callbacks by looking its methods up and taking a `MethodHandle` to each, cached per endpoint class.
-Every connection this module opens is the same class — `SessionListener`, the module's own adapter — so that is the one class Jetty ever looks up.
+Every connection this module opens is the same class, `SessionListener`, the module's own adapter, so that is the one class Jetty ever looks up.
 A `WebSocketHandler` an application writes is reached through an interface call and is never reflected over, whatever its shape, which is the same confinement xref:reflection-scope.adoc[jte's generated classes] get.

@@ -2,7 +2,8 @@
 :navtitle: Handlebars
 
 `spider-silk-handlebars` renders with https://github.com/jknack/handlebars.java[Handlebars.java] instead of the jte bundled with core.
-It is a separate module for the same reason xref:tomcat.adoc[Tomcat] is: being tied to one engine is a thing worth saying in the artifact's name, and core stays a web tier with one template dependency rather than three.
+It is a separate module for the same reason xref:tomcat.adoc[Tomcat] is.
+A tie to one engine belongs in the artifact's name, and core stays a web tier with one template dependency rather than three.
 
 == Installation
 
@@ -15,8 +16,8 @@ dependencies {
 }
 ----
 
-Excluding jte is optional; it only keeps an unused engine off the classpath.
-Leave it in and both work side by side — `templates(renderer)` takes whichever you hand it.
+Excluding jte is optional.
+It only keeps an unused engine off the classpath, and leaving it in lets both work side by side, since `templates(renderer)` takes whichever you hand it.
 
 == Rendering
 
@@ -59,11 +60,13 @@ app.templates(new HandlebarsTemplates(handlebars));
 
 Pass the loader an empty suffix, as above, or it appends `.hbs` on top of the one `HandlebarsTemplates` already added.
 
-`new HandlebarsTemplates("hbs")` caches compiled templates in a `ConcurrentMapTemplateCache`; Handlebars' own default is to compile on every render, which is a per-request parse in production.
+`new HandlebarsTemplates("hbs")` caches compiled templates in a `ConcurrentMapTemplateCache`.
+Handlebars' own default is to compile on every render, which is a per-request parse in production.
 Hand in a `Handlebars` of your own to choose differently.
 
 == Reflection
 
 Handlebars resolves `+{{deck.title}}+` against a `Map` first, but falls back to reflection for a record or a bean.
-That is the module's reflection, not core's — see xref:reflection-scope.adoc[The Scope of "No Reflection"].
+That is the module's reflection, not core's.
+See xref:reflection-scope.adoc[The Scope of "No Reflection"] for where the rule applies.
 Keeping the model a `Map` of values a template already holds keeps even that out of the picture.

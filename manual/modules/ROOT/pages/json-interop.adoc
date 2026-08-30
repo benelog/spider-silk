@@ -1,9 +1,9 @@
 = External JSON Binding
 :navtitle: External JSON Binding
 
-Core's JSON is hand-written on purpose, and that decision is the framework's to make for core — not for the application.
-An app with three hundred DTOs, or one whose wire format is generated from a schema it does not own, has a reason to bind objects with a library.
-Nothing stops it: the seam is two methods that were always there.
+An application can bind JSON with a library of its own, through a seam of two methods that were always there.
+Core's JSON is hand-written on purpose, but that decision is the framework's to make for core, not for the application.
+An application with three hundred DTOs, or one whose wire format is generated from a schema it does not own, has a reason to bind objects with a library.
 
 == The seam
 
@@ -18,11 +18,12 @@ public BufferedReader bodyReader()               // the characters, unparsed
 ----
 
 That is the whole integration.
-Note what it is *not*: do not route another library's output through `JsonWriter<T>`, which returns a `Json.JsonValue` and would mean re-parsing a document the library had just finished writing.
+Do not route another library's output through `JsonWriter<T>`: it returns a `Json.JsonValue`, which would mean re-parsing a document the library had just finished writing.
 The library serializes, and `json(String)` sends what it produced.
 
 The servlet API allows a body to be read as bytes or as characters, not both.
-A request that has already been through `body()`, `bodyJson()`, `bodyNdjson()`, or `param()` — all of which read characters — throws `IllegalStateException` from `bodyStream()`, and the reverse holds too.
+A request that has already been through `body()`, `bodyJson()`, `bodyNdjson()`, or `param()` throws `IllegalStateException` from `bodyStream()`, because all four read characters.
+The reverse holds as well.
 Whichever a handler picks, it picks once.
 
 == Jackson
@@ -50,9 +51,10 @@ app.post("/api/decks", req -> {
 });
 ----
 
-Reading through `bodyStream()` rather than `body()` is the point on the way in: Jackson parses the socket, and the request never exists as one String.
+Read through `bodyStream()` rather than `body()` on the way in.
+Jackson then parses the socket, and the request never exists as one String.
 
-An `exception(JsonProcessingException.class, ...)` handler on the `App` is where the two `try` blocks go once there is more than one handler.
+Move the two `try` blocks into an `exception(JsonProcessingException.class, ...)` handler on the `App` once there is more than one handler.
 
 == Gson
 
@@ -69,7 +71,8 @@ app.post("/api/decks", req -> {
 ----
 
 Gson reads characters, so `bodyReader()` is its half of the seam.
-`fromJson` returns null for an empty body and throws `JsonSyntaxException` for a malformed one; both are the application's to answer, since core has not been told this body is JSON.
+`fromJson` returns null for an empty body and throws `JsonSyntaxException` for a malformed one.
+Both are the application's to answer, since core has not been told this body is JSON.
 
 == A binder that generates its code
 
@@ -93,20 +96,25 @@ app.get("/api/decks/{deckId}", req ->
         WebResponse.json(DECK.toJson(deckService.deck(req.pathParamLong("deckId")))));
 ----
 
-Its annotation processor generates a Java source adapter per type at compile time and registers it through `ServiceLoader`; there is no reflective fallback.
-So the runtime stays reflection-free and the native image needs no entry for a bound type — the same trade jte makes for templates.
+Its annotation processor generates a Java source adapter per type at compile time and registers it through `ServiceLoader`.
+There is no reflective fallback.
+The runtime therefore stays reflection-free, and the native image needs no entry for a bound type, which is the same trade jte makes for templates.
 
 What it does *not* keep is the stronger promise underneath the no-reflection rule: the wire format changes only when someone edits it.
-A generated adapter derives its field names from the record's components, so renaming a component renames a JSON field — silently, at compile time, in a build that still succeeds.
-Pinning each name with `@Json.Property("...")` restores the guarantee and costs about as much typing as the hand-written writer it replaced.
-That is the trade, stated plainly; where it comes out is the application's call, and core is not involved either way.
+A generated adapter derives its field names from the record's components, so renaming a component renames a JSON field.
+It does so silently, at compile time, in a build that still succeeds.
+Pinning each name with `@Json.Property("...")` restores the guarantee, and costs about as much typing as the hand-written writer it replaced.
+That is the trade.
+Where it comes out is the application's call, and core is not involved either way.
 
-DSL-JSON's `@CompiledJson` works the same way, with one difference worth knowing: it keeps a runtime reflection fallback for types the processor did not see, so "no reflection" there is a configuration to hold rather than a property of the build.
+DSL-JSON's `@CompiledJson` works the same way, with one difference worth knowing.
+It keeps a runtime reflection fallback for types the processor did not see, so "no reflection" there is a configuration to hold rather than a property of the build.
 
 == What core still does
 
 Routing, parameter extraction, and the request and response envelope are unchanged by any of this.
-An application can bind one endpoint with a library and hand-write the next; `WebResponse.json` takes a `String` and does not ask where it came from.
+An application can bind one endpoint with a library and hand-write the next.
+`WebResponse.json` takes a `String` and does not ask where it came from.
 
 NOTE: The snippets on this page are illustrations, not part of the build.
 No module of this project depends on Jackson, Gson, or avaje-jsonb.
