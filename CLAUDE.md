@@ -32,6 +32,9 @@
   `README.md` stays a Quick Start: installation, hello world, and links into the site.
   Do not grow the README back into the manual.
 - `notes/positioning.md` and `notes/decisions.md` stay Markdown; they are background, not the manual.
+- **The prose style is a skill**: `.claude/skills/doc-tone/SKILL.md`.
+  Lead with the conclusion, one idea per sentence, the register of a technical reference manual.
+  It covers `manual/`, `README.md`, and `notes/` alike, and carries the before/after examples and the verification steps.
 
 ## Build / Verification
 
