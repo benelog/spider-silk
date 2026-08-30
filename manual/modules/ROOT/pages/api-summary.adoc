@@ -5,7 +5,7 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 
 == What `App` provides
 
-* Routes: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, each also as `(path, description, handler)`, and `path(prefix, group -> ...)` — patterns and matching order in xref:routing.adoc[Routing]
+* Routes: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, each also as `(path, description, handler)`, and `path(prefix, group -> ...)`; patterns and matching order in xref:routing.adoc[Routing]
 * Introspection: `routes()` reports every registered route as `Route(method, path, description)`, in registration order.
   `guards()` reports the filters and error handlers beside them as `Guard.Before(path)`, `Guard.After(path)`, and `Guard.Error(status)`.
   xref:openapi.adoc[`spider-silk-openapi`] turns the route list into an OpenAPI 3.1 document

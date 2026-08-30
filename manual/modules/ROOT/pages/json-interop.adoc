@@ -77,7 +77,7 @@ Both are the application's to answer, since core has not been told this body is 
 == A binder that generates its code
 
 xref:reflection-scope.adoc[The framework's no-reflection rule] is about core, and a library an application adds answers for itself.
-Jackson and Gson both read and write fields reflectively, which is a real cost under a xref:native-image.adoc[native image] — every bound type needs a reflection entry.
+Jackson and Gson both read and write fields reflectively, which is a real cost under a xref:native-image.adoc[native image]: every bound type needs a reflection entry.
 
 https://avaje.io/jsonb/[avaje-jsonb] is the version of this that keeps the property:
 
