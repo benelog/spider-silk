@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="Spider Silk" width="160">
+  <img src="notes/logo.svg" alt="Spider Silk" width="160">
 </p>
 
 <p align="center">
@@ -159,6 +159,6 @@ Codex, Cursor, and GitHub Copilot read the same directory once it is copied into
 
 ## Further reading
 
-Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what it trades away to get there: [docs/positioning.md](docs/positioning.md).
-Why each piece has the shape it has, item by item, with the rejected list: [docs/decisions.md](docs/decisions.md).
+Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what it trades away to get there: [notes/positioning.md](notes/positioning.md).
+Why each piece has the shape it has, item by item, with the rejected list: [notes/decisions.md](notes/decisions.md).
 What was deliberately deferred, one issue per item with the condition that would make it worth doing: [the issue tracker](https://github.com/benelog/spider-silk/issues).

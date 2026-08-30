@@ -3,7 +3,7 @@
   The Maven counterpart of spider-silk-gradle-plugin. Maven shares build
   conventions by inheritance, not by plugin: a Mojo runs goals but cannot
   declare other plugins' configuration, so the conventions live in this
-  parent's pluginManagement and profiles instead (docs/decisions.md #26).
+  parent's pluginManagement and profiles instead (notes/decisions.md #26).
 
   This file is the published artifact, copied verbatim by the module's Gradle
   build; its coordinates below must match the Gradle project's, and the build

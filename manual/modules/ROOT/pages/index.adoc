@@ -85,8 +85,8 @@ app.start(8080);                                // embedded Jetty, sessions on
 
 == Positioning and roadmap
 
-Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what it trades away to get there: https://github.com/benelog/spider-silk/blob/main/docs/positioning.md[docs/positioning.md].
+Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what it trades away to get there: https://github.com/benelog/spider-silk/blob/main/notes/positioning.md[notes/positioning.md].
 
-Why each piece has the shape it has, item by item, with the rejected list: https://github.com/benelog/spider-silk/blob/main/docs/decisions.md[docs/decisions.md].
+Why each piece has the shape it has, item by item, with the rejected list: https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[notes/decisions.md].
 
 What was deliberately deferred, one issue per item with the condition that would make it worth doing: https://github.com/benelog/spider-silk/issues[the issue tracker].
