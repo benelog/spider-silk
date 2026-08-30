@@ -47,7 +47,8 @@ It too reads the project's `.claude/skills/`.
 == Any other tool
 
 The format is an open standard, and this skill uses nothing tool-specific: YAML frontmatter with a name and a description, a Markdown body, and relative links to the reference files beside it.
-A tool that discovers `SKILL.md` files — https://agentskills.io keeps the list — takes the same directory unchanged.
+Any tool that discovers `SKILL.md` files takes the same directory unchanged.
+https://agentskills.io keeps the list of them.
 
 == What is in it
 

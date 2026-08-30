@@ -2,7 +2,7 @@
 :navtitle: The Request
 
 `WebRequest` is the handler's view of what the client sent.
-The sections below cover the parts that need more than a getter: cookies, repeated parameters, the query-string and form-body split, and content negotiation.
+The sections below cover the parts that need more than a getter: cookies, repeated parameters, the query-string and form-body split, content negotiation, and file uploads.
 
 == Cookies
 
@@ -61,15 +61,18 @@ Quality values and specificity are applied the way the specification asks: `text
 
 Two edges are worth stating, because they are the ones every hand-written parser gets wrong:
 
-* A request with no `Accept` at all is a caller that never said, not one that will take nothing — the first candidate wins, so the list is written in the order the handler prefers.
+* A request with no `Accept` at all is a caller that never said, not one that will take nothing.
+  The first candidate wins, so the list is written in the order the handler prefers.
 * A caller that will take none of them is answered `406 Not Acceptable`, the same way `param(name)` answers 400 rather than returning null.
 
 A handler therefore never has a null branch to write.
 
-Asking the question makes the answer depend on a request header, so the response carries `Vary: Accept` without the handler saying so — including the 406, and including an answer that turned out to be the only type on offer.
+Asking the question makes the answer depend on a request header, so the response carries `Vary: Accept` without the handler saying so.
+That covers the 406, and an answer that turned out to be the only type on offer.
 That is the same bookkeeping `app.gzip()` does for `Accept-Encoding`, for the same reason: a shared cache must not hand JSON to the next browser.
 
-For the rare decision `accepts` cannot phrase, `req.acceptedTypes()` is the parsed view behind it — the media types asked for, best first, the refused ones dropped, and empty when the request sent no `Accept`.
+`req.acceptedTypes()` is the parsed view behind `accepts`, for the rare decision `accepts` cannot phrase.
+It reports the media types asked for, best first, with the refused ones dropped, and is empty when the request sent no `Accept`.
 
 `Accept-Language` and `Accept-Encoding` are not negotiated for you.
 Encoding is the compression layer's own business, and language would be a locale story core does not have.
@@ -89,5 +92,7 @@ app.post("/decks/{deckId}/import", req -> {
 ----
 
 `UploadedFile` answers `fileName()`, `contentType()`, `size()`, and the content as `bytes()` or as UTF-8 text with `asText()`.
-The limits — maximum sizes, and where a large upload is buffered — are the servlet container's multipart configuration, set on the server: `multipart(new MultipartConfigElement(...))` on `JettyServer`, xref:tomcat.adoc[TomcatServer], and xref:undertow.adoc[UndertowServer] alike.
-The default buffers to the system temp directory with no size cap and a 1MB in-memory threshold; `multipart(null)` turns multipart handling off.
+The limits are the servlet container's multipart configuration, set on the server: the maximum sizes, and where a large upload is buffered.
+`multipart(new MultipartConfigElement(...))` sets them on `JettyServer`, xref:tomcat.adoc[TomcatServer], and xref:undertow.adoc[UndertowServer] alike.
+The default buffers to the system temp directory with no size cap and a 1MB in-memory threshold.
+`multipart(null)` turns multipart handling off.
