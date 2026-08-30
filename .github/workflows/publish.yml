@@ -8,8 +8,8 @@ on:
     # tested. Everything here is prose or the doc site's own toolchain, none
     # of which the Gradle build reads.
     paths-ignore:
-      - 'doc/**'
-      - 'docs/**'
+      - 'manual/**'
+      - 'notes/**'
       - '**.md'
       - 'antora-playbook.yml'
       - 'package.json'

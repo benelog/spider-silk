@@ -44,7 +44,7 @@ updates:
     schedule:
       interval: weekly
 
-  # Antora, which builds the manual under doc/.
+  # Antora, which builds the manual under manual/.
   - package-ecosystem: npm
     directory: /
     schedule:
