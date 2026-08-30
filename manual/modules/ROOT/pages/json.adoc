@@ -1,11 +1,13 @@
 = JSON
 :navtitle: JSON
 
+Core builds and parses JSON itself, and the mapping between a document and a Java type is code you write.
+
 == Writers and readers
 
+`JsonWriter<T>` and `JsonReader<T>` name a mapping so that it can be reused.
 `Json.obj()` builds a tree inline, which gets repetitive once the same record is serialized in three handlers.
-`JsonWriter<T>` and `JsonReader<T>` name that mapping so it can be reused.
-Both have one method, so both are lambdas:
+Both interfaces have a single method, so both are lambdas:
 
 [source,java]
 ----
@@ -31,22 +33,26 @@ app.post("/api/decks", req -> {
 });
 ----
 
-Still no reflection: the mapping is code you wrote, so a field rename changes the wire format only if you edit it.
+There is still no reflection.
+The mapping is code you wrote, so a field rename changes the wire format only if you edit it.
 
 == Reading values
 
-`getString` throws `IllegalArgumentException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400: a handler gets a whole value or none, the same contract as `pathParamLong`.
-For a key that is allowed to be absent, `optString`/`optLong`/`optDouble`/`optBoolean` answer a default instead, for a missing key and for an explicit JSON `null` alike.
+`getString` throws `IllegalArgumentException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400.
+A handler gets a whole value or none, the same contract as `pathParamLong`.
+For a key that is allowed to be absent, `optString`, `optLong`, `optDouble`, and `optBoolean` answer a default instead, for a missing key and for an explicit JSON `null` alike.
 A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
 
 == `JsonCodec<T>`
 
-Most types only go out, which is why the two halves are separate interfaces rather than one with an unimplementable `read`.
-When a type does travel both ways, `JsonCodec<T>` is both at once: `JsonCodec.of(writer, reader)` to build one, `JsonCodec.list(codec)` for the list form.
+`JsonCodec<T>` is a writer and a reader at once, for a type that travels both ways.
+`JsonCodec.of(writer, reader)` builds one, and `JsonCodec.list(codec)` gives the list form.
+The two halves are separate interfaces because most types only go out, and one interface would leave them with an unimplementable `read`.
 
 == Where this stops being enough
 
-`WebResponse.json(value, writer)` builds the whole document in memory before sending any of it, which an answer of a hundred thousand rows cannot afford: xref:large-json.adoc[Large JSON and NDJSON] writes one value at a time instead, and reads a body the same way.
+`WebResponse.json(value, writer)` builds the whole document in memory before sending any of it, which an answer of a hundred thousand rows cannot afford.
+xref:large-json.adoc[Large JSON and NDJSON] writes one value at a time instead, and reads a body the same way.
 
 Writing the mapping by hand is core's decision for core, not for the application.
-An app with a wire format it does not own can bind objects with a library through the same seam every other page uses: xref:json-interop.adoc[External JSON Binding].
+An application with a wire format it does not own can bind objects with a library, through the same seam every other page uses: xref:json-interop.adoc[External JSON Binding].

@@ -29,8 +29,9 @@ Data spanning several lines becomes one `data:` line each, which the client join
 [#why-websocket-is-not-in-core]
 == Why SSE is in core and WebSocket is not
 
-It is an ordinary `get` route answering in a different shape, not a registration of its own, so `app.routes()` lists it, filters cover it, and the request logger reports it when the stream ends.
-That is the whole reason SSE is in core and WebSocket is not: a WebSocket upgrade leaves servlet dispatch and none of the above would still apply.
+SSE is an ordinary `get` route answering in a different shape, not a registration of its own.
+`app.routes()` therefore lists it, filters cover it, and the request logger reports it when the stream ends.
+A WebSocket upgrade leaves servlet dispatch, and none of that would still apply, which is the whole reason SSE is in core and WebSocket is not.
 Where a socket is what the application actually needs, xref:websocket.adoc[`spider-silk-jetty-websocket`] maps one, on Jetty and under its own name.
 It also means a deployment on a plain servlet container gets SSE too, since `AppServlet` needs nothing else.
 
@@ -45,4 +46,5 @@ Ending a stream is not an error, and there are three ways it happens:
 * the client goes away: the write that discovers it throws `SseStream.Closed`, which ends the handler where it stands,
 * `app.stop()` closes every stream still open, before Jetty is asked to drain, because a stream is a request in flight that would otherwise never finish.
 
-A stream quieter than Jetty's 30-second connector idle timeout is closed by the server; `stream.comment("ping")` on a timer is what keeps it alive, and proxies in front usually want the same.
+A stream quieter than Jetty's 30-second connector idle timeout is closed by the server.
+`stream.comment("ping")` on a timer is what keeps it alive, and proxies in front usually want the same.

@@ -10,7 +10,8 @@ app.get("/decks/{deckId}", req ->
         WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
 ----
 
-Nothing has to be configured for that: an `App` renders with https://jte.gg[jte] over `classpath:/jte`, appending `.jte`, so the handler above renders `classpath:/jte/deck.jte`.
+Nothing has to be configured for that.
+An `App` renders with https://jte.gg[jte] over `classpath:/jte` and appends `.jte`, so the handler above renders `classpath:/jte/deck.jte`.
 The model is a `Map`, passed to jte's parameters by name, and `ContentType.Html` escapes `${}` output for you.
 
 == A root or a suffix of your own
@@ -25,8 +26,8 @@ The suffix is appended, never checked for, so a name that still carries its exte
 
 == Another engine
 
-`TemplateRenderer` is a single method — a template name, a model, and the writer to render into.
-An engine that is not jte is that one method, and `templates(renderer)` puts it in place of the default.
+`TemplateRenderer` is a single method, taking a template name, a model, and the writer to render into.
+Implement it for an engine that is not jte, and pass it to `templates(renderer)` to take the place of the default.
 
 [source,java]
 ----
@@ -42,14 +43,17 @@ app.templates(new HandlebarsTemplates("hbs"));          // classpath:/hbs/deck.h
 app.templates(new ThymeleafTemplates("thymeleaf"));     // classpath:/thymeleaf/deck.html
 ----
 
-Anything else is the one-liner above; a module only earns its place when there is something to settle beyond `compile(name).render(model)`.
+Anything else is the one-liner above.
+A module only earns its place when there is something to settle beyond `compile(name).render(model)`.
 
-Rendering happens while the handler's exception handling still applies, so a template that throws reaches `app.exception(...)` like any other failure, and a `HEAD` of a rendered page reports the length the `GET` would have sent.
+Rendering happens while the handler's exception handling still applies.
+A template that throws therefore reaches `app.exception(...)` like any other failure, and a `HEAD` of a rendered page reports the length the `GET` would have sent.
 
 [#production]
 == Development and production
 
-jte compiles templates at runtime by default, reading them from the classpath: nothing to configure, but it needs a JDK on the deployment machine, and an edited template is not seen until the classpath copy is rebuilt.
+jte compiles templates at runtime by default, reading them from the classpath.
+There is nothing to configure, but the deployment machine needs a JDK, and an edited template is not seen until the classpath copy is rebuilt.
 The engine has a mode for each side of that trade, and `JteTemplates` has a constructor for each.
 
 Development resolves templates from the source directory instead of the classpath:
@@ -60,7 +64,8 @@ app.templates(new JteTemplates(
         new DirectoryCodeResolver(Path.of("src/main/resources/jte"))));
 ----
 
-Before each render, jte checks the modification timestamp of the template file and everything it depends on, and recompiles what changed — saving a `.jte` file and refreshing the browser is the whole loop.
+Before each render, jte checks the modification timestamp of the template file and everything it depends on, and recompiles what changed.
+Saving a `.jte` file and refreshing the browser is the whole loop.
 
 Production precompiles every template at build time with the https://jte.gg/pre-compiling/[jte Gradle plugin]:
 
@@ -87,4 +92,5 @@ app.templates(new JteTemplates(TemplateEngine.createPrecompiled(ContentType.Html
 
 The jar then renders from compiled classes: no runtime compiler, no JDK on the machine, and a template that does not compile fails the build instead of the request.
 The suffix applies either way, so no handler changes.
-The example project wires both modes behind a `--dev` flag, and a xref:native-image.adoc[native image] has no compiler at runtime at all, so there this mode is the only one.
+The example project wires both modes behind a `--dev` flag.
+A xref:native-image.adoc[native image] has no compiler at runtime at all, so precompiling is the only mode there.

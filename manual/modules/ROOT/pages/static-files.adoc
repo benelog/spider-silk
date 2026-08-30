@@ -1,10 +1,10 @@
 = Static Files
 :navtitle: Static Files
 
-`classpath:/public/*` is served at the root without being asked for; `staticFiles("/assets")` names a different directory.
+An `App` serves `classpath:/public/*` at the root without being asked to, and `staticFiles("/assets")` names a different directory.
 Every response carries an `ETag` and `Last-Modified` derived from the resource, so a reload comes back as a bodyless 304 instead of the file again.
 The default `Cache-Control: no-cache` means "cache it, but check with me first", which is right for names that never change.
-For fingerprinted names, say so:
+Say so for fingerprinted names:
 
 [source,java]
 ----
@@ -18,7 +18,7 @@ Directories are never served.
 
 == A directory on disk
 
-Files that are not on the classpath — user uploads, a volume mounted beside the jar, a directory some separate build writes into — come from `StaticFiles.directory(path)`:
+`StaticFiles.directory(path)` serves files that are not on the classpath, such as user uploads, a volume mounted beside the jar, or a directory some separate build writes into:
 
 [source,java]
 ----
@@ -28,8 +28,9 @@ app.staticFiles(
                 .hostedPath("/uploads"));
 ----
 
-`staticFiles(...)` takes as many roots as you have and reads them in the order given: the first that holds the file answers, and the rest are not asked.
-Everything else is the same either way — the same validators, the same conditional requests, the same `Cache-Control`, the same `hostedPath`.
+`staticFiles(...)` takes as many roots as you have, and reads them in the order given.
+The first root that holds the file answers, and the rest are not asked.
+Everything else is the same either way: the same validators, the same conditional requests, the same `Cache-Control`, and the same `hostedPath`.
 
 The root is read per request rather than at construction, so a volume that is mounted after the application starts needs no restart, and one that is never mounted answers 404 instead of failing to boot.
 
@@ -37,8 +38,8 @@ Called with no argument at all, `staticFiles()` serves nothing and leaves every 
 
 == A pre-compressed sibling
 
-`gzip()` deflates the same unchanging asset again on every request that asks for it, and brotli it cannot answer at all, because the JDK ships no encoder.
-A `.br` or `.gz` file that a build left next to the asset closes both halves, and `precompressed()` is what looks for it:
+`precompressed()` answers from a `.br` or `.gz` file that a build left next to the asset.
+`gzip()` on its own deflates the same unchanging asset again on every request that asks for it, and cannot answer brotli at all, because the JDK ships no encoder:
 
 [source,java]
 ----
@@ -47,8 +48,10 @@ app.staticFiles(new StaticFiles("/public")
         .precompressed());                              // app.css.br / app.css.gz answer app.css
 ----
 
-Brotli wins where both siblings exist and the client takes both: it is the smaller of the two, and the one nothing else here can produce.
-The answer describes the original either way — its `Content-Type`, since a `.gz` extension is the encoding and not the type, and its `ETag` and `Last-Modified`, so a browser revalidating across encodings keeps its 304.
+Brotli wins where both siblings exist and the client takes both.
+It is the smaller of the two, and the one nothing else here can produce.
+The answer describes the original either way.
+The `Content-Type` is the original's, since a `.gz` extension is the encoding and not the type, and so are the `ETag` and `Last-Modified`, so a browser revalidating across encodings keeps its 304.
 That tag is marked weak on an encoded answer, for the same reason `gzip()` marks its own.
 
 An asset with no sibling, or a client that reads neither encoding, is answered exactly as before, `gzip()` included.
@@ -59,6 +62,8 @@ It is off until it is named, because a `.gz` left over from an older pipeline is
 
 == Staying inside the directory
 
-A directory root is a path-traversal surface that a classpath lookup does not have, so the guard is explicit and does not lean on the container: a request is answered only when the file it resolves to, with every symbolic link followed, is a regular file whose real path lies under the root's own real path.
-A `..` anywhere in the path is refused before that, and a symbolic link pointing out of the root is refused by it.
-Anything the guard turns down is not a file this root has, so routing carries on and the answer is the usual 404 — never a message that says which of the two it was.
+A request is answered only when the file it resolves to, with every symbolic link followed, is a regular file whose real path lies under the root's own real path.
+A directory root is a path-traversal surface that a classpath lookup does not have, so the guard is explicit and does not lean on the container.
+A `..` anywhere in the path is refused before the guard runs, and a symbolic link pointing out of the root is refused by it.
+Anything the guard turns down is not a file this root has, so routing carries on and the answer is the usual 404.
+No message says which of the two it was.
