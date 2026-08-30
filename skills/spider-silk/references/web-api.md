@@ -82,6 +82,9 @@ Map<String, String> all = req.cookies();
 String body = req.body();
 Json.JsonValue json = req.bodyJson();                       // unparseable -> 400
 NewDeck deck = req.bodyJson(NEW_DECK_READER);               // reader rejection -> 400
+Stream<Card> cards = req.bodyNdjson(CARD_READER);           // lazy; a bad line -> 400 naming it
+InputStream in = req.bodyStream();                          // unread bytes, for another library's parser
+BufferedReader r = req.bodyReader();                        // unread characters; bytes or characters, never both
 UploadedFile file = req.file("file");                       // missing part or not multipart -> 400
 // UploadedFile: fileName(), contentType(), size(), bytes(), asText()
 ```
@@ -101,8 +104,9 @@ Immutable value: every method returns a new response, so chains compose and afte
 
 ```java
 // Bodies
-WebResponse.html(page); WebResponse.text(s); WebResponse.bytes(b);
+WebResponse.html(page); WebResponse.text(s); WebResponse.bytes(pdf, "application/pdf");
 WebResponse.json(rawString); WebResponse.json(jsonValue); WebResponse.json(value, writer);
+WebResponse.jsonArray(sink -> ...); WebResponse.ndjson(sink -> ...);   // written a value at a time, see content.md
 WebResponse.template("deck");                       // name carries no extension
 WebResponse.template("deck", Map.of("deck", deck));
 WebResponse.stream("text/csv", out -> exporter.write(out));

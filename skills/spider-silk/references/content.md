@@ -1,6 +1,6 @@
 # Content: JSON, templates, static files, SSE, WebSocket, OpenAPI
 
-Contents: [JSON](#json) · [Templates](#templates) · [Static files](#static-files) · [SSE](#server-sent-events) · [WebSocket](#websocket) · [OpenAPI export](#openapi-export)
+Contents: [JSON](#json) · [Large answers and NDJSON](#answers-too-large-to-hold) · [Binding with another library](#binding-json-with-another-library) · [Templates](#templates) · [Static files](#static-files) · [SSE](#server-sent-events) · [WebSocket](#websocket) · [OpenAPI export](#openapi-export)
 
 ## JSON
 
@@ -31,6 +31,63 @@ app.post("/api/decks", req -> {
 - A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
 - `JsonCodec<T>` is writer and reader at once for types that travel both ways: `JsonCodec.of(writer, reader)`, `JsonCodec.list(codec)`.
 - The conventional home for an app's wire format is one `Codecs` class of static writer/reader lambdas.
+
+### Answers too large to hold
+
+`WebResponse.json(list, DECKS)` builds every element as a tree and then one string holding all of them, so a hundred thousand rows sit in memory twice before the client sees the first one.
+That is the right trade for an answer that fits and the wrong one for an export.
+Two response kinds write the elements as they are produced instead:
+
+```java
+// An ordinary JSON array, written a value at a time: the brackets and commas belong to the response
+app.get("/api/decks/{deckId}/cards", req -> {
+    long deckId = req.pathParamLong("deckId");           // look the deck up here, not inside the writer
+    return WebResponse.jsonArray(sink -> service.eachCard(deckId, card -> sink.write(card, CARD)));
+});
+
+// One complete JSON value per line, application/x-ndjson
+app.get("/api/decks/{deckId}/cards.ndjson", req -> {
+    long deckId = req.pathParamLong("deckId");
+    return WebResponse.ndjson(sink -> service.eachCard(deckId, card -> sink.write(card, CARD)));
+});
+
+// Reading NDJSON back, lazily: a hundred thousand records are never a list
+app.post("/api/decks/{deckId}/cards.ndjson", req -> {
+    int imported = service.importCards(req.pathParamLong("deckId"), req.bodyNdjson(CARD_DRAFT));
+    return WebResponse.json(Json.obj().put("imported", imported));
+});
+```
+
+- `sink.write(value, writer)` takes the same hand-written `JsonWriter<T>` as everything else: a different way of framing the output, not a different way of mapping it.
+  It throws `UncheckedIOException` rather than a checked `IOException`, so `card -> sink.write(card, CARD)` is an ordinary `Consumer` and fits a row callback over a database cursor.
+- Both are a `stream` body underneath, so the headers commit before the writer runs.
+  Anything that can fail in a way the client should hear about — a missing deck, an unauthorized caller — must be settled *before* the response is returned; a failure inside the writer can no longer change the status.
+- `req.bodyNdjson(reader)` is a lazy `Stream<T>`.
+  A line that is not valid JSON, or that the reader rejects, answers 400 naming the line — but only where the stream is consumed, so consume it before returning the response, ideally inside one transaction so a bad line rolls the import back.
+- Prefer NDJSON over an array for bulk data: each line stands alone, so a consumer acts on record one without waiting for the last, and a cut-off transfer leaves whole records rather than an unclosed document.
+  It is bulk transfer, not live events — [SSE](#server-sent-events) is the one that flushes per event and reconnects.
+- There is no streaming *parser*: `bodyJson()` builds the whole tree, because a tree is what a hand-written `JsonReader` reads.
+  For a single document too large to hold, the answer is NDJSON.
+
+### Binding JSON with another library
+
+Hand-written mapping is core's decision for core, not for the application.
+An app with three hundred DTOs, or a wire format generated from a schema it does not own, has a reason to bind with a library — so when the user asks for Jackson, Gson, or avaje-jsonb, wire it through the seam rather than refusing:
+
+```java
+// Out: a document something else already serialized
+return WebResponse.json(MAPPER.writeValueAsString(decks));
+
+// In: the body, unread. bodyStream() is bytes (Jackson), bodyReader() is characters (Gson)
+NewDeck body = MAPPER.readValue(req.bodyStream(), NewDeck.class);
+NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
+```
+
+- Never route a library's output through `JsonWriter<T>`: it returns a `Json.JsonValue`, so the document would be re-parsed the moment the library finished writing it.
+- A body reads as bytes or as characters, never both.
+  After `body()`, `bodyJson()`, `bodyNdjson()`, or `param()` — all of which read characters — `bodyStream()` throws `IllegalStateException`, and the reverse holds too.
+- Core has not been told the body is JSON, so the library's own failures are the application's to answer: map them with `app.exception(JsonProcessingException.class, ...)` or throw `HttpException(HttpStatus.BAD_REQUEST, ...)`.
+- Under a [native image](servers-and-deployment.md#graalvm-native-image), Jackson and Gson need a reflection entry per bound type; avaje-jsonb generates an adapter per type at compile time and needs none.
 
 ## Templates
 

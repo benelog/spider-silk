@@ -18,8 +18,12 @@ metadata:
 
 A thin Java web framework on top of the Jakarta Servlet API.
 Requires Java 21 or later.
-The current version is `0.1.0-SNAPSHOT`, published to GitHub Packages, which needs authentication even for public repositories — see [First-run setup](#first-run-setup) before touching the build file.
+Releases are published to GitHub Packages, which needs authentication even for public repositories — see [First-run setup](#first-run-setup) before touching the build file.
 The full manual is at <https://spider-silk.benelog.net>; the reference files beside this one are distilled from it.
+
+**Version.** This skill writes `0.1.0-SNAPSHOT` throughout, which is the release it was written against and the only version string in it.
+Before putting it in a build file, prefer whatever the project already declares.
+For a project starting fresh, check <https://github.com/benelog/spider-silk/packages> for the current version, since this skill's copy ages with each release.
 
 ## Principles the code you write must respect
 
@@ -27,8 +31,11 @@ Spider Silk is built around explicitness, and code that fights this reads as wro
 
 1. **No reflection.**
    There is no annotation scanning, no proxies, no automatic binding.
-   Never introduce annotation-based routing, classpath scanning, or reflective JSON binding (no Jackson/Gson on domain objects).
-   JSON mapping is hand-written with the framework's `Json` API — that is a feature, not a gap to fill.
+   Never introduce annotation-based routing or classpath scanning: those fight the framework itself, and there is no seam for them.
+   JSON mapping is hand-written with the framework's `Json` API — that is a feature, not a gap to fill, so do not reach for a binding library unasked.
+   A library the *application* adds is a different question, and the answer to it is not "no".
+   When the user asks for Jackson, Gson, or avaje-jsonb, wire it through the seam that exists for exactly that: `WebResponse.json(String)` on the way out, `req.bodyStream()` or `bodyReader()` on the way in.
+   [references/content.md](references/content.md) has the shape.
 2. **A handler is a function from a request to a response**: `WebResponse handle(WebRequest req)`.
    Handlers return a `WebResponse` value; they never write to a servlet response directly (except a deliberate `WebResponse.raw(...)`).
 3. **No DI container.**
@@ -38,7 +45,8 @@ Spider Silk is built around explicitness, and code that fights this reads as wro
    Every route is one registration statement; there is no `Controller` interface and no self-registering class.
    Handlers arrive as a lambda, a single-route `...Action` class implementing `Handler`, or a public method reference (`decks::showDeck`).
 5. **The framework covers the web tier only.**
-   Persistence, transactions, and scheduling are the application's own code (see the `example-flashcard` app in the framework repo for the pattern: plain `NamedParameterJdbcTemplate`, a hand-rolled `Transactions` wrapper, a hand-wired context class).
+   Persistence, transactions, and scheduling are the application's own code: plain `NamedParameterJdbcTemplate`, a hand-rolled `Transactions` wrapper around `TransactionTemplate`, a hand-wired context class.
+   The worked example is <https://github.com/benelog/spider-silk/tree/main/example-flashcard>.
 
 ## First-run setup
 
@@ -138,6 +146,7 @@ Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus
 - Template names carry no extension (`template("deck")` renders `deck.jte`).
 - Sessions are on by default; `req.flash(key, value)` + `req.flashed(key)` is the Post/Redirect/Get message pattern.
 - `app.routes()` returns every registered route as data (`Route(method, path, description)`); build introspection pages and OpenAPI export on it.
+- An answer too large to hold in memory is `WebResponse.jsonArray(sink -> ...)` or `WebResponse.ndjson(sink -> ...)`, written a value at a time, and `req.bodyNdjson(reader)` reads a large body back lazily — never build a hundred thousand rows into one tree. See [references/content.md](references/content.md).
 
 ## Testing
 
@@ -158,13 +167,39 @@ assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
 Both live in `spider-silk-test` (`net.benelog.spidersilk.test`), test scope only.
 Details in [references/testing.md](references/testing.md).
 
+## Verify a change before calling it done
+
+The API is typed all the way through — `WebResponse` from every branch, `HttpStatus` rather than an int, a declared type on every extraction — so the compiler catches most mistakes if you let it:
+
+```bash
+./gradlew build     # or: mvn verify
+```
+
+`WebTest` needs no port, no container, and no mock library, so covering a new route is cheap enough that there is no reason to assert by hand that it works — add the test (see [references/testing.md](references/testing.md)).
+To watch it serve a real request, `app.start(8080)` and `curl` it.
+`app.routes()` prints the table the router actually walks, which settles "is my route registered, and at what path?" without guessing.
+
+## When something fails
+
+| Symptom | Cause |
+|---|---|
+| `401`, or `Could not resolve net.benelog.spidersilk:...` | GitHub Packages rejects anonymous downloads — see [First-run setup](#first-run-setup) |
+| `IllegalStateException` at startup, naming a path | Two routes match exactly the same requests (the same path, or the same shape with a variable renamed). Registration is the check, because one of them could never run |
+| A template is not found | The name carried an extension. `template("deck")`, never `template("deck.jte")` — the engine appends its own suffix |
+| A 400 where you expected a null | Typed extraction rejects rather than returning null. Use the `(name, default)` form for a parameter that may be absent; a present-but-unparseable value is still a 400 |
+| A `{name}` route swallows a literal one | Registration order breaks ties, so register `/study/today` before `/study/{mode}` |
+| A before-filter never runs for paths under its own | A filter path needs the trailing `*` to cover what is under it: `/admin/*`, not `/admin` |
+| An after-filter's change is lost | `WebResponse` is immutable. The filter has to *return* the new response; calling a builder method and dropping the result changes nothing |
+| A streamed response answers 200 and then fails | The headers commit before the writer runs. Whatever can fail in a way the client should hear about belongs before the response is returned |
+| Reflection errors under a native image | The framework needs no configuration; a library the application added does. Precompile jte templates, and generate metadata for the reflective library |
+
 ## Where to look next
 
 | Task | Read |
 |---|---|
 | Dependencies, Maven, modules and exclusions, Gradle plugin, Maven parent | [references/setup.md](references/setup.md) |
 | Routing, handlers, request/response API, filters, errors, sessions, CORS/gzip/security headers, logging, introspection | [references/web-api.md](references/web-api.md) |
-| JSON, templates (jte/FreeMarker/Handlebars/Thymeleaf), static files, SSE, WebSocket, OpenAPI export | [references/content.md](references/content.md) |
+| JSON (including large answers, NDJSON, and binding with another library), templates (jte/FreeMarker/Handlebars/Thymeleaf), static files, SSE, WebSocket, OpenAPI export | [references/content.md](references/content.md) |
 | Server tuning, virtual threads, Tomcat/Undertow, external containers, Jib/Docker images, native image | [references/servers-and-deployment.md](references/servers-and-deployment.md) |
 | WebTest and TestRequest in full | [references/testing.md](references/testing.md) |
 

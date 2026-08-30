@@ -2,7 +2,8 @@
 
 Spider Silk requires Java 21 or later.
 Releases are published to GitHub Packages, not Maven Central, and GitHub Packages requires authentication even for public repositories: a personal access token (classic) with the `read:packages` scope, used as the password.
-The current version is `0.1.0-SNAPSHOT`; the group id, the package root, and the `Automatic-Module-Name` are all `net.benelog.spidersilk`.
+The snippets below write `0.1.0-SNAPSHOT`, the release this skill was written against — SKILL.md has the rule for checking it before it reaches a build file.
+The group id, the package root, and the `Automatic-Module-Name` are all `net.benelog.spidersilk`.
 
 ## Gradle
 
