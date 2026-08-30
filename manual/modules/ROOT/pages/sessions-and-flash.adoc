@@ -1,7 +1,12 @@
 = Sessions and Flash
 :navtitle: Sessions and Flash
 
+A session keeps values on the server across a visitor's requests.
+A flash value is a session value that survives exactly one request more.
+
 == Session attributes
+
+Session attributes are read and written through the request:
 
 [source,java]
 ----
@@ -10,14 +15,18 @@ User user = req.sessionAttr("user");    // null when absent
 req.removeSessionAttr("user");
 ----
 
-Reading never creates a session, so a visitor who has not signed in costs no session object; writing creates one on demand.
-The value is any object, kept server-side — only the container's session cookie travels.
+Reading never creates a session, so a visitor who has not signed in costs no session object.
+Writing creates one on demand.
+The value is any object and stays on the server: only the container's session cookie travels.
 
-Session support is the servlet container's, on by default: `JettyServer` turns it off with `sessions(false)`, while xref:tomcat.adoc[Tomcat] and xref:undertow.adoc[Undertow] always install a session manager, as their pages explain.
+Session support is the servlet container's, and is on by default.
+`JettyServer` turns it off with `sessions(false)`.
+xref:tomcat.adoc[Tomcat] and xref:undertow.adoc[Undertow] always install a session manager, as their pages explain.
 
 == Flash
 
-A flash value is visible exactly once, on the request after the one that set it — which is the Post/Redirect/Get pattern's missing piece: the POST wants to say "Imported 12 cards." on the page its redirect lands on.
+A flash value is visible exactly once, on the request after the one that set it.
+That is the missing piece of the Post/Redirect/Get pattern: the POST wants to say "Imported 12 cards." on the page its redirect lands on.
 
 [source,java]
 ----
@@ -31,6 +40,8 @@ app.get("/decks/{deckId}", req -> WebResponse.template("deck",
         Map.of("message", req.flashed("message"), "deck", ...)));
 ----
 
-`flash(key, value)` stores a string in the session; before the next request is dispatched, everything flashed moves out of the session and into that request, where `flashed(key)` reads it — and any request after that finds nothing.
-`flashed` answers null for a key nobody flashed, so a template renders the message conditionally.
-Flash rides on the session, so it needs sessions on — which they are, by default.
+`flash(key, value)` stores a string in the session.
+Before the next request is dispatched, everything flashed moves out of the session and into that request, where `flashed(key)` reads it.
+Any request after that finds nothing.
+`flashed` answers null for a key nobody flashed, so a template can render the message conditionally.
+Flash rides on the session, so it needs sessions on, which they are by default.

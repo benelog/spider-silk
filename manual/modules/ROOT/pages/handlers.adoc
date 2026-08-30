@@ -1,12 +1,12 @@
 = Handlers
 :navtitle: Handlers
 
-`Handler` has one method, so how a handler is written is the application's call rather than the framework's.
-The example app uses all three shapes.
+`Handler` has a single method, so the application decides what shape a handler takes.
+The example app uses all three.
 
 == A lambda
 
-When there is no state worth a class:
+Use a lambda when there is no state worth a class:
 
 [source,java]
 ----
@@ -16,8 +16,8 @@ app.get("/openapi.json", req -> WebResponse.json(
 
 == An `Action` class
 
-When a class answers exactly one route.
-It implements `Handler`, so it registers as itself:
+Use a class when it answers exactly one route.
+The class implements `Handler`, so it registers as itself:
 
 [source,java]
 ----
@@ -41,12 +41,14 @@ public class StatsAction implements Handler {
 app.get("/stats", context.statsAction());
 ----
 
-`Action` is the A of the ADR (Action-Domain-Responder) pattern: a web-tier class that answers exactly one request, the same convention as Laravel's single action controllers.
-The framework does not know the name: `Handler` is the interface, `…Action` is a naming convention for the classes that implement it directly.
+`Action` is the A of the ADR (Action-Domain-Responder) pattern: a web-tier class that answers exactly one request.
+Laravel's single action controllers follow the same convention.
+The framework does not know the name.
+`Handler` is the interface, and `…Action` is a naming convention for the classes that implement it directly.
 
 == Public methods, registered by reference
 
-When one class answers several related routes:
+Register methods by reference when one class answers several related routes:
 
 [source,java]
 ----
@@ -66,5 +68,6 @@ app.post("/decks/{deckId}/rename", decks::renameDeck);
 ----
 
 The methods are `public` because registration happens outside the class, and that is the point.
-There is no `Controller` interface and no `register(App)` method to implement, so every route the application answers is one statement in one list, and `app.routes()` reports exactly what is written there.
-A class that registers its own routes hides half the routing table inside itself, which is the thing annotation scanning does, just spelled out by hand.
+There is no `Controller` interface and no `register(App)` method to implement.
+Every route the application answers is therefore one statement in one list, and `app.routes()` reports exactly what is written there.
+A class that registers its own routes hides half the routing table inside itself, which is what annotation scanning does, spelled out by hand.

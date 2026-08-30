@@ -1,9 +1,12 @@
 = Filters and Errors
 :navtitle: Filters and Errors
 
+A filter runs before or after a route handler.
+An error handler fills in the body of a response that ended on a status with nothing to show.
+
 == Filters
 
-`before`/`after` take an optional path.
+`before` and `after` take an optional path, and cover everything in scope when given none.
 A trailing `*` covers the prefix _and_ everything under it, so `/admin/*` guards `/admin` as well as `/admin/users`, which is what a guard almost always means:
 
 [source,java]
@@ -13,8 +16,9 @@ app.before("/admin/*", req -> req.sessionAttr("user") == null
         : null);                            // carry on
 ----
 
-A before-filter that returns a response ends the request there; returning `null` continues to the route.
-To reject without a body of your own, `throw new HttpException(HttpStatus.UNAUTHORIZED, "...")` and let `error(HttpStatus.UNAUTHORIZED, ...)` render it.
+A before-filter that returns a response ends the request there.
+Returning `null` continues to the route.
+Throw `new HttpException(HttpStatus.UNAUTHORIZED, "...")` to reject without a body of your own, and let `error(HttpStatus.UNAUTHORIZED, ...)` render it.
 
 An after-filter takes the response the route returned and hands back a replacement, or `null` to leave it alone:
 
@@ -28,7 +32,9 @@ app.after((req, res) -> res.header("X-Request-Id", requestId()));
 `error(status, handler)` fills in the body for any response that ended on that status with no body, whether from the router, from an `HttpException`, or from a handler that returned `WebResponse.empty(HttpStatus.FORBIDDEN)`.
 `notFound(handler)` is shorthand for `error(HttpStatus.NOT_FOUND, handler)`, so one registration styles the router's own 404 and every handler-made one alike.
 A response that already carries a body is left alone.
-What the error handler returns keeps the headers the framework had already worked out, such as the `Allow` of a 405, and answers with the registered status unless it sets one of its own.
+What the error handler returns keeps the headers the framework had already worked out, such as the `Allow` of a 405.
+It answers with the registered status unless it sets one of its own.
 Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.
 
-Both lists are readable back: `app.guards()` reports the filters and the error handlers the way `app.routes()` reports the routes, in xref:route-introspection.adoc#guards[Route Introspection].
+Both lists are readable back.
+`app.guards()` reports the filters and the error handlers the way `app.routes()` reports the routes, in xref:route-introspection.adoc#guards[Route Introspection].
