@@ -1,8 +1,10 @@
 = GraalVM Native Image
 :navtitle: GraalVM Native Image
 
-A framework without reflection is a framework `native-image` can see through: routing is a list, handlers are lambdas the closed-world analysis follows, and there is no reflection config to write for core.
-What needs preparing is the parts that are not the framework, and the example project shows all of them: `gradle :example-flashcard:nativeCompile` builds a self-contained binary serving the same app.
+A framework without reflection is a framework `native-image` can see through.
+Routing is a list, handlers are lambdas the closed-world analysis follows, and there is no reflection config to write for core.
+What needs preparing is the parts that are not the framework, and the example project shows all of them.
+`gradle :example-flashcard:nativeCompile` builds a self-contained binary serving the same app.
 
 == What the example prepares
 
@@ -28,11 +30,13 @@ dependencies {
 }
 ----
 +
-That config is the whole of jte's reflection: the engine looks a generated class up by name and invokes its `render` method, while the expressions inside a template run as compiled code that never reflects over the model — see xref:reflection-scope.adoc[The Scope of "No Reflection"].
+That config is the whole of jte's reflection.
+The engine looks a generated class up by name and invokes its `render` method, while the expressions inside a template run as compiled code that never reflects over the model; see xref:reflection-scope.adoc[The Scope of "No Reflection"].
 No model class, and no framework class, needs an entry.
 
 Row mapping::
-The repositories map rows with spring-jdbc's `DataClassRowMapper` and feed inserts through `SimplePropertySqlParameterSource`, both of which reach the domain records reflectively — the example's own choice, kept because so much existing JDBC code looks exactly like this.
+The repositories map rows with spring-jdbc's `DataClassRowMapper` and feed inserts through `SimplePropertySqlParameterSource`, both of which reach the domain records reflectively.
+That is the example's own choice, kept because so much existing JDBC code looks exactly like this.
 What that choice costs under native image is a reflection config listing every domain type, and the build derives that list from the package (see below) rather than maintaining it by hand.
 
 Resources and the driver::
@@ -50,7 +54,8 @@ graalvmNative {
 }
 ----
 +
-The xref:gradle-plugin.adoc[spider-silk plugin] supplies the rest of the block: `--no-fallback`, the mostly-static `--static-nolibc` the container section below relies on, and the metadata repository — by hand, that is `buildArgs.add('--no-fallback')`, `buildArgs.add('--static-nolibc')`, and `metadataRepository { enabled = true }` under the `org.graalvm.buildtools.native` plugin.
+The xref:gradle-plugin.adoc[spider-silk plugin] supplies the rest of the block: `--no-fallback`, the mostly-static `--static-nolibc` the container section below relies on, and the metadata repository.
+By hand, that is `buildArgs.add('--no-fallback')`, `buildArgs.add('--static-nolibc')`, and `metadataRepository { enabled = true }` under the `org.graalvm.buildtools.native` plugin.
 
 == Build and run
 
@@ -62,7 +67,8 @@ example-flashcard/build/native/nativeCompile/flashcard
 ----
 
 Built with GraalVM CE 25, the binary comes out at 61MB and Jetty reports itself started after roughly 35ms, against roughly 350ms for the same app on a JVM.
-Everything the example does — routing, jte templates, static files, sessions and flash, the JSON API, the OpenAPI export, H2 over spring-jdbc with transactions — runs in the binary with no reflection config written by hand: every entry in the image is generated, by the jte plugin for the template classes and by the build itself for the domain package, and not one of them names a framework class.
+Everything the example does runs in the binary with no reflection config written by hand: routing, jte templates, static files, sessions and flash, the JSON API, the OpenAPI export, and H2 over spring-jdbc with transactions.
+Every entry in the image is generated, by the jte plugin for the template classes and by the build itself for the domain package, and not one of them names a framework class.
 `--no-fallback` keeps that honest, failing the build rather than quietly emitting a binary that still needs a JVM.
 
 The `--dev` template mode is the one thing that stays on the JVM, since hot-reloading a template means compiling it at runtime.
@@ -70,8 +76,9 @@ The `--dev` template mode is the one thing that stays on the JVM, since hot-relo
 [#container]
 == The binary in a container
 
-xref:deployment.adoc[Deployment] sets up Jib to containerize the app on a JRE base without a Docker daemon on the build machine; the binary is one file, and `-Pnative` re-aims that same build at it.
-The switch ships in the xref:gradle-plugin.adoc[spider-silk plugin], so the example's build carries nothing for it; expanded, it is a conditional over Jib's native-image extension, which needs the buildscript classpath:
+`-Pnative` re-aims at the binary the same Jib build xref:deployment.adoc[Deployment] sets up, which containerizes the app on a JRE base with no Docker daemon on the build machine.
+The switch ships in the xref:gradle-plugin.adoc[spider-silk plugin], so the example's build carries nothing for it.
+Expanded, it is a conditional over Jib's native-image extension, which needs the buildscript classpath:
 
 [source,groovy]
 ----
@@ -95,8 +102,12 @@ if (providers.gradleProperty('native').present) {
 }
 ----
 
-The extension replaces the dependency and class layers Jib would assemble with a single layer holding the binary, sets its executable bit, and points the entrypoint at `/app/flashcard`; `imageName` tells it which file to take from `build/native/nativeCompile` and must match the `graalvmNative` block's.
-The base image shrinks along with the process: the binary builds mostly static (`--static-nolibc`, a plugin default), everything but glibc linked in, and `distroless/base` is little more than that glibc, CA certificates, and a filesystem skeleton — no shell, no package manager, and no JVM, since the JVM left at compile time.
+The extension replaces the dependency and class layers Jib would assemble with a single layer holding the binary, sets its executable bit, and points the entrypoint at `/app/flashcard`.
+`imageName` tells it which file to take from `build/native/nativeCompile`, and must match the `graalvmNative` block's.
+
+The base image shrinks along with the process.
+The binary builds mostly static (`--static-nolibc`, a plugin default), with everything but glibc linked in, and `distroless/base` is little more than that glibc, CA certificates, and a filesystem skeleton.
+There is no shell, no package manager, and no JVM, since the JVM left at compile time.
 The mostly-static link is what makes that base sufficient: linked dynamically, the binary also wants `libz`, which `distroless/base` does not carry, and the container dies on startup.
 
 [source,bash]
@@ -107,16 +118,21 @@ docker load < example-flashcard/build/jib-image.tar
 docker run -p 8080:8080 ghcr.io/benelog/spider-silk-flashcard:native
 ----
 
-The tar comes out at 34MB against 124MB for the JVM image, and the trade is portability: Java bytecode runs on any architecture with a JRE image, while a native binary is compiled for one platform, so this image runs on the architecture that built it — there is no cross-compilation.
+The tar comes out at 34MB against 124MB for the JVM image, and the trade is portability.
+Java bytecode runs on any architecture with a JRE image, while a native binary is compiled for one platform, so this image runs on the architecture that built it.
+There is no cross-compilation.
 
 == When a library reflects
 
-The framework will not be what stops you; a library that resolves classes by name at runtime will.
-Prefer the code path that says what it means — a precompiled template, a hand-written mapper — and where a library must reflect, hand `native-image` its config: from the library's own tooling like jte's extension, from GraalVM's metadata repository like H2's, or maintained for your own types as below.
+The framework will not be what stops you.
+A library that resolves classes by name at runtime will.
+Prefer the code path that says what it means, such as a precompiled template or a hand-written mapper.
+Where a library must reflect, hand `native-image` its config: from the library's own tooling like jte's extension, from GraalVM's metadata repository like H2's, or maintained for your own types as below.
 
 === Keeping DataClassRowMapper, measured
 
-What the example's `DataClassRowMapper` and `SimplePropertySqlParameterSource` need is one file: a `reflect-config.json` on the classpath under `META-INF/native-image/<any-directory>/`, with an entry per domain type — written by hand, or generated the way the example's build does.
+The example's `DataClassRowMapper` and `SimplePropertySqlParameterSource` need one file: a `reflect-config.json` on the classpath under `META-INF/native-image/<any-directory>/`, with an entry per domain type.
+Write it by hand, or generate it the way the example's build does.
 
 [source,json]
 ----
@@ -128,7 +144,8 @@ What the example's `DataClassRowMapper` and `SimplePropertySqlParameterSource` n
 ]
 ----
 
-`allDeclaredConstructors` is what lets `DataClassRowMapper` find the record's canonical constructor, and `allDeclaredMethods` is what lets `SimplePropertySqlParameterSource` read the accessors; nothing beyond the domain types themselves was needed.
+`allDeclaredConstructors` is what lets `DataClassRowMapper` find the record's canonical constructor, and `allDeclaredMethods` is what lets `SimplePropertySqlParameterSource` read the accessors.
+Nothing beyond the domain types themselves was needed.
 The example was built and exercised both ways on one machine, through every repository path in the binary:
 
 [cols="1,1,1",options="header"]
@@ -148,8 +165,10 @@ The example was built and exercised both ways on one machine, through every repo
 | 60.9MiB (+4.8%)
 |===
 
-The reflection metadata is baked in when the image is built, so boot pays nothing; the costs live elsewhere.
-Reflective mapping is slower per row at request time, and above all the failure mode moves: a record added without a config entry is not a compile error, and `--no-fallback` cannot catch it — the build succeeds and the first query against that record answers 500 in production.
+The reflection metadata is baked in when the image is built, so boot pays nothing.
+The costs live elsewhere.
+Reflective mapping is slower per row at request time, and above all the failure mode moves.
+A record added without a config entry is not a compile error, and `--no-fallback` cannot catch it: the build succeeds, and the first query against that record answers 500 in production.
 The tracing agent (`-agentlib:native-image-agent=config-output-dir=...`) can write the config from a JVM run that clicks through the app, at the price of sweeping in everything else it saw.
 
 === Deriving the config from a package
@@ -179,6 +198,6 @@ def domainReflectConfig = tasks.register('domainReflectConfig') {
 sourceSets.main.resources.srcDir(domainReflectConfig)
 ----
 
-`srcDir(domainReflectConfig)` adds the generated directory to the main resources and carries the task dependency with it, so `processResources` — and everything built from it, jar and native image alike — picks the file up.
+`srcDir(domainReflectConfig)` adds the generated directory to the main resources and carries the task dependency with it, so `processResources` picks the file up, and so does everything built from it, jar and native image alike.
 The sweep is the point and also the caveat: every type in the package is opened to reflection, one source file per top-level type, so it fits a package that holds nothing but the types meant for it.
 Both variants on this page were verified the same way: built with GraalVM CE 25 and exercised through every repository code path in the running binary.

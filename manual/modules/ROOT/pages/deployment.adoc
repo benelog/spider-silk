@@ -1,6 +1,8 @@
 = Deployment
 :navtitle: Deployment
 
+This chapter covers what an application does instead of calling `app.start(port)`: deploying to an external servlet container, precompiling templates, building a container image with Jib, and writing a Dockerfile where a platform demands one.
+
 == An external servlet container
 
 Deploy to an external servlet container by skipping `start` and mapping `AppServlet` yourself:
@@ -11,9 +13,9 @@ ServletContextHandler context = new ServletContextHandler(ServletContextHandler.
 context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
 ----
 
-`AppServlet` is a standard servlet, so it runs on any container (Tomcat and others), not just Jetty.
+`AppServlet` is a standard servlet, so it runs on any container, not just Jetty.
 An embedded Tomcat that `app.start(port)` runs itself is a different thing, and lives in `spider-silk-tomcat`: see xref:tomcat.adoc[Tomcat], and xref:undertow.adoc[Undertow] for the third option.
-Deploying to a container you did not start, exclude the bundled Jetty:
+Exclude the bundled Jetty when deploying to a container you did not start:
 
 [source,groovy,subs="attributes+"]
 ----
@@ -25,13 +27,16 @@ implementation('{project-group}:spider-silk-core') {
 == Precompiled templates
 
 jte compiles templates at runtime by default, which requires a JDK on the deployment machine.
-A production build precompiles instead: the jte Gradle plugin turns each template into a Java class at build time, so the jar renders compiled classes and a template that does not compile fails the build rather than the request.
-The plugin configuration and the matching constructor are in xref:templates.adoc#production[Templates], alongside the development-mode counterpart; a xref:native-image.adoc[native image] makes this mode a requirement rather than an optimization, since a native binary carries no compiler.
+A production build precompiles instead.
+The jte Gradle plugin turns each template into a Java class at build time, so the jar renders compiled classes, and a template that does not compile fails the build rather than the request.
+The plugin configuration and the matching constructor are in xref:templates.adoc#production[Templates], alongside the development-mode counterpart.
+A xref:native-image.adoc[native image] makes this mode a requirement rather than an optimization, since a native binary carries no compiler.
 
 == A container image, without Docker
 
-https://github.com/GoogleContainerTools/jib[Jib] builds a container image from the Gradle model alone, so the build machine needs no Docker daemon: `gradle :example-flashcard:jibBuildTar` writes `build/jib-image.tar`, ready for any Docker host to load.
-The example's configuration is the xref:gradle-plugin.adoc[spider-silk plugin], which brings Jib along with the JRE 21 base and port 8080 already set, leaving the image name:
+https://github.com/GoogleContainerTools/jib[Jib] builds a container image from the Gradle model alone, so the build machine needs no Docker daemon.
+`gradle :example-flashcard:jibBuildTar` writes `build/jib-image.tar`, ready for any Docker host to load.
+The example configures it through the xref:gradle-plugin.adoc[spider-silk plugin], which brings Jib along with the JRE 21 base and port 8080 already set, leaving only the image name:
 
 [source,groovy]
 ----
@@ -48,12 +53,19 @@ jib {
 
 Without the plugin, the same image is Jib's own plugin (`com.google.cloud.tools.jib`) with `from.image = 'eclipse-temurin:21-jre'` and `container.ports = ['8080']` added to the block above.
 
-Jib layers the image the way the build is structured, and the split is worth spelling out because it is what makes rebuilds and pushes cheap: external dependencies (the Jetty, Spring JDBC, and H2 jars), project dependencies (the `spider-silk-core` jar, on its own so a framework edit leaves the larger external layer untouched), resources, and classes, each a separate layer.
-An edit to the application code rewrites only the small classes layer on top; Jib also pins every timestamp to the epoch, so an unchanged layer reproduces bit-for-bit with the same digest and a registry push skips it instead of re-uploading.
-That `spider-silk-core` counts as a project dependency is a fact about this repository, where the example and the framework build together; an application that pulls spider-silk from a repository sees it as one more external jar, cached in the dependencies layer with Jetty and the rest and rewritten only on a version bump.
+Jib layers the image the way the build is structured, and that split is what makes rebuilds and pushes cheap.
+Four tiers each become a layer: external dependencies (the Jetty, Spring JDBC, and H2 jars), project dependencies (the `spider-silk-core` jar, on its own so a framework edit leaves the larger external layer untouched), resources, and classes.
+An edit to the application code rewrites only the small classes layer on top.
+Jib also pins every timestamp to the epoch, so an unchanged layer reproduces bit-for-bit with the same digest, and a registry push skips it instead of re-uploading.
+
+That `spider-silk-core` counts as a project dependency is a fact about this repository, where the example and the framework build together.
+An application that pulls spider-silk from a repository sees it as one more external jar, cached in the dependencies layer with Jetty and the rest, and rewritten only on a version bump.
+
 The entrypoint comes from the `application` block's `mainClass`.
-A JRE base suffices because the templates ride along as the precompiled classes from the section above; nothing in the image compiles at runtime.
-One wrinkle, which the plugin absorbs: Jib checks the app's `targetCompatibility` against the base image's Java version, and a build that targets 21 through `options.release` alone leaves the toolchain's version there for the check to read and refuse the JRE 21 base; the plugin restates the release where Jib looks, which by hand is `java { targetCompatibility = JavaVersion.VERSION_21 }`.
+A JRE base suffices because the templates ride along as the precompiled classes from the section above, and nothing in the image compiles at runtime.
+One wrinkle is worth knowing, and the plugin absorbs it.
+Jib checks the app's `targetCompatibility` against the base image's Java version, and a build that targets 21 through `options.release` alone leaves the toolchain's version there for the check to read and refuse the JRE 21 base.
+The plugin restates the release where Jib looks, which by hand is `java { targetCompatibility = JavaVersion.VERSION_21 }`.
 
 [source,bash]
 ----
@@ -65,12 +77,13 @@ docker run -p 8080:8080 ghcr.io/benelog/spider-silk-flashcard
 
 The tar is only the daemonless route: `gradle jib` pushes the same image straight to the registry given credentials, and `gradle jibDockerBuild` loads it into a local daemon where one exists.
 H2 keeps its database file under the process home, `/root/db` in this image, so the data lives and dies with the container unless a volume is mounted there.
-The same build containerizes the GraalVM binary instead when asked: `-Pnative` swaps the base image and the layers, and xref:native-image.adoc#container[the native image chapter] shows what changes.
+The same build containerizes the GraalVM binary instead when asked.
+`-Pnative` swaps the base image and the layers, and xref:native-image.adoc#container[the native image chapter] shows what changes.
 
 [#dockerfile]
 == A Dockerfile, where a platform demands one
 
-Some platforms build only from a Dockerfile, and for them the example carries one: `example-flashcard/Dockerfile`, a multi-stage build run from the repository root so the context holds every module of the multi-module build.
+The example carries a Dockerfile for the platforms that build only from one: `example-flashcard/Dockerfile`, a multi-stage build run from the repository root so the context holds every module of the multi-module build.
 
 [source,bash]
 ----
@@ -79,14 +92,23 @@ docker run -p 8080:8080 spider-silk-flashcard
 ----
 
 The file earns its keep by reproducing by hand the layering Jib does for free, so every instruction is ordered for the layer cache.
-The build stage copies the Gradle scripts alone — every module's, since `settings.gradle` names them all — and downloads dependencies before any source enters the image, so a source edit re-runs compilation but never the download.
-That download is `resolveDependencies`, a task the xref:gradle-plugin.adoc[spider-silk plugin] registers to fetch the external runtime jars and nothing else; the stock `dependencies` report is not a substitute, as it stops at metadata and caches no application jar at all.
-The runtime stage then copies Jib's four tiers as four `COPY` instructions, least volatile first: the external jars, the `spider-silk-core` jar, the resources, and the application's classes — loose `.class` files, not a jar.
-Skipping the jar removes the one thing that could change without the code changing: an archive repackaged with fresh timestamps reads as new content, where an unchanged `.class` file reads as what it is, so a comment-only edit that compiles to identical bytecode leaves even the classes layer cached.
-(Gradle builds reproducible jars by default these days, which blunts that problem; Maven's jar plugin does not unless `project.build.outputTimestamp` says so, which makes loose classes matter more in a Maven build.)
-For an application of your own, spider-silk's jars fall on the external side — they change on a version bump, not on your edits — and the core tier disappears; it exists here only because the framework builds alongside the example.
+The build stage copies the Gradle scripts alone, every module's, since `settings.gradle` names them all, and downloads dependencies before any source enters the image.
+A source edit therefore re-runs compilation but never the download.
+That download is `resolveDependencies`, a task the xref:gradle-plugin.adoc[spider-silk plugin] registers to fetch the external runtime jars and nothing else.
+The stock `dependencies` report is not a substitute: it stops at metadata and caches no application jar at all.
+
+The runtime stage then copies Jib's four tiers as four `COPY` instructions, least volatile first: the external jars, the `spider-silk-core` jar, the resources, and the application's classes as loose `.class` files rather than a jar.
+Skipping the jar removes the one thing that could change without the code changing.
+An archive repackaged with fresh timestamps reads as new content, where an unchanged `.class` file reads as what it is, so a comment-only edit that compiles to identical bytecode leaves even the classes layer cached.
+(Gradle builds reproducible jars by default these days, which blunts that problem.
+Maven's jar plugin does not, unless `project.build.outputTimestamp` says so, which makes loose classes matter more in a Maven build.)
+For an application of your own, spider-silk's jars fall on the external side, since they change on a version bump and not on your edits, and the core tier disappears.
+It exists here only because the framework builds alongside the example.
 `COPY` caches by content, so a code change re-runs the whole build stage yet rewrites only the small classes layer at the end.
-One asymmetry against Jib is worth knowing: Docker caches the instructions as a chain, so an edit rewrites its own tier and the tiers after it — a template or static-file edit rewrites resources and classes, both small — where Jib's layers are independent of one another.
+
+One asymmetry against Jib is worth knowing.
+Docker caches the instructions as a chain, so an edit rewrites its own tier and the tiers after it: a template or static-file edit rewrites resources and classes, both small.
+Jib's layers are independent of one another.
 The entrypoint states what the jar's manifest no longer can: the classpath, in Jib's order, and the main class.
 The `.dockerignore` at the root belongs to this arrangement: it keeps `build/` directories out of the context, which would otherwise invalidate the source layers on every build.
 Everything else about the image matches the Jib one: the same `eclipse-temurin:21-jre` base, the same port, and the same H2 caveat about the process home.
