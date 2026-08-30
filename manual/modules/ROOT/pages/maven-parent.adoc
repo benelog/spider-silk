@@ -1,8 +1,8 @@
 = The Maven Parent
 :navtitle: The Maven Parent
 
-Maven shares build conventions by inheritance, not by plugin: a Maven plugin runs goals, but it cannot declare other plugins' configuration the way a Gradle plugin can.
-So the xref:gradle-plugin.adoc[Gradle plugin]'s counterpart is a parent POM, `spider-silk-maven-parent`, whose `pluginManagement` and profiles carry the same packaging.
+The xref:gradle-plugin.adoc[Gradle plugin]'s counterpart is a parent POM, `spider-silk-maven-parent`, whose `pluginManagement` and profiles carry the same packaging.
+Maven shares build conventions by inheritance rather than by plugin: a Maven plugin runs goals, and cannot declare other plugins' configuration the way a Gradle plugin can.
 
 [source,xml,subs="attributes+"]
 ----
@@ -15,7 +15,8 @@ So the xref:gradle-plugin.adoc[Gradle plugin]'s counterpart is a parent POM, `sp
 
 [IMPORTANT]
 ====
-Maven resolves a `<parent>` before it reads the child's `<repositories>`, so the GitHub Packages repository from xref:install.adoc[Installation] must be declared in `~/.m2/settings.xml` — a `<repositories>` block in the pom cannot fetch its own parent.
+The GitHub Packages repository from xref:install.adoc[Installation] must be declared in `~/.m2/settings.xml`.
+Maven resolves a `<parent>` before it reads the child's `<repositories>`, so a `<repositories>` block in the pom cannot fetch its own parent.
 
 [source,xml,subs="attributes+"]
 ----
@@ -43,8 +44,9 @@ The `<servers>` credentials entry from Installation applies unchanged, under the
 
 == Opting in by declaring
 
-Everything sits in the parent's `pluginManagement`, so it is inert until the child declares the plugin — the declaration is the opt-in, the way `spiderSilk { jte() }` is on the Gradle side.
-A child that containerizes and precompiles jte declares both, and configuration stays at what is the application's own:
+Everything sits in the parent's `pluginManagement`, so it stays inert until the child declares the plugin.
+The declaration is the opt-in, the way `spiderSilk { jte() }` is on the Gradle side.
+A child that containerizes and precompiles jte declares both, and configures only what is the application's own:
 
 [source,xml]
 ----
@@ -82,26 +84,35 @@ A child that containerizes and precompiles jte declares both, and configuration 
 </build>
 ----
 
-The main class is declared once, in the jar manifest where a runnable jar wants it anyway: Jib infers its entrypoint from there, and `native-maven-plugin` reads the same entry for the binary — configuring it on either plugin instead would work, until the two drift.
+The main class is declared once, in the jar manifest where a runnable jar wants it anyway.
+Jib infers its entrypoint from there, and `native-maven-plugin` reads the same entry for the binary.
+Configuring it on either plugin instead would work, until the two drift.
 
 What the declarations inherit mirrors the Gradle plugin's conventions:
 
-* Jib builds on `eclipse-temurin:21-jre` and exposes port 8080; `mvn package jib:buildTar` writes `target/jib-image.tar` with no Docker daemon involved, layered as xref:deployment.adoc[Deployment] describes.
-* `maven.compiler.release` is set to 21, which doubles as where Jib reads the Java version it checks against the base image — the `targetCompatibility` wrinkle the Gradle plugin absorbs has no Maven counterpart to absorb.
+* Jib builds on `eclipse-temurin:21-jre` and exposes port 8080.
+  `mvn package jib:buildTar` writes `target/jib-image.tar` with no Docker daemon involved, layered as xref:deployment.adoc[Deployment] describes.
+* `maven.compiler.release` is set to 21, which doubles as where Jib reads the Java version it checks against the base image.
+  The `targetCompatibility` wrinkle the Gradle plugin absorbs has no Maven counterpart to absorb.
 * jte precompiles every template under `src/main/resources/jte` at build time, native-image resources included, exactly as xref:templates.adoc#production[Templates] describes.
-* The native binary builds with `<fallback>false</fallback>`, mostly static (`--static-nolibc`, so the `distroless/base` container owes it nothing but glibc), and the reachability metadata repository enabled, named `${spider-silk.native.image-name}` — the artifactId unless the property says otherwise.
+* The native binary builds with `<fallback>false</fallback>`, mostly static (`--static-nolibc`, so the `distroless/base` container owes it nothing but glibc), and the reachability metadata repository enabled.
+  It is named `${spider-silk.native.image-name}`, which is the artifactId unless the property says otherwise.
 
 == The native profile
 
-`mvn -Pnative package jib:buildTar` ships the GraalVM binary instead of the jar: the profile binds `native:compile-no-fork` to `package`, swaps Jib's base for `distroless/base`, and attaches Jib's native-image extension pointed at the same binary name — the switch xref:native-image.adoc#container[the native image chapter] walks through.
+`mvn -Pnative package jib:buildTar` ships the GraalVM binary instead of the jar.
+The profile binds `native:compile-no-fork` to `package`, swaps Jib's base for `distroless/base`, and attaches Jib's native-image extension pointed at the same binary name.
+xref:native-image.adoc#container[The native image chapter] walks through that switch.
 
 The `${spider-silk.image.tag}` placeholder in the child's image name above is what keeps the two images apart: the parent defaults it to `latest`, the profile flips it to `native`, and a child that hard-codes a tag instead opts out of the distinction.
 
 == Dockerfile warm-up
 
-Where a platform demands xref:deployment.adoc#dockerfile[a Dockerfile], the Gradle plugin's `resolveDependencies` has a stock Maven counterpart: `mvn dependency:go-offline` downloads the dependencies and plugins for the warm-up layer, run after copying the pom alone the way the Gradle Dockerfile copies the build scripts.
+`mvn dependency:go-offline` is the Maven counterpart to the Gradle plugin's `resolveDependencies`, where a platform demands xref:deployment.adoc#dockerfile[a Dockerfile].
+It downloads the dependencies and plugins for the warm-up layer, and runs after copying the pom alone, the way the Gradle Dockerfile copies the build scripts.
 
 == What the parent pins
 
-The parent's version fixes the versions of what it manages — jte {jte-version}, Jib {jib-maven-version} (the Maven plugin lags the Gradle plugin's {jib-version} upstream), and the GraalVM build tools {graalvm-buildtools-version} — and a toolchain bump arrives as a parent release.
+The parent's version fixes the versions of what it manages: jte {jte-version}, Jib {jib-maven-version} (the Maven plugin lags the Gradle plugin's {jib-version} upstream), and the GraalVM build tools {graalvm-buildtools-version}.
+A toolchain bump arrives as a parent release.
 As on the Gradle side, nothing here is beyond plain Maven: every convention is readable in the parent POM itself, and a build that would rather own a block copies it out and drops the inheritance.

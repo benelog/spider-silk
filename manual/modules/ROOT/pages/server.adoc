@@ -1,7 +1,8 @@
 = The Server
 :navtitle: The Server
 
-Everything usually worth tuning is a method on `JettyServer`, and anything else is reachable through customizers that run against the real Jetty objects just before startup:
+`JettyServer` has a method for everything usually worth tuning.
+Customizers reach anything else, running against the real Jetty objects just before startup:
 
 [source,java]
 ----
@@ -24,7 +25,8 @@ new JettyServer(app)
 == Virtual threads
 
 Handlers can run on virtual threads.
-That is a thread pool setting, not a framework feature, so it stays two lines of Jetty's own API: platform threads keep running the selectors, the handlers get the virtual ones:
+That is a thread-pool setting rather than a framework feature, so it stays two lines of Jetty's own API.
+Platform threads keep running the selectors, and the handlers get the virtual ones:
 
 [source,java]
 ----
@@ -35,19 +37,21 @@ app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool))
    .start(8080);
 ----
 
-Worth it only if the handlers block: on I/O, on a database.
+It is worth doing only if the handlers block, on I/O or on a database.
 A `synchronized` block around that blocking call pins the carrier thread and takes the benefit back.
 
 == Shutdown
 
-Shutdown is graceful out of the box: a JVM shutdown hook stops the server on Ctrl-C or SIGTERM, and `stop()` gives requests in flight five seconds to finish before dropping them.
-Idle keep-alive connections do not hold that up; they are closed as soon as the drain starts, so a stop with nothing running returns immediately.
+Shutdown is graceful out of the box.
+A JVM shutdown hook stops the server on Ctrl-C or SIGTERM, and `stop()` gives requests in flight five seconds to finish before dropping them.
+Idle keep-alive connections do not hold that up.
+They are closed as soon as the drain starts, so a stop with nothing running returns immediately.
 `stopTimeout(Duration.ZERO)` turns the drain off entirely.
 
 [#replacing-the-server]
 == Replacing the server
 
-To keep `app.start(port)` as the entry point while still configuring the server, or to run a different server entirely, replace the factory:
+Replace the factory to configure the server while keeping `app.start(port)` as the entry point, or to run a different server entirely:
 
 [source,java]
 ----
@@ -70,7 +74,8 @@ Two are written already: xref:tomcat.adoc[Tomcat] and xref:undertow.adoc[Underto
 [#choosing]
 == Choosing a server
 
-Everything core provides works the same on all three — routing, filters, error handlers, JSON, templates, static files, SSE, multipart uploads, sessions — because all core ever needed was a servlet container.
+Everything core provides works the same on all three: routing, filters, error handlers, JSON, templates, static files, SSE, multipart uploads, and sessions.
+All core ever needed was a servlet container.
 `WebTest` starts no server at all, so tests do not change either.
 What differs is the embedding: what the server needs from its surroundings, and how much of the lifecycle this project had to assemble by hand.
 
@@ -134,7 +139,8 @@ What differs is the embedding: what the server needs from its surroundings, and 
 | 381 lines
 |===
 
-None of the three is a better server; they cost different things.
+None of the three is a better server.
+They cost different things.
 
 **Jetty stays the default** because it costs nothing to keep.
 It needs no disk, its shutdown and lifecycle are its own rather than assembled here, and it logs through slf4j like the rest of an application.
@@ -146,7 +152,8 @@ It is also the server Spring Boot defaults to, so a service moving off Spring Bo
 And it is the one with a security-advisory pipeline most enterprise processes already track.
 
 **Undertow is the one to reach for on the technical merits.**
-It is the lightest of the three to embed — no working directory, no bridge for its logging — and it is the only one whose graceful shutdown is a first-class handler rather than something assembled from a thread pool, which is why it is also the only one where the drain survives switching to virtual threads.
+It is the lightest of the three to embed, with no working directory and no bridge for its logging.
+Its graceful shutdown is a first-class handler rather than something assembled from a thread pool, which is why it is also the only one where the drain survives a switch to virtual threads.
 The catch is reach: it is a WildFly component rather than a standalone product, so the operational familiarity and the tooling around it are thinner than Tomcat's.
 
 None of this is load-bearing.
