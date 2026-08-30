@@ -25,11 +25,12 @@ void createsADeck() {
 ----
 
 `get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and `postJson`, all return the raw `HttpResponse<String>`, so assertions stay in whatever library the project already uses.
-`send(builder -> ...)` is the way out for anything else, and `send(builder -> ..., bodyHandler)` reads the body some other way — as bytes, when the answer is xref:cors-compression-and-security-headers.adoc[compressed] and decoding it as text would destroy it.
+`send(builder -> ...)` is the way out for anything else, and `send(builder -> ..., bodyHandler)` reads the body some other way.
+Reading it as bytes is what a xref:cors-compression-and-security-headers.adoc[compressed] answer needs, since decoding it as text would destroy it.
 
 == The handler alone, with `TestRequest`
 
-When the handler itself is what is under test, not the routing that reaches it, `TestRequest` builds the argument and you call the method:
+`TestRequest` builds the argument and you call the method, for a test of the handler itself rather than of the routing that reaches it:
 
 [source,java]
 ----

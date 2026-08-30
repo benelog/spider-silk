@@ -1,17 +1,19 @@
 = Example: Flashcard
 :navtitle: Example: Flashcard
 
-The same features as ch07-jdbc-plus from `spring-jdbc-book` (decks, cards, tags, spaced-repetition study, smart decks, CSV import/export, statistics) built without Spring Boot.
+The example app builds the same features as ch07-jdbc-plus from `spring-jdbc-book` without Spring Boot: decks, cards, tags, spaced-repetition study, smart decks, CSV import and export, and statistics.
 
 DB::
 Repositories use `NamedParameterJdbcTemplate` directly.
 The executed SQL is visible in the code.
 Inserts are the exception: `SimpleJdbcInsert` reads the table metadata and returns the generated key, with `SimplePropertySqlParameterSource` taking the values straight off the domain record.
 `SmartDeckRepository` still spells its parameters out, because its `SmartCondition` enum has to reach the driver as `name()` rather than as an enum.
-Row mapping goes through `DataClassRowMapper`; the reflection this pair needs under a xref:native-image.adoc[native image] is a config the build generates from the domain package.
+Row mapping goes through `DataClassRowMapper`.
+The reflection this pair needs under a xref:native-image.adoc[native image] is a config the build generates from the domain package.
 
 DI::
-No container; `FlashcardContext` wires everything by calling constructors directly, playing the role of Spring's ApplicationContext by hand.
+There is no container.
+`FlashcardContext` wires everything by calling constructors directly, playing the role of Spring's `ApplicationContext` by hand.
 
 Transactions::
 Instead of AOP, services call `Transactions.write()/read()`, a thin wrapper around `TransactionTemplate`.
@@ -22,7 +24,8 @@ As a bonus, a JSON API (`/api/decks`, `/api/decks/\{id}/cards`) sits on the same
 Its wire format is in `flashcard.web.Codecs` as hand-written `JsonWriter`/`JsonReader` lambdas.
 
 Introspection::
-`/_routes` lists every route and `/openapi.json` is the same list as an OpenAPI 3.1 document, both built from `app.routes()`, which is what the framework exposing its routing table as data buys you.
+`/_routes` lists every route, and `/openapi.json` is the same list as an OpenAPI 3.1 document.
+Both are built from `app.routes()`, which is what a routing table exposed as data buys.
 The document goes through xref:openapi.adoc[`spider-silk-openapi`], and the app decides what it covers: the `/api` routes, since everything else here answers with HTML.
 Those are also the only routes registered with a description, which the page shows in a column of its own and the document as each operation's `summary`.
 
@@ -31,7 +34,8 @@ Every response::
 `securityHeaders(...)` takes the defaults plus a policy this app can run under: `default-src 'self'` covers everything it loads, and `style-src` also allows inline because `stats.jte` sizes its chart bars with a style attribute, which no stylesheet can do.
 HSTS is deliberately absent, since `main` serves this over `http://localhost`.
 `gzip()` covers the pages, the stylesheet, the JSON, and the CSV export alike.
-`cors(...)` is scoped to `/openapi.json` alone — the one document here meant to be read by something that is not this application, such as a Swagger UI served elsewhere — and not to `/api/decks`, which creates decks.
+`cors(...)` is scoped to `/openapi.json` alone, and not to `/api/decks`, which creates decks.
+That document is the one thing here meant to be read by something that is not this application, such as a Swagger UI served elsewhere.
 
 Routing::
 There is no `Controller` interface.
