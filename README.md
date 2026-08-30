@@ -13,24 +13,24 @@
 
 Thin by design, strong by types.
 
-A web framework on top of the Jakarta Servlet API.
+Spider Silk is a web framework built on the Jakarta Servlet API.
 
 Three core principles:
 
 - **No reflection.**
-    * There is no annotation scanning, no proxies, no automatic binding.
-    * What runs is exactly what you see in the code, stack traces stay short, and startup is fast.
-* **The API is intuitively simple.**
+    * There is no annotation scanning, no proxies, and no automatic binding.
+    * What runs is what the code says, stack traces stay short, and startup stays fast.
+- **The API is intuitively simple.**
     * A handler is a function from a request to a response: `WebResponse handle(WebRequest request)`.
-    * `WebResponse` as the return type matches the intuition directly: a handler takes a request in and hands a response back.
-* **Better RESTful API support than raw servlets.**
-    * Per-method routing with path variables, typed parameter extraction, exception-to-status mapping.
+    * That signature is the whole model.
+- **Better RESTful API support than raw servlets.**
+    * Routing is per method, paths carry variables, parameters are extracted with a declared type, and exceptions map to status codes.
 
 **Full documentation: [spider-silk.benelog.net](https://spider-silk.benelog.net)**
 
 ## Quick Start
 
-Java 21 or later is required.
+Spider Silk requires Java 21 or later.
 The current version is `0.1.0-SNAPSHOT`, published to GitHub Packages.
 
 > GitHub Packages requires authentication even for a public repository.
@@ -56,7 +56,8 @@ dependencies {
 }
 ```
 
-Keep the token out of the build file by putting it in `~/.gradle/gradle.properties`:
+Keep the token out of the build file.
+Put it in `~/.gradle/gradle.properties`:
 
 ```properties
 gpr.user=your-github-username
@@ -126,9 +127,9 @@ $ curl localhost:8080/hello/silk
 Hello, silk
 ```
 
-Routing groups, filters, error handlers, JSON codecs, SSE, templates, static files, route introspection, the test harness, and server tuning are all in the [documentation](https://spider-silk.benelog.net).
+`spider-silk-core` brings embedded Jetty with it, so nothing else is needed to serve a request.
 
-Embedded Jetty comes along with `spider-silk-core`, so nothing else is needed to serve a request.
+Routing groups, filters, error handlers, JSON codecs, SSE, templates, static files, route introspection, the test harness, and server tuning are all in the [documentation](https://spider-silk.benelog.net).
 
 ## Modules
 
@@ -155,10 +156,11 @@ Claude Code installs it as a plugin:
 /plugin install spider-silk@spider-silk
 ```
 
-Codex, Cursor, and GitHub Copilot read the same directory once it is copied into their skill locations; the paths are in [the documentation](https://spider-silk.benelog.net/agent-skill.html).
+Codex, Cursor, and GitHub Copilot read the same directory once it is copied into their skill locations.
+[The documentation](https://spider-silk.benelog.net/agent-skill.html) has the paths.
 
 ## Further reading
 
-Where Spider Silk sits next to Javalin, Spark, Helidon SE, and Spring Boot, and what it trades away to get there: [notes/positioning.md](notes/positioning.md).
-Why each piece has the shape it has, item by item, with the rejected list: [notes/decisions.md](notes/decisions.md).
-What was deliberately deferred, one issue per item with the condition that would make it worth doing: [the issue tracker](https://github.com/benelog/spider-silk/issues).
+[notes/positioning.md](notes/positioning.md) places Spider Silk next to Javalin, Spark, Helidon SE, and Spring Boot, and states what it trades away to get there.
+[notes/decisions.md](notes/decisions.md) gives the reasoning behind each piece, item by item, together with the list of what was rejected.
+[The issue tracker](https://github.com/benelog/spider-silk/issues) records what was deliberately deferred, one issue per item, with the condition that would make it worth doing.
