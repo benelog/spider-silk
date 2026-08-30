@@ -11,7 +11,9 @@
 
 # Spider Silk
 
-A thin web framework on top of the Jakarta Servlet API.
+Thin by design, strong by types.
+
+A web framework on top of the Jakarta Servlet API.
 
 Three core principles:
 

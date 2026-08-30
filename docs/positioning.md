@@ -4,12 +4,13 @@ Where Spider Silk sits among lightweight JVM web frameworks, and what it trades 
 
 ## The one-line position
 
-> **A servlet-native web layer with no reflection anywhere, small enough to read
-> in one sitting.**
+> **Thin by design, strong by types.**
 
-The distinguishing claim is not "lightweight" — half a dozen frameworks are lightweight.
+That is the line the README and the manual lead with; what it stands for is a servlet-native web layer with no reflection anywhere, small enough to read in one sitting.
+"Thin" is the half that has to be argued, because the distinguishing claim is not "lightweight" — half a dozen frameworks are lightweight.
 It is that *nothing* between the socket and your handler is resolved at runtime by name: not routing, not parameter conversion, not JSON.
 Every dispatch is a lambda you registered on a line you can point at.
+"Strong" is the other half, argued [below](#strengths-stated-precisely): a handler answers by returning, so a branch that forgets to answer is a compile error rather than a blank response, and a path variable arrives as a `long` or not at all.
 
 **Who it is for**
 
