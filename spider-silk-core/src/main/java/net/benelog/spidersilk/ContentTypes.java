@@ -2,7 +2,7 @@ package net.benelog.spidersilk;
 
 import java.util.Map;
 
-/** Extension-to-Content-Type mapping for static files. */
+/** Extension-to-Content-Type mapping, for static files and for {@link WebResponse#file}. */
 final class ContentTypes {
 
     private static final Map<String, String> BY_EXTENSION = Map.ofEntries(

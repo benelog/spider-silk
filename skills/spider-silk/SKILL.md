@@ -194,6 +194,7 @@ To watch it serve a real request, `app.start(8080)` and `curl` it.
 | A before-filter never runs for paths under its own | A filter path needs the trailing `*` to cover what is under it: `/admin/*`, not `/admin` |
 | An after-filter's change is lost | `WebResponse` is immutable. The filter has to *return* the new response; calling a builder method and dropping the result changes nothing |
 | A streamed response answers 200 and then fails | The headers commit before the writer runs. Whatever can fail in a way the client should hear about belongs before the response is returned |
+| `WebResponse.file(path)` throws where a 404 was expected | A file a handler chose is not a static file, so a missing one is not automatically a 404. Check `Files.isRegularFile` and throw `HttpException(HttpStatus.NOT_FOUND, ...)` when that is what missing means |
 | Reflection errors under a native image | The framework needs no configuration; a library the application added does. Precompile jte templates, and generate metadata for the reflective library |
 
 ## Where to look next

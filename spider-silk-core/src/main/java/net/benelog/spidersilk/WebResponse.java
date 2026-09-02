@@ -7,6 +7,9 @@ import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -270,6 +273,50 @@ public final class WebResponse {
      */
     public static WebResponse stream(String contentType, StreamWriter writer) {
         return of(new Stream(Objects.requireNonNull(writer, "writer"))).contentType(contentType);
+    }
+
+    /**
+     * A file on disk, answered with the content type its name implies, its size
+     * as {@code Content-Length}, and a {@link Stream} body.
+     *
+     * <pre>{@code
+     * app.get("/decks/{deckId}/export", req ->
+     *         WebResponse.file(service.writeExport(req.pathParamLong("deckId")))
+     *                 .attachment("deck.csv"));
+     * }</pre>
+     *
+     * <p>The type comes from the extension, and a name whose extension is not in
+     * the table answers {@code application/octet-stream}. A file whose name says
+     * nothing useful about its content is answered with
+     * {@code .contentType(...)}, which overrides what was worked out here.
+     *
+     * <p>A path that is not a readable regular file throws
+     * {@link UncheckedIOException} rather than answering 404. The framework
+     * cannot tell an export that was cleaned up from a path the handler built
+     * wrong, and the handler can: it checks the file is there and answers 404
+     * itself when that is what a missing one means. The check happens here
+     * rather than while the body is written, so the failure is still inside the
+     * handler's {@code try} and an {@link App#exception} handler can see it.
+     *
+     * <p>Validators and conditional requests are {@link StaticFiles}' business,
+     * not this one's. A file a handler chose is not a static file, and only the
+     * handler knows whether it can change.
+     */
+    public static WebResponse file(Path path) {
+        Objects.requireNonNull(path, "path");
+        BasicFileAttributes attributes;
+        try {
+            attributes = Files.readAttributes(path, BasicFileAttributes.class);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Cannot read file: " + path, e);
+        }
+        if (!attributes.isRegularFile()) {
+            throw new UncheckedIOException(
+                    new IOException("Not a regular file: " + path));
+        }
+        return of(new Stream(out -> Files.copy(path, out)))
+                .contentType(ContentTypes.byPath(path.getFileName().toString()))
+                .header("Content-Length", Long.toString(attributes.size()));
     }
 
     /**

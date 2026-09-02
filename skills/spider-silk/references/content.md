@@ -89,6 +89,23 @@ NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
 - Core has not been told the body is JSON, so the library's own failures are the application's to answer: map them with `app.exception(JsonProcessingException.class, ...)` or throw `HttpException(HttpStatus.BAD_REQUEST, ...)`.
 - Under a [native image](servers-and-deployment.md#graalvm-native-image), Jackson and Gson need a reflection entry per bound type; avaje-jsonb generates an adapter per type at compile time and needs none.
 
+## A file on disk
+
+`WebResponse.file(path)` answers with the content type the file's name implies, its size as `Content-Length`, and a `stream` body.
+
+```java
+app.get("/decks/{deckId}/export", req ->
+        WebResponse.file(service.writeExport(req.pathParamLong("deckId")))
+                .attachment("deck.csv"));
+```
+
+- The type comes from the extension; an extension the table does not know answers `application/octet-stream`, and `.contentType(...)` overrides it.
+  The table is not public: the way to a content type is the file that has one.
+- A path that is not a readable regular file throws `UncheckedIOException`, never a 404.
+  A handler that means "no export for that deck" writes `throw new HttpException(HttpStatus.NOT_FOUND, ...)` after its own `Files.isRegularFile` check.
+- The check runs when the response is built, not while the body is written, so the failure is still inside the handler and `app.exception(...)` can answer it.
+- Validators and conditional requests are `StaticFiles`' business. A file a handler chose is not a static file.
+
 ## Templates
 
 `WebResponse.template(name, model)` renders a page; the name carries no extension — the engine appends its own.

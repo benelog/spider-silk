@@ -54,8 +54,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 36 | The request first in `ExceptionHandler`, as in every other handler | ✅ shipped |
 | 37 | `RequestLogger` reports a `Duration`, not a count of milliseconds | ✅ shipped |
 | 38 | `param(name, parser)`: one seam for every type with no named form | ✅ shipped |
+| 39 | `WebResponse.file(Path)`, with the content-type table kept private | ✅ shipped |
 
-Forty of the forty-one shipped.
+Forty-one of the forty-two shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -794,6 +795,37 @@ Rejecting is throwing `IllegalArgumentException` **or `DateTimeException`**.
 Rejected on the way: catching `RuntimeException`.
 The value handed to a parser is never null, since `param(name)` has already answered 400 for an absent one.
 A `NullPointerException` or an `IllegalStateException` out of a parser is therefore a fault in the parser and not in the request, and a 500 is the honest answer.
+
+## 39 · A file a handler chose
+
+### 39. `WebResponse.file(Path)`, and the content-type table stays private
+
+`WebResponse.file(path)` answers with the content type the name implies, the file's size as `Content-Length`, and a `Stream` body.
+A handler serving an export, an attachment, or anything else outside the classpath was writing `stream(contentType, out -> Files.copy(path, out))` and working out the content type itself.
+`ContentTypes.byPath` already had the table, and `StaticFiles` already built exactly this response.
+
+**The table stays package-private.**
+That was the open question, and decision 32 answers it: 1.0 is the promise that what is public keeps its shape, so a public table is a permanent one.
+The table has fourteen extensions and is deliberately incomplete, and made public that incompleteness becomes the promise: `.pdf`, `.webp`, and `.mp4` each turn into a request to extend a published list.
+Reached only through `file`, it is an implementation detail of a factory, and a handler that disagrees with what the name implied writes `.contentType(...)`, which was already there.
+The case that pushes the other way is a blob out of a database with a filename stored beside it, where there is no `Path` to hand to `file`.
+That handler names its own content type, which is one string it already has the information to write, and the alternative is a permanent public list to keep it from writing it.
+
+**A missing file throws; it does not answer 404.**
+The framework cannot tell an export that was cleaned up from a path the handler built wrong.
+The handler can, so a 404 for a missing file is the line the handler writes, after its own check.
+`UncheckedIOException` is what `bodyStream()` already throws for the same class of problem.
+
+The check runs in the factory rather than in the writer, and that is the load-bearing part.
+Decision 18 names the trap: a body produced after dispatch has left its `try` block can no longer reach `app.exception(...)`.
+One `readAttributes` call answers both questions the factory has — the size, and whether this is a regular file at all — so a directory fails while the handler can still be told, not after the headers are committed.
+
+Rejected on the way: a `file(contentType, path)` overload.
+Decision 35 would put the content type first, `.contentType(...)` already overrides, and two ways to say the same thing is what that decision removed rather than added.
+
+Validators and conditional requests stay with `StaticFiles`, which is not refactored onto this.
+It works on a `Resource` rather than a `Path`, and it carries the `ETag`, the `Last-Modified`, and the pre-compressed sibling branch that decision 31 added.
+A file a handler chose is not a static file: only the handler knows whether it can change.
 
 ## Rejected — decisions, with the reason
 

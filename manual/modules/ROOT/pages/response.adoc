@@ -6,7 +6,7 @@ Every method returns a new response, which is what lets an after-filter rewrite 
 
 == Bodies
 
-`html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
+`html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `file(path)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
 The content type is the first argument of every body that takes one.
 A template name carries no extension.
 The engine appends its own, as xref:templates.adoc[Templates] describes.
@@ -24,6 +24,38 @@ assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
 assertThat(response.header("Location")).isEqualTo("/api/decks/1");
 assertThat(((WebResponse.Text) response.body()).content()).isEqualTo("{\"id\":1}");
 ----
+
+== A file on disk
+
+`file(path)` answers with the content type the file's name implies, its size as `Content-Length`, and a `Stream` body.
+
+[source,java]
+----
+app.get("/decks/{deckId}/export", req ->
+        WebResponse.file(service.writeExport(req.pathParamLong("deckId")))
+                .attachment("deck.csv"));
+----
+
+The type comes from the extension, and an extension the table does not know answers `application/octet-stream`.
+A file whose name says nothing useful about its content is answered with `.contentType(...)`, which overrides what was worked out from the name.
+The table itself is not public: the way to a content type is the file that has one.
+
+A path that is not a readable regular file throws `UncheckedIOException` rather than answering 404.
+The framework cannot tell an export that was cleaned up from a path the handler built wrong, and the handler can.
+A handler that wants a 404 for a missing file writes the line that says so:
+
+[source,java]
+----
+if (!Files.isRegularFile(export)) {
+    throw new HttpException(HttpStatus.NOT_FOUND, "No export for that deck");
+}
+return WebResponse.file(export);
+----
+
+The check runs when the response is built, not while the body is written, so the failure is still inside the handler and `app.exception(...)` can answer it.
+
+Validators and conditional requests belong to xref:static-files.adoc[Static Files], not here.
+A file a handler chose is not a static file, and only the handler knows whether it can change.
 
 == Statuses
 

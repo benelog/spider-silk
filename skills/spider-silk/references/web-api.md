@@ -114,6 +114,9 @@ WebResponse.jsonArray(sink -> ...); WebResponse.ndjson(sink -> ...);   // writte
 WebResponse.template("deck");                       // name carries no extension
 WebResponse.template("deck", Map.of("deck", deck));
 WebResponse.stream("text/csv", out -> exporter.write(out));
+WebResponse.file(path);                       // type from the name, length from the file
+                                              //   not a readable file -> UncheckedIOException,
+                                              //   never a 404: that is the handler's line
 WebResponse.sse(stream -> ...);                     // see content.md
 WebResponse.raw((servletReq, servletRes) -> ...);   // full servlet control, rare
 
