@@ -114,7 +114,7 @@ class WebSocketsTest {
         List<String> filtered = new ArrayList<>();
         List<String> logged = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, millis) -> logged.add(req.path()))
+                .requestLogger((req, res, took) -> logged.add(req.path()))
                 .before("/echo", req -> {
                     filtered.add(req.path());
                     return null;

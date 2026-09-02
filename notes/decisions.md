@@ -52,8 +52,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 34 | Six places the contract and the behaviour disagreed | ✅ shipped |
 | 35 | The content type first, on every body that takes one | ✅ shipped |
 | 36 | The request first in `ExceptionHandler`, as in every other handler | ✅ shipped |
+| 37 | `RequestLogger` reports a `Duration`, not a count of milliseconds | ✅ shipped |
 
-Thirty-eight of the thirty-nine shipped.
+Thirty-nine of the forty shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -751,6 +752,26 @@ No deprecated overload was left behind, for the reason decision 35 gives.
 The break is mechanical wherever the lambda touches the exception: a body calling `e.getMessage()` stops compiling until the parameters are swapped.
 A lambda that uses neither parameter compiles either way, which is the one case the compiler cannot flag, and also the case where the order does not matter.
 It is taken before 1.0 for the reason decision 34 gives, that the cost only grows.
+
+## 37 · The type of an elapsed time
+
+### 37. `RequestLogger` reports a `Duration`
+
+`RequestLogger.log` takes a `Duration`, where it used to take a `long` of milliseconds.
+It was the one place the API handed out a duration as a number.
+`maxAge`, `hsts`, `stopTimeout`, and the cookie forms all take a `Duration`, so a reader had one exception to hold in mind.
+
+The measurement is `System.nanoTime`, and a `long` of milliseconds threw away everything below a millisecond before the logger saw it.
+A request that finished in 400 microseconds was reported as `0`.
+A `Duration` carries what was measured, and a logger that wants the old number calls `took.toMillis()`.
+
+Rejected on the way: reporting nanoseconds as a `long`.
+It keeps the precision and loses the unit, which is the half of the problem that costs more.
+`Duration` names its own unit at every call site that reads it.
+
+The break is not mechanical, which is why it is taken now rather than after 1.0.
+A lambda that passes the argument straight to a logger keeps compiling and starts printing `PT0.4S` where it printed `400`.
+Decision 34's argument applies with more force for that reason, not less.
 
 ## Rejected — decisions, with the reason
 

@@ -303,8 +303,8 @@ public final class App {
      * Called after every response, with how long the request took.
      *
      * <pre>{@code
-     * app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
-     *         req.method(), req.path(), res.status().code(), millis));
+     * app.requestLogger((req, res, took) -> logger.info("{} {} -> {} ({}ms)",
+     *         req.method(), req.path(), res.status().code(), took.toMillis()));
      * }</pre>
      *
      * One lambda, and no logging framework in core. A logger that throws is

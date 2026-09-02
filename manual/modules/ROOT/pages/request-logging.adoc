@@ -5,8 +5,8 @@
 
 [source,java]
 ----
-app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
-        req.method(), req.path(), res.status().code(), millis));
+app.requestLogger((req, res, took) -> logger.info("{} {} -> {} ({}ms)",
+        req.method(), req.path(), res.status().code(), took.toMillis()));
 ----
 
 Core carries no logging framework, so which logger, at which level, and in which format is the application's call.

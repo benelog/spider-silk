@@ -205,8 +205,8 @@ CORS is a browser rule about what a script may read; authentication stays a befo
 ## Request logging
 
 ```java
-app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
-        req.method(), req.path(), res.status().code(), millis));
+app.requestLogger((req, res, took) -> logger.info("{} {} -> {} ({}ms)",
+        req.method(), req.path(), res.status().code(), took.toMillis()));
 ```
 
 Runs once per request after the response is complete; the status it sees is the one actually sent.

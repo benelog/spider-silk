@@ -223,8 +223,8 @@ class ReadmeSnippets {
     // ---- blocks 15, 16: request logging, static files ----
 
     void loggingAndAssets(App app) {
-        app.requestLogger((req, res, millis) -> logger.info("{} {} -> {} ({}ms)",
-                req.method(), req.path(), res.status().code(), millis));
+        app.requestLogger((req, res, took) -> logger.info("{} {} -> {} ({}ms)",
+                req.method(), req.path(), res.status().code(), took.toMillis()));
 
         app.staticFiles(new StaticFiles("/public")
                 .hostedPath("/assets")              // classpath:/public/* at /assets/*

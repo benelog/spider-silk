@@ -2,6 +2,7 @@ package net.benelog.spidersilk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -16,7 +17,7 @@ class RequestLoggerTest {
     void everyRequestIsReportedWithItsStatus() {
         List<String> logged = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, millis) -> logged.add(
+                .requestLogger((req, res, took) -> logged.add(
                         req.method() + " " + req.path() + " -> " + res.status().code()))
                 .get("/decks", req -> WebResponse.text("list"));
 
@@ -33,7 +34,7 @@ class RequestLoggerTest {
     void theStatusIsTheOneTheErrorHandlerLeftBehind() {
         List<HttpStatus> statuses = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, millis) -> statuses.add(res.status()))
+                .requestLogger((req, res, took) -> statuses.add(res.status()))
                 .error(HttpStatus.NOT_FOUND, req -> WebResponse.text("gone for good").status(HttpStatus.GONE))
                 .get("/", req -> WebResponse.text("ok"));
 
@@ -46,7 +47,7 @@ class RequestLoggerTest {
     void anUncaughtExceptionIsStillReported() {
         List<HttpStatus> statuses = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, millis) -> statuses.add(res.status()))
+                .requestLogger((req, res, took) -> statuses.add(res.status()))
                 .get("/boom", req -> {
                     throw new IllegalStateException("kaboom");
                 });
@@ -58,9 +59,9 @@ class RequestLoggerTest {
 
     @Test
     void theElapsedTimeIsReported() {
-        List<Long> times = new ArrayList<>();
+        List<Duration> times = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, millis) -> times.add(millis))
+                .requestLogger((req, res, took) -> times.add(took))
                 .get("/slow", req -> {
                     Thread.sleep(15);
                     return WebResponse.text("done");
@@ -69,14 +70,28 @@ class RequestLoggerTest {
         WebTest.test(app, client -> client.get("/slow"));
 
         assertThat(times).hasSize(1);
-        assertThat(times.get(0)).isGreaterThanOrEqualTo(10);
+        assertThat(times.get(0)).isGreaterThanOrEqualTo(Duration.ofMillis(10));
+    }
+
+    /** A Duration keeps what the nanosecond clock measured, so a fast request is not reported as zero. */
+    @Test
+    void aRequestFasterThanAMillisecondIsStillReported() {
+        List<Duration> times = new ArrayList<>();
+        App app = new App()
+                .requestLogger((req, res, took) -> times.add(took))
+                .get("/", req -> WebResponse.text("ok"));
+
+        WebTest.test(app, client -> client.get("/"));
+
+        assertThat(times).hasSize(1);
+        assertThat(times.get(0)).isPositive();
     }
 
     /** Logging happens after the response is sent, so a broken logger cannot break it. */
     @Test
     void aLoggerThatThrowsDoesNotAffectTheResponse() {
         App app = new App()
-                .requestLogger((req, res, millis) -> {
+                .requestLogger((req, res, took) -> {
                     throw new IllegalStateException("logger is broken");
                 })
                 .get("/", req -> WebResponse.text("ok"));

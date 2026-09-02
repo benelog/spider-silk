@@ -57,7 +57,7 @@ class SseTest {
         List<String> filtered = new ArrayList<>();
         List<HttpStatus> logged = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, millis) -> logged.add(res.status()))
+                .requestLogger((req, res, took) -> logged.add(res.status()))
                 .before("/events", req -> {
                     filtered.add("before " + req.path());
                     return null;

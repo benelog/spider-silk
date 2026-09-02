@@ -7,6 +7,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -112,7 +113,7 @@ public class AppServlet extends HttpServlet {
             return;
         }
         try {
-            app.requestLogger.log(request, response, (System.nanoTime() - startedAt) / 1_000_000);
+            app.requestLogger.log(request, response, Duration.ofNanos(System.nanoTime() - startedAt));
         } catch (Exception e) {
             log("Request logger failed", e);
         }
