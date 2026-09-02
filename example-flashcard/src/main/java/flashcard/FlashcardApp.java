@@ -113,16 +113,16 @@ public class FlashcardApp {
         app.cors(Cors.anyOrigin().forPath("/openapi.json"));
 
         // CSV format error: this handler runs after the transaction rolled back.
-        app.exception(CsvFormatException.class, (e, req) -> {
+        app.exception(CsvFormatException.class, (req, e) -> {
             req.flash("error", e.getMessage());
             return WebResponse.redirect("/");
         });
         app.exception(IllegalArgumentException.class,
-                (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+                (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
         // A body that failed to parse is a 400, not one of the 404s above. The
         // more specific type wins whatever the order, so this line may sit here.
         app.exception(Json.JsonException.class,
-                (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
+                (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
         registerRoutes(app, context);
         return app;

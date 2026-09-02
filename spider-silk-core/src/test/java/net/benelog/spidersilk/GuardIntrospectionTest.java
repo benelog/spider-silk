@@ -78,7 +78,7 @@ class GuardIntrospectionTest {
     @Test
     void exceptionHandlersAreNotGuards() {
         App app = new App().exception(IllegalStateException.class,
-                (e, req) -> WebResponse.text(e.getMessage()));
+                (req, e) -> WebResponse.text(e.getMessage()));
 
         assertThat(app.guards()).isEmpty();
     }

@@ -143,9 +143,9 @@ app.before("/admin/*", req -> req.sessionAttr("user") == null
 app.after((req, res) -> res.header("X-Request-Id", requestId()));   // null = leave alone
 
 app.exception(NoSuchDeckException.class,
-        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 app.exception(Json.JsonException.class,       // most specific type wins, whatever the order
-        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
+        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
 app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 ```

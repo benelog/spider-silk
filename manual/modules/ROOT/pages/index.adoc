@@ -68,9 +68,9 @@ app.path("/api/decks", group -> {
 });
 
 app.exception(IllegalArgumentException.class,
-        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 app.exception(Json.JsonException.class,        // the more specific type wins, whatever the order
-        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
+        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
 app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 

@@ -19,9 +19,9 @@ class ExceptionHandlersTest {
                     throw new IllegalStateException("specific");
                 })
                 .exception(Exception.class,
-                        (e, req) -> WebResponse.text("general").status(HttpStatus.INTERNAL_SERVER_ERROR))
+                        (req, e) -> WebResponse.text("general").status(HttpStatus.INTERNAL_SERVER_ERROR))
                 .exception(IllegalStateException.class,
-                        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.CONFLICT));
+                        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.CONFLICT));
 
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.get("/boom");
@@ -38,9 +38,9 @@ class ExceptionHandlersTest {
                     throw new IllegalStateException("specific");
                 })
                 .exception(IllegalStateException.class,
-                        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.CONFLICT))
+                        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.CONFLICT))
                 .exception(Exception.class,
-                        (e, req) -> WebResponse.text("general").status(HttpStatus.INTERNAL_SERVER_ERROR));
+                        (req, e) -> WebResponse.text("general").status(HttpStatus.INTERNAL_SERVER_ERROR));
 
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.get("/boom");
@@ -57,9 +57,9 @@ class ExceptionHandlersTest {
                     throw new UnsupportedOperationException("other");
                 })
                 .exception(IllegalStateException.class,
-                        (e, req) -> WebResponse.text("wrong").status(HttpStatus.CONFLICT))
+                        (req, e) -> WebResponse.text("wrong").status(HttpStatus.CONFLICT))
                 .exception(RuntimeException.class,
-                        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_GATEWAY));
+                        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_GATEWAY));
 
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.get("/boom");
@@ -83,9 +83,9 @@ class ExceptionHandlersTest {
                     throw new IllegalArgumentException("Deck not found");
                 })
                 .exception(IllegalArgumentException.class,
-                        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND))
+                        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND))
                 .exception(Json.JsonException.class,
-                        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
+                        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
         WebTest.test(app, client -> {
             assertThat(client.postJson("/decks", "{}").statusCode()).isEqualTo(400);

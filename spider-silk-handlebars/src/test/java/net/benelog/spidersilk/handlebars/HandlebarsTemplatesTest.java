@@ -69,7 +69,7 @@ class HandlebarsTemplatesTest {
                 .templates(new HandlebarsTemplates("hbs"))
                 .get("/hello", req -> WebResponse.template("nothing-here", Map.of()))
                 .exception(Exception.class,
-                        (e, req) -> WebResponse.text("caught").status(HttpStatus.BAD_REQUEST));
+                        (req, e) -> WebResponse.text("caught").status(HttpStatus.BAD_REQUEST));
 
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.get("/hello");

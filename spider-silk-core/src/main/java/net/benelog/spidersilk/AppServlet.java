@@ -285,7 +285,7 @@ public class AppServlet extends HttpServlet {
         ExceptionHandler<Exception> handler = exceptionHandlerFor(e);
         if (handler != null) {
             try {
-                return renderTemplate(required(handler.handle(e, request),
+                return renderTemplate(required(handler.handle(request, e),
                         "Exception handler", request.method(), request.path()));
             } catch (Exception handlerFailure) {
                 return internalError(handlerFailure, request);

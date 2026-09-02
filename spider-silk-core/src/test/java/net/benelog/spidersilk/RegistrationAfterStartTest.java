@@ -30,7 +30,7 @@ class RegistrationAfterStartTest {
         assertThatIllegalStateException()
                 .isThrownBy(() -> app.after((req, res) -> null));
         assertThatIllegalStateException()
-                .isThrownBy(() -> app.exception(Exception.class, (e, req) -> WebResponse.empty()));
+                .isThrownBy(() -> app.exception(Exception.class, (req, e) -> WebResponse.empty()));
         assertThatIllegalStateException()
                 .isThrownBy(() -> app.error(HttpStatus.NOT_FOUND, req -> WebResponse.text("gone")));
         assertThatIllegalStateException()

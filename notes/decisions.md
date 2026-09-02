@@ -51,8 +51,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 33 | Streamed JSON and NDJSON, on the `Stream` body already there | ✅ shipped |
 | 34 | Six places the contract and the behaviour disagreed | ✅ shipped |
 | 35 | The content type first, on every body that takes one | ✅ shipped |
+| 36 | The request first in `ExceptionHandler`, as in every other handler | ✅ shipped |
 
-Thirty-seven of the thirty-eight shipped.
+Thirty-eight of the thirty-nine shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -730,6 +731,26 @@ No deprecated overload was left behind.
 `bytes(byte[], String)` and `bytes(String, byte[])` would both compile, which is exactly the ambiguity the change removes.
 The break is mechanical: every call site is a compile error whose fix is visible in the error.
 It is taken before 1.0 for the reason decision 34 gives, that the cost only grows.
+
+## 36 · The argument order of an exception handler
+
+### 36. The request first, in `ExceptionHandler` too
+
+`ExceptionHandler.handle` takes `(WebRequest request, E exception)`.
+It used to take the exception first, and it was the one handler interface that did.
+`Handler`, `BeforeFilter`, `AfterFilter`, and `RequestLogger` all name the request first, so a reader who had written three lambdas for this framework had to look the fourth one up.
+Decision 18 set the naming rule for these interfaces.
+This is the argument rule that goes with it.
+Every handler now takes the request first, and what it answers with follows.
+
+The order it left reads like a `catch` clause, and Javalin's `(e, ctx)` is the same.
+That echo is the argument for having kept it, and it loses to consistency across five interfaces of the same framework.
+The interface is functional, so its shape is final at 1.0 and was settled on purpose rather than by default.
+
+No deprecated overload was left behind, for the reason decision 35 gives.
+The break is mechanical wherever the lambda touches the exception: a body calling `e.getMessage()` stops compiling until the parameters are swapped.
+A lambda that uses neither parameter compiles either way, which is the one case the compiler cannot flag, and also the case where the order does not matter.
+It is taken before 1.0 because the cost only grows — decision 34's argument.
 
 ## Rejected — decisions, with the reason
 

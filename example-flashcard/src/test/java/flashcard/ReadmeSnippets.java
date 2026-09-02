@@ -137,7 +137,7 @@ class ReadmeSnippets {
 
         // Exception-to-response mapping
         app.exception(IllegalArgumentException.class,
-                (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+                (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
         // One place for a styled error page, whatever produced the status
         app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
