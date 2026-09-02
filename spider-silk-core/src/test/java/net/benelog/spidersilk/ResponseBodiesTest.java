@@ -94,7 +94,7 @@ class ResponseBodiesTest {
     void theBodyKindsAreExhaustive() {
         assertThat(describe(WebResponse.noContent())).isEqualTo("no body");
         assertThat(describe(WebResponse.html("hello"))).isEqualTo("hello");
-        assertThat(describe(WebResponse.bytes(new byte[2], "application/octet-stream")))
+        assertThat(describe(WebResponse.bytes("application/octet-stream", new byte[2])))
                 .isEqualTo("2 bytes");
         assertThat(describe(WebResponse.template("deck", java.util.Map.of())))
                 .isEqualTo("template deck");

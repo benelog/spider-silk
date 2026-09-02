@@ -216,7 +216,21 @@ public final class WebResponse {
         });
     }
 
-    public static WebResponse bytes(byte[] data, String contentType) {
+    /**
+     * Bytes already in memory — a generated PDF, an image, an export small
+     * enough to build before answering. The content type comes first, as it
+     * does on {@link #stream(String, StreamWriter)}.
+     *
+     * <pre>{@code
+     * app.get("/decks/{deckId}/sheet.pdf", req -> WebResponse
+     *         .bytes("application/pdf", service.sheet(req.pathParamLong("deckId")))
+     *         .attachment("deck.pdf"));
+     * }</pre>
+     *
+     * <p>A body that is written as it goes, rather than held whole, is
+     * {@link #stream(String, StreamWriter)}.
+     */
+    public static WebResponse bytes(String contentType, byte[] data) {
         return of(new Bytes(data)).contentType(contentType);
     }
 

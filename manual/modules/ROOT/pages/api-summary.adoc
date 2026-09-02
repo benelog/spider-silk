@@ -38,7 +38,7 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 
 == What `WebResponse` provides
 
-* Bodies: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
+* Bodies: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
 * Bodies written a value at a time: `jsonArray(sink -> ...)` for an array too big to hold, and `ndjson(sink -> ...)` for one value per line.
   Both are a `stream` body underneath, so the headers commit before the writer runs
 * Statuses: `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`

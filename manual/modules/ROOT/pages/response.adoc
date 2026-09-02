@@ -6,7 +6,8 @@ Every method returns a new response, which is what lets an after-filter rewrite 
 
 == Bodies
 
-`html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
+`html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
+The content type is the first argument of every body that takes one.
 A template name carries no extension.
 The engine appends its own, as xref:templates.adoc[Templates] describes.
 

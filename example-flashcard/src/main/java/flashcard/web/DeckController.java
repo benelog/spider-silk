@@ -82,7 +82,7 @@ public class DeckController {
         long deckId = req.pathParamLong("deckId");
         String csv = deckService.exportCsv(deckId);
         return WebResponse
-                .bytes(csv.getBytes(StandardCharsets.UTF_8), "text/csv; charset=UTF-8")
+                .bytes("text/csv; charset=UTF-8", csv.getBytes(StandardCharsets.UTF_8))
                 .attachment("deck-%d.csv".formatted(deckId));
     }
 

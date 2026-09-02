@@ -104,7 +104,7 @@ Immutable value: every method returns a new response, so chains compose and afte
 
 ```java
 // Bodies
-WebResponse.html(page); WebResponse.text(s); WebResponse.bytes(pdf, "application/pdf");
+WebResponse.html(page); WebResponse.text(s); WebResponse.bytes("application/pdf", pdf);
 WebResponse.json(rawString); WebResponse.json(jsonValue); WebResponse.json(value, writer);
 WebResponse.jsonArray(sink -> ...); WebResponse.ndjson(sink -> ...);   // written a value at a time, see content.md
 WebResponse.template("deck");                       // name carries no extension

@@ -105,7 +105,7 @@ class GzipTest {
     @Test
     void anAlreadyCompressedTypeIsNotTouched() {
         byte[] image = new byte[4096];
-        App app = new App().gzip().get("/photo", req -> WebResponse.bytes(image, "image/jpeg"));
+        App app = new App().gzip().get("/photo", req -> WebResponse.bytes("image/jpeg", image));
 
         WebTest.test(app, client -> {
             HttpResponse<byte[]> response = gzipped(client, "/photo");

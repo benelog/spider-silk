@@ -50,8 +50,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 32 | One name for the group id, the package root, and the module name | ✅ shipped |
 | 33 | Streamed JSON and NDJSON, on the `Stream` body already there | ✅ shipped |
 | 34 | Six places the contract and the behaviour disagreed | ✅ shipped |
+| 35 | The content type first, on every body that takes one | ✅ shipped |
 
-Thirty-six of the thirty-seven shipped.
+Thirty-seven of the thirty-eight shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -714,6 +715,21 @@ Each fix is small, and each would have cost more after 1.0, because correcting a
 Rejected on the way: the framework turning an uncaught `JsonException` into a 400 itself.
 That would make a reader-less `bodyJson()` answer 400 with no line saying so, one implicit mapping in an API whose point is that mappings are written.
 The example and the agent skill carry the explicit line instead, and specificity matching is what lets that line sit after the `IllegalArgumentException` one.
+
+## 35 · The argument order of a body
+
+### 35. The content type first, on every body that takes one
+
+`bytes` takes the content type first, as `stream` already did.
+It used to take it last, so the two factories that name a content type named it in opposite places.
+They are the same answer in a different shape, bytes held in memory or bytes written as they go, and a reader who had used one guessed the other wrong.
+`stream` is the one that cannot move: its writer is a lambda, and a lambda reads as a block only when it is the last argument.
+So `bytes` moved, and the rule is now stateable in one line: the content type is the first argument of every body that takes one.
+
+No deprecated overload was left behind.
+`bytes(byte[], String)` and `bytes(String, byte[])` would both compile, which is exactly the ambiguity the change removes.
+The break is mechanical: every call site is a compile error whose fix is visible in the error.
+It is taken before 1.0 for the reason decision 34 gives, that the cost only grows.
 
 ## Rejected — decisions, with the reason
 
