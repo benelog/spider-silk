@@ -7,6 +7,7 @@ import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.DateTimeException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -14,6 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 import jakarta.servlet.ServletException;
@@ -192,6 +194,31 @@ public final class WebRequest {
         }
     }
 
+    /**
+     * A path variable read through a parser of your own, for the types that have
+     * no named form.
+     *
+     * <pre>{@code
+     * app.get("/decks/{deckId}", req -> deckPage(req.pathParam("deckId", UUID::fromString)));
+     * }</pre>
+     *
+     * <p>A parser that rejects the text answers 400 naming the variable, the same
+     * contract as {@link #pathParamLong}. Rejecting means throwing
+     * {@link IllegalArgumentException} or {@link DateTimeException}, which is
+     * what {@code UUID::fromString}, {@code Integer::parseInt}, and
+     * {@code LocalDate::parse} already do. Any other exception is a fault in the
+     * parser rather than in the request, and stays a 500.
+     */
+    public <T> T pathParam(String name, Function<String, T> parser) {
+        String value = pathParam(name);
+        try {
+            return parser.apply(value);
+        } catch (IllegalArgumentException | DateTimeException e) {
+            throw new HttpException(HttpStatus.BAD_REQUEST,
+                    "Invalid value for path variable {%s}: %s".formatted(name, value));
+        }
+    }
+
     // ---- Query string and form parameters ----
 
     /** A required parameter. Responds with 400 if missing. */
@@ -255,6 +282,43 @@ public final class WebRequest {
         return value == null ? defaultValue : parseEnum(name, type, value);
     }
 
+    /**
+     * A required parameter read through a parser of your own, for the types that
+     * have no named form.
+     *
+     * <pre>{@code
+     * LocalDate since = req.param("since", LocalDate::parse);
+     * UUID owner = req.param("owner", UUID::fromString);
+     * }</pre>
+     *
+     * <p>A missing parameter answers 400, as {@link #param(String)} does, and so
+     * does a parser that rejects the text. Rejecting means throwing
+     * {@link IllegalArgumentException} or {@link DateTimeException}, which is
+     * what {@code UUID::fromString}, {@code Integer::parseInt}, and
+     * {@code LocalDate::parse} already do. Any other exception is a fault in the
+     * parser rather than in the request, and stays a 500.
+     *
+     * <p>The named forms stay the short spelling for the types that have one:
+     * {@link #paramLong(String)}, {@link #paramBoolean(String)}, and
+     * {@link #paramEnum(String, Class)}.
+     */
+    public <T> T param(String name, Function<String, T> parser) {
+        return parse(name, param(name), parser);
+    }
+
+    /**
+     * An optional parameter read through a parser of your own: the default when
+     * absent, still a 400 when the parser rejects what was sent.
+     *
+     * <pre>{@code
+     * int page = req.param("page", Integer::parseInt, 1);
+     * }</pre>
+     */
+    public <T> T param(String name, Function<String, T> parser, T defaultValue) {
+        String value = req.getParameter(name);
+        return value == null ? defaultValue : parse(name, value, parser);
+    }
+
     private static long parseLong(String name, String value) {
         try {
             return Long.parseLong(value);
@@ -273,6 +337,15 @@ public final class WebRequest {
         }
         throw new HttpException(HttpStatus.BAD_REQUEST,
                 "Parameter %s is not a boolean: %s".formatted(name, value));
+    }
+
+    private static <T> T parse(String name, String value, Function<String, T> parser) {
+        try {
+            return parser.apply(value);
+        } catch (IllegalArgumentException | DateTimeException e) {
+            throw new HttpException(HttpStatus.BAD_REQUEST,
+                    "Invalid value for parameter %s: %s".formatted(name, value));
+        }
     }
 
     private static <E extends Enum<E>> E parseEnum(String name, Class<E> type, String value) {

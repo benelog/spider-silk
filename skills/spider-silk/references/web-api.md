@@ -69,7 +69,11 @@ Direction d = req.pathParamEnum("direction", Direction.class);
 
 String q = req.param("q");                                  // missing -> 400
 long page = req.paramLong("page", 1);                       // default covers absence, not garbage
-boolean archived = req.paramBoolean("archived", false);     // "true"/"false" only; "yes" -> 400
+boolean archived = req.paramBoolean("archived", false);     // "true"/"false" only
+LocalDate since = req.param("since", LocalDate::parse);     // any other type: a parser
+UUID owner = req.param("owner", UUID::fromString);          // 400 on IllegalArgumentException
+int page = req.param("page", Integer::parseInt, 1);         //   or DateTimeException
+int deckId = req.pathParam("deckId", Integer::parseInt);    // path variables take one too; "yes" -> 400
 List<String> tags = req.params("tag");                      // repeated values; empty list when absent
 
 String p = req.queryParam("page");                          // query string only, null when absent

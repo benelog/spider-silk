@@ -53,8 +53,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 35 | The content type first, on every body that takes one | ✅ shipped |
 | 36 | The request first in `ExceptionHandler`, as in every other handler | ✅ shipped |
 | 37 | `RequestLogger` reports a `Duration`, not a count of milliseconds | ✅ shipped |
+| 38 | `param(name, parser)`: one seam for every type with no named form | ✅ shipped |
 
-Thirty-nine of the forty shipped.
+Forty of the forty-one shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -772,6 +773,27 @@ It keeps the precision and loses the unit, which is the half of the problem that
 The break is not mechanical, which is why it is taken now rather than after 1.0.
 A lambda that passes the argument straight to a logger keeps compiling and starts printing `PT0.4S` where it printed `400`.
 Decision 34's argument applies with more force for that reason, not less.
+
+## 38 · Typed parameters beyond the named forms
+
+### 38. `param(name, parser)`, alongside the named forms rather than in their place
+
+`param(name, parser)`, `param(name, parser, default)`, and `pathParam(name, parser)` read any type, where the parser is a `Function<String, T>` written at the call site.
+`paramLong`, `paramBoolean`, and `paramEnum` each exist as a required form and a default form, and the same again for path variables.
+Every further type was two or four more overloads, and `int`, `double`, `UUID`, and `LocalDate` had none.
+One seam covers them all, and it is the framework's own idiom: the mapping is a lambda, so there is still no reflection.
+
+The named forms stay.
+`req.paramLong("id")` is shorter than `req.param("id", Long::parseLong)`, and the common types are common enough to be worth the shorter spelling.
+The seam covers the rest, so the overload list stops growing.
+
+The contract is decision 8's, the one `bodyJson(reader)` has: a parser that rejects the text answers 400 naming the parameter, so a handler receives a whole value or none.
+Rejecting is throwing `IllegalArgumentException` **or `DateTimeException`**.
+`DateTimeParseException` is not an `IllegalArgumentException` — it descends from `DateTimeException`, which descends straight from `RuntimeException` — so an `IllegalArgumentException`-only catch would have made `LocalDate::parse`, one of the types the seam exists for, a 500 on a bad date.
+
+Rejected on the way: catching `RuntimeException`.
+The value handed to a parser is never null, since `param(name)` has already answered 400 for an absent one.
+A `NullPointerException` or an `IllegalStateException` out of a parser is therefore a fault in the parser and not in the request, and a 500 is the honest answer.
 
 ## Rejected — decisions, with the reason
 

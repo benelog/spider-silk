@@ -34,6 +34,23 @@ A parameter that is present but unparseable is still a 400.
 `paramBoolean(name)` and `paramBoolean(name, default)` read `true` or `false` in any case and answer 400 for anything else, so `?archived=yes` is rejected rather than read as false.
 A checkbox therefore carries `value="true"`, or is read through `params(name)` where its presence is the answer.
 
+== Any other type: a parser
+
+`param(name, parser)` reads a type that has no named form, where the parser is a `Function<String, T>` written at the call site.
+
+[source,java]
+----
+LocalDate since = req.param("since", LocalDate::parse);
+UUID owner = req.param("owner", UUID::fromString);
+int page = req.param("page", Integer::parseInt, 1);        // default covers absence only
+int deckId = req.pathParam("deckId", Integer::parseInt);   // path variables too
+----
+
+A parser that rejects the text answers 400 naming the parameter, the same contract the named forms have.
+Rejecting means throwing `IllegalArgumentException` or `DateTimeException`, which is what `UUID::fromString`, `Integer::parseInt`, and `LocalDate::parse` already do.
+Anything else the parser throws is a fault in the parser rather than in the request, and stays a 500.
+No reflection is involved: the mapping is the lambda you wrote.
+
 == Query string vs. form body
 
 The servlet API merges the two, so `param("id")` answers an `id` in the URL and an `id` in the form alike.
