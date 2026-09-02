@@ -26,7 +26,7 @@ app.post("/api/decks", req -> {
 });
 ```
 
-- `getString`/`getLong`/... throw `IllegalArgumentException` on a missing key or wrong type, and `req.bodyJson(reader)` turns that into a 400: a handler gets a whole value or none.
+- `getString`/`getLong`/... throw `Json.JsonException` (an `IllegalArgumentException`) on a missing key or wrong type, and `req.bodyJson(reader)` turns that into a 400: a handler gets a whole value or none. `asLong`/`getLong` reject `1.5` rather than truncating it.
 - For keys allowed to be absent: `optString`/`optLong`/`optDouble`/`optBoolean` answer a default, for a missing key and an explicit JSON `null` alike.
 - A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
 - `JsonCodec<T>` is writer and reader at once for types that travel both ways: `JsonCodec.of(writer, reader)`, `JsonCodec.list(codec)`.

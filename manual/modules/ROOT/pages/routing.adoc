@@ -77,6 +77,8 @@ app.get("/study/{mode}", study::byMode);    // everything else under /study
 Registering a second route that matches exactly the same requests throws `IllegalStateException` on the spot.
 That covers the same path and the same shape with a variable renamed.
 Such a route could never run, and the exception reports it at registration instead of leaving a dead entry in the table.
+Registration closes at `start()`.
+The table is read by every request thread without a lock, so a route added to a running application throws `IllegalStateException` instead of racing the requests, and `stop()` opens registration again.
 
 == When nothing matches
 

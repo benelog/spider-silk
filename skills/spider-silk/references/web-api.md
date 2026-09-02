@@ -69,7 +69,7 @@ Direction d = req.pathParamEnum("direction", Direction.class);
 
 String q = req.param("q");                                  // missing -> 400
 long page = req.paramLong("page", 1);                       // default covers absence, not garbage
-boolean archived = req.paramBoolean("archived", false);
+boolean archived = req.paramBoolean("archived", false);     // "true"/"false" only; "yes" -> 400
 List<String> tags = req.params("tag");                      // repeated values; empty list when absent
 
 String p = req.queryParam("page");                          // query string only, null when absent
@@ -144,11 +144,16 @@ app.after((req, res) -> res.header("X-Request-Id", requestId()));   // null = le
 
 app.exception(NoSuchDeckException.class,
         (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+app.exception(Json.JsonException.class,       // most specific type wins, whatever the order
+        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
 app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 app.notFound(handler);                      // shorthand for error(NOT_FOUND, handler)
 ```
 
+- `exception(Type, handler)` runs the handler for the most specific registered type the exception is an instance of, in any registration order.
+- `Json.JsonException` is an `IllegalArgumentException`, so map it separately when `IllegalArgumentException` means 404.
+- Register everything before `app.start(...)`: a route, filter, or setting added to a running app throws `IllegalStateException`.
 - `throw new HttpException(HttpStatus.UNAUTHORIZED, "...")` rejects from anywhere and lets `error(status, ...)` render the body.
 - `error(status, handler)` fills the body for any response that ended on that status with no body (router 404s, `HttpException`, `WebResponse.empty(status)`); a response that already carries a body is left alone.
 - Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.

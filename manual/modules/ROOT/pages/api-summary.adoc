@@ -10,20 +10,22 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
   `guards()` reports the filters and error handlers beside them as `Guard.Before(path)`, `Guard.After(path)`, and `Guard.Error(status)`.
   xref:openapi.adoc[`spider-silk-openapi`] turns the route list into an OpenAPI 3.1 document
 * Filters: `before(filter)` / `before(path, filter)`, same for `after`
-* Errors: `exception(Type, handler)`, `error(HttpStatus, handler)`, `notFound(handler)`
+* Errors: `exception(Type, handler)`, where the most specific registered type wins, `error(HttpStatus, handler)`, `notFound(handler)`
 * Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
   Each is off until named, and applies to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
 * Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)`.
   jte over `classpath:/jte` and `classpath:/public` at the root are the defaults, so neither has to be called.
   `StaticFiles.directory(path)` serves a directory on disk instead of the classpath, several roots given at once are read in order, and `precompressed()` answers with a `.br` or `.gz` sibling where a build left one.
   `FreeMarkerTemplates`, `HandlebarsTemplates`, and `ThymeleafTemplates` are `TemplateRenderer` implementations in modules of their own
-* Server: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`
+* Server: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`.
+  Registration closes at `start`: a route, filter, or setting added to a running application throws `IllegalStateException`, and `stop()` opens it again
 
 == What `WebRequest` provides
 
 * Request info: `method()`, `path()`, `header(name)`, `raw()` for the servlet request itself
-* Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`
-* Parameters: `param` (400 when missing), `paramLong`, `paramEnum`, each with a `(..., default)` form for optional parameters; `paramBoolean(name, default)`; `params(name)` for repeated values
+* Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`.
+  A name the pattern never declared throws `IllegalStateException`, not a 400
+* Parameters: `param` (400 when missing), `paramLong`, `paramBoolean` (`true` or `false` only), `paramEnum`, each with a `(..., default)` form for optional parameters; `params(name)` for repeated values
 * Query vs. form: `queryParam`, `queryParams`, `formParam`, `formParams`
 * Content negotiation: `accepts(types...)` answers with the type the caller prefers out of the ones offered, 406 when it will take none of them; `acceptedTypes()` for the parsed `Accept` header
 * Cookies the client sent: `cookie(name)`, `cookies()`

@@ -155,10 +155,18 @@ public final class WebRequest {
 
     // ---- Path variables ----
 
+    /**
+     * A path variable the matched route declared.
+     *
+     * @throws IllegalStateException if the route's pattern has no variable of
+     *         that name. That is a mismatch between the pattern and the handler
+     *         reading it, not bad input, so it is not the
+     *         {@code IllegalArgumentException} an application maps to a status.
+     */
     public String pathParam(String name) {
         String value = pathParams.get(name);
         if (value == null) {
-            throw new IllegalArgumentException(
+            throw new IllegalStateException(
                     "Path pattern has no such variable: {" + name + "}");
         }
         return value;
@@ -214,9 +222,24 @@ public final class WebRequest {
         return value == null ? defaultValue : parseLong(name, value);
     }
 
+    /**
+     * A required boolean parameter: {@code true} or {@code false}, in any
+     * case. Anything else is a 400, the same contract as
+     * {@link #paramLong(String)}. A checkbox therefore wants
+     * {@code value="true"}, or {@link #params(String)} where its presence is the
+     * answer.
+     */
+    public boolean paramBoolean(String name) {
+        return parseBoolean(name, param(name));
+    }
+
+    /**
+     * An optional boolean parameter: the default when absent, still a 400 when
+     * the value is neither {@code true} nor {@code false}.
+     */
     public boolean paramBoolean(String name, boolean defaultValue) {
         String value = req.getParameter(name);
-        return value != null ? Boolean.parseBoolean(value) : defaultValue;
+        return value == null ? defaultValue : parseBoolean(name, value);
     }
 
     public <E extends Enum<E>> E paramEnum(String name, Class<E> type) {
@@ -239,6 +262,17 @@ public final class WebRequest {
             throw new HttpException(HttpStatus.BAD_REQUEST,
                     "Parameter %s is not a number: %s".formatted(name, value));
         }
+    }
+
+    private static boolean parseBoolean(String name, String value) {
+        if (value.equalsIgnoreCase("true")) {
+            return true;
+        }
+        if (value.equalsIgnoreCase("false")) {
+            return false;
+        }
+        throw new HttpException(HttpStatus.BAD_REQUEST,
+                "Parameter %s is not a boolean: %s".formatted(name, value));
     }
 
     private static <E extends Enum<E>> E parseEnum(String name, Class<E> type, String value) {

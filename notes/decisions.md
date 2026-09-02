@@ -49,8 +49,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 31 | Pre-compressed `.br`/`.gz` siblings, named on `StaticFiles` | ✅ shipped |
 | 32 | One name for the group id, the package root, and the module name | ✅ shipped |
 | 33 | Streamed JSON and NDJSON, on the `Stream` body already there | ✅ shipped |
+| 34 | Six places the contract and the behaviour disagreed | ✅ shipped |
 
-Thirty-five of the thirty-six shipped.
+Thirty-six of the thirty-seven shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -676,6 +677,41 @@ Its field names still come from the record's components, though, so a rename cha
 No reflection was never the whole rule.
 It was the mechanism by which the rule was kept.
 
+## 34 · The contract, checked against the code
+
+### 34. Six places the contract and the behaviour disagreed
+
+The API states one contract for input, "a value or a 400", and six places in the code did something else.
+Decision 32 read what was public.
+This one read what the public things did.
+Each fix is small, and each would have cost more after 1.0, because correcting a behaviour a caller has coded around is the breaking change that looks like a bug fix.
+
+- **`Json.JsonException`, a subtype of `IllegalArgumentException`.**
+  `Json`'s accessors threw the plain type, and so did `pathParam` for a variable the pattern never declared.
+  An application that maps `IllegalArgumentException` to 404, as the example did, therefore answered 404 for a body that failed to parse and for a typo in a handler.
+  The subtype keeps decision 8's reader contract: a reader throwing the plain type for a rule of its own is still a 400 through `bodyJson(reader)`.
+  It also lets an application map parsing failures on their own.
+  The `pathParam` case became `IllegalStateException`, since a mismatch between a pattern and the handler reading it is not bad input.
+- **The most specific exception handler runs.**
+  It used to be the first registered that matched, so `Exception.class` registered first made every later handler unreachable, silently.
+  Decision 14's router throws on a route that can never run, and the same shape here would throw on a subtype registered after its supertype, which forbids an order that is perfectly readable.
+  Matching by specificity resolves it with no rule to remember: every type that matches one exception lies on one inheritance chain, so of any two the one assignable to the other is the more specific.
+  `isAssignableFrom` is `Class` API of the same kind as the `isInstance` already in use, not the scanning this framework refuses.
+- **Registration closes at `start()`.**
+  The router's maps are read by every request thread without a lock, and decision 13's claim that `routes()` is the list the dispatcher walks holds only while that list does not change underneath it.
+  Registering on a running `App` throws, and `stop()` opens registration again, so a suite that reconfigures between starts still works.
+- **Three strict readings.**
+  `paramBoolean` read `yes` as false through `Boolean.parseBoolean`, where `paramLong` answers 400 for `x`.
+  It now takes `true` and `false` and rejects the rest, and gained the required form the other typed parameters already had.
+  `asLong` truncated `1.5` to 1.
+  It now rejects a fraction and still reads `2.0` and `1e3` as whole.
+  `AppServlet` set UTF-8 on every request, which overrode a charset the request declared.
+  The default now applies only where none was.
+
+Rejected on the way: the framework turning an uncaught `JsonException` into a 400 itself.
+That would make a reader-less `bodyJson()` answer 400 with no line saying so, one implicit mapping in an API whose point is that mappings are written.
+The example and the agent skill carry the explicit line instead, and specificity matching is what lets that line sit after the `IllegalArgumentException` one.
+
 ## Rejected — decisions, with the reason
 
 These are closed.
@@ -691,4 +727,5 @@ If one is reopened, it is a change to what the framework is.
 | `ServiceLoader`-based server discovery | Classpath-driven binding is the magic this framework exists without. |
 | Javalin-style plugin registry | A registry of things that configure themselves is how a container starts. Decision 27 is what the alternative looks like: three named methods, each taking a value that does nothing until `App` is handed it. |
 | Spark's static-import DSL | Process-global mutable state: one app per JVM, no parallel tests. |
+| Path-scoped `error(status, handler)`, or `RouteGroup.error(...)` | An application that answers JSON under `/api` and HTML elsewhere branches inside one handler, on `req.accepts(...)` or `req.path()`, which is one visible line. A path component on `Guard.Error` would turn decision 6's one place that renders a 404 into several, and would report a status handler as covering a pattern where it covers a status. |
 | `app.ws(path, config)` in core | A WebSocket is a protocol upgrade, so it leaves servlet dispatch: the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` all stop applying to it. Core would be handing out an API that core's own features silently do not cover. It also ends the no-lock-in claim that `WebServer` exists for, since `AppServlet` on another container cannot follow. `jakarta.websocket` is no escape either: its default `Configurator` instantiates endpoints reflectively. It lives in `spider-silk-jetty-websocket` instead, where the name carries the tie to Jetty — decision 15c. |

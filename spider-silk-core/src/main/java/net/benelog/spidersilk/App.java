@@ -31,6 +31,9 @@ import net.benelog.spidersilk.server.WebServerFactory;
  *
  * {@link #start(int)} runs the bundled Jetty. To deploy to an external servlet
  * container instead, skip it and map {@link AppServlet} yourself.
+ *
+ * <p>Everything is registered before {@code start}: a route, a filter, or a
+ * setting added to a running application throws {@link IllegalStateException}.
  */
 public final class App {
 
@@ -53,6 +56,7 @@ public final class App {
     private WebServer server;
 
     public App get(String path, Handler handler) {
+        requireNotStarted();
         router.add("GET", path, handler);
         return this;
     }
@@ -72,50 +76,59 @@ public final class App {
      * argument instead of an annotation.
      */
     public App get(String path, String description, Handler handler) {
+        requireNotStarted();
         router.add("GET", path, description, handler);
         return this;
     }
 
     public App post(String path, Handler handler) {
+        requireNotStarted();
         router.add("POST", path, handler);
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for POST. */
     public App post(String path, String description, Handler handler) {
+        requireNotStarted();
         router.add("POST", path, description, handler);
         return this;
     }
 
     public App put(String path, Handler handler) {
+        requireNotStarted();
         router.add("PUT", path, handler);
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for PUT. */
     public App put(String path, String description, Handler handler) {
+        requireNotStarted();
         router.add("PUT", path, description, handler);
         return this;
     }
 
     public App patch(String path, Handler handler) {
+        requireNotStarted();
         router.add("PATCH", path, handler);
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for PATCH. */
     public App patch(String path, String description, Handler handler) {
+        requireNotStarted();
         router.add("PATCH", path, description, handler);
         return this;
     }
 
     public App delete(String path, Handler handler) {
+        requireNotStarted();
         router.add("DELETE", path, handler);
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for DELETE. */
     public App delete(String path, String description, Handler handler) {
+        requireNotStarted();
         router.add("DELETE", path, description, handler);
         return this;
     }
@@ -125,12 +138,14 @@ public final class App {
      * its headers and no body.
      */
     public App head(String path, Handler handler) {
+        requireNotStarted();
         router.add("HEAD", path, handler);
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for HEAD. */
     public App head(String path, String description, Handler handler) {
+        requireNotStarted();
         router.add("HEAD", path, description, handler);
         return this;
     }
@@ -140,12 +155,14 @@ public final class App {
      * is answered with the {@code Allow} header the path's routes imply.
      */
     public App options(String path, Handler handler) {
+        requireNotStarted();
         router.add("OPTIONS", path, handler);
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for OPTIONS. */
     public App options(String path, String description, Handler handler) {
+        requireNotStarted();
         router.add("OPTIONS", path, description, handler);
         return this;
     }
@@ -198,6 +215,7 @@ public final class App {
      * "/admin" as well as "/admin/users".
      */
     public App before(String path, BeforeFilter filter) {
+        requireNotStarted();
         beforeFilters.add(new BeforeEntry(path, filter));
         return this;
     }
@@ -209,13 +227,22 @@ public final class App {
 
     /** A filter that runs after matching routes complete normally. */
     public App after(String path, AfterFilter filter) {
+        requireNotStarted();
         afterFilters.add(new AfterEntry(path, filter));
         return this;
     }
 
-    /** A per-exception-type handler. The first match in registration order runs. */
+    /**
+     * A per-exception-type handler. The handler for the most specific type the
+     * exception is an instance of runs, whatever order the handlers were
+     * registered in: with handlers for {@code IllegalArgumentException} and for
+     * {@code Json.JsonException}, a body that failed to parse reaches the second
+     * one. Registering a type twice replaces the first handler.
+     */
     public <E extends Exception> App exception(Class<E> type, ExceptionHandler<E> handler) {
-        exceptionHandlers.put(type, handler);
+        requireNotStarted();
+        exceptionHandlers.put(Objects.requireNonNull(type, "type"),
+                Objects.requireNonNull(handler, "handler"));
         return this;
     }
 
@@ -235,6 +262,7 @@ public final class App {
      * with the registered status unless it sets one of its own.
      */
     public App error(HttpStatus status, Handler handler) {
+        requireNotStarted();
         errorHandlers.put(Objects.requireNonNull(status, "status"),
                 Objects.requireNonNull(handler, "handler"));
         return this;
@@ -289,6 +317,7 @@ public final class App {
      * already been sent by then.
      */
     public App requestLogger(RequestLogger logger) {
+        requireNotStarted();
         this.requestLogger = Objects.requireNonNull(logger, "logger");
         return this;
     }
@@ -303,6 +332,7 @@ public final class App {
      * }</pre>
      */
     public App templates(TemplateRenderer renderer) {
+        requireNotStarted();
         this.templates = Objects.requireNonNull(renderer, "renderer");
         return this;
     }
@@ -345,6 +375,7 @@ public final class App {
      * path is left to routing.
      */
     public App staticFiles(StaticFiles... staticFiles) {
+        requireNotStarted();
         this.staticFiles = List.of(Objects.requireNonNull(staticFiles, "staticFiles"));
         return this;
     }
@@ -362,6 +393,7 @@ public final class App {
      * responses a cross-origin caller has to be able to read.
      */
     public App cors(Cors cors) {
+        requireNotStarted();
         this.cors = Objects.requireNonNull(cors, "cors");
         return this;
     }
@@ -383,6 +415,7 @@ public final class App {
      * any filter runs.
      */
     public App gzip(Gzip gzip) {
+        requireNotStarted();
         this.gzip = Objects.requireNonNull(gzip, "gzip");
         return this;
     }
@@ -403,6 +436,7 @@ public final class App {
      * a browser renders like any other and no after-filter runs for one.
      */
     public App securityHeaders(SecurityHeaders securityHeaders) {
+        requireNotStarted();
         this.securityHeaders = Objects.requireNonNull(securityHeaders, "securityHeaders");
         return this;
     }
@@ -420,6 +454,7 @@ public final class App {
      * }</pre>
      */
     public App server(WebServerFactory factory) {
+        requireNotStarted();
         this.serverFactory = Objects.requireNonNull(factory, "factory");
         return this;
     }
@@ -478,6 +513,19 @@ public final class App {
         for (SseStream stream : List.copyOf(openStreams)) {
             openStreams.remove(stream);
             stream.close();
+        }
+    }
+
+    /**
+     * Registration stops at {@link #start}. The routing table is read by every
+     * request thread without a lock, and {@link #routes()} is documented as the
+     * list the dispatcher walks, so a route added to a running server would be
+     * both a race and a snapshot that lies. {@link #stop()} opens it again.
+     */
+    private void requireNotStarted() {
+        if (server != null) {
+            throw new IllegalStateException(
+                    "Already started on port " + port() + ": register before start()");
         }
     }
 

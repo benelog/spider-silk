@@ -31,6 +31,8 @@ The values come back in request order, and an absent parameter gives an empty li
 `paramLong("page", 1)` and `paramEnum("direction", Direction.class, Direction.FRONT)` supply a default for an optional typed parameter.
 The default covers absence only.
 A parameter that is present but unparseable is still a 400.
+`paramBoolean(name)` and `paramBoolean(name, default)` read `true` or `false` in any case and answer 400 for anything else, so `?archived=yes` is rejected rather than read as false.
+A checkbox therefore carries `value="true"`, or is read through `params(name)` where its presence is the answer.
 
 == Query string vs. form body
 

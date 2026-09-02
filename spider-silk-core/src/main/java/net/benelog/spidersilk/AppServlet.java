@@ -57,7 +57,10 @@ public class AppServlet extends HttpServlet {
 
     @Override
     protected void service(HttpServletRequest req, HttpServletResponse res) throws IOException {
-        req.setCharacterEncoding("UTF-8");
+        if (req.getCharacterEncoding() == null) {
+            // The request declared no charset. One that did is read as it said.
+            req.setCharacterEncoding("UTF-8");
+        }
         promoteFlash(req);
 
         long startedAt = System.nanoTime();
@@ -279,23 +282,41 @@ public class AppServlet extends HttpServlet {
     }
 
     private WebResponse handleException(Exception e, WebRequest request) {
-        for (var entry : app.exceptionHandlers.entrySet()) {
-            if (entry.getKey().isInstance(e)) {
-                @SuppressWarnings("unchecked")
-                ExceptionHandler<Exception> handler =
-                        (ExceptionHandler<Exception>) entry.getValue();
-                try {
-                    return renderTemplate(required(handler.handle(e, request),
-                            "Exception handler", request.method(), request.path()));
-                } catch (Exception handlerFailure) {
-                    return internalError(handlerFailure, request);
-                }
+        ExceptionHandler<Exception> handler = exceptionHandlerFor(e);
+        if (handler != null) {
+            try {
+                return renderTemplate(required(handler.handle(e, request),
+                        "Exception handler", request.method(), request.path()));
+            } catch (Exception handlerFailure) {
+                return internalError(handlerFailure, request);
             }
         }
         if (e instanceof HttpException httpException) {
             return fail(request, httpException.status(), httpException.getMessage());
         }
         return internalError(e, request);
+    }
+
+    /**
+     * The handler registered for the most specific type this exception is an
+     * instance of, or null when none matches. Registration order plays no part:
+     * every type that matches sits on one inheritance chain, so of any two the
+     * one assignable to the other is the more specific, and a handler for a
+     * subtype is reached whether it was registered before or after its
+     * supertype's.
+     */
+    @SuppressWarnings("unchecked")
+    private ExceptionHandler<Exception> exceptionHandlerFor(Exception e) {
+        Class<?> bestType = null;
+        ExceptionHandler<? extends Exception> best = null;
+        for (var entry : app.exceptionHandlers.entrySet()) {
+            Class<?> type = entry.getKey();
+            if (type.isInstance(e) && (bestType == null || bestType.isAssignableFrom(type))) {
+                bestType = type;
+                best = entry.getValue();
+            }
+        }
+        return (ExceptionHandler<Exception>) best;
     }
 
     private WebResponse internalError(Exception e, WebRequest request) {

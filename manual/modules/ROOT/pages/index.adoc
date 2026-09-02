@@ -69,6 +69,8 @@ app.path("/api/decks", group -> {
 
 app.exception(IllegalArgumentException.class,
         (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+app.exception(Json.JsonException.class,        // the more specific type wins, whatever the order
+        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
 app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 
@@ -76,6 +78,7 @@ app.start(8080);                                // embedded Jetty, sessions on
 ----
 
 `start` returns as soon as the port is bound.
+Everything is registered before it: a route, a filter, or a setting added to a running application throws `IllegalStateException`.
 The server's threads keep the JVM alive from there, so `join()` is only needed when you want to block the main thread as well.
 `stop()` shuts the server down.
 `port()` reports the bound port, which is how a test reads back the port the OS picked for `start(0)`.

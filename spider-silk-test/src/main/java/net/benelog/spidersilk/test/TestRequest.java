@@ -136,7 +136,6 @@ public final class TestRequest {
         return this;
     }
 
-    /** A cookie the client sent. Setting one is {@link WebResponse#cookie}. */
     /**
      * Marks the request as having arrived over HTTPS, which is what
      * {@code isSecure()} reports and what HSTS and a Secure cookie ask about.
@@ -146,6 +145,7 @@ public final class TestRequest {
         return this;
     }
 
+    /** A cookie the client sent. Setting one is {@link WebResponse#cookie}. */
     public TestRequest cookie(String name, String value) {
         cookies.add(new Cookie(name, value));
         return this;

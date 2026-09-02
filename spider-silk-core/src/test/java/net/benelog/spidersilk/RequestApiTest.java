@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import net.benelog.spidersilk.test.TestRequest;
 import net.benelog.spidersilk.test.WebTest;
+
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 /** Query parameters told apart from form fields, plus automatic HEAD and OPTIONS. */
 class RequestApiTest {
@@ -27,6 +31,36 @@ class RequestApiTest {
 
             assertThat(response.body()).isEqualTo("query=url form=body");
         });
+    }
+
+    /** A request that declares its charset is read in it; one that does not is read as UTF-8. */
+    @Test
+    void bodyIsDecodedInTheCharsetTheRequestDeclared() {
+        App app = new App().post("/echo", req -> WebResponse.text(req.body()));
+
+        WebTest.test(app, client -> {
+            var latin1 = client.send(request -> request.uri(URI.create(client.url("/echo")))
+                    .header("Content-Type", "text/plain; charset=ISO-8859-1")
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(
+                            "caf\u00e9".getBytes(StandardCharsets.ISO_8859_1))));
+            assertThat(latin1.body()).isEqualTo("caf\u00e9");
+
+            var undeclared = client.send(request -> request.uri(URI.create(client.url("/echo")))
+                    .header("Content-Type", "text/plain")
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(
+                            "caf\u00e9".getBytes(StandardCharsets.UTF_8))));
+            assertThat(undeclared.body()).isEqualTo("caf\u00e9");
+        });
+    }
+
+    /** A variable the pattern never declared is the handler's mistake, not the caller's. */
+    @Test
+    void anUndeclaredPathVariableIsAProgrammingError() {
+        WebRequest request = TestRequest.get("/decks/3").pathParam("deckId", "3").build();
+
+        assertThatIllegalStateException()
+                .isThrownBy(() -> request.pathParam("deckid"))
+                .withMessageContaining("{deckid}");
     }
 
     @Test

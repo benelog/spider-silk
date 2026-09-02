@@ -19,6 +19,7 @@ class OptionalParamsTest {
         assertThat(request.paramLong("page", 1)).isEqualTo(1L);
         assertThat(request.paramEnum("direction", Direction.class, Direction.FRONT))
                 .isEqualTo(Direction.FRONT);
+        assertThat(request.paramBoolean("archived", true)).isTrue();
     }
 
     @Test
@@ -26,11 +27,15 @@ class OptionalParamsTest {
         WebRequest request = TestRequest.get("/decks")
                 .queryParam("page", "3")
                 .queryParam("direction", "BACK")
+                .queryParam("archived", "TRUE")
+                .queryParam("flipped", "false")
                 .build();
 
         assertThat(request.paramLong("page", 1)).isEqualTo(3L);
         assertThat(request.paramEnum("direction", Direction.class, Direction.FRONT))
                 .isEqualTo(Direction.BACK);
+        assertThat(request.paramBoolean("archived", false)).isTrue();
+        assertThat(request.paramBoolean("flipped")).isFalse();
     }
 
     /** The default covers absence only: a value that is there but wrong is a 400. */
@@ -39,6 +44,7 @@ class OptionalParamsTest {
         WebRequest request = TestRequest.get("/decks")
                 .queryParam("page", "x")
                 .queryParam("direction", "SIDEWAYS")
+                .queryParam("archived", "yes")
                 .build();
 
         assertThatExceptionOfType(HttpException.class)
@@ -47,6 +53,14 @@ class OptionalParamsTest {
 
         assertThatExceptionOfType(HttpException.class)
                 .isThrownBy(() -> request.paramEnum("direction", Direction.class, Direction.FRONT))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        // "yes" is not false. Boolean.parseBoolean would have read it as one.
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> request.paramBoolean("archived", false))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> request.paramBoolean("absent"))
                 .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 }

@@ -38,8 +38,11 @@ The mapping is code you wrote, so a field rename changes the wire format only if
 
 == Reading values
 
-`getString` throws `IllegalArgumentException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400.
+`getString` throws `Json.JsonException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400.
 A handler gets a whole value or none, the same contract as `pathParamLong`.
+`Json.JsonException` is an `IllegalArgumentException`, so a reader that throws the plain type for a rule of its own is rejected the same way.
+It is also a type of its own, so an application that maps `IllegalArgumentException` to a status maps a body that failed to parse separately, and the handler for the more specific type runs whatever the registration order.
+`asLong` and `getLong` reject a number with a fractional part rather than truncating it: `1.5` is not a long, while `2.0` and `1e3` are whole and read as one.
 For a key that is allowed to be absent, `optString`, `optLong`, `optDouble`, and `optBoolean` answer a default instead, for a missing key and for an explicit JSON `null` alike.
 A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
 

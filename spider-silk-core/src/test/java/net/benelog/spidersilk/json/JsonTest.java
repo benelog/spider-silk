@@ -92,12 +92,36 @@ class JsonTest {
                 .hasMessageContaining("Nested deeper than");
     }
 
+    /**
+     * Every failure is a Json.JsonException, so an application that maps
+     * IllegalArgumentException to a status of its own can still tell a body
+     * that failed to parse apart from a bad argument of its own.
+     */
     @Test
     void throwsOnWrongTypeAccess() {
         Json.JsonValue value = Json.parse("{\"a\":1}");
-        assertThatThrownBy(value::asArray).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(value::asArray).isInstanceOf(Json.JsonException.class);
         assertThatThrownBy(() -> value.asObject().getString("a"))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(Json.JsonException.class);
+        assertThatThrownBy(() -> value.asObject().get("missing"))
+                .isInstanceOf(Json.JsonException.class);
+        assertThatThrownBy(() -> Json.parse("{\"a\":}")).isInstanceOf(Json.JsonException.class);
         assertThat(Json.parse("null").isNull()).isTrue();
+    }
+
+    /** A number with a fractional part is not a long, and is rejected rather than truncated. */
+    @Test
+    void asLongRejectsAFractionRatherThanTruncatingIt() {
+        assertThatThrownBy(() -> Json.parse("1.5").asLong())
+                .isInstanceOf(Json.JsonException.class)
+                .hasMessageContaining("Not a JSON integer");
+        assertThatThrownBy(() -> Json.parse("{\"n\":2.5}").asObject().getLong("n"))
+                .isInstanceOf(Json.JsonException.class);
+        assertThatThrownBy(() -> Json.parse("{\"n\":2.5}").asObject().optLong("n", 0))
+                .isInstanceOf(Json.JsonException.class);
+
+        assertThat(Json.parse("2.0").asLong()).isEqualTo(2L);
+        assertThat(Json.parse("1e3").asLong()).isEqualTo(1000L);
+        assertThat(Json.parse("-7").asLong()).isEqualTo(-7L);
     }
 }

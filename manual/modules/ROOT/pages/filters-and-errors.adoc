@@ -2,6 +2,7 @@
 :navtitle: Filters and Errors
 
 A filter runs before or after a route handler.
+An exception handler turns an exception a handler threw into a response.
 An error handler fills in the body of a response that ended on a status with nothing to show.
 
 == Filters
@@ -26,6 +27,24 @@ An after-filter takes the response the route returned and hands back a replaceme
 ----
 app.after((req, res) -> res.header("X-Request-Id", requestId()));
 ----
+
+== Exception handlers
+
+`exception(Type, handler)` answers a request whose handler threw an exception of that type or a subtype:
+
+[source,java]
+----
+app.exception(IllegalArgumentException.class,
+        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+app.exception(Json.JsonException.class,
+        (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
+----
+
+The handler for the most specific type the exception is an instance of runs, whatever order the handlers were registered in.
+`Json.JsonException` is an `IllegalArgumentException`, and a body that failed to parse reaches the second handler above rather than the first.
+Registering a type twice replaces the first handler.
+An `HttpException` no handler covers answers with its status and message, and any other uncovered exception answers 500 and is logged.
+A template that fails to render throws inside the handler's own dispatch, so it reaches these handlers too.
 
 == Error handlers
 

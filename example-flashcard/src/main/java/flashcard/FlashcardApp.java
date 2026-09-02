@@ -28,6 +28,7 @@ import net.benelog.spidersilk.JteTemplates;
 import net.benelog.spidersilk.SecurityHeaders;
 import net.benelog.spidersilk.TemplateRenderer;
 import net.benelog.spidersilk.WebResponse;
+import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.openapi.OpenApi;
 import net.benelog.spidersilk.server.JettyServer;
 
@@ -118,6 +119,10 @@ public class FlashcardApp {
         });
         app.exception(IllegalArgumentException.class,
                 (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+        // A body that failed to parse is a 400, not one of the 404s above. The
+        // more specific type wins whatever the order, so this line may sit here.
+        app.exception(Json.JsonException.class,
+                (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
         registerRoutes(app, context);
         return app;
