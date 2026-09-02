@@ -9,8 +9,8 @@ package net.benelog.spidersilk;
  * }</pre>
  *
  * <p>The request comes first, as it does in {@link Handler}, {@link BeforeFilter},
- * {@link AfterFilter}, and {@link RequestLogger}: what the handler is answering
- * is the first argument, and what it is answering it with follows.
+ * {@link AfterFilter}, and {@link RequestLogger}: the request being answered is
+ * the first argument, and the exception that interrupted it follows.
  */
 @FunctionalInterface
 public interface ExceptionHandler<E extends Exception> {

@@ -741,7 +741,7 @@ It used to take the exception first, and it was the one handler interface that d
 `Handler`, `BeforeFilter`, `AfterFilter`, and `RequestLogger` all name the request first, so a reader who had written three lambdas for this framework had to look the fourth one up.
 Decision 18 set the naming rule for these interfaces.
 This is the argument rule that goes with it.
-Every handler now takes the request first, and what it answers with follows.
+Every handler now takes the request first, and whatever else it is given follows.
 
 The order it left reads like a `catch` clause, and Javalin's `(e, ctx)` is the same.
 That echo is the argument for having kept it, and it loses to consistency across five interfaces of the same framework.
@@ -750,7 +750,7 @@ The interface is functional, so its shape is final at 1.0 and was settled on pur
 No deprecated overload was left behind, for the reason decision 35 gives.
 The break is mechanical wherever the lambda touches the exception: a body calling `e.getMessage()` stops compiling until the parameters are swapped.
 A lambda that uses neither parameter compiles either way, which is the one case the compiler cannot flag, and also the case where the order does not matter.
-It is taken before 1.0 because the cost only grows — decision 34's argument.
+It is taken before 1.0 for the reason decision 34 gives, that the cost only grows.
 
 ## Rejected — decisions, with the reason
 
