@@ -61,14 +61,6 @@ class GuardIntrospectionTest {
                 new Guard.Before("/api/decks/{deckId}/cards")));
     }
 
-    /** notFound is error(NOT_FOUND, ...) and is listed as one. */
-    @Test
-    void notFoundIsAnErrorGuard() {
-        App app = new App().notFound(noop);
-
-        assertThat(app.guards()).isEqualTo(List.of(new Guard.Error(HttpStatus.NOT_FOUND)));
-    }
-
     /** One body per status: registering a second replaces the first, and stays in its place. */
     @Test
     void aStatusRegisteredTwiceIsListedOnce() {

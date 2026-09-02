@@ -10,7 +10,7 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
   `guards()` reports the filters and error handlers beside them as `Guard.Before(path)`, `Guard.After(path)`, and `Guard.Error(status)`.
   xref:openapi.adoc[`spider-silk-openapi`] turns the route list into an OpenAPI 3.1 document
 * Filters: `before(filter)` / `before(path, filter)`, same for `after`
-* Errors: `exception(Type, handler)`, where the most specific registered type wins, `error(HttpStatus, handler)`, `notFound(handler)`
+* Errors: `exception(Type, handler)`, where the most specific registered type wins, `error(HttpStatus, handler)`
 * Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
   Each is off until named, and applies to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
 * Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)`.

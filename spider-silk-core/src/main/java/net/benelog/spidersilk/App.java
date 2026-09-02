@@ -268,11 +268,6 @@ public final class App {
         return this;
     }
 
-    /** Shorthand for {@code error(HttpStatus.NOT_FOUND, handler)}. */
-    public App notFound(Handler handler) {
-        return error(HttpStatus.NOT_FOUND, handler);
-    }
-
     /**
      * Everything registered that runs around a route rather than being one:
      * the {@link #before} and {@link #after} filters, and the

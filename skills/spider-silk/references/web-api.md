@@ -148,7 +148,6 @@ app.exception(Json.JsonException.class,       // most specific type wins, whatev
         (e, req) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
 app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
-app.notFound(handler);                      // shorthand for error(NOT_FOUND, handler)
 ```
 
 - `exception(Type, handler)` runs the handler for the most specific registered type the exception is an instance of, in any registration order.

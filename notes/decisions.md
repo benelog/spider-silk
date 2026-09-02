@@ -89,6 +89,9 @@ Spark's static-import equivalent keeps the prefix in process-global state, which
 
 One place to render a 404 or 500, whatever set the status.
 A response that already carries a body is left alone, which the sealed `WebResponse.Body` states outright rather than by sniffing the servlet response.
+No per-status shorthand: `notFound(handler)` was one, and it went, because the status a shorthand stands for is the one thing the call no longer says.
+`error(HttpStatus.NOT_FOUND, handler)` names it, the way `redirect(url, HttpStatus.MOVED_PERMANENTLY)` names its status in decision 24 and for the same reason.
+A family that stops at one status is also the harder thing to read: a reader who has seen `notFound` expects `serverError` beside it, and the 500 page is written as often as the 404.
 
 ### 7. Test harness
 

@@ -85,7 +85,7 @@ The table is read by every request thread without a lock, so a route added to a 
 A path no route knows answers 404.
 A path that only other methods know answers 405, with an `Allow` header listing the methods that would have worked.
 For a GET or HEAD, xref:static-files.adoc[static files] are consulted before the 404: routes come first, so a route can shadow a file.
-`notFound(handler)` is shorthand for `error(HttpStatus.NOT_FOUND, handler)`.
+`error(HttpStatus.NOT_FOUND, handler)` registers the body that 404 answers with.
 xref:filters-and-errors.adoc[Filters and Errors] covers how an error handler fills in the body.
 
 == HEAD and OPTIONS
