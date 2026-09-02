@@ -37,7 +37,7 @@ When the handler is under test rather than the routing that reaches it, build th
 @Test
 void createDeckRespondsWith201() {
     WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
-            .jsonBody("{\"name\": \"Spanish\"}")
+            .jsonBody(Json.obj().put("name", "Spanish"))
             .build());
 
     assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
@@ -47,6 +47,8 @@ void createDeckRespondsWith201() {
 
 Builder methods: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, `secure()`, `sessionAttr`; `build()` hands back a `WebRequest`.
 
+- `jsonBody` takes a `Json.JsonValue` tree, a value with the `JsonWriter` the application already declares, or raw text.
+  Raw text is the form for a body no writer would produce, such as the malformed one a 400 test sends.
 - Path variables are supplied, not matched, since no route is involved: `pathParam("deckId", "3")` states what the router would have resolved.
 - Everything a handler can tell apart still holds: query and form parameters of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 exactly as production would.
 

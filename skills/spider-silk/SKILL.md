@@ -162,7 +162,7 @@ WebTest.test(app, client -> {
 
 // A handler alone: no port, no container, no mocks
 WebResponse response = controller.createDeck(
-        TestRequest.post("/api/decks").jsonBody("{\"name\": \"Spanish\"}").build());
+        TestRequest.post("/api/decks").jsonBody(Json.obj().put("name", "Spanish")).build());
 assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
 ```
 

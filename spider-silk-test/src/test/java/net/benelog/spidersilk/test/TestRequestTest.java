@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import net.benelog.spidersilk.HttpException;
 import net.benelog.spidersilk.HttpStatus;
 import net.benelog.spidersilk.WebRequest;
+import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonWriter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
@@ -128,6 +130,28 @@ class TestRequestTest {
     }
 
     @Test
+    void jsonBodyTakesATree() {
+        WebRequest request = TestRequest.post("/api/decks")
+                .jsonBody(Json.obj().put("name", "Spanish"))
+                .build();
+
+        assertThat(request.header("Content-Type")).isEqualTo("application/json");
+        assertThat(request.bodyJson().asObject().getString("name")).isEqualTo("Spanish");
+    }
+
+    @Test
+    void jsonBodyTakesTheApplicationsOwnWriter() {
+        JsonWriter<NewDeck> writer = deck -> Json.obj().put("name", deck.name());
+
+        WebRequest request = TestRequest.post("/api/decks")
+                .jsonBody(new NewDeck("Spanish"), writer)
+                .build();
+
+        assertThat(request.header("Content-Type")).isEqualTo("application/json");
+        assertThat(request.bodyJson().asObject().getString("name")).isEqualTo("Spanish");
+    }
+
+    @Test
     void aBodyTheReaderRejectsIsA400() {
         WebRequest request = TestRequest.post("/api/decks")
                 .jsonBody("{\"title\": \"Spanish\"}")
@@ -212,5 +236,9 @@ class TestRequestTest {
         assertThatExceptionOfType(HttpException.class)
                 .isThrownBy(() -> request.file("file"))
                 .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    /** The body of a request, as the application would declare it. */
+    private record NewDeck(String name) {
     }
 }

@@ -51,7 +51,7 @@ class ApiControllerTest extends RepositoryTestSupport {
     @Test
     void createDeckRespondsWith201AndLocation() {
         WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
-                .jsonBody("{\"name\": \"Spanish\"}")
+                .jsonBody(Json.obj().put("name", "Spanish"))
                 .build());
 
         assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
@@ -74,7 +74,7 @@ class ApiControllerTest extends RepositoryTestSupport {
     void createDeckRejectsABodyWithoutANameWith400() {
         assertThatExceptionOfType(HttpException.class)
                 .isThrownBy(() -> controller.createDeck(TestRequest.post("/api/decks")
-                        .jsonBody("{\"title\": \"Spanish\"}")
+                        .jsonBody(Json.obj().put("title", "Spanish"))
                         .build()))
                 .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }

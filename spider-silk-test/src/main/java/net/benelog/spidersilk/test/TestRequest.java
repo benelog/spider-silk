@@ -16,6 +16,8 @@ import jakarta.servlet.http.Part;
 
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
+import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonWriter;
 
 /**
  * Builds a {@link WebRequest} so a handler can be called directly, with no
@@ -25,7 +27,7 @@ import net.benelog.spidersilk.WebResponse;
  * @Test
  * void createDeckRespondsWith201() {
  *     WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
- *             .jsonBody("{\"name\": \"Spanish\"}")
+ *             .jsonBody(Json.obj().put("name", "Spanish"))
  *             .build());
  *
  *     assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
@@ -159,9 +161,39 @@ public final class TestRequest {
         return this;
     }
 
-    /** A JSON body, with the content type that goes with it. */
+    /**
+     * A JSON body as raw text, with the content type that goes with it. This is
+     * the form for a body no builder would produce — malformed JSON, or a field
+     * the writer does not emit.
+     */
     public TestRequest jsonBody(String json) {
         return body(json).header("Content-Type", "application/json");
+    }
+
+    /**
+     * A JSON body as a tree, so a test states the body in the same builder the
+     * handler reads it with rather than in escaped quotes:
+     *
+     * <pre>{@code
+     * TestRequest.post("/api/decks").jsonBody(Json.obj().put("name", "Spanish"))
+     * }</pre>
+     */
+    public TestRequest jsonBody(Json.JsonValue json) {
+        return jsonBody(json.toJson());
+    }
+
+    /**
+     * A JSON body written through the application's own writer, so the test and
+     * the handler agree on the wire format by construction:
+     *
+     * <pre>{@code
+     * static final JsonWriter<NewDeck> NEW_DECK = deck -> Json.obj().put("name", deck.name());
+     *
+     * TestRequest.post("/api/decks").jsonBody(new NewDeck("Spanish"), NEW_DECK)
+     * }</pre>
+     */
+    public <T> TestRequest jsonBody(T value, JsonWriter<T> writer) {
+        return jsonBody(writer.write(value));
     }
 
     /**

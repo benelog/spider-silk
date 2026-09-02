@@ -284,7 +284,7 @@ class ReadmeSnippets {
 
     void assertOnTheAnswer() throws Exception {
         WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
-                .jsonBody("{\"name\": \"Spanish\"}")
+                .jsonBody(Json.obj().put("name", "Spanish"))
                 .build());
 
         assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
