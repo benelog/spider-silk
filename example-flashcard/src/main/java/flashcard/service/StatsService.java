@@ -1,6 +1,7 @@
 package flashcard.service;
 
 import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -35,7 +36,7 @@ public class StatsService {
     /** The read transaction keeps the aggregate queries on one snapshot. */
     public StatsView overview() {
         return tx.read(() -> {
-            LocalDate today = LocalDate.now();
+            LocalDate today = LocalDate.now(ZoneId.systemDefault());
             List<DailyStat> daily = padDays(
                     reviewLogRepository.findDailyStats(today.minusDays(CHART_DAYS - 1)), today);
 

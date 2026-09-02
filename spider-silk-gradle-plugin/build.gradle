@@ -1,6 +1,7 @@
 plugins {
     id 'java-gradle-plugin'
     id 'maven-publish'
+    id 'net.ltgt.errorprone' version '5.1.1'
 }
 
 group = 'net.benelog.spidersilk'
@@ -22,6 +23,8 @@ dependencies {
     implementation 'gg.jte.gradle:gg.jte.gradle.gradle.plugin:3.2.4'
     implementation 'gg.jte:jte-runtime:3.2.4' // gg.jte.ContentType, in JteExtension's signature but not on the plugin's compile classpath
     implementation 'org.graalvm.buildtools.native:org.graalvm.buildtools.native.gradle.plugin:1.1.10'
+
+    errorprone 'com.google.errorprone:error_prone_core:2.50.0'
 
     testImplementation gradleTestKit()
     testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'

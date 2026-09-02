@@ -18,6 +18,12 @@ package net.benelog.spidersilk;
 @FunctionalInterface
 public interface BeforeFilter {
 
-    /** @return the response to answer with, or null to continue */
+    /**
+     * Answers the request here, or lets it through to the next filter and the route.
+     *
+     * @param request the request as it arrived
+     * @return the response to answer with, or null to continue
+     * @throws Exception anything the filter cannot handle, routed to {@link App#exception}
+     */
     WebResponse handle(WebRequest request) throws Exception;
 }

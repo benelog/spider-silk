@@ -1,6 +1,7 @@
 package flashcard.service;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
@@ -32,7 +33,7 @@ public class CardService {
     public Card addCard(Long deckId, String text, String meaning, String tagsText) {
         return tx.write(() -> {
             Card card = cardRepository.insert(
-                    Card.create(deckId, text, meaning, LocalDateTime.now()));
+                    Card.create(deckId, text, meaning, LocalDateTime.now(ZoneId.systemDefault())));
             attachTags(card.id(), tagsText);
             return card;
         });
@@ -95,7 +96,7 @@ public class CardService {
             while (remaining.hasNext()) {
                 CardDraft draft = remaining.next();
                 Card card = cardRepository.insert(
-                        Card.create(deckId, draft.text(), draft.meaning(), LocalDateTime.now()));
+                        Card.create(deckId, draft.text(), draft.meaning(), LocalDateTime.now(ZoneId.systemDefault())));
                 attachTags(card.id(), draft.tags());
                 imported++;
             }

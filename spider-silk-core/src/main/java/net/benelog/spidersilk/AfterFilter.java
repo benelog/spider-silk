@@ -17,6 +17,13 @@ package net.benelog.spidersilk;
 @FunctionalInterface
 public interface AfterFilter {
 
-    /** @return the response to answer with, or null to keep the one passed in */
+    /**
+     * Replaces the response the route returned, or keeps it.
+     *
+     * @param request  the request as it arrived
+     * @param response the response the route returned
+     * @return the response to answer with, or null to keep the one passed in
+     * @throws Exception anything the filter cannot handle, routed to {@link App#exception}
+     */
     WebResponse handle(WebRequest request, WebResponse response) throws Exception;
 }

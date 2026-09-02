@@ -17,6 +17,8 @@ import java.time.Duration;
 public interface RequestLogger {
 
     /**
+     * Records one completed request.
+     *
      * @param request the request, as it was received
      * @param response the response it was finally answered with
      * @param took how long the whole request took, dispatch and rendering included

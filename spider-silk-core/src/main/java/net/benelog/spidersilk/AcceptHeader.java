@@ -120,7 +120,7 @@ final class AcceptHeader {
             return List.of();
         }
         List<Entry> entries = new ArrayList<>();
-        for (String element : header.split(",")) {
+        for (String element : header.split(",", -1)) {
             String[] parts = element.split(";");
             String value = strip(parts[0]);
             if (value.isEmpty()) {

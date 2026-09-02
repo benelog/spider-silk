@@ -1,5 +1,6 @@
 package net.benelog.spidersilk;
 
+import java.util.Locale;
 import java.util.Map;
 
 /** Extension-to-Content-Type mapping, for static files and for {@link WebResponse#file}. */
@@ -30,7 +31,7 @@ final class ContentTypes {
         if (dot < 0) {
             return "application/octet-stream";
         }
-        return BY_EXTENSION.getOrDefault(path.substring(dot + 1).toLowerCase(),
+        return BY_EXTENSION.getOrDefault(path.substring(dot + 1).toLowerCase(Locale.ROOT),
                 "application/octet-stream");
     }
 }

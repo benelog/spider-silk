@@ -79,6 +79,7 @@ public final class UndertowServer implements WebServer {
     private Thread awaitThread;
     private Thread hook;
 
+    /** A server for the app, on the defaults above until the setters say otherwise. */
     public UndertowServer(App app) {
         this.app = Objects.requireNonNull(app, "app");
     }

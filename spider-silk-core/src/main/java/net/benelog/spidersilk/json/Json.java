@@ -139,8 +139,8 @@ public final class Json {
     public static final class JsonPrimitive implements JsonValue {
 
         static final JsonPrimitive NULL = new JsonPrimitive(null);
-        static final JsonPrimitive TRUE = new JsonPrimitive(Boolean.TRUE);
-        static final JsonPrimitive FALSE = new JsonPrimitive(Boolean.FALSE);
+        static final JsonPrimitive TRUE = new JsonPrimitive(true);
+        static final JsonPrimitive FALSE = new JsonPrimitive(false);
 
         private final Object value;   // String | Long | Double | Boolean | null
 
@@ -237,19 +237,19 @@ public final class Json {
         /** Returns defaultValue when the key is missing or the value is null. */
         public long optLong(String key, long defaultValue) {
             JsonValue value = members.get(key);
-            return value == null || value.isNull() ? defaultValue : value.asLong();
+            return (value == null || value.isNull()) ? defaultValue : value.asLong();
         }
 
         /** Returns defaultValue when the key is missing or the value is null. */
         public double optDouble(String key, double defaultValue) {
             JsonValue value = members.get(key);
-            return value == null || value.isNull() ? defaultValue : value.asDouble();
+            return (value == null || value.isNull()) ? defaultValue : value.asDouble();
         }
 
         /** Returns defaultValue when the key is missing or the value is null. */
         public boolean optBoolean(String key, boolean defaultValue) {
             JsonValue value = members.get(key);
-            return value == null || value.isNull() ? defaultValue : value.asBoolean();
+            return (value == null || value.isNull()) ? defaultValue : value.asBoolean();
         }
 
         @Override

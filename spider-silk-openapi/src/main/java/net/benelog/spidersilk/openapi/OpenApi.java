@@ -100,7 +100,7 @@ public final class OpenApi {
     /** Every {@code {name}} in the pattern, which OpenAPI requires to be declared. */
     private static Json.JsonArray pathParameters(String path) {
         Json.JsonArray parameters = Json.arr();
-        for (String segment : path.split("/")) {
+        for (String segment : path.split("/", -1)) {
             if (segment.length() >= 2 && segment.startsWith("{") && segment.endsWith("}")) {
                 parameters.add(Json.obj()
                         .put("name", segment.substring(1, segment.length() - 1))

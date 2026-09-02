@@ -88,6 +88,7 @@ public final class TomcatServer implements WebServer {
     private Thread hook;
     private Path temporaryBaseDir;
 
+    /** A server for the app, on the defaults above until the setters say otherwise. */
     public TomcatServer(App app) {
         this.app = Objects.requireNonNull(app, "app");
     }

@@ -47,7 +47,12 @@ public sealed interface Guard {
      * A body registered through {@link App#error(HttpStatus, Handler)} for
      * responses that ended on this status with no body. It is scoped to a
      * status rather than to a path, so it covers every path.
+     *
+     * <p>The name mirrors {@link App#error}, as {@code Before} and {@code After}
+     * mirror their registrations, and is written {@code Guard.Error} everywhere
+     * outside this file, where {@link java.lang.Error} is never referred to.
      */
+    @SuppressWarnings("AvoidCommonTypeNames")
     record Error(HttpStatus status) implements Guard {
     }
 }

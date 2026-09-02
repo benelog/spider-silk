@@ -72,22 +72,27 @@ public final class TestRequest {
 
     // ---- Starting one ----
 
+    /** A GET, the request most handlers are tested with. */
     public static TestRequest get(String path) {
         return method("GET", path);
     }
 
+    /** A POST; the body comes from {@link #formParam}, {@link #body}, or {@link #jsonBody}. */
     public static TestRequest post(String path) {
         return method("POST", path);
     }
 
+    /** A PUT, with the same body options as {@link #post}. */
     public static TestRequest put(String path) {
         return method("PUT", path);
     }
 
+    /** A PATCH, with the same body options as {@link #post}. */
     public static TestRequest patch(String path) {
         return method("PATCH", path);
     }
 
+    /** A DELETE. */
     public static TestRequest delete(String path) {
         return method("DELETE", path);
     }
@@ -133,6 +138,7 @@ public final class TestRequest {
         return this;
     }
 
+    /** A request header. Call it twice with one name for a repeated one. */
     public TestRequest header(String name, String value) {
         headers.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
         return this;
@@ -255,7 +261,8 @@ public final class TestRequest {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 
-    /** One uploaded file, held in memory. */
+    /** One uploaded file, held in memory. Its bytes are the caller's, so equality is identity. */
+    @SuppressWarnings("ArrayRecordComponent")
     private record StubPart(String name, String fileName, String contentType, byte[] content)
             implements Part {
 

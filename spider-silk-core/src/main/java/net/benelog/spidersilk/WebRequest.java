@@ -136,7 +136,7 @@ public final class WebRequest {
 
     /** Records that this answer depends on {@code Accept}, for {@link AppServlet} to declare. */
     private void negotiated() {
-        req.setAttribute(NEGOTIATED_ATTRIBUTE, Boolean.TRUE);
+        req.setAttribute(NEGOTIATED_ATTRIBUTE, true);
     }
 
     /**
@@ -422,7 +422,7 @@ public final class WebRequest {
             return Map.of();
         }
         Map<String, List<String>> parsed = new LinkedHashMap<>();
-        for (String pair : query.split("&")) {
+        for (String pair : query.split("&", -1)) {
             if (pair.isEmpty()) {
                 continue;
             }
@@ -608,7 +608,13 @@ public final class WebRequest {
 
     // ---- Session ----
 
-    @SuppressWarnings("unchecked")
+    /**
+     * A session attribute, or null when there is no session or no such
+     * attribute. The type parameter is the caller's cast, so that
+     * {@code User user = req.sessionAttr("user")} reads as one line; a value of
+     * another type fails at that assignment, as it would with the cast written out.
+     */
+    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     public <T> T sessionAttr(String key) {
         HttpSession session = req.getSession(false);
         return session == null ? null : (T) session.getAttribute(key);

@@ -1,6 +1,7 @@
 package flashcard.service;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -50,7 +51,7 @@ class CsvCodecTest {
 
     @Test
     void exportedFormatCanBeParsedBack() {
-        Card card = Card.create(1L, "a, b", "meaning", LocalDateTime.now());
+        Card card = Card.create(1L, "a, b", "meaning", LocalDateTime.now(ZoneId.systemDefault()));
         String csv = CsvCodec.format(List.of(new CardWithTags(card, List.of("tag1", "tag2"))));
 
         List<CsvCard> parsed = CsvCodec.parse(csv);

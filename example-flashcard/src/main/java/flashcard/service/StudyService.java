@@ -2,6 +2,7 @@ package flashcard.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import flashcard.domain.Card;
@@ -44,7 +45,7 @@ public class StudyService {
     }
 
     public StudySession startTodaySession(StudyDirection direction) {
-        List<Card> cards = cardRepository.findDue(LocalDate.now());
+        List<Card> cards = cardRepository.findDue(LocalDate.now(ZoneId.systemDefault()));
         return new StudySession("Today's review", direction, idsOf(cards));
     }
 
@@ -60,7 +61,7 @@ public class StudyService {
     }
 
     public long todayCount() {
-        return cardRepository.countDue(LocalDate.now());
+        return cardRepository.countDue(LocalDate.now(ZoneId.systemDefault()));
     }
 
     public Card currentCard(StudySession session) {
@@ -77,7 +78,7 @@ public class StudyService {
     public void answer(StudySession session, boolean correct) {
         tx.writeVoid(() -> {
             Long cardId = session.currentCardId();
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
 
             if (!session.isRetryRound()) {
                 ReviewState state = reviewStateRepository.findByCardId(cardId)

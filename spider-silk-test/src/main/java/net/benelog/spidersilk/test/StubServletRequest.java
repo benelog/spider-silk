@@ -242,6 +242,11 @@ final class StubServletRequest implements HttpServletRequest {
             }
 
             @Override
+            public int read(byte[] buffer, int offset, int length) {
+                return bytes.read(buffer, offset, length);
+            }
+
+            @Override
             public boolean isFinished() {
                 return bytes.available() == 0;
             }

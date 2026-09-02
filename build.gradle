@@ -2,7 +2,10 @@
 // subproject, so the root's lifecycle tasks would pass it by; these delegates
 // keep `gradlew build`, `publishToMavenLocal`, and the publish the workflow
 // runs covering it too.
-apply plugin: 'base'
+plugins {
+    id 'base'
+    id 'net.ltgt.errorprone' version '5.1.1' apply false
+}
 tasks.named('build') {
     dependsOn gradle.includedBuild('spider-silk-gradle-plugin').task(':build')
 }
@@ -26,10 +29,19 @@ subprojects {
 // so it is the one subproject that is not a Java module.
 configure(subprojects.findAll { it.name != 'spider-silk-maven-parent' }) {
     apply plugin: 'java'
+    apply plugin: 'net.ltgt.errorprone'
+
+    dependencies {
+        errorprone 'com.google.errorprone:error_prone_core:2.50.0'
+    }
 
     tasks.withType(JavaCompile).configureEach {
         options.encoding = 'UTF-8'
         options.release = 21
+        // Error Prone runs inside javac on every module. Sources the build
+        // generates (jte's precompiled templates carry no @Generated) are
+        // not this project's to fix, so they are left out of the checks.
+        options.errorprone.excludedPaths = '.*/build/generated-sources/.*'
     }
 
     tasks.withType(Test).configureEach {
@@ -48,6 +60,14 @@ configure(subprojects.findAll {
     java {
         withSourcesJar()
         withJavadocJar()
+    }
+
+    // The javadoc is prose: a summary sentence says what a method does and
+    // what it returns, and a @param line per argument would repeat it. doclint
+    // keeps checking syntax, references, and HTML; only the "missing" group,
+    // which demands the tags, is off.
+    tasks.withType(Javadoc).configureEach {
+        options.addBooleanOption('Xdoclint:all,-missing', true)
     }
 
     // The module name is frozen API once released, and it is the module's package

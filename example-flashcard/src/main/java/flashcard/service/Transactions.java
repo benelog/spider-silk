@@ -24,7 +24,7 @@ public class Transactions {
 
     public Transactions(DataSource writeDataSource, DataSource readDataSource) {
         PlatformTransactionManager writeManager = new JdbcTransactionManager(writeDataSource);
-        PlatformTransactionManager readManager = readDataSource == writeDataSource
+        PlatformTransactionManager readManager = readDataSource.equals(writeDataSource)
                 ? writeManager
                 : new JdbcTransactionManager(readDataSource);
         this.writeTx = new TransactionTemplate(writeManager);

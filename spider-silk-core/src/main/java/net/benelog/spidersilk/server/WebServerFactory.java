@@ -20,8 +20,11 @@ import net.benelog.spidersilk.App;
 public interface WebServerFactory {
 
     /**
+     * Creates the server, configured but not yet started.
+     *
      * @param app  the application to serve
      * @param port the port passed to {@link App#start(int)}
+     * @return the server {@link App#start(int)} will start
      */
     WebServer create(App app, int port);
 }

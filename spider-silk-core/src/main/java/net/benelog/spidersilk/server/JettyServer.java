@@ -75,6 +75,7 @@ public final class JettyServer implements WebServer {
     private Server server;
     private ServerConnector connector;
 
+    /** A server for the app, on the defaults above until the setters say otherwise. */
     public JettyServer(App app) {
         this.app = Objects.requireNonNull(app, "app");
     }

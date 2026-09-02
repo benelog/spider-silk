@@ -2,6 +2,7 @@ package flashcard.service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import flashcard.domain.Card;
@@ -27,7 +28,7 @@ public class DeckService {
     }
 
     public Deck createDeck(String name) {
-        return tx.write(() -> deckRepository.insert(Deck.create(name, LocalDateTime.now())));
+        return tx.write(() -> deckRepository.insert(Deck.create(name, LocalDateTime.now(ZoneId.systemDefault()))));
     }
 
     public void renameDeck(Long deckId, String newName) {
@@ -44,7 +45,7 @@ public class DeckService {
     }
 
     public List<DeckSummary> deckSummaries() {
-        return deckRepository.findAllSummaries(LocalDate.now());
+        return deckRepository.findAllSummaries(LocalDate.now(ZoneId.systemDefault()));
     }
 
     /**
@@ -55,7 +56,7 @@ public class DeckService {
         return tx.write(() -> {
             List<CsvCard> parsed = CsvCodec.parse(csvContent);
 
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime now = LocalDateTime.now(ZoneId.systemDefault());
             for (CsvCard csvCard : parsed) {
                 Card card = cardRepository.insert(
                         Card.create(deckId, csvCard.text(), csvCard.meaning(), now));

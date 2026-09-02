@@ -1,6 +1,7 @@
 package flashcard.service;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 import flashcard.domain.Card;
@@ -34,10 +35,10 @@ public class SmartDeckService {
             case OFTEN_WRONG -> cardRepository.findOftenWrong(
                     OFTEN_WRONG_MIN_ATTEMPTS, OFTEN_WRONG_MIN_PERCENT);
             case STALE -> cardRepository.findStale(
-                    LocalDateTime.now().minusDays(STALE_DAYS));
+                    LocalDateTime.now(ZoneId.systemDefault()).minusDays(STALE_DAYS));
             case TAGGED -> cardRepository.findByTagName(param);
             case RECENT -> cardRepository.findRecent(
-                    LocalDateTime.now().minusDays(parseDays(param)));
+                    LocalDateTime.now(ZoneId.systemDefault()).minusDays(parseDays(param)));
         };
     }
 
@@ -55,7 +56,7 @@ public class SmartDeckService {
     }
 
     public long staleCount() {
-        return cardRepository.countStale(LocalDateTime.now().minusDays(STALE_DAYS));
+        return cardRepository.countStale(LocalDateTime.now(ZoneId.systemDefault()).minusDays(STALE_DAYS));
     }
 
     public List<SmartDeck> smartDecks() {

@@ -28,5 +28,12 @@ import org.eclipse.jetty.websocket.server.ServerUpgradeResponse;
 @FunctionalInterface
 public interface WebSocketFactory {
 
+    /**
+     * The handler for one connection, or null to refuse the upgrade.
+     *
+     * @param request  the upgrade request, still an ordinary HTTP request
+     * @param response the handshake response, where a sub-protocol is accepted
+     * @return the handler that takes the connection, or null to refuse it
+     */
     WebSocketHandler create(ServerUpgradeRequest request, ServerUpgradeResponse response);
 }

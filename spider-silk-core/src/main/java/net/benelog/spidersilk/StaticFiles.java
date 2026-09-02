@@ -269,7 +269,7 @@ public final class StaticFiles {
     private boolean isUnchanged(HttpServletRequest req, String etag, long lastModified) {
         String ifNoneMatch = req.getHeader("If-None-Match");
         if (ifNoneMatch != null) {
-            for (String candidate : ifNoneMatch.split(",")) {
+            for (String candidate : ifNoneMatch.split(",", -1)) {
                 String trimmed = candidate.trim();
                 if (trimmed.equals("*") || trimmed.equals(etag) || trimmed.equals("W/" + etag)) {
                     return true;
@@ -376,7 +376,9 @@ public final class StaticFiles {
         @Override
         public void discard() {
             try (InputStream ignored = connection.getInputStream()) {
+                // Opened only to be closed, which releases what the connection holds.
             } catch (IOException e) {
+                // Nothing was opened, so there is nothing to release.
             }
         }
     }

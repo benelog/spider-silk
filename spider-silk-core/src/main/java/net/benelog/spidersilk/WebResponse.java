@@ -79,8 +79,11 @@ public final class WebResponse {
     /**
      * Bytes written as they are. The array is held, not copied — a download is
      * exactly the case where a second copy is what you were avoiding — so it
-     * belongs to the response once handed over.
+     * belongs to the response once handed over. Two bodies are equal only when
+     * they hold the same array, which is the identity a held-not-copied array
+     * has; nothing compares bodies by content.
      */
+    @SuppressWarnings("ArrayRecordComponent")
     public record Bytes(byte[] data) implements Body {
     }
 
@@ -496,7 +499,7 @@ public final class WebResponse {
         if (existing == null || existing.isBlank()) {
             return header("Vary", field);
         }
-        for (String listed : existing.split(",")) {
+        for (String listed : existing.split(",", -1)) {
             if (listed.trim().equalsIgnoreCase(field)) {
                 return this;
             }

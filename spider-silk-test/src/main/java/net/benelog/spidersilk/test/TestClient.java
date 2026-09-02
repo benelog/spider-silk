@@ -35,6 +35,7 @@ public final class TestClient {
         return baseUrl + path;
     }
 
+    /** Sends a GET. */
     public HttpResponse<String> get(String path) {
         return send(request -> request.uri(URI.create(url(path))).GET());
     }
@@ -51,10 +52,12 @@ public final class TestClient {
                 .method("OPTIONS", HttpRequest.BodyPublishers.noBody()));
     }
 
+    /** Sends a DELETE. */
     public HttpResponse<String> delete(String path) {
         return send(request -> request.uri(URI.create(url(path))).DELETE());
     }
 
+    /** Posts an empty body, for a route that acts on the path alone. */
     public HttpResponse<String> post(String path) {
         return post(path, "");
     }
@@ -65,11 +68,13 @@ public final class TestClient {
                 .POST(HttpRequest.BodyPublishers.ofString(body)));
     }
 
+    /** Puts a raw body, with the same Content-Type advice as {@link #post(String, String)}. */
     public HttpResponse<String> put(String path, String body) {
         return send(request -> request.uri(URI.create(url(path)))
                 .PUT(HttpRequest.BodyPublishers.ofString(body)));
     }
 
+    /** Patches with a raw body, with the same Content-Type advice as {@link #post(String, String)}. */
     public HttpResponse<String> patch(String path, String body) {
         return send(request -> request.uri(URI.create(url(path)))
                 .method("PATCH", HttpRequest.BodyPublishers.ofString(body)));
