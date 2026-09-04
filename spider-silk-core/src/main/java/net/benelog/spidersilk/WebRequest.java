@@ -10,10 +10,10 @@ import java.time.DateTimeException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -890,13 +890,29 @@ public final class WebRequest {
 
     // ---- Flash (visible exactly once, on the request after a redirect) ----
 
+    /**
+     * Leaves a message for the request after the redirect, which reads it with
+     * {@link #flashed(String)} and is the only request that can.
+     *
+     * <p>Two requests in one session can be on two container threads at once —
+     * a form posted in one tab while another is still loading. Finding the map
+     * and creating it are therefore done under the session's own monitor, which
+     * {@code AppServlet} takes for the other half of the pair, and the map is
+     * concurrent so that two writers do not corrupt it once they both hold it.
+     */
     public void flash(String key, String value) {
         HttpSession session = req.getSession(true);
-        @SuppressWarnings("unchecked")
-        Map<String, String> flash = (Map<String, String>) session.getAttribute(FLASH_ATTRIBUTE);
-        if (flash == null) {
-            flash = new HashMap<>();
-            session.setAttribute(FLASH_ATTRIBUTE, flash);
+        Map<String, String> flash;
+        // The container answers one HttpSession object per session id, so this
+        // is the lock the promoting side takes too.
+        synchronized (session) {
+            @SuppressWarnings("unchecked")
+            Map<String, String> existing = (Map<String, String>) session.getAttribute(FLASH_ATTRIBUTE);
+            if (existing == null) {
+                existing = new ConcurrentHashMap<>();
+                session.setAttribute(FLASH_ATTRIBUTE, existing);
+            }
+            flash = existing;
         }
         flash.put(key, value);
     }

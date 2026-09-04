@@ -5,13 +5,21 @@ import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.Test;
 
 import net.benelog.spidersilk.test.TestRequest;
 import net.benelog.spidersilk.test.WebTest;
 
-/** A session attribute read under a named type, and a session ended. */
+/** A session attribute read under a named type, a session ended, and flash delivered once. */
 class SessionAttributesTest {
 
     record User(String name) {
@@ -102,6 +110,63 @@ class SessionAttributesTest {
 
             assertThat(as(client, cookie, "/me").body()).isEqualTo("nobody");
         });
+    }
+
+    /**
+     * Flash is delivered exactly once, and a session read by two requests at the
+     * same time is where "once" is hard to keep. A browser makes that case by
+     * prefetching the redirect target, or by having a second tab open on the
+     * same site.
+     *
+     * <p>The window between taking the flash and removing it is a few
+     * instructions wide, so one round of the race finds an unsynchronized
+     * promotion only now and then. The round is therefore repeated: the answer
+     * is exact every time when the promotion holds the session's monitor, and
+     * over this many attempts it is not when it does not.
+     */
+    @Test
+    void aFlashedMessageReachesOnlyOneOfTwoSimultaneousRequests() {
+        App app = new App()
+                .post("/save", req -> {
+                    req.flash("message", "saved");
+                    return WebResponse.noContent();
+                })
+                .get("/home", req -> WebResponse.text(String.valueOf(req.flashed("message"))));
+
+        WebTest.test(app, client -> {
+            for (int round = 0; round < 50; round++) {
+                // The client keeps cookies, so both reads below are one session.
+                client.post("/save");
+
+                List<String> answers = together(2, () -> client.get("/home").body());
+
+                assertThat(answers).containsExactlyInAnyOrder("saved", "null");
+            }
+        });
+    }
+
+    /** Runs a call on that many threads, released together, and collects the answers. */
+    private static List<String> together(int threads, Supplier<String> call) {
+        CyclicBarrier start = new CyclicBarrier(threads);
+        try (ExecutorService pool = Executors.newFixedThreadPool(threads)) {
+            List<Future<String>> pending = new ArrayList<>();
+            for (int i = 0; i < threads; i++) {
+                pending.add(pool.submit(() -> {
+                    start.await();
+                    return call.get();
+                }));
+            }
+            List<String> answers = new ArrayList<>();
+            for (Future<String> answer : pending) {
+                answers.add(answer.get());
+            }
+            return answers;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for the answers", e);
+        } catch (ExecutionException e) {
+            throw new IllegalStateException("A request failed", e.getCause());
+        }
     }
 
     private static java.net.http.HttpResponse<String> as(

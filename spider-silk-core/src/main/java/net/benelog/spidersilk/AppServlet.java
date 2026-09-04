@@ -341,17 +341,31 @@ public class AppServlet extends HttpServlet {
         }
     }
 
-    /** Moves flash left in the session by the request before the redirect into this request. */
+    /**
+     * Moves flash left in the session by the request before the redirect into
+     * this request.
+     *
+     * <p>Taking it and removing it happen under the session's own monitor, the
+     * lock {@link WebRequest#flash} takes to create the map. Two requests in
+     * one session can be served at once — a form posted in one tab while
+     * another is loading, or a browser prefetching a link — and reading the
+     * attribute before removing it would otherwise hand the same message to
+     * both of them, which is the one thing flash promises not to do.
+     */
     private void promoteFlash(HttpServletRequest req) {
         HttpSession session = req.getSession(false);
         if (session == null) {
             return;
         }
-        Object flash = session.getAttribute(WebRequest.FLASH_ATTRIBUTE);
-        if (flash != null) {
+        Object flash;
+        synchronized (session) {
+            flash = session.getAttribute(WebRequest.FLASH_ATTRIBUTE);
+            if (flash == null) {
+                return;
+            }
             session.removeAttribute(WebRequest.FLASH_ATTRIBUTE);
-            req.setAttribute(WebRequest.FLASH_ATTRIBUTE, flash);
         }
+        req.setAttribute(WebRequest.FLASH_ATTRIBUTE, flash);
     }
 
     private WebResponse handleException(Exception e, WebRequest request) {
