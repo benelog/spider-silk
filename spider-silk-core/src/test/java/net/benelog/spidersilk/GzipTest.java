@@ -125,6 +125,29 @@ class GzipTest {
                 assertThat(header(gzipped(client, "/page"), "Content-Encoding")).isEqualTo("br"));
     }
 
+    /**
+     * A streamed body is deflated as it is written, so the trailer has to be
+     * written when the writer returns and not when the deflater is collected.
+     * Reading it back is what says the trailer is there.
+     */
+    @Test
+    void aStreamedBodyArrivesWholeAndItsLengthIsNotAnnounced() {
+        App app = new App().gzip().get("/report", req ->
+                WebResponse.stream("text/plain; charset=UTF-8", out -> {
+                    for (int i = 0; i < 200; i++) {
+                        out.write("<p>a deck of cards</p>\n".getBytes(StandardCharsets.UTF_8));
+                    }
+                }));
+
+        WebTest.test(app, client -> {
+            HttpResponse<byte[]> response = gzipped(client, "/report");
+
+            assertThat(header(response, "Content-Encoding")).isEqualTo("gzip");
+            assertThat(inflate(response.body())).isEqualTo(PAGE);
+            assertThat(response.body().length).isLessThan(PAGE.length());
+        });
+    }
+
     // ---- Static files, which are streams and carry validators ----
 
     /**

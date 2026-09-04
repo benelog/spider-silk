@@ -1,7 +1,9 @@
 package net.benelog.spidersilk;
 
 import java.io.ByteArrayOutputStream;
+import java.io.FilterOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -184,9 +186,12 @@ public final class Gzip {
      */
     private WebResponse compressed(WebResponse response, StreamWriter writer) {
         return encoded(response.body(new WebResponse.Stream(out -> {
-            GZIPOutputStream zipped = new GZIPOutputStream(out);
-            writer.write(zipped);
-            zipped.finish();
+            // finish() writes the trailer but leaves the Deflater's native memory
+            // to the Cleaner; close() is what ends it. Closing the servlet stream
+            // is the container's business, so the shield absorbs that one call.
+            try (GZIPOutputStream zipped = new GZIPOutputStream(new NonClosing(out))) {
+                writer.write(zipped);
+            }
         }))).withoutHeader("Content-Length");
     }
 
@@ -211,5 +216,29 @@ public final class Gzip {
             throw new UncheckedIOException(e);
         }
         return out.toByteArray();
+    }
+
+    /**
+     * The response stream, wrapped so that closing the gzip stream over it ends
+     * the deflater without ending the response. {@link FilterOutputStream} passes
+     * an array write on one byte at a time, which is the whole cost of streaming
+     * a large file, so that one goes straight through.
+     */
+    private static final class NonClosing extends FilterOutputStream {
+
+        NonClosing(OutputStream out) {
+            super(out);
+        }
+
+        @Override
+        public void write(byte[] b, int off, int len) throws IOException {
+            out.write(b, off, len);
+        }
+
+        /** Flushes what the deflater just wrote; the container closes the rest. */
+        @Override
+        public void close() throws IOException {
+            out.flush();
+        }
     }
 }
