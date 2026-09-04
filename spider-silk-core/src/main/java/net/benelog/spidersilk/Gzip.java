@@ -65,7 +65,7 @@ public final class Gzip {
             "image/svg+xml");
 
     private int minBytes = DEFAULT_MIN_BYTES;
-    private List<String> types = DEFAULT_TYPES;
+    private List<String> types = lowerCased(DEFAULT_TYPES);
 
     private Gzip() {
     }
@@ -90,11 +90,17 @@ public final class Gzip {
     /**
      * The content types to compress, in place of {@link #DEFAULT_TYPES}. Each is
      * matched as a prefix of the response's {@code Content-Type}, so
-     * {@code "text/"} covers HTML, CSS, and plain text alike.
+     * {@code "text/"} covers HTML, CSS, and plain text alike. The match ignores
+     * case, which a media type is defined to do.
      */
     public Gzip types(String... types) {
-        this.types = List.of(types);
+        this.types = lowerCased(List.of(types));
         return this;
+    }
+
+    /** The list a request is matched against: folded once, here, not per request. */
+    private static List<String> lowerCased(List<String> types) {
+        return types.stream().map(type -> type.toLowerCase(Locale.ROOT)).toList();
     }
 
     /**
@@ -150,7 +156,7 @@ public final class Gzip {
         }
         String type = contentType.toLowerCase(Locale.ROOT);
         for (String candidate : types) {
-            if (type.startsWith(candidate.toLowerCase(Locale.ROOT))) {
+            if (type.startsWith(candidate)) {
                 return true;
             }
         }

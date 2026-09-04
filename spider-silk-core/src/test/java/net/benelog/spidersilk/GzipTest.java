@@ -196,6 +196,18 @@ class GzipTest {
                 assertThat(header(client.get("/style.css"), "ETag")).startsWith("\""));
     }
 
+    // ---- Configuration ----
+
+    /** A media type is case-insensitive, so a configured one is folded, not compared as typed. */
+    @Test
+    void aConfiguredTypeMatchesWhateverCaseItWasWrittenIn() {
+        App app = new App().gzip(Gzip.defaults().types("Text/HTML"))
+                .get("/page", req -> WebResponse.html(PAGE));
+
+        WebTest.test(app, client ->
+                assertThat(header(gzipped(client, "/page"), "Content-Encoding")).isEqualTo("gzip"));
+    }
+
     // ---- Configuration that cannot mean anything ----
 
     @Test
