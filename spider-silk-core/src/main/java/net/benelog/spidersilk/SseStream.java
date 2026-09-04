@@ -5,6 +5,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -36,6 +37,13 @@ import jakarta.servlet.http.HttpServletResponse;
  * has.
  */
 public final class SseStream {
+
+    /**
+     * The line endings the protocol accepts inside a field's value, each of
+     * which becomes a field of its own. Compiled once: an SSE body is the one
+     * body written in a tight loop, and String.split recompiles this per call.
+     */
+    private static final Pattern LINE_BREAK = Pattern.compile("\\r\\n|\\r|\\n");
 
     private final OutputStream out;
 
@@ -101,9 +109,7 @@ public final class SseStream {
         if (event != null) {
             frame.append("event: ").append(event).append('\n');
         }
-        for (String line : data.split("\r\n|\r|\n", -1)) {
-            frame.append("data: ").append(line).append('\n');
-        }
+        appendLines(frame, "data: ", data);
         write(frame.append('\n').toString());
         nextId = null;
         return this;
@@ -116,9 +122,7 @@ public final class SseStream {
      */
     public synchronized SseStream comment(String text) {
         StringBuilder frame = new StringBuilder();
-        for (String line : text.split("\r\n|\r|\n", -1)) {
-            frame.append(": ").append(line).append('\n');
-        }
+        appendLines(frame, ": ", text);
         write(frame.append('\n').toString());
         return this;
     }
@@ -141,6 +145,17 @@ public final class SseStream {
             out.close();
         } catch (IOException e) {
             // The client is already gone. There is nothing left to report it to.
+        }
+    }
+
+    /**
+     * One field per line of the text, which is how the protocol carries a value
+     * that spans several: the client joins them back with newlines. A comment
+     * is framed the same way, under the empty field name.
+     */
+    private static void appendLines(StringBuilder frame, String prefix, String text) {
+        for (String line : LINE_BREAK.split(text, -1)) {
+            frame.append(prefix).append(line).append('\n');
         }
     }
 
