@@ -59,8 +59,7 @@ import net.benelog.spidersilk.server.JettyServer;
  */
 public final class WebSockets implements Consumer<Server> {
 
-    private final Map<String, PathSpec> paths = new LinkedHashMap<>();
-    private final Map<String, WebSocketFactory> factories = new LinkedHashMap<>();
+    private final Map<String, Mapping> mappings = new LinkedHashMap<>();
     private final List<Consumer<ServerWebSocketContainer>> containerCustomizers = new ArrayList<>();
 
     private Duration idleTimeout;
@@ -79,11 +78,10 @@ public final class WebSockets implements Consumer<Server> {
     public WebSockets at(String path, WebSocketFactory factory) {
         Objects.requireNonNull(path, "path");
         Objects.requireNonNull(factory, "factory");
-        if (paths.containsKey(path)) {
+        if (mappings.containsKey(path)) {
             throw new IllegalArgumentException("Path is already mapped: " + path);
         }
-        paths.put(path, WebSocketMappings.parsePathSpec(path));
-        factories.put(path, factory);
+        mappings.put(path, new Mapping(WebSocketMappings.parsePathSpec(path), factory));
         return this;
     }
 
@@ -147,7 +145,12 @@ public final class WebSockets implements Consumer<Server> {
             container.setMaxBinaryMessageSize(maxBinaryMessageSize);
         }
         containerCustomizers.forEach(customizer -> customizer.accept(container));
-        paths.forEach((path, spec) -> container.addMapping(spec, creator(factories.get(path))));
+        mappings.values()
+                .forEach(mapping -> container.addMapping(mapping.spec(), creator(mapping.factory())));
+    }
+
+    /** What {@link #at} registered for one path: the parsed spec and its factory. */
+    private record Mapping(PathSpec spec, WebSocketFactory factory) {
     }
 
     private static WebSocketCreator creator(WebSocketFactory factory) {
