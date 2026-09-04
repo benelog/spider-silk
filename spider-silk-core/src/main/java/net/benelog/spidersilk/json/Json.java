@@ -35,8 +35,10 @@ public final class Json {
     }
 
     /**
-     * Parses JSON text. Throws {@link JsonException} on invalid syntax, and on
-     * objects and arrays nested deeper than 256 levels.
+     * Parses JSON text. Throws {@link JsonException} on invalid syntax, on
+     * objects and arrays nested deeper than 256 levels, and on a number too
+     * large for a {@code double} to hold, which would otherwise read back as an
+     * infinity and serialize as text no JSON parser accepts.
      */
     public static JsonValue parse(String text) {
         Parser parser = new Parser(text);
@@ -197,8 +199,9 @@ public final class Json {
             return put(key, new JsonPrimitive(value));
         }
 
+        /** Throws {@link JsonException} for NaN and for an infinity, which JSON has no syntax for. */
         public JsonObject put(String key, double value) {
-            return put(key, new JsonPrimitive(value));
+            return put(key, new JsonPrimitive(finite(value)));
         }
 
         public JsonObject put(String key, boolean value) {
@@ -342,8 +345,9 @@ public final class Json {
             return add(new JsonPrimitive(value));
         }
 
+        /** Throws {@link JsonException} for NaN and for an infinity, which JSON has no syntax for. */
         public JsonArray add(double value) {
-            return add(new JsonPrimitive(value));
+            return add(new JsonPrimitive(finite(value)));
         }
 
         public JsonArray add(boolean value) {
@@ -390,6 +394,20 @@ public final class Json {
             }
             sb.append(']');
         }
+    }
+
+    /**
+     * The value itself, unless it is NaN or an infinity. JSON's grammar has no
+     * syntax for either, so a document holding one is not JSON and this file's
+     * own parser rejects it. A double is checked where it enters the tree, so
+     * the failure names the call that made the value rather than turning up as
+     * a response body no client can read.
+     */
+    static double finite(double value) {
+        if (!Double.isFinite(value)) {
+            throw new JsonException("Not a JSON number: " + value);
+        }
+        return value;
     }
 
     static void writeString(StringBuilder sb, String s) {
@@ -562,9 +580,14 @@ public final class Json {
             }
             String number = text.substring(start, pos);
             try {
-                return integral
-                        ? new JsonPrimitive(Long.parseLong(number))
-                        : new JsonPrimitive(Double.parseDouble(number));
+                if (integral) {
+                    return new JsonPrimitive(Long.parseLong(number));
+                }
+                double value = Double.parseDouble(number);
+                if (!Double.isFinite(value)) {
+                    throw error("Number out of range: " + number);
+                }
+                return new JsonPrimitive(value);
             } catch (NumberFormatException e) {
                 throw error("Invalid number format: " + number);
             }

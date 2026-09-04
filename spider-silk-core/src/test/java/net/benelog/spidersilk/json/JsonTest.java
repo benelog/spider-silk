@@ -198,4 +198,39 @@ class JsonTest {
         assertThat(Json.parse("1e3").asLong()).isEqualTo(1000L);
         assertThat(Json.parse("-7").asLong()).isEqualTo(-7L);
     }
+
+    /**
+     * JSON has no NaN and no infinity, so neither is allowed into a tree: a
+     * document that held one would serialize to text this parser rejects.
+     */
+    @Test
+    void rejectsNonFiniteDoubles() {
+        assertThatThrownBy(() -> Json.obj().put("x", Double.NaN))
+                .isInstanceOf(Json.JsonException.class)
+                .hasMessageContaining("Not a JSON number");
+        assertThatThrownBy(() -> Json.obj().put("x", Double.POSITIVE_INFINITY))
+                .isInstanceOf(Json.JsonException.class);
+        assertThatThrownBy(() -> Json.obj().put("x", Double.NEGATIVE_INFINITY))
+                .isInstanceOf(Json.JsonException.class);
+        assertThatThrownBy(() -> Json.arr().add(0.0 / 0.0))
+                .isInstanceOf(Json.JsonException.class);
+        assertThatThrownBy(() -> Json.arr().add(1.0 / 0.0))
+                .isInstanceOf(Json.JsonException.class);
+
+        assertThat(Json.obj().put("x", 0.5).toJson()).isEqualTo("{\"x\":0.5}");
+        assertThat(Json.arr().add(-1.5).toJson()).isEqualTo("[-1.5]");
+    }
+
+    /** A literal too large for a double is a parse error, not a silent infinity. */
+    @Test
+    void rejectsANumberTooLargeForADouble() {
+        assertThatThrownBy(() -> Json.parse("1e400"))
+                .isInstanceOf(Json.JsonException.class)
+                .hasMessageContaining("Number out of range");
+        assertThatThrownBy(() -> Json.parse("{\"n\":-1e400}"))
+                .isInstanceOf(Json.JsonException.class);
+
+        assertThat(Json.parse("1e-400").asDouble()).isEqualTo(0.0);
+        assertThat(Json.parse("1e308").asDouble()).isEqualTo(1e308);
+    }
 }
