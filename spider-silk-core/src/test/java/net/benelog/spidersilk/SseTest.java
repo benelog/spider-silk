@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -49,6 +50,42 @@ class SseTest {
 
                     """);
         });
+    }
+
+    /** The reconnection delay is a stream-level setting, so it goes out on its own. */
+    @Test
+    void retryWritesTheReconnectionDelayInMilliseconds() {
+        App app = new App().get("/events", req -> WebResponse.sse(stream -> {
+            stream.retry(Duration.ofSeconds(2));
+            stream.send("tick", "first");
+        }));
+
+        WebTest.test(app, client -> assertThat(client.get("/events").body()).isEqualTo("""
+                retry: 2000
+
+                event: tick
+                data: first
+
+                """));
+    }
+
+    /** A negative delay is a line no browser would apply, so it fails at the call. */
+    @Test
+    void aNegativeReconnectionDelayIsRejectedAndLeavesTheStreamOpen() {
+        AtomicBoolean rejected = new AtomicBoolean();
+        App app = new App().get("/events", req -> WebResponse.sse(stream -> {
+            try {
+                stream.retry(Duration.ofSeconds(-1));
+            } catch (IllegalArgumentException e) {
+                rejected.set(true);
+            }
+            stream.send("still open");
+        }));
+
+        WebTest.test(app, client ->
+                assertThat(client.get("/events").body()).isEqualTo("data: still open\n\n"));
+
+        assertThat(rejected.get()).as("a negative delay should have been rejected").isTrue();
     }
 
     /** The whole reason SSE is in core and WebSocket is not: it is an ordinary route. */

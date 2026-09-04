@@ -194,6 +194,7 @@ app.get("/decks/{deckId}/events", req -> {
 ```
 
 - `send(data)` unnamed event, `send(event, data)` named, `id(...)` labels for `Last-Event-ID` resume, `comment(text)` is a heartbeat.
+- `stream.retry(Duration.ofSeconds(2))` sets how long the browser waits before reconnecting; it is written and flushed on its own, not held for the next event, and a negative delay throws.
 - The request holds its thread for the stream's lifetime — the virtual-thread executor (servers-and-deployment.md) is what makes many streams cheap.
 - A client that went away surfaces as `SseStream.Closed` thrown from the write; `app.stop()` closes open streams first.
 - Jetty idles out a quiet connection after 30 seconds: `stream.comment("ping")` on a timer keeps it alive.

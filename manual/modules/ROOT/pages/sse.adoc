@@ -23,8 +23,26 @@ event: due
 data: {"count":12}
 ----
 
-`send(data)` sends an unnamed event, `send(event, data)` a named one, `id(...)` labels the event that follows so the browser can resume with `Last-Event-ID`, and `comment(text)` sends a heartbeat no listener sees.
+`send(data)` sends an unnamed event, `send(event, data)` a named one, `id(...)` labels the event that follows so the browser can resume with `Last-Event-ID`, `retry(...)` sets the reconnection delay, and `comment(text)` sends a heartbeat no listener sees.
 Data spanning several lines becomes one `data:` line each, which the client joins back together.
+
+== Reconnection
+
+`retry(Duration)` sets the delay the browser waits before it comes back after the stream drops, written as one `retry:` line in milliseconds.
+
+[source,java]
+----
+stream.retry(Duration.ofSeconds(2));
+----
+
+A browser that is told nothing reconnects on a default of its own, a few seconds.
+Saying it is the application's business: a server that closes every stream on deploy knows how soon it wants the browser back, and nothing else does.
+
+The line goes out where it is called rather than with the next event, because the delay belongs to the stream and not to one event.
+It holds for the connections that follow, until another one is sent.
+A negative delay throws, since the protocol gives one no meaning and a browser ignores it in silence.
+
+`id(...)` is the other half of a resumed stream: the browser sends the last id it saw back as `Last-Event-ID`, and the handler reads it with `req.header("Last-Event-ID")`.
 
 [#why-websocket-is-not-in-core]
 == Why SSE is in core and WebSocket is not

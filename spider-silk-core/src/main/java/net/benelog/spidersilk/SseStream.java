@@ -3,6 +3,8 @@ package net.benelog.spidersilk;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.Objects;
 
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -51,6 +53,33 @@ public final class SseStream {
      */
     public synchronized SseStream id(String id) {
         this.nextId = id;
+        return this;
+    }
+
+    /**
+     * The delay the browser waits before it reconnects, written as one
+     * {@code retry:} line in milliseconds and flushed on its own. It holds for
+     * the rest of the stream, and for the connections that follow it, until
+     * another one is sent.
+     *
+     * <pre>{@code
+     * stream.retry(Duration.ofSeconds(2));
+     * }</pre>
+     *
+     * <p>Unlike {@link #id(String)} this is not a label on the next event, so it
+     * goes out where it is called rather than waiting for one. The browser
+     * applies it as the line arrives, and a stream that sends none reconnects on
+     * the browser's own default, which is a few seconds.
+     *
+     * @throws IllegalArgumentException if the delay is negative, which the
+     *         protocol has no meaning for and a browser silently ignores
+     */
+    public synchronized SseStream retry(Duration delay) {
+        Objects.requireNonNull(delay, "delay");
+        if (delay.isNegative()) {
+            throw new IllegalArgumentException("A reconnection delay cannot be negative: " + delay);
+        }
+        write("retry: " + delay.toMillis() + "\n\n");
         return this;
     }
 

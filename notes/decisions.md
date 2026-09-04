@@ -60,8 +60,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 42 | Uploads that stream, an optional upload as null, and `files(name)` | ✅ shipped |
 | 43 | A named tail variable, `/files/{path*}`, read with `pathParam` | ✅ shipped |
 | 44 | `JsonObject` iterates as members, with `optObject`/`optArray` and `isString`/`isNumber`/`isBoolean` beside it | ✅ shipped |
+| 45 | `SseStream.retry(Duration)`, written where it is called | ✅ shipped |
 
-Forty-six of the forty-seven shipped.
+Forty-seven of the forty-eight shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -973,6 +974,30 @@ No `isObject()` or `isArray()` joins them: `instanceof` answers those questions 
 
 The parser needed no change, and that is worth recording.
 `JsonObject` was already backed by a `LinkedHashMap`, so document order was preserved all along and only unreachable.
+## 45 · The fourth SSE field
+
+### 45. `SseStream.retry(Duration)`, written where it is called
+
+`stream.retry(Duration.ofSeconds(2))` writes one `retry:` line in milliseconds, which is the delay a browser waits before it reconnects.
+The protocol has four fields and `SseStream` wrote three: `id`, `event`, and `data`, plus the comment decision 15a's heartbeat uses.
+`retry` had no method, so the only way to send it was `WebResponse.raw`, which gives up the framing the rest of the stream has.
+
+Sending it is the application's business, the way `id` is.
+A browser told nothing reconnects on a default of its own, a few seconds.
+A server that closes every stream on a deploy wants the browser back sooner than that, and only the server knows it.
+
+**The line goes out where it is called, not with the next event.**
+That is the one place this differs from `id`, which holds its value until the event that follows and then clears it.
+An id labels one event, and a delay is a setting on the stream: it holds for the connections that follow, until another one replaces it.
+Holding it for the next event would also mean a `retry` on a stream that then sends nothing was never sent at all, which is exactly the shape a deploy makes likely.
+
+A negative delay throws `IllegalArgumentException`.
+The protocol defines the field as a non-negative integer, and a browser drops a line it cannot read without saying so.
+Decision 24's argument applies here too: failing at the call is better than shipping a line no client will act on.
+
+Rejected on the way: a reconnection delay named once on `App` or on `WebResponse.sse`.
+It would read as a server setting, and it is not one.
+The value travels in the body, so it belongs to whatever writes the events, and a stream that wants to change it halfway through can.
 
 ## Rejected — decisions, with the reason
 
