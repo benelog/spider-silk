@@ -482,8 +482,10 @@ public final class WebRequest {
 
     /** Every value of a repeated form field. */
     public List<String> formParams(String name) {
-        List<String> merged = params(name);
+        // The query string is read first so that a malformed one answers 400
+        // here too, rather than reaching the container's own parser as a 500.
         List<String> fromQuery = queryParams(name);
+        List<String> merged = params(name);
         if (fromQuery.isEmpty()) {
             return merged;
         }
@@ -508,14 +510,23 @@ public final class WebRequest {
             return Map.of();
         }
         Map<String, List<String>> parsed = new LinkedHashMap<>();
-        for (String pair : query.split("&", -1)) {
-            if (pair.isEmpty()) {
-                continue;
+        try {
+            for (String pair : query.split("&", -1)) {
+                if (pair.isEmpty()) {
+                    continue;
+                }
+                int equals = pair.indexOf('=');
+                String name = decode(equals < 0 ? pair : pair.substring(0, equals));
+                String value = equals < 0 ? "" : decode(pair.substring(equals + 1));
+                parsed.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
             }
-            int equals = pair.indexOf('=');
-            String name = decode(equals < 0 ? pair : pair.substring(0, equals));
-            String value = equals < 0 ? "" : decode(pair.substring(equals + 1));
-            parsed.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
+        } catch (IllegalArgumentException e) {
+            // A stray %, or one not followed by two hex digits. That is the URL
+            // the caller sent, so it is a 400 like every other bad input here,
+            // and it is answered for the query string as a whole because a
+            // percent-escape that will not decode makes none of it trustworthy.
+            throw new HttpException(HttpStatus.BAD_REQUEST,
+                    "Query string is not valid URL encoding: " + query);
         }
         // The lists are handed out by queryParams(name) and cached for the rest
         // of the request, so they are frozen before either can happen.

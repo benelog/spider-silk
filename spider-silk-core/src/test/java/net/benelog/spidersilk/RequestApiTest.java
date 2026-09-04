@@ -2,6 +2,9 @@ package net.benelog.spidersilk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
@@ -10,6 +13,7 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import net.benelog.spidersilk.test.TestClient;
 import net.benelog.spidersilk.test.TestRequest;
 import net.benelog.spidersilk.test.WebTest;
 
@@ -103,6 +107,56 @@ class RequestApiTest {
 
         WebTest.test(app, client ->
                 assertThat(client.get("/search?q=a+b%26c").body()).isEqualTo("a b&c"));
+    }
+
+    /** A percent-escape that will not decode is bad input, so it answers 400 and not 500. */
+    @Test
+    void aMalformedQueryStringIsRejectedAsBadInput() {
+        App app = new App().get("/search", req -> WebResponse.text(req.queryParam("q")));
+
+        WebTest.test(app, client -> {
+            String response = raw(client, "",
+                    "GET /search?q=%zz HTTP/1.1", "Host: localhost", "Connection: close");
+
+            assertThat(response).startsWith("HTTP/1.1 400");
+            assertThat(response).contains("Query string is not valid URL encoding");
+        });
+    }
+
+    /** A form read consults the query string to tell the two apart, so it answers 400 too. */
+    @Test
+    void aFormReadBehindAMalformedQueryStringIsAlsoA400() {
+        App app = new App().post("/submit", req -> WebResponse.text(req.formParam("name")));
+
+        WebTest.test(app, client -> {
+            String body = "name=Ada";
+            String response = raw(client, body,
+                    "POST /submit?q=%zz HTTP/1.1",
+                    "Host: localhost",
+                    "Content-Type: application/x-www-form-urlencoded",
+                    "Content-Length: " + body.length(),
+                    "Connection: close");
+
+            assertThat(response).startsWith("HTTP/1.1 400");
+            assertThat(response).contains("Query string is not valid URL encoding");
+        });
+    }
+
+    /**
+     * Sends a request the java.net.http client cannot build: {@link URI} refuses
+     * a percent-escape that is not two hex digits, so a malformed query string
+     * has to go on the wire by hand. The whole response is returned as text.
+     */
+    private static String raw(TestClient client, String body, String... requestLines) {
+        String request = String.join("\r\n", requestLines) + "\r\n\r\n" + body;
+        URI base = URI.create(client.url("/"));
+        try (Socket socket = new Socket(base.getHost(), base.getPort())) {
+            socket.getOutputStream().write(request.getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+            return new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     @Test
