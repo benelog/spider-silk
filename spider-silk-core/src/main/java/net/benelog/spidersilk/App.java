@@ -45,12 +45,15 @@ public final class App {
     final Map<HttpStatus, Handler> errorHandlers = new LinkedHashMap<>();
     final Set<SseStream> openStreams = ConcurrentHashMap.newKeySet();
 
-    TemplateRenderer templates;
+    volatile TemplateRenderer templates;
     List<StaticFiles> staticFiles = List.of(new StaticFiles(StaticFiles.DEFAULT_ROOT));
     RequestLogger requestLogger;
     Cors cors;
     Gzip gzip;
     SecurityHeaders securityHeaders;
+
+    /** Guards the one lazy assignment in {@link #templateRenderer()}. */
+    private final Object templatesLock = new Object();
 
     private WebServerFactory serverFactory = (app, port) -> new JettyServer(app).port(port);
     private WebServer server;
@@ -336,12 +339,25 @@ public final class App {
      * The template engine, built on first render if nobody supplied one. jte
      * compiles into a directory it creates, so the default is not built for an
      * app that never renders a template.
+     *
+     * <p>Every render of a {@link WebResponse.Template} calls this, so the
+     * lazy assignment is behind a double check on a volatile field rather than
+     * behind a lock every request has to take. A monitor here would serialise
+     * concurrent HTML responses for one assignment that happens once, and a
+     * handler on a virtual thread would pin its carrier waiting for it.
      */
-    synchronized TemplateRenderer templateRenderer() {
-        if (templates == null) {
-            templates = new JteTemplates(JteTemplates.DEFAULT_ROOT);
+    TemplateRenderer templateRenderer() {
+        TemplateRenderer renderer = templates;
+        if (renderer == null) {
+            synchronized (templatesLock) {
+                renderer = templates;
+                if (renderer == null) {
+                    renderer = new JteTemplates(JteTemplates.DEFAULT_ROOT);
+                    templates = renderer;
+                }
+            }
         }
-        return templates;
+        return renderer;
     }
 
     /**

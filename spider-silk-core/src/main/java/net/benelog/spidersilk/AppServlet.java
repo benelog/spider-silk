@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.io.StringWriter;
+import java.io.Writer;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -269,9 +269,76 @@ public class AppServlet extends HttpServlet {
         if (!(response.body() instanceof WebResponse.Template template)) {
             return response;
         }
-        StringWriter out = new StringWriter();
+        TemplateBuffer out = new TemplateBuffer();
         app.templateRenderer().render(template.name(), template.model(), out);
         return response.body(new WebResponse.Text(out.toString()));
+    }
+
+    /**
+     * The buffer a template renders into. {@link java.io.StringWriter
+     * StringWriter} would do the
+     * same job over a {@code StringBuffer}, whose every append is synchronized
+     * although the buffer never leaves this method, and whose {@code toString}
+     * copies the whole page a second time. A {@link StringBuilder} handed
+     * straight to {@code append} avoids both.
+     */
+    private static final class TemplateBuffer extends Writer {
+
+        private final StringBuilder text = new StringBuilder();
+
+        @Override
+        public void write(int c) {
+            text.append((char) c);
+        }
+
+        @Override
+        public void write(char[] buffer, int offset, int length) {
+            text.append(buffer, offset, length);
+        }
+
+        @Override
+        public void write(String string) {
+            text.append(string);
+        }
+
+        @Override
+        public void write(String string, int offset, int length) {
+            text.append(string, offset, offset + length);
+        }
+
+        @Override
+        public Writer append(CharSequence characters) {
+            text.append(characters);
+            return this;
+        }
+
+        @Override
+        public Writer append(CharSequence characters, int start, int end) {
+            text.append(characters, start, end);
+            return this;
+        }
+
+        @Override
+        public Writer append(char character) {
+            text.append(character);
+            return this;
+        }
+
+        /** Nothing is buffered elsewhere, so there is nothing to push out. */
+        @Override
+        public void flush() {
+        }
+
+        /** Nothing is held open, so a write after this one is still fine. */
+        @Override
+        public void close() {
+        }
+
+        /** The page rendered so far. */
+        @Override
+        public String toString() {
+            return text.toString();
+        }
     }
 
     /** Moves flash left in the session by the request before the redirect into this request. */

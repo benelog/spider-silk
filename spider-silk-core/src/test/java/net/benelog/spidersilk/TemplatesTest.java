@@ -5,7 +5,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.StringWriter;
 import java.net.http.HttpResponse;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BrokenBarrierException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.junit.jupiter.api.Test;
 
@@ -55,6 +64,51 @@ class TemplatesTest {
         assertThatThrownBy(() -> new JteTemplates("jte")
                 .render("greeting.jte", Map.of("name", "Silk"), out))
                 .hasMessageContaining("greeting.jte.jte");
+    }
+
+    /**
+     * The engine is built on the first render, and every render after it goes
+     * through the same accessor. Several requests at once therefore have to
+     * come back with their own page, not one another's and not a deadlock.
+     */
+    @Test
+    void concurrentRendersEachGetTheirOwnPage() {
+        App app = new App().get("/hello/{name}",
+                req -> WebResponse.template("greeting", Map.of("name", req.pathParam("name"))));
+
+        WebTest.test(app, client -> {
+            int callers = 16;
+            ExecutorService pool = Executors.newFixedThreadPool(callers);
+            try {
+                CyclicBarrier startTogether = new CyclicBarrier(callers);
+                List<CompletableFuture<String>> answers = new ArrayList<>();
+                for (int i = 0; i < callers; i++) {
+                    String name = "caller" + i;
+                    answers.add(CompletableFuture.supplyAsync(() -> {
+                        awaitAll(startTogether);
+                        return client.get("/hello/" + name).body();
+                    }, pool));
+                }
+                for (int i = 0; i < callers; i++) {
+                    assertThat(answers.get(i).join())
+                            .isEqualTo("<p>Hello, caller" + i + "!</p>\n");
+                }
+            } finally {
+                pool.shutdownNow();
+            }
+        });
+    }
+
+    /** The barrier every caller waits on, so the renders really do overlap. */
+    private static void awaitAll(CyclicBarrier barrier) {
+        try {
+            barrier.await(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted waiting for the other callers", e);
+        } catch (BrokenBarrierException | TimeoutException e) {
+            throw new IllegalStateException("The callers never lined up", e);
+        }
     }
 
     @Test
