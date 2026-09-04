@@ -57,8 +57,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 39 | `WebResponse.file(Path)`, with the content-type table kept private | ✅ shipped |
 | 40 | Read-only delegates for what only `raw()` reached | ✅ shipped |
 | 41 | `sessionAttr(key, Class<T>)` and `invalidateSession()` | ✅ shipped |
+| 42 | Uploads that stream, an optional upload as null, and `files(name)` | ✅ shipped |
 
-Forty-three of the forty-four shipped.
+Forty-four of the forty-five shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -879,6 +880,38 @@ That is the price of the name, and it is paid by nobody: a session holding a `Cl
 `invalidateSession()` ends the session, which is the one session operation every application with a login has.
 It was `raw().getSession(false).invalidate()`, which is three calls with a null check the caller has to remember, through the escape hatch decision 40 has just narrowed the need for.
 A request with no session is left alone rather than told off, since logging out twice is not an error.
+## 42 · An upload the handler need not hold, and one it need not have
+
+### 42. `inputStream()` and `writeTo(Path)`, an absent upload as null, and `files(name)`
+
+`UploadedFile` read its content two ways, `bytes()` and `asText()`, and both build the whole upload in memory.
+A framework that streams an answer through `stream`, `jsonArray`, and `ndjson` was making the request side hold a video as one byte array.
+`inputStream()` hands the part to a parser, and `writeTo(path)` puts it on disk.
+
+**`writeTo` is `Part.write`, not a copy loop.**
+It is what the servlet API offers, and a container that had already buffered the upload to disk moves that file rather than reading the bytes back through the framework.
+The cost is that the content is written once, because the buffered file is gone afterwards, and the javadoc says so.
+The path is made absolute before it is handed over: `Part.write` resolves a relative name against the container's multipart location, which is a directory the handler did not choose and cannot see.
+Relative to the working directory is the meaning a caller can predict, and it is the same on Jetty, Tomcat, and Undertow, which the acceptance test in each server module now checks.
+
+**An absent upload answers null, not an `Optional` and not a default.**
+`param(name, default)` is the optional form for a parameter, and there is no default file for that shape to take.
+`cookie(name)`, `queryParam(name)`, `formParam(name)`, and `flashed(key)` already answer null for a value whose absence is an answer rather than an error, so `fileOrNull(name)` is the fifth of those.
+An `Optional<UploadedFile>` would be the only `Optional` in the API, and the question it would raise about those four is the reason it was rejected.
+The name carries the contract to the call site, where `file(name)` is the one that answers 400.
+
+**A part with no file name is not an upload.**
+A browser sends the part anyway when a file input is left alone, with an empty `filename` and no content, so a `fileOrNull` that asked only whether the part was there would answer with an empty file in exactly the case it exists for.
+The text fields of a multipart form are parts too, and `getParts()` hands them to `files(name)` beside the files.
+One rule settles both: a part counts when it carries a submitted file name.
+`file(name)` follows it as well, and now answers 400 where it used to hand back an empty file, which is the reading decision 34 took for the same class of mismatch.
+
+**`files(name)` is empty when the field carried nothing.**
+`params(name)` answers a repeated parameter that was not sent with an empty list, on the grounds that "none chosen" is an answer, and a file input asks the same question.
+`file(name)` stays the first file of the field, which is what a container answers for the name alone.
+
+`TestRequest` holds its parts as a list rather than as a map keyed by field name, so a test states a repeated file field the way a form sends it.
+Its stub part implements `write` by writing the bytes out, so `writeTo` is testable without a server, which is what decision 20 asks of that harness.
 
 ## Rejected — decisions, with the reason
 

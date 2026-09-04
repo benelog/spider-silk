@@ -142,6 +142,7 @@ Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus
 - A type with no named form takes a parser: `req.param("since", LocalDate::parse)`, `req.param("page", Integer::parseInt, 1)`, `req.pathParam("deckId", UUID::fromString)`. A parser that throws `IllegalArgumentException` or `DateTimeException` answers 400 naming the parameter. Do not write `Long.parseLong(req.param(...))` by hand: that is a 500 on bad input.
 - `param(name, default)` forms cover absence only; a present-but-unparseable value is still a 400.
 - Ordinary reads about the request have a method, so do not reach through `raw()` for them: `isSecure()`, `scheme()`, `host()`, `remoteAddress()`, `contentType()`, `queryString()`, `headers(name)`, `headers()`. `raw()` is for an async context, a client certificate, or a container-specific attribute.
+- A large upload never becomes a `byte[]`: `req.file(name).writeTo(path)` writes it to disk and `inputStream()` hands it to a parser. An optional upload is `req.fileOrNull(name)` (null when absent, including a file input left empty), and a field carrying several files is `req.files(name)`.
 - `WebResponse` is immutable: every builder method returns a new value, so chains work and after-filters can rewrite responses.
 - Statuses are `HttpStatus` constants, never raw ints; `HttpStatus.of(int)` when the number arrives at runtime.
 - A before-filter returning `null` continues to the route; returning a response ends the request; `throw new HttpException(status, msg)` rejects and lets `error(status, ...)` render the body.

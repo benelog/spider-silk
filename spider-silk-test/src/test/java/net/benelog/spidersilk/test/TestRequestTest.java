@@ -1,11 +1,17 @@
 package net.benelog.spidersilk.test;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import net.benelog.spidersilk.HttpException;
 import net.benelog.spidersilk.HttpStatus;
+import net.benelog.spidersilk.UploadedFile;
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.json.JsonWriter;
@@ -236,6 +242,66 @@ class TestRequestTest {
         assertThatExceptionOfType(HttpException.class)
                 .isThrownBy(() -> request.file("file"))
                 .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
+    void oneFieldCarriesSeveralFiles() {
+        WebRequest request = TestRequest.post("/decks/3/import")
+                .file("pages", "one.txt", "1")
+                .file("pages", "two.txt", "2")
+                .file("cover", "cover.png", "png")
+                .build();
+
+        assertThat(request.files("pages")).extracting(UploadedFile::fileName)
+                .containsExactly("one.txt", "two.txt");
+        assertThat(request.files("cover")).hasSize(1);
+        assertThat(request.files("missing")).isEmpty();
+        // The first of them is what a container answers for the name alone.
+        assertThat(request.file("pages").asText()).isEqualTo("1");
+    }
+
+    @Test
+    void anAbsentOptionalUploadIsNull() {
+        WebRequest withoutIt = TestRequest.post("/profile")
+                .file("other", "note.txt", "x")
+                .build();
+        WebRequest withIt = TestRequest.post("/profile")
+                .file("avatar", "me.png", "png")
+                .build();
+
+        assertThat(withoutIt.fileOrNull("avatar")).isNull();
+        assertThat(TestRequest.post("/profile").build().fileOrNull("avatar")).isNull();
+        assertThat(withIt.fileOrNull("avatar").fileName()).isEqualTo("me.png");
+    }
+
+    /** A file input a browser sent with nothing chosen: a part, and no file. */
+    @Test
+    void aPartWithNoFileNameIsNotAnUpload() {
+        WebRequest request = TestRequest.post("/profile")
+                .file("avatar", "", "")
+                .build();
+
+        assertThat(request.fileOrNull("avatar")).isNull();
+        assertThat(request.files("avatar")).isEmpty();
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(() -> request.file("avatar"))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+    }
+
+    @Test
+    void anUploadIsReadAsAStreamAndWrittenToAFile(@TempDir Path dir) throws Exception {
+        WebRequest request = TestRequest.post("/decks/3/import")
+                .file("csv", "cards.csv", "front,back\n")
+                .build();
+        Path target = dir.resolve("saved.csv");
+
+        try (InputStream in = request.file("csv").inputStream()) {
+            assertThat(new String(in.readAllBytes(), StandardCharsets.UTF_8))
+                    .isEqualTo("front,back\n");
+        }
+        request.file("csv").writeTo(target);
+
+        assertThat(Files.readString(target)).isEqualTo("front,back\n");
     }
 
     /** The body of a request, as the application would declare it. */

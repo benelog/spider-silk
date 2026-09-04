@@ -52,6 +52,7 @@ The host a handler reads with `req.host()` is stated as a header: `header("Host"
   Raw text is the form for a body no writer would produce, such as the malformed one a 400 test sends.
 - Path variables are supplied, not matched, since no route is involved: `pathParam("deckId", "3")` states what the router would have resolved.
 - Everything a handler can tell apart still holds: query and form parameters of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 exactly as production would.
+- `file` twice with one name is the field that carries several files (`req.files(name)`), an empty file name is the input a browser sent with nothing chosen (`req.fileOrNull(name)` answers null), and `UploadedFile.writeTo(path)` writes the bytes out here as it does behind a container.
 
 ## Asserting on the response value
 

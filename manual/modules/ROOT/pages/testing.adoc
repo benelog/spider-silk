@@ -51,3 +51,4 @@ The host that `req.host()` and `req.scheme()` report comes from the `Host` heade
 Raw text is the form for a body no writer would produce, such as the malformed one a 400 test sends.
 Path variables are supplied rather than matched, since no route is involved: `pathParam("deckId", "3")` is what the router would have resolved.
 Everything a handler can tell apart still holds: a query parameter and a form field of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 the way a non-multipart request does.
+`file` called twice with one name builds the field that carries several files, which `req.files(name)` reads back, and an empty file name is the input a browser sent with nothing chosen, which `req.fileOrNull(name)` answers null for.

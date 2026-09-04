@@ -1,9 +1,12 @@
 package net.benelog.spidersilk.test;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -59,7 +62,7 @@ public final class TestRequest {
     private final Map<String, List<String>> formParams = new LinkedHashMap<>();
     private final Map<String, String> pathParams = new LinkedHashMap<>();
     private final List<Cookie> cookies = new ArrayList<>();
-    private final Map<String, Part> parts = new LinkedHashMap<>();
+    private final List<Part> parts = new ArrayList<>();
 
     private String body = "";
     private StubServletRequest.StubSession session;
@@ -221,9 +224,14 @@ public final class TestRequest {
      * An uploaded file, read back by {@code req.file(name)}. A request with no
      * file at all is not a multipart request, so asking for one answers 400 —
      * the same as behind a container.
+     *
+     * <p>Call it twice with one name for a field that carries several files,
+     * which is what {@code req.files(name)} reads back. An empty file name is
+     * the file input a browser sent with nothing chosen, so
+     * {@code req.fileOrNull(name)} answers null for it.
      */
     public TestRequest file(String name, String fileName, String contentType, byte[] content) {
-        parts.put(name, new StubPart(name, fileName, contentType, content));
+        parts.add(new StubPart(name, fileName, contentType, content));
         return this;
     }
 
@@ -259,7 +267,7 @@ public final class TestRequest {
         Map<String, List<String>> headerCopy = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         headerCopy.putAll(copyOf(headers));
         StubServletRequest raw = new StubServletRequest(method, path, headerCopy,
-                copyOf(queryParams), copyOf(formParams), List.copyOf(cookies), Map.copyOf(parts),
+                copyOf(queryParams), copyOf(formParams), List.copyOf(cookies), List.copyOf(parts),
                 !parts.isEmpty(), body, session);
         raw.secure(secure);
         raw.remoteAddress(remoteAddress);
@@ -323,10 +331,14 @@ public final class TestRequest {
             return List.of("Content-Type");
         }
 
+        /**
+         * Writes the bytes out, so {@code UploadedFile.writeTo(path)} works here
+         * as it does behind a container. There is no multipart location to
+         * resolve a relative name against, so the name is taken as it is.
+         */
         @Override
-        public void write(String target) {
-            throw new UnsupportedOperationException(
-                    "A TestRequest upload is held in memory; read it with bytes() or asText()");
+        public void write(String target) throws IOException {
+            Files.write(Path.of(target), content);
         }
 
         @Override

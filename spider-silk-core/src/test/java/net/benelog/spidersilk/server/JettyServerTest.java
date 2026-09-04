@@ -10,6 +10,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -20,6 +22,7 @@ import org.eclipse.jetty.util.VirtualThreads;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.WebResponse;
@@ -127,6 +130,42 @@ class JettyServerTest {
 
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(response.body()).isEqualTo("front,back");
+    }
+
+    /** writeTo and files(name) are core's promises about an upload, on this container. */
+    @Test
+    void anUploadIsWrittenToDiskAndOneFieldCarriesSeveral(@TempDir Path dir) throws Exception {
+        Path saved = dir.resolve("saved.csv");
+        app = new App()
+                .post("/upload", req -> {
+                    req.files("csv").get(1).writeTo(saved);
+                    return WebResponse.text(
+                            req.files("csv").size() + " " + req.file("csv").fileName());
+                })
+                .start(0);
+
+        HttpResponse<String> response = client.send(upload(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.body()).isEqualTo("2 one.csv");
+        assertThat(Files.readString(saved)).isEqualTo("hola,hello");
+    }
+
+    /** Two files under one field name, the shape {@code files("csv")} reads. */
+    private HttpRequest upload() {
+        String boundary = "spidersilkboundary";
+        String body = "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"csv\"; filename=\"one.csv\"\r\n"
+                + "Content-Type: text/csv\r\n\r\n"
+                + "front,back\r\n"
+                + "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"csv\"; filename=\"two.csv\"\r\n"
+                + "Content-Type: text/csv\r\n\r\n"
+                + "hola,hello\r\n"
+                + "--" + boundary + "--\r\n";
+        return HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/upload"))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
     }
 
     @Test

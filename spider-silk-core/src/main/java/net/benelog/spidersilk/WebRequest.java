@@ -9,6 +9,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.DateTimeException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -640,19 +641,100 @@ public final class WebRequest {
         }
     }
 
-    /** A multipart upload. Responds with 400 if missing. */
+    /**
+     * A multipart upload. Responds with 400 if missing.
+     *
+     * <p>Missing is any of the three ways it can be: no part of that name, a
+     * part carrying no file name, and a request that is not multipart at all.
+     * {@link #fileOrNull(String)} answers null for the same three, for an upload
+     * a handler does not require.
+     */
     public UploadedFile file(String name) {
+        Part part;
         try {
-            Part part = req.getPart(name);
-            if (part == null) {
-                throw new HttpException(HttpStatus.BAD_REQUEST, "Missing uploaded file: " + name);
-            }
-            return new UploadedFile(part);
+            part = req.getPart(name);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         } catch (ServletException e) {
             throw new HttpException(HttpStatus.BAD_REQUEST, "Not a multipart request");
         }
+        if (!isFile(part)) {
+            throw new HttpException(HttpStatus.BAD_REQUEST, "Missing uploaded file: " + name);
+        }
+        return new UploadedFile(part);
+    }
+
+    /**
+     * An upload the form need not carry, or null — the shape {@link #cookie} and
+     * {@link #queryParam} already have for a value whose absence is an answer
+     * rather than an error.
+     *
+     * <pre>{@code
+     * UploadedFile avatar = req.fileOrNull("avatar");
+     * if (avatar != null) {
+     *     avatar.writeTo(avatars.resolve(userId + ".png"));
+     * }
+     * }</pre>
+     *
+     * <p>Null covers every way the file can be absent: no part of that name, a
+     * file input the browser sent empty because nothing was chosen, and a
+     * request that is not multipart at all. A handler that declared the upload
+     * optional has already said what to do about all three, which is why none
+     * of them is the 400 {@link #file(String)} answers.
+     */
+    public UploadedFile fileOrNull(String name) {
+        Part part;
+        try {
+            part = req.getPart(name);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (ServletException e) {
+            return null;
+        }
+        return isFile(part) ? new UploadedFile(part) : null;
+    }
+
+    /**
+     * Every file sent under one field name, in the order the request sent them —
+     * the shape a {@code <input type="file" multiple>} arrives in. Empty when
+     * the field carried none, since "nothing chosen" is an answer, not an error,
+     * and {@link #params(String)} answers a repeated parameter the same way.
+     *
+     * <pre>{@code
+     * for (UploadedFile page : req.files("pages")) {
+     *     page.writeTo(scans.resolve(page.fileName()));
+     * }
+     * }</pre>
+     *
+     * <p>Only the parts that carry a file are counted. The text fields of the
+     * same form are parts too, and they are read with {@link #param(String)}.
+     */
+    public List<UploadedFile> files(String name) {
+        Collection<Part> parts;
+        try {
+            parts = req.getParts();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        } catch (ServletException e) {
+            return List.of();
+        }
+        List<UploadedFile> files = new ArrayList<>();
+        for (Part part : parts) {
+            if (part.getName().equals(name) && isFile(part)) {
+                files.add(new UploadedFile(part));
+            }
+        }
+        return List.copyOf(files);
+    }
+
+    /**
+     * Whether a part is an uploaded file at all. A part with no submitted file
+     * name is a text field of the same form, or a file input the browser sent
+     * empty because nothing was chosen; neither is a file a handler can read.
+     */
+    private static boolean isFile(Part part) {
+        return part != null && part.getSubmittedFileName() != null
+                && !part.getSubmittedFileName().isEmpty();
     }
 
     // ---- Cookies the client sent ----

@@ -146,6 +146,41 @@ class UndertowServerTest {
         assertThat(response.body()).isEqualTo("front,back");
     }
 
+    /** writeTo and files(name) are core's promises about an upload, on this container. */
+    @Test
+    void anUploadIsWrittenToDiskAndOneFieldCarriesSeveral(@TempDir Path dir) throws Exception {
+        Path saved = dir.resolve("saved.csv");
+        startOnUndertow(new App()
+                .post("/upload", req -> {
+                    req.files("csv").get(1).writeTo(saved);
+                    return WebResponse.text(
+                            req.files("csv").size() + " " + req.file("csv").fileName());
+                }));
+
+        HttpResponse<String> response = client.send(upload(), HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.body()).isEqualTo("2 one.csv");
+        assertThat(Files.readString(saved)).isEqualTo("hola,hello");
+    }
+
+    /** Two files under one field name, the shape {@code files("csv")} reads. */
+    private HttpRequest upload() {
+        String boundary = "spidersilkboundary";
+        String body = "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"csv\"; filename=\"one.csv\"\r\n"
+                + "Content-Type: text/csv\r\n\r\n"
+                + "front,back\r\n"
+                + "--" + boundary + "\r\n"
+                + "Content-Disposition: form-data; name=\"csv\"; filename=\"two.csv\"\r\n"
+                + "Content-Type: text/csv\r\n\r\n"
+                + "hola,hello\r\n"
+                + "--" + boundary + "--\r\n";
+        return HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/upload"))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build();
+    }
+
     /** SSE is framing over the servlet response, so it travels to a third server too. */
     @Test
     void serverSentEventsStreamOverUndertow() throws Exception {

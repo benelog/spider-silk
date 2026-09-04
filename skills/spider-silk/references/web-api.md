@@ -96,7 +96,10 @@ Stream<Card> cards = req.bodyNdjson(CARD_READER);           // lazy; a bad line 
 InputStream in = req.bodyStream();                          // unread bytes, for another library's parser
 BufferedReader r = req.bodyReader();                        // unread characters; bytes or characters, never both
 UploadedFile file = req.file("file");                       // missing part or not multipart -> 400
-// UploadedFile: fileName(), contentType(), size(), bytes(), asText()
+UploadedFile avatar = req.fileOrNull("avatar");             // optional upload; null when absent
+List<UploadedFile> pages = req.files("pages");              // one field, several files; empty when none
+// UploadedFile: fileName(), contentType(), size(), bytes(), asText(),
+//               inputStream(), writeTo(path)               // the last two hold nothing in memory
 ```
 
 Content negotiation reads `Accept` for you and answers one of the offered strings (406 when the caller takes none, first candidate when no `Accept` was sent), adding `Vary: Accept` automatically:

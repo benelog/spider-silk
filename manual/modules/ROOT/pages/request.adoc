@@ -138,7 +138,31 @@ app.post("/decks/{deckId}/import", req -> {
 });
 ----
 
-`UploadedFile` answers `fileName()`, `contentType()`, `size()`, and the content as `bytes()` or as UTF-8 text with `asText()`.
+`UploadedFile` answers `fileName()`, `contentType()`, and `size()`, and hands over the content four ways.
+`bytes()` and `asText()` hold it in memory, as one byte array or as UTF-8 text.
+`inputStream()` and `writeTo(path)` do not, so an upload of any size reaches a parser or a file with no byte array in between:
+
+[source,java]
+----
+app.post("/scans", req -> {
+    Path saved = uploads.resolve(UUID.randomUUID() + ".pdf");
+    req.file("scan").writeTo(saved);
+    return WebResponse.text("saved");
+});
+----
+
+The caller closes the stream, and it is the same content either way: what has been read is read, so a handler that wants the bytes as well buffers them itself rather than asking twice.
+`writeTo` takes an absolute path, or a relative one resolved against the working directory.
+It writes the content once, because a container that had already buffered the upload to disk may move that file rather than copy it.
+
+`req.fileOrNull(name)` answers null for an upload the form need not carry, which is the shape `req.cookie(name)` and `req.queryParam(name)` already have for a value whose absence is an answer.
+Null covers every way the file can be absent: no part of that name, a file input the browser sent empty because nothing was chosen, and a request that is not multipart at all.
+`req.file(name)` answers 400 for all three of those, since a handler that asked for the file plainly needs it.
+
+`req.files(name)` answers every file sent under one field name, in the order the request sent them, which is what an `<input type="file" multiple>` produces.
+The list is empty when the field carried none, the way `req.params(name)` is empty for a repeated parameter that was not sent.
+Only the parts that carry a file are counted, so the text fields of the same multipart form are still read with `req.param(name)`.
+
 The limits are the servlet container's multipart configuration, set on the server: the maximum sizes, and where a large upload is buffered.
 `multipart(new MultipartConfigElement(...))` sets them on `JettyServer`, xref:tomcat.adoc[TomcatServer], and xref:undertow.adoc[UndertowServer] alike.
 The default buffers to the system temp directory with no size cap and a 1MB in-memory threshold.

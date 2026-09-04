@@ -56,7 +56,7 @@ final class StubServletRequest implements HttpServletRequest {
     private final Map<String, List<String>> queryParams;
     private final Map<String, List<String>> formParams;
     private final List<Cookie> cookies;
-    private final Map<String, Part> parts;
+    private final List<Part> parts;
     private final boolean multipart;
     private final String body;
 
@@ -67,7 +67,7 @@ final class StubServletRequest implements HttpServletRequest {
 
     StubServletRequest(String method, String path, Map<String, List<String>> headers,
             Map<String, List<String>> queryParams, Map<String, List<String>> formParams,
-            List<Cookie> cookies, Map<String, Part> parts, boolean multipart, String body,
+            List<Cookie> cookies, List<Part> parts, boolean multipart, String body,
             HttpSession session) {
         this.method = method;
         this.path = path;
@@ -284,17 +284,25 @@ final class StubServletRequest implements HttpServletRequest {
      * A request with no parts is not a multipart request, and a container says so
      * by throwing — which {@code WebRequest.file} turns into a 400. A part that
      * was never added is a null, the other 400.
+     *
+     * <p>A name added more than once answers with the first of them, as a
+     * container does; the rest are reached through {@link #getParts()}.
      */
     @Override
     public Part getPart(String name) throws ServletException {
         requireMultipart();
-        return parts.get(name);
+        for (Part part : parts) {
+            if (part.getName().equals(name)) {
+                return part;
+            }
+        }
+        return null;
     }
 
     @Override
     public Collection<Part> getParts() throws ServletException {
         requireMultipart();
-        return List.copyOf(parts.values());
+        return List.copyOf(parts);
     }
 
     private void requireMultipart() throws ServletException {
