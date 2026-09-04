@@ -63,6 +63,7 @@ final class StubServletRequest implements HttpServletRequest {
     private final Map<String, Object> attributes = new LinkedHashMap<>();
     private HttpSession session;
     private boolean secure;
+    private String remoteAddress = "127.0.0.1";
 
     StubServletRequest(String method, String path, Map<String, List<String>> headers,
             Map<String, List<String>> queryParams, Map<String, List<String>> formParams,
@@ -363,19 +364,40 @@ final class StubServletRequest implements HttpServletRequest {
         return secure ? "https" : "http";
     }
 
+    /**
+     * The host out of the {@code Host} header, as a container reads it, so that
+     * {@code header("Host", "shop.example.com:8080")} is how a test states the
+     * host a handler branches on. {@code localhost} when no header was sent.
+     */
     @Override
     public String getServerName() {
-        return "localhost";
+        String host = getHeader("Host");
+        if (host == null) {
+            return "localhost";
+        }
+        int colon = portSeparator(host);
+        return colon < 0 ? host : host.substring(0, colon);
     }
 
     @Override
     public int getServerPort() {
-        return 80;
+        String host = getHeader("Host");
+        int colon = host == null ? -1 : portSeparator(host);
+        if (colon < 0) {
+            return secure ? 443 : 80;
+        }
+        return Integer.parseInt(host.substring(colon + 1));
+    }
+
+    /** The colon before the port, or -1. The one inside an IPv6 literal is not it. */
+    private static int portSeparator(String host) {
+        int colon = host.lastIndexOf(':');
+        return colon > host.lastIndexOf(']') ? colon : -1;
     }
 
     @Override
     public String getRemoteAddr() {
-        return "127.0.0.1";
+        return remoteAddress;
     }
 
     @Override
@@ -411,6 +433,11 @@ final class StubServletRequest implements HttpServletRequest {
     /** Whether this request arrived over TLS, which HSTS and Secure cookies ask. */
     void secure(boolean secure) {
         this.secure = secure;
+    }
+
+    /** The client address, which a rate limiter or an allow-list reads. */
+    void remoteAddress(String remoteAddress) {
+        this.remoteAddress = remoteAddress;
     }
 
     @Override

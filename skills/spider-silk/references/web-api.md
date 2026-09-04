@@ -61,7 +61,13 @@ Never invent a `Controller` interface or a `register(App)` method: the whole rou
 ## WebRequest
 
 ```java
-req.method(); req.path(); req.header(name); req.raw();      // raw() = the servlet request
+req.method(); req.path(); req.header(name);                 // header lookup ignores case
+List<String> tags = req.headers("X-Tag");                   // every value of a repeated header
+Map<String, List<String>> all = req.headers();              // every header, all values
+req.contentType(); req.queryString();                       // null when the request carried none
+req.isSecure(); req.scheme(); req.host(); req.remoteAddress();
+// scheme() + "://" + host() + path() = the absolute URL; host() carries a non-default port
+req.raw();                                                  // the servlet request; escape hatch only
 
 long id = req.pathParamLong("deckId");                      // non-numeric -> 400
 String name = req.pathParam("name");

@@ -22,7 +22,8 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 
 == What `WebRequest` provides
 
-* Request info: `method()`, `path()`, `header(name)`, `raw()` for the servlet request itself
+* Request info: `method()`, `path()`, `header(name)`, `headers(name)` for a repeated header, `headers()` for all of them, `contentType()`, `queryString()`, `isSecure()`, `scheme()`, `host()`, `remoteAddress()`, and `raw()` for the servlet request itself.
+  `host()` carries the port when it is not the scheme's default, so `scheme()`, `host()`, and `path()` rebuild the absolute URL
 * Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`, and `pathParam(name, parser)` for any other type.
   A name the pattern never declared throws `IllegalStateException`, not a 400
 * Parameters: `param` (400 when missing), `paramLong`, `paramBoolean` (`true` or `false` only), `paramEnum`, each with a `(..., default)` form for optional parameters; `params(name)` for repeated values

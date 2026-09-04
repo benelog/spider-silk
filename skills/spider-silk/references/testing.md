@@ -45,7 +45,8 @@ void createDeckRespondsWith201() {
 }
 ```
 
-Builder methods: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, `secure()`, `sessionAttr`; `build()` hands back a `WebRequest`.
+Builder methods: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, `secure()`, `remoteAddress(addr)`, `sessionAttr`; `build()` hands back a `WebRequest`.
+The host a handler reads with `req.host()` is stated as a header: `header("Host", "shop.example.com:8080")`.
 
 - `jsonBody` takes a `Json.JsonValue` tree, a value with the `JsonWriter` the application already declares, or raw text.
   Raw text is the form for a body no writer would produce, such as the malformed one a 400 test sends.

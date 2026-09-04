@@ -55,8 +55,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 37 | `RequestLogger` reports a `Duration`, not a count of milliseconds | ✅ shipped |
 | 38 | `param(name, parser)`: one seam for every type with no named form | ✅ shipped |
 | 39 | `WebResponse.file(Path)`, with the content-type table kept private | ✅ shipped |
+| 40 | Read-only delegates for what only `raw()` reached | ✅ shipped |
 
-Forty-one of the forty-two shipped.
+Forty-two of the forty-three shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -826,6 +827,31 @@ Decision 35 would put the content type first, `.contentType(...)` already overri
 Validators and conditional requests stay with `StaticFiles`, which is not refactored onto this.
 It works on a `Resource` rather than a `Path`, and it carries the `ETag`, the `Last-Modified`, and the pre-compressed sibling branch that decision 31 added.
 A file a handler chose is not a static file: only the handler knows whether it can change.
+
+## 40 · The reads that only `raw()` reached
+
+### 40. Eight read-only delegates on `WebRequest`, and `SecurityHeaders` stops going behind the API
+
+`isSecure()`, `remoteAddress()`, `contentType()`, `queryString()`, `scheme()`, `host()`, `headers(name)`, and `headers()` are methods on `WebRequest`.
+Each was answered through `raw()` before, and each is an ordinary question about a request rather than a container detail.
+`SecurityHeaders` asked `request.raw().isSecure()`, which is core reaching around its own API for something the API should have said.
+The bar decision 32 sets for the public surface is a use a handler or a `RequestLogger` has today, not completeness against `HttpServletRequest`: a request logger wants the client address, a signature wants the query string as it arrived, and HSTS wants the scheme.
+
+`raw()` stays, and stays what decision 32 made it: the escape hatch for an async context, a client certificate, or a container-specific attribute.
+The eight are read-only, so nothing about the one deliberate write in this class changes.
+
+**`host()` carries the port when it is not the scheme's default.**
+That was the open question, and it is the one method here that is not a bare delegate.
+`getServerName()` alone would make `scheme() + "://" + host() + path()` wrong on every development server that is not on 80, which is the case the method exists for.
+Both halves come from the container rather than from the `Host` header directly, so a proxy's `X-Forwarded-Host` applies here on the same terms as it does to `scheme()`.
+`header("Host")` still reads the header as sent, for a handler that wants exactly that.
+
+`headers()` answers `Map<String, List<String>>` in the order the request sent them, and its names are therefore case-sensitive where `header(name)` is not.
+That is the shape `cookies()` already has, and the alternative — a case-insensitive map — would promise a lookup semantics that the one-name `headers(name)` already provides better.
+
+`TestRequest` gains `remoteAddress(addr)` and nothing else.
+`secure()` already covered `isSecure()` and `scheme()`, and `contentType()` and `queryString()` are already stated by `header("Content-Type")` and `queryParam(name, value)`.
+The host is stated as `header("Host", ...)`, which is how a real request states it, so the stub derives the name and the port from that header the way a container does rather than taking a setter of its own.
 
 ## Rejected — decisions, with the reason
 

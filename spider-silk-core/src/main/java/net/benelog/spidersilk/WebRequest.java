@@ -48,7 +48,7 @@ public final class WebRequest {
     private final HttpServletRequest req;
     private final Map<String, String> pathParams;
 
-    private Map<String, List<String>> queryString;
+    private Map<String, List<String>> parsedQuery;
     private String errorMessage;
 
     /**
@@ -84,6 +84,86 @@ public final class WebRequest {
 
     public String header(String name) {
         return req.getHeader(name);
+    }
+
+    /**
+     * Every value of a repeated header, in the order the request sent them —
+     * {@code Accept-Encoding} listed twice, or a {@code Forwarded} chain. Empty
+     * when the header is absent, and {@link #header(String)} returns the first of
+     * these.
+     */
+    public List<String> headers(String name) {
+        return List.copyOf(Collections.list(req.getHeaders(name)));
+    }
+
+    /**
+     * Every header the request carried, by name, each with all of its values —
+     * what a request logger or a signature over the headers reads. The names come
+     * back as the request spelled them, and a lookup through them is therefore
+     * case-sensitive where {@link #header(String)} is not.
+     */
+    public Map<String, List<String>> headers() {
+        Map<String, List<String>> byName = new LinkedHashMap<>();
+        for (String name : Collections.list(req.getHeaderNames())) {
+            byName.putIfAbsent(name, headers(name));
+        }
+        // Read-only, and in the order the request sent them, which Map.copyOf
+        // would lose.
+        return Collections.unmodifiableMap(byName);
+    }
+
+    /** The declared media type of the body, or null when the request sent none. */
+    public String contentType() {
+        return req.getContentType();
+    }
+
+    /**
+     * The query string as it arrived, undecoded and without the {@code ?}, or
+     * null when the URL carried none. {@link #queryParam(String)} reads a single
+     * value out of it; this is the whole of it, for a signature or a log line.
+     */
+    public String queryString() {
+        return req.getQueryString();
+    }
+
+    /**
+     * Whether the request arrived over TLS. What HSTS and a {@code Secure} cookie
+     * ask about, and behind a TLS-terminating proxy the answer is only true once
+     * the container has been told to trust {@code X-Forwarded-Proto}.
+     */
+    public boolean isSecure() {
+        return req.isSecure();
+    }
+
+    /** The address the request came from, as text. The proxy's, when there is one in front. */
+    public String remoteAddress() {
+        return req.getRemoteAddr();
+    }
+
+    /** {@code "http"} or {@code "https"}, the other half of {@link #isSecure()}. */
+    public String scheme() {
+        return req.getScheme();
+    }
+
+    /**
+     * The host the request was addressed to, with the port when it is not the
+     * default for the scheme, so that {@code scheme() + "://" + host() + path()}
+     * is the absolute URL of this request.
+     *
+     * <p>The port is the one part of this that is not a bare delegate, and it is
+     * there because leaving it out is wrong exactly where an absolute URL is
+     * built by hand — a development server on 8080, a second instance on 8081.
+     * The container answers both halves, so a proxy's {@code X-Forwarded-Host} is
+     * applied here on the same terms as {@link #scheme()}.
+     */
+    public String host() {
+        String name = req.getServerName();
+        int port = req.getServerPort();
+        return port == defaultPort(req.getScheme()) ? name : name + ":" + port;
+    }
+
+    private static int defaultPort(String scheme) {
+        return "https".equals(scheme) ? 443 : 80;
     }
 
     /**
@@ -381,7 +461,7 @@ public final class WebRequest {
 
     /** Every value of a repeated query-string parameter. */
     public List<String> queryParams(String name) {
-        return queryString().getOrDefault(name, List.of());
+        return parsedQuery().getOrDefault(name, List.of());
     }
 
     /**
@@ -410,11 +490,11 @@ public final class WebRequest {
         return List.copyOf(remaining);
     }
 
-    private Map<String, List<String>> queryString() {
-        if (queryString == null) {
-            queryString = parseQueryString(req.getQueryString());
+    private Map<String, List<String>> parsedQuery() {
+        if (parsedQuery == null) {
+            parsedQuery = parseQueryString(req.getQueryString());
         }
-        return queryString;
+        return parsedQuery;
     }
 
     private static Map<String, List<String>> parseQueryString(String query) {

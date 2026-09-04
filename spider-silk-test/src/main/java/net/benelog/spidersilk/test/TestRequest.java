@@ -64,6 +64,7 @@ public final class TestRequest {
     private String body = "";
     private StubServletRequest.StubSession session;
     private boolean secure;
+    private String remoteAddress = "127.0.0.1";
 
     private TestRequest(String method, String path) {
         this.method = method;
@@ -150,6 +151,20 @@ public final class TestRequest {
      */
     public TestRequest secure() {
         this.secure = true;
+        return this;
+    }
+
+    /**
+     * The address the request came from, which {@code remoteAddress()} reports —
+     * what a rate limiter or an allow-list branches on. {@code 127.0.0.1} unless
+     * a test says otherwise.
+     *
+     * <p>The host is stated as a header instead: {@code header("Host",
+     * "shop.example.com")} is what {@code host()} and {@code scheme()} read,
+     * the way a real request supplies them.
+     */
+    public TestRequest remoteAddress(String remoteAddress) {
+        this.remoteAddress = remoteAddress;
         return this;
     }
 
@@ -247,6 +262,7 @@ public final class TestRequest {
                 copyOf(queryParams), copyOf(formParams), List.copyOf(cookies), Map.copyOf(parts),
                 !parts.isEmpty(), body, session);
         raw.secure(secure);
+        raw.remoteAddress(remoteAddress);
         return new WebRequest(raw, Map.copyOf(pathParams));
     }
 

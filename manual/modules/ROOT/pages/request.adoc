@@ -2,7 +2,35 @@
 :navtitle: The Request
 
 `WebRequest` is the handler's view of what the client sent.
-The sections below cover the parts that need more than a getter: cookies, repeated parameters, the query-string and form-body split, content negotiation, and file uploads.
+The plain reads are listed first, followed by the parts that need more than a getter: cookies, repeated parameters, the query-string and form-body split, content negotiation, and file uploads.
+
+== What the request is
+
+Every ordinary question about a request has a method, so none of them needs `raw()`.
+
+[source,java]
+----
+req.method();               // "GET"
+req.path();                 // "/decks/3", with no query string on the end
+req.header("Accept");       // the first value; the lookup ignores case
+req.headers("X-Tag");       // every value of a repeated header, empty when absent
+req.headers();              // every header, by name, each with all of its values
+req.contentType();          // the body's declared type, null when the request sent none
+req.queryString();          // "q=a+b&page=2", undecoded, null when the URL carried none
+req.isSecure();             // whether the request arrived over TLS
+req.scheme();               // "http" or "https"
+req.host();                 // "shop.example.com", with the port when it is not the default
+req.remoteAddress();        // "203.0.113.7", the proxy's address when one is in front
+----
+
+`req.scheme() + "://" + req.host() + req.path()` is the absolute URL of the request.
+`host()` therefore carries the port whenever it is not the default for the scheme, since a development server on 8080 is the case where building the URL by hand goes wrong.
+
+`isSecure()`, `scheme()`, and `host()` report what the container believes.
+Behind a TLS-terminating proxy that means the container has to be told to trust `X-Forwarded-Proto`, or a request that reached the browser over HTTPS still reads as plain HTTP here.
+
+`raw()` remains for what these do not cover: an async context, a client certificate, a container-specific attribute.
+It is an escape hatch rather than a shortcut, and what is read through it is read behind the framework's back.
 
 == Cookies
 

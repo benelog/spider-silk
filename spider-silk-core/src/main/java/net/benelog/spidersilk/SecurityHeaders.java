@@ -134,7 +134,7 @@ public final class SecurityHeaders {
         for (Map.Entry<String, String> header : headers.entrySet()) {
             answer = addIfAbsent(answer, header.getKey(), header.getValue());
         }
-        if (hsts != null && request.raw().isSecure()) {
+        if (hsts != null && request.isSecure()) {
             answer = addIfAbsent(answer, HSTS, hsts);
         }
         return answer;
