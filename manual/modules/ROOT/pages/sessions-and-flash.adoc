@@ -10,14 +10,40 @@ Session attributes are read and written through the request:
 
 [source,java]
 ----
-req.sessionAttr("user", user);          // creates the session if there is none yet
-User user = req.sessionAttr("user");    // null when absent
+req.sessionAttr("user", user);                    // creates the session if there is none yet
+User user = req.sessionAttr("user", User.class);  // null when absent
+User same = req.sessionAttr("user");              // the same read, cast by the caller
 req.removeSessionAttr("user");
 ----
 
 Reading never creates a session, so a visitor who has not signed in costs no session object.
 Writing creates one on demand.
 The value is any object and stays on the server: only the container's session cookie travels.
+
+Name the type to be told where a wrong one is.
+`sessionAttr(key, User.class)` casts with `Class.cast` and fails on that line, naming the key, the type found, and the type asked for.
+`sessionAttr(key)` casts at the call site instead, so the same mistake is a `ClassCastException` on the assignment rather than on the read.
+Both are `IllegalStateException` territory rather than a 400: the value was put in the session by the application itself, so a type it does not expect is the application's own mistake and answers 500.
+Neither is reflection in the sense this framework avoids, since the type is written at the call site.
+
+`sessionAttr(key, User.class)` reads, which is the one place the two-argument forms overlap.
+Storing a `Class` as a session value therefore says `sessionAttr(key, (Object) User.class)`.
+
+== Ending a session
+
+`invalidateSession()` ends the session, which is what logging out is:
+
+[source,java]
+----
+app.post("/logout", req -> {
+    req.invalidateSession();
+    return WebResponse.redirect("/", HttpStatus.SEE_OTHER);
+});
+----
+
+Everything in the session is gone and the visitor's next request starts a new one.
+A request with no session to begin with is left alone, so logging out twice is not an error.
+Invalidate and then return: a session attribute read after this answers null, and one written after it starts a session again.
 
 Session support is the servlet container's, and is on by default.
 `JettyServer` turns it off with `sessions(false)`.

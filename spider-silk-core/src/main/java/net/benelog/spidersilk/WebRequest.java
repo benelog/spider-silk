@@ -693,11 +693,49 @@ public final class WebRequest {
      * attribute. The type parameter is the caller's cast, so that
      * {@code User user = req.sessionAttr("user")} reads as one line; a value of
      * another type fails at that assignment, as it would with the cast written out.
+     *
+     * <p>{@link #sessionAttr(String, Class)} names the type instead, and fails at
+     * the read rather than at the assignment.
      */
     @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
     public <T> T sessionAttr(String key) {
         HttpSession session = req.getSession(false);
         return session == null ? null : (T) session.getAttribute(key);
+    }
+
+    /**
+     * A session attribute of a named type, or null when there is no session or no
+     * such attribute.
+     *
+     * <pre>{@code
+     * User user = req.sessionAttr("user", User.class);
+     * }</pre>
+     *
+     * <p>The cast is {@link Class#cast}, so a value of another type fails on this
+     * line, naming the key and both types, rather than on the assignment several
+     * lines away that {@link #sessionAttr(String)} fails on.
+     * {@code paramEnum(name, type)} takes a class for the same reason, and neither
+     * is reflection in the sense this framework avoids: the type is written at the
+     * call site.
+     *
+     * <p>A value of the wrong type is a mismatch between the line that wrote the
+     * session and the line that reads it, both of them the application's own, so
+     * it is an {@link IllegalStateException} and a 500 — the same answer
+     * {@link #pathParam(String)} gives an undeclared variable, and not the 400
+     * that a caller's bad input earns.
+     *
+     * <p>Storing a {@code Class} is the one case this overload gets in the way of:
+     * {@code sessionAttr(key, User.class)} reads, so writing that value says
+     * {@code sessionAttr(key, (Object) User.class)}.
+     */
+    public <T> T sessionAttr(String key, Class<T> type) {
+        HttpSession session = req.getSession(false);
+        Object value = session == null ? null : session.getAttribute(key);
+        if (value != null && !type.isInstance(value)) {
+            throw new IllegalStateException("Session attribute %s is a %s, not a %s"
+                    .formatted(key, value.getClass().getName(), type.getName()));
+        }
+        return type.cast(value);
     }
 
     public void sessionAttr(String key, Object value) {
@@ -708,6 +746,22 @@ public final class WebRequest {
         HttpSession session = req.getSession(false);
         if (session != null) {
             session.removeAttribute(key);
+        }
+    }
+
+    /**
+     * Ends the session, so that everything in it is gone and the next request
+     * starts a new one. What logging out is.
+     *
+     * <p>Does nothing when there is no session, since a visitor who was never
+     * signed in has nothing to end. The request keeps working afterwards, but
+     * reading a session attribute through it answers null and writing one starts
+     * a session again, so a handler invalidates and then returns.
+     */
+    public void invalidateSession() {
+        HttpSession session = req.getSession(false);
+        if (session != null) {
+            session.invalidate();
         }
     }
 

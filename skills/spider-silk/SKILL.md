@@ -149,6 +149,7 @@ Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus
 - `redirect(location)` is 302; say `HttpStatus.SEE_OTHER` (303) after a POST.
 - Template names carry no extension (`template("deck")` renders `deck.jte`).
 - Sessions are on by default; `req.flash(key, value)` + `req.flashed(key)` is the Post/Redirect/Get message pattern.
+- Read a session attribute under its type: `req.sessionAttr("user", User.class)` fails on that line with the key and both types named, where `req.sessionAttr("user")` fails on the assignment. Logging out is `req.invalidateSession()`, not `raw().getSession(false).invalidate()`.
 - `app.routes()` returns every registered route as data (`Route(method, path, description)`); build introspection pages and OpenAPI export on it.
 - An answer too large to hold in memory is `WebResponse.jsonArray(sink -> ...)` or `WebResponse.ndjson(sink -> ...)`, written a value at a time, and `req.bodyNdjson(reader)` reads a large body back lazily — never build a hundred thousand rows into one tree. See [references/content.md](references/content.md).
 

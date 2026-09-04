@@ -56,8 +56,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 38 | `param(name, parser)`: one seam for every type with no named form | ✅ shipped |
 | 39 | `WebResponse.file(Path)`, with the content-type table kept private | ✅ shipped |
 | 40 | Read-only delegates for what only `raw()` reached | ✅ shipped |
+| 41 | `sessionAttr(key, Class<T>)` and `invalidateSession()` | ✅ shipped |
 
-Forty-two of the forty-three shipped.
+Forty-three of the forty-four shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -852,6 +853,32 @@ That is the shape `cookies()` already has, and the alternative — a case-insens
 `TestRequest` gains `remoteAddress(addr)` and nothing else.
 `secure()` already covered `isSecure()` and `scheme()`, and `contentType()` and `queryString()` are already stated by `header("Content-Type")` and `queryParam(name, value)`.
 The host is stated as `header("Host", ...)`, which is how a real request states it, so the stub derives the name and the port from that header the way a container does rather than taking a setter of its own.
+
+## 41 · The session, read under a type and ended
+
+### 41. `sessionAttr(key, Class<T>)` and `invalidateSession()`
+
+`sessionAttr(key, User.class)` casts with `Class.cast` and fails on the line that reads, naming the key, the type found, and the type asked for.
+`sessionAttr(key)` returns `<T> T`, so the cast happens at the call site and a wrong type is a `ClassCastException` on the assignment rather than on the read.
+`paramEnum(name, Class<E>)` already takes the class for the same reason, and neither is reflection in the sense this framework refuses: the type is written at the call site, not discovered from the value.
+
+The unchecked form stays, for the cases where the type is obvious and the assignment is the read.
+It is also the form that reads a value whose type is a type variable, which a `Class` argument cannot name.
+
+**A wrong type is an `IllegalStateException`, not a 400.**
+That was the open question, and `paramEnum` is the wrong precedent for it: a parameter is the caller's text, and a session value is something the application itself put there.
+A type it does not expect is a mismatch between two lines of the same application, which is what `pathParam(name)` already answers with an `IllegalStateException` rather than with the `IllegalArgumentException` an application maps to a status.
+So it answers 500, and the message says which key and which two types, which is the whole point of naming the type.
+Rejected on the way: a `ClassCastException` carrying the better message.
+It would keep the failure type the unchecked form gives, and it would read as the framework failing to cast something rather than as the application disagreeing with itself.
+
+`sessionAttr(key, User.class)` reads rather than writes, since `Class<T>` is more specific than `Object` and overload resolution takes the more specific one.
+Storing a `Class` as a session value therefore has to say `sessionAttr(key, (Object) User.class)`.
+That is the price of the name, and it is paid by nobody: a session holding a `Class` is not a thing applications do.
+
+`invalidateSession()` ends the session, which is the one session operation every application with a login has.
+It was `raw().getSession(false).invalidate()`, which is three calls with a null check the caller has to remember, through the escape hatch decision 40 has just narrowed the need for.
+A request with no session is left alone rather than told off, since logging out twice is not an error.
 
 ## Rejected — decisions, with the reason
 

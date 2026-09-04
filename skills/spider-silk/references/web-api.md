@@ -173,9 +173,12 @@ app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of(
 ## Sessions and flash
 
 ```java
-req.sessionAttr("user", user);          // writing creates the session on demand
-User user = req.sessionAttr("user");    // reading never creates one; null when absent
+req.sessionAttr("user", user);                    // writing creates the session on demand
+User user = req.sessionAttr("user", User.class);  // reading never creates one; null when absent
+                                                  //   wrong type -> IllegalStateException here (500)
+User same = req.sessionAttr("user");              // caller's cast; wrong type fails on the assignment
 req.removeSessionAttr("user");
+req.invalidateSession();                          // logging out; no session = nothing to do
 
 // Post/Redirect/Get: a flash value is visible exactly once, on the request after the redirect
 req.flash("message", "Imported 12 cards.");

@@ -313,8 +313,15 @@ final class StubServletRequest implements HttpServletRequest {
 
     // ---- Session ----
 
+    /**
+     * An invalidated session is gone, as it is behind a container: the request
+     * that ended it reads null afterwards, and asking to create makes a new one.
+     */
     @Override
     public HttpSession getSession(boolean create) {
+        if (session instanceof StubSession stub && !stub.valid()) {
+            session = null;
+        }
         if (session == null && create) {
             session = new StubSession();
         }
@@ -628,6 +635,11 @@ final class StubServletRequest implements HttpServletRequest {
             if (!valid) {
                 throw new IllegalStateException("The session has been invalidated");
             }
+        }
+
+        /** Whether this session is still the request's; false once it was invalidated. */
+        boolean valid() {
+            return valid;
         }
 
         @Override
