@@ -44,7 +44,24 @@ A handler gets a whole value or none, the same contract as `pathParamLong`.
 It is also a type of its own, so an application that maps `IllegalArgumentException` to a status maps a body that failed to parse separately, and the handler for the more specific type runs whatever the registration order.
 `asLong` and `getLong` reject a number with a fractional part rather than truncating it: `1.5` is not a long, while `2.0` and `1e3` are whole and read as one.
 For a key that is allowed to be absent, `optString`, `optLong`, `optDouble`, and `optBoolean` answer a default instead, for a missing key and for an explicit JSON `null` alike.
+`optObject` and `optArray` answer `null` on the same terms, and throw when the key is present with a value of another type.
+`isString()`, `isNumber()`, and `isBoolean()` report what a primitive holds, beside `isNull()`, so a value that may be a string or a number is told apart before it is read.
 A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
+
+== Keys not known in advance
+
+A parsed object reads with for-each as well, one `Map.Entry` per member, in document order.
+`keys()` lists the keys in that order and `size()` counts the members, so a document whose keys are data, a map of tag names to counts for instance, reads into a `Map`:
+
+[source,java]
+----
+Map<String, Long> counts = new LinkedHashMap<>();
+for (var member : req.bodyJson().asObject()) {
+    counts.put(member.getKey(), member.getValue().asLong());
+}
+----
+
+The key list and the members handed to the loop are copies, so writing through one does not reach the object.
 
 == `JsonCodec<T>`
 

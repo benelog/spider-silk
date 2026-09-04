@@ -133,6 +133,21 @@ public final class Json {
         default boolean isNull() {
             return this instanceof JsonPrimitive primitive && primitive.value() == null;
         }
+
+        /** True for a JSON string, so a value of either type is told apart before it is read. */
+        default boolean isString() {
+            return this instanceof JsonPrimitive primitive && primitive.value() instanceof String;
+        }
+
+        /** True for a JSON number, whether it is whole or has a fractional part. */
+        default boolean isNumber() {
+            return this instanceof JsonPrimitive primitive && primitive.value() instanceof Number;
+        }
+
+        /** True for {@code true} and for {@code false}. */
+        default boolean isBoolean() {
+            return this instanceof JsonPrimitive primitive && primitive.value() instanceof Boolean;
+        }
     }
 
     /** A string, number, boolean, or null. */
@@ -162,7 +177,15 @@ public final class Json {
         }
     }
 
-    public static final class JsonObject implements JsonValue {
+    /**
+     * Iterable, so an object whose keys are not known in advance reads with
+     * for-each: {@code for (var member : object)}, each member a
+     * {@link Map.Entry} of the key and its value.
+     *
+     * <p>Members keep the order they were put in, and a parsed object keeps
+     * document order.
+     */
+    public static final class JsonObject implements JsonValue, Iterable<Map.Entry<String, JsonValue>> {
 
         private final Map<String, JsonValue> members = new LinkedHashMap<>();
 
@@ -193,6 +216,16 @@ public final class Json {
 
         public boolean has(String key) {
             return members.containsKey(key);
+        }
+
+        /** How many members the object has. */
+        public int size() {
+            return members.size();
+        }
+
+        /** The keys, in document order, as a list that cannot be modified. */
+        public List<String> keys() {
+            return List.copyOf(members.keySet());
         }
 
         /** Throws {@link JsonException} when the key is missing. */
@@ -250,6 +283,33 @@ public final class Json {
         public boolean optBoolean(String key, boolean defaultValue) {
             JsonValue value = members.get(key);
             return (value == null || value.isNull()) ? defaultValue : value.asBoolean();
+        }
+
+        /**
+         * Returns null when the key is missing or the value is JSON null, and
+         * throws {@link JsonException} when it is present and not an object.
+         */
+        public JsonObject optObject(String key) {
+            JsonValue value = members.get(key);
+            return (value == null || value.isNull()) ? null : value.asObject();
+        }
+
+        /**
+         * Returns null when the key is missing or the value is JSON null, and
+         * throws {@link JsonException} when it is present and not an array.
+         */
+        public JsonArray optArray(String key) {
+            JsonValue value = members.get(key);
+            return (value == null || value.isNull()) ? null : value.asArray();
+        }
+
+        @Override
+        public Iterator<Map.Entry<String, JsonValue>> iterator() {
+            List<Map.Entry<String, JsonValue>> snapshot = new ArrayList<>(members.size());
+            for (var entry : members.entrySet()) {
+                snapshot.add(Map.entry(entry.getKey(), entry.getValue()));
+            }
+            return snapshot.iterator();
         }
 
         @Override

@@ -27,8 +27,16 @@ app.post("/api/decks", req -> {
 ```
 
 - `getString`/`getLong`/... throw `Json.JsonException` (an `IllegalArgumentException`) on a missing key or wrong type, and `req.bodyJson(reader)` turns that into a 400: a handler gets a whole value or none. `asLong`/`getLong` reject `1.5` rather than truncating it.
-- For keys allowed to be absent: `optString`/`optLong`/`optDouble`/`optBoolean` answer a default, for a missing key and an explicit JSON `null` alike.
+- For keys allowed to be absent: `optString`/`optLong`/`optDouble`/`optBoolean` answer a default, for a missing key and an explicit JSON `null` alike. `optObject`/`optArray` answer `null` on the same terms, since a container has no literal default to name.
+- `isString()`/`isNumber()`/`isBoolean()`, beside `isNull()`, tell a primitive's type without a try/catch; `instanceof Json.JsonObject` and `instanceof Json.JsonArray` do it for the containers.
 - A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
+- So does a parsed object, one `Map.Entry` per member in document order, with `keys()` and `size()` beside it — that is how keys that are data rather than schema get read:
+  ```java
+  Map<String, Long> counts = new LinkedHashMap<>();
+  for (var member : req.bodyJson().asObject()) {
+      counts.put(member.getKey(), member.getValue().asLong());
+  }
+  ```
 - `JsonCodec<T>` is writer and reader at once for types that travel both ways: `JsonCodec.of(writer, reader)`, `JsonCodec.list(codec)`.
 - The conventional home for an app's wire format is one `Codecs` class of static writer/reader lambdas.
 

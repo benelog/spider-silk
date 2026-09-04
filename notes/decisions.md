@@ -59,8 +59,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 41 | `sessionAttr(key, Class<T>)` and `invalidateSession()` | ✅ shipped |
 | 42 | Uploads that stream, an optional upload as null, and `files(name)` | ✅ shipped |
 | 43 | A named tail variable, `/files/{path*}`, read with `pathParam` | ✅ shipped |
+| 44 | `JsonObject` iterates as members, with `optObject`/`optArray` and `isString`/`isNumber`/`isBoolean` beside it | ✅ shipped |
 
-Forty-five of the forty-six shipped.
+Forty-six of the forty-seven shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -944,6 +945,34 @@ Rejected on the way: `req.pathTail()`.
 It reads the same value off the request without a variable, and it means nothing on a route registered without a wildcard.
 Every handler holding a `WebRequest` would gain a method that is empty or meaningless for most of them.
 A name in the pattern is this framework's existing answer to what a segment matched, and a tail is one more thing a pattern can name.
+## 44 · Reading an object whose keys are data
+
+### 44. `JsonObject` iterates as members, rather than handing out a `Map`
+
+`JsonObject` implements `Iterable<Map.Entry<String, JsonValue>>`, and carries `size()` and `keys()` beside it.
+`JsonArray` already had `size()`, `values()`, and for-each, while the object half had only `has` and `get`.
+A document whose keys are data rather than schema, a map of tag names to counts for instance, could therefore not be read at all: every accessor wanted the key the caller was trying to discover.
+The three members mirror the array's three one for one, so the two containers are read the same way.
+
+Rejected on the way: `members()` returning a `Map<String, JsonValue>`.
+`Map.copyOf` leaves iteration order unspecified, so the defensive copy such an accessor should return is the one copy that loses document order.
+Returning the backing `LinkedHashMap` keeps the order and hands out the object's own state, which the rest of this API does not do.
+A `LinkedHashMap` copy declared as `Map` keeps both and states neither: nothing in `Map` promises document order, and nothing in it warns that `put` throws.
+`List<String> keys()` promises both in its own contract, and a for-each over members reads each value beside its key instead of looking it up again.
+
+**`optObject` and `optArray` answer `null`, where the four primitive `opt*` forms take a default.**
+A caller naming a default has a literal for a string, a number, or a boolean, and has none for a container.
+An empty `JsonObject` handed back as a default reads as a member that was present and empty, which is a different fact about the document.
+`null` says only that the member was absent, and a missing key and an explicit JSON `null` both reach it, which is the semantic the four existing forms already have.
+That null branch is written only where the caller asked for it, since `getObject` and `getArray` still throw for the required case.
+
+**`isString()`, `isNumber()`, and `isBoolean()` join `isNull()` on `JsonValue`.**
+`instanceof JsonObject` and `instanceof JsonArray` already told the containers apart, and `isNull()` covered null.
+A value that may be a string or a number could be told apart only by calling `asString()` and catching `JsonException`, which is control flow through the exception decision 34 reserves for input that is wrong.
+No `isObject()` or `isArray()` joins them: `instanceof` answers those questions and narrows the type in the same expression, which a boolean does not.
+
+The parser needed no change, and that is worth recording.
+`JsonObject` was already backed by a `LinkedHashMap`, so document order was preserved all along and only unreachable.
 
 ## Rejected — decisions, with the reason
 
