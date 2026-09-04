@@ -66,9 +66,12 @@ public class AppServlet extends HttpServlet {
 
         long startedAt = System.nanoTime();
         WebRequest request = new WebRequest(req, Map.of());
-        WebResponse response = dispatch(request);
+        // Split here and nowhere else: the router, the filters, and the CORS
+        // path all read the same segments, and the path cannot change under them.
+        String[] segments = PathPattern.split(request.path());
+        WebResponse response = dispatch(request, segments);
         try {
-            response = decorate(response, request);
+            response = decorate(response, request, segments);
             write(response, req, res, "HEAD".equals(req.getMethod()));
         } catch (Exception e) {
             writeFailed(e, res);
@@ -90,13 +93,13 @@ public class AppServlet extends HttpServlet {
      * security headers add headers; compression runs last, because what it does
      * depends on the content type and the length the other two have settled.
      */
-    private WebResponse decorate(WebResponse response, WebRequest request) {
+    private WebResponse decorate(WebResponse response, WebRequest request, String[] segments) {
         WebResponse decorated = response;
         if (Boolean.TRUE.equals(request.raw().getAttribute(WebRequest.NEGOTIATED_ATTRIBUTE))) {
             decorated = decorated.vary("Accept");
         }
         if (app.cors != null) {
-            decorated = app.cors.apply(decorated, request);
+            decorated = app.cors.apply(decorated, request, segments);
         }
         if (app.securityHeaders != null) {
             decorated = app.securityHeaders.apply(decorated, request);
@@ -122,15 +125,14 @@ public class AppServlet extends HttpServlet {
     // ---- Working out the answer ----
 
     /** Never throws and never returns null: every path here ends in a response. */
-    private WebResponse dispatch(WebRequest request) {
+    private WebResponse dispatch(WebRequest request, String[] segments) {
         HttpServletRequest req = request.raw();
         String method = req.getMethod();
         String path = request.path();
-        String[] segments = PathPattern.split(path);
         WebRequest current = request;
         WebResponse response;
         try {
-            Router.Match match = routeFor(method, path);
+            Router.Match match = routeFor(method, segments);
             if (match != null) {
                 current = request.withPathParams(match.pathParams());
                 WebResponse answered = runBefore(segments, current);
@@ -145,9 +147,9 @@ public class AppServlet extends HttpServlet {
                 if (file != null) {
                     return file;
                 }
-                response = noRoute(current, method, path);
+                response = noRoute(current, method, path, segments);
             } else {
-                response = noRoute(current, method, path);
+                response = noRoute(current, method, path, segments);
             }
             response = renderTemplate(response);
         } catch (Exception e) {
@@ -168,10 +170,10 @@ public class AppServlet extends HttpServlet {
     }
 
     /** A HEAD with no route of its own is answered by the GET route, minus the body. */
-    private Router.Match routeFor(String method, String path) {
-        Router.Match match = app.router.find(method, path);
+    private Router.Match routeFor(String method, String[] segments) {
+        Router.Match match = app.router.find(method, segments);
         if (match == null && "HEAD".equals(method)) {
-            return app.router.find("GET", path);
+            return app.router.find("GET", segments);
         }
         return match;
     }
@@ -181,8 +183,9 @@ public class AppServlet extends HttpServlet {
      * the path is unknown, and otherwise an {@code Allow} header with either an
      * OPTIONS answer or a 405 behind it.
      */
-    private WebResponse noRoute(WebRequest request, String method, String path) {
-        Set<String> allowed = allowedMethods(path);
+    private WebResponse noRoute(WebRequest request, String method, String path,
+            String[] segments) {
+        Set<String> allowed = allowedMethods(segments);
         if (allowed.isEmpty()) {
             return fail(request, HttpStatus.NOT_FOUND, "Not Found: " + path);
         }
@@ -192,7 +195,9 @@ public class AppServlet extends HttpServlet {
                     WebResponse.empty().header("Allow", allow).header("Content-Length", "0");
             // A preflight is this same answer, told in the words CORS uses. The
             // methods it may name are the ones the Allow header just worked out.
-            return app.cors == null ? answer : app.cors.preflight(answer, request, allow);
+            return app.cors == null
+                    ? answer
+                    : app.cors.preflight(answer, request, allow, segments);
         }
         return fail(request, HttpStatus.METHOD_NOT_ALLOWED, "Method Not Allowed: " + method + " " + path)
                 .header("Allow", allow);
@@ -203,8 +208,8 @@ public class AppServlet extends HttpServlet {
      * OPTIONS response. HEAD and OPTIONS are in there because this servlet
      * answers them without a route being registered for either.
      */
-    private Set<String> allowedMethods(String path) {
-        Set<String> registered = app.router.allowedMethods(path);
+    private Set<String> allowedMethods(String[] segments) {
+        Set<String> registered = app.router.allowedMethods(segments);
         if (registered.isEmpty()) {
             return registered;
         }

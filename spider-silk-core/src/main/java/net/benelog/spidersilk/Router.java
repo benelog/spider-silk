@@ -65,12 +65,12 @@ final class Router {
                 : base + " as " + existing.path() + ", which matches the same requests";
     }
 
-    Match find(String method, String path) {
+    /** The path arrives already split, because one request asks this more than once. */
+    Match find(String method, String[] segments) {
         MethodRoutes routes = byMethod.get(method);
         if (routes == null) {
             return null;
         }
-        String[] segments = PathPattern.split(path);
         for (Entry entry : routes.candidates(segments)) {
             Map<String, String> params = entry.pattern().match(segments);
             if (params != null) {
@@ -81,8 +81,7 @@ final class Router {
     }
 
     /** Whether the path matches under other methods. Feeds the Allow header of a 405. */
-    Set<String> allowedMethods(String path) {
-        String[] segments = PathPattern.split(path);
+    Set<String> allowedMethods(String[] segments) {
         Set<String> methods = new LinkedHashSet<>();
         byMethod.forEach((method, routes) -> {
             for (Entry entry : routes.candidates(segments)) {

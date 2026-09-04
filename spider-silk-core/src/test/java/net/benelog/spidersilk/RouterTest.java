@@ -11,18 +11,23 @@ class RouterTest {
 
     private final Handler noop = req -> null;
 
+    /** The router is asked in segments, which the servlet splits once per request. */
+    private static String[] path(String path) {
+        return PathPattern.split(path);
+    }
+
     @Test
     void findsHandlerByMethodAndPath() {
         Router router = new Router();
         router.add("GET", "/decks/{deckId}", noop);
         router.add("POST", "/decks", noop);
 
-        Router.Match match = router.find("GET", "/decks/7");
+        Router.Match match = router.find("GET", path("/decks/7"));
         assertThat(match).isNotNull();
         assertThat(match.pathParams().get("deckId")).isEqualTo("7");
 
-        assertThat(router.find("GET", "/decks")).isNull();
-        assertThat(router.find("POST", "/decks")).isNotNull();
+        assertThat(router.find("GET", path("/decks"))).isNull();
+        assertThat(router.find("POST", path("/decks"))).isNotNull();
     }
 
     @Test
@@ -32,7 +37,7 @@ class RouterTest {
         router.add("GET", "/study/today", first);
         router.add("GET", "/study/{mode}", noop);
 
-        assertThat(router.find("GET", "/study/today").handler()).isEqualTo(first);
+        assertThat(router.find("GET", path("/study/today")).handler()).isEqualTo(first);
     }
 
     @Test
@@ -41,9 +46,9 @@ class RouterTest {
         router.add("POST", "/decks", noop);
         router.add("PUT", "/decks", noop);
 
-        assertThat(router.find("GET", "/decks")).isNull();
-        assertThat(router.allowedMethods("/decks")).isEqualTo(Set.of("POST", "PUT"));
-        assertThat(router.allowedMethods("/nowhere")).isEqualTo(Set.of());
+        assertThat(router.find("GET", path("/decks"))).isNull();
+        assertThat(router.allowedMethods(path("/decks"))).isEqualTo(Set.of("POST", "PUT"));
+        assertThat(router.allowedMethods(path("/nowhere"))).isEqualTo(Set.of());
     }
 
     /** The index groups by first segment; a variable pattern still has to be considered. */
@@ -54,8 +59,8 @@ class RouterTest {
         router.add("GET", "/decks", noop);
         router.add("GET", "/{page}", byId);
 
-        assertThat(router.find("GET", "/about").handler()).isEqualTo(byId);
-        assertThat(router.find("GET", "/decks")).isNotNull();
+        assertThat(router.find("GET", path("/about")).handler()).isEqualTo(byId);
+        assertThat(router.find("GET", path("/decks"))).isNotNull();
     }
 
     /** Registration order decides even when the two patterns land in different buckets. */
@@ -66,7 +71,7 @@ class RouterTest {
         router.add("GET", "/{page}", first);
         router.add("GET", "/decks", noop);
 
-        assertThat(router.find("GET", "/decks").handler()).isEqualTo(first);
+        assertThat(router.find("GET", path("/decks")).handler()).isEqualTo(first);
     }
 
     @Test
@@ -76,8 +81,8 @@ class RouterTest {
         router.add("GET", "/", root);
         router.add("GET", "/decks", noop);
 
-        assertThat(router.find("GET", "/").handler()).isEqualTo(root);
-        assertThat(router.find("GET", "/nowhere")).isNull();
+        assertThat(router.find("GET", path("/")).handler()).isEqualTo(root);
+        assertThat(router.find("GET", path("/nowhere"))).isNull();
     }
 
     /** A pattern that matches the rest of the path can start anywhere. */
@@ -87,8 +92,8 @@ class RouterTest {
         Handler everything = req -> null;
         router.add("GET", "/*", everything);
 
-        assertThat(router.find("GET", "/").handler()).isEqualTo(everything);
-        assertThat(router.find("GET", "/anything/at/all").handler()).isEqualTo(everything);
+        assertThat(router.find("GET", path("/")).handler()).isEqualTo(everything);
+        assertThat(router.find("GET", path("/anything/at/all")).handler()).isEqualTo(everything);
     }
 
     /** The index reads the first segment, which a tail at the end does not touch. */
@@ -99,12 +104,12 @@ class RouterTest {
         router.add("GET", "/files/{path*}", files);
         router.add("GET", "/decks", noop);
 
-        Router.Match match = router.find("GET", "/files/docs/a.txt");
+        Router.Match match = router.find("GET", path("/files/docs/a.txt"));
         assertThat(match.handler()).isEqualTo(files);
         assertThat(match.pathParams().get("path")).isEqualTo("docs/a.txt");
 
-        assertThat(router.find("GET", "/files").pathParams().get("path")).isEmpty();
-        assertThat(router.find("GET", "/elsewhere/a.txt")).isNull();
+        assertThat(router.find("GET", path("/files")).pathParams().get("path")).isEmpty();
+        assertThat(router.find("GET", path("/elsewhere/a.txt"))).isNull();
     }
 
     /** A tail as the whole pattern can start anywhere, the way a bare "*" does. */
@@ -114,8 +119,8 @@ class RouterTest {
         Handler everything = req -> null;
         router.add("GET", "/{path*}", everything);
 
-        assertThat(router.find("GET", "/").pathParams().get("path")).isEmpty();
-        assertThat(router.find("GET", "/anything/at/all").pathParams().get("path"))
+        assertThat(router.find("GET", path("/")).pathParams().get("path")).isEmpty();
+        assertThat(router.find("GET", path("/anything/at/all")).pathParams().get("path"))
                 .isEqualTo("anything/at/all");
     }
 
@@ -127,7 +132,7 @@ class RouterTest {
         router.add("GET", "/files/index.html", index);
         router.add("GET", "/files/{path*}", noop);
 
-        assertThat(router.find("GET", "/files/index.html").handler()).isEqualTo(index);
+        assertThat(router.find("GET", path("/files/index.html")).handler()).isEqualTo(index);
     }
 
     /** Both spellings match the same requests, so the second could never run. */
@@ -148,7 +153,7 @@ class RouterTest {
         router.add("POST", "/decks", noop);
         router.add("DELETE", "/{page}", noop);
 
-        assertThat(router.allowedMethods("/decks")).isEqualTo(Set.of("POST", "DELETE"));
+        assertThat(router.allowedMethods(path("/decks"))).isEqualTo(Set.of("POST", "DELETE"));
     }
 
     /** A second route matching the same requests could never run, so it fails right away. */

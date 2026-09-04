@@ -148,9 +148,9 @@ public final class Cors {
      * not allowed also gains nothing, and the browser is the one that turns that
      * silence into a failure.
      */
-    WebResponse apply(WebResponse response, WebRequest request) {
+    WebResponse apply(WebResponse response, WebRequest request, String[] segments) {
         String origin = request.header("Origin");
-        if (origin == null || !covers(request.path())) {
+        if (origin == null || !covers(segments)) {
             return response;
         }
         String allowed = allowedOrigin(origin);
@@ -181,10 +181,11 @@ public final class Cors {
      * an origin this does not allow — comes back unchanged, still a plain
      * {@code Allow} answer.
      */
-    WebResponse preflight(WebResponse optionsAnswer, WebRequest request, String allow) {
+    WebResponse preflight(WebResponse optionsAnswer, WebRequest request, String allow,
+            String[] segments) {
         String origin = request.header("Origin");
         if (origin == null || request.header("Access-Control-Request-Method") == null
-                || !covers(request.path()) || allowedOrigin(origin) == null) {
+                || !covers(segments) || allowedOrigin(origin) == null) {
             return optionsAnswer;
         }
         WebResponse answer = optionsAnswer.header("Access-Control-Allow-Methods",
@@ -207,8 +208,8 @@ public final class Cors {
         return answer;
     }
 
-    private boolean covers(String path) {
-        return pattern.match(PathPattern.split(path)) != null;
+    private boolean covers(String[] segments) {
+        return pattern.match(segments) != null;
     }
 
     /** What to echo back, or null when this origin is not one of ours. */
