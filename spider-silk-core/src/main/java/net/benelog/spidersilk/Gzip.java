@@ -131,7 +131,7 @@ public final class Gzip {
                 || response.status() == HttpStatus.NOT_MODIFIED) {
             return false;
         }
-        if (response.headerIgnoringCase("Content-Encoding") != null) {
+        if (response.header("Content-Encoding") != null) {
             return false;
         }
         if (response.body() instanceof WebResponse.Sse
@@ -139,7 +139,7 @@ public final class Gzip {
                 || response.body() instanceof WebResponse.Empty) {
             return false;
         }
-        return isCompressibleType(response.headerIgnoringCase("Content-Type"));
+        return isCompressibleType(response.header("Content-Type"));
     }
 
     private boolean isCompressibleType(String contentType) {
@@ -193,7 +193,7 @@ public final class Gzip {
     /** What every compressed answer says about itself. */
     private static WebResponse encoded(WebResponse response) {
         WebResponse encoded = response.header("Content-Encoding", "gzip");
-        String etag = encoded.headerIgnoringCase("ETag");
+        String etag = encoded.header("ETag");
         if (etag == null || etag.startsWith("W/")) {
             return encoded;
         }

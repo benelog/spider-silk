@@ -141,7 +141,7 @@ public final class SecurityHeaders {
     }
 
     private static WebResponse addIfAbsent(WebResponse response, String name, String value) {
-        return response.headerIgnoringCase(name) == null ? response.header(name, value) : response;
+        return response.header(name) == null ? response.header(name, value) : response;
     }
 
     private SecurityHeaders set(String name, String value) {

@@ -147,7 +147,11 @@ response.status(HttpStatus.CREATED).header("Location", "/api/decks/1")
 
 // Reading back (assertions, after-filters)
 response.status(); response.header(name); response.headers(); response.cookies(); response.body();
+response.header("content-type");            // names compare without regard to case
 ```
+
+Header names are case-insensitive both ways: `header("content-type", ...)` over a `Content-Type` replaces the value and keeps the first name and its position, so `headers()` is one value per field, in the order they were set.
+A header that has to be sent more than once — two `Link` lines in one answer — is out of scope: cookies have `cookie(...)` / `cookies()`, and everything else repeated is written through `WebResponse.raw((req, res) -> res.addHeader(...))`.
 
 `body()` is a sealed `WebResponse.Body` (`Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw`), so a `switch` needs no default and tests assert without a servlet response.
 

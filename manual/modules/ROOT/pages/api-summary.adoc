@@ -51,6 +51,8 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
   Both are a `stream` body underneath, so the headers commit before the writer runs
 * Statuses: `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`
 * Building on: `status`, `header`, `contentType`, `vary(field)`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
-* Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`
+* Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`.
+  Header names compare without regard to case, and one field holds one value however many spellings set it.
+  A header that must be sent twice is written through `raw`; see xref:response.adoc#headers[Headers]
 
 See xref:response.adoc[The Response] for the shape of `body()` and the lambda families.

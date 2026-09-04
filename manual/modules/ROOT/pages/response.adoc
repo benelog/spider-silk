@@ -57,6 +57,37 @@ The check runs when the response is built, not while the body is written, so the
 Validators and conditional requests belong to xref:static-files.adoc[Static Files], not here.
 A file a handler chose is not a static file, and only the handler knows whether it can change.
 
+[#headers]
+== Headers
+
+`header(name, value)` sets a header and `header(name)` reads one back, under any spelling of the name.
+Field names are case-insensitive in HTTP, and the map behind them compares the same way.
+
+[source,java]
+----
+WebResponse response = WebResponse.text("ok").header("X-Trace-Id", trace);
+
+response.header("x-trace-id");   // the trace id: the spelling asked for does not matter
+response.headers();              // every field, in the order they were set
+----
+
+A response holds one value per field.
+Setting a field again, under whatever spelling, replaces the value and leaves the name and its position alone, so `headers()` reads back exactly what goes on the wire.
+`vary(field)` is the one method that adds rather than replaces, because `Vary` names a list and compression and CORS each have something to put on it.
+
+A header sent more than once is out of scope, and `headers()` says so by its type: a `Map<String, String>` promises one value per name.
+Cookies are the exception that has a list of its own, added with `cookie(...)` and read back with `cookies()`.
+Anything else that must repeat, such as two `Link` lines in one answer, is written through `raw`:
+
+[source,java]
+----
+return WebResponse.raw((req, res) -> {
+    res.addHeader("Link", "<https://example.com/decks?page=2>; rel=\"next\"");
+    res.addHeader("Link", "<https://example.com/decks?page=9>; rel=\"last\"");
+    res.setStatus(HttpStatus.NO_CONTENT.code());
+});
+----
+
 == Statuses
 
 `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`.

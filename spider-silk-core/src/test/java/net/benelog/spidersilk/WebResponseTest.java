@@ -5,6 +5,8 @@ import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
+import net.benelog.spidersilk.test.WebTest;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -41,6 +43,61 @@ class WebResponseTest {
         assertThat(response.header("X-One")).isEqualTo("again");
         assertThat(List.copyOf(response.headers().keySet()))
                 .isEqualTo(List.of("Content-Type", "X-One", "X-Two"));
+    }
+
+    /** Field names are case-insensitive in HTTP, and so is the map that holds them. */
+    @Test
+    void aHeaderIsReadBackWhateverSpellingIsAskedFor() {
+        WebResponse response = WebResponse.text("ok").header("X-Trace-Id", "abc");
+
+        assertThat(response.header("x-trace-id")).isEqualTo("abc");
+        assertThat(response.header("X-TRACE-ID")).isEqualTo("abc");
+        assertThat(response.headers().get("content-type")).isEqualTo("text/plain; charset=UTF-8");
+        assertThat(response.headers().containsKey("CONTENT-TYPE")).isTrue();
+        assertThat(response.headers()).hasSize(2);
+    }
+
+    /** One field has one value, and the spelling it arrived under is the one that stays. */
+    @Test
+    void aSecondSpellingReplacesTheValueAndKeepsTheFirstNameAndPlace() {
+        WebResponse response = WebResponse.text("ok")
+                .header("X-One", "1")
+                .header("content-type", "application/json")
+                .header("x-one", "again");
+
+        assertThat(response.header("Content-Type")).isEqualTo("application/json");
+        assertThat(response.header("X-One")).isEqualTo("again");
+        assertThat(List.copyOf(response.headers().keySet()))
+                .isEqualTo(List.of("Content-Type", "X-One"));
+    }
+
+    /** A filter that renames the spelling still sets the field the framework set. */
+    @Test
+    void overMatchesTheBaseHeaderWhateverItsSpelling() {
+        WebResponse base = WebResponse.empty(HttpStatus.METHOD_NOT_ALLOWED)
+                .header("Allow", "GET, POST");
+
+        WebResponse answer = WebResponse.text("Method Not Allowed").header("allow", "GET").over(base);
+
+        assertThat(answer.header("Allow")).isEqualTo("GET");
+        assertThat(List.copyOf(answer.headers().keySet()))
+                .isEqualTo(List.of("Allow", "Content-Type"));
+    }
+
+    /** The whole point of the map: one field, one line on the wire. */
+    @Test
+    void aFieldSetTwiceUnderTwoSpellingsIsSentOnce() {
+        App app = new App().get("/", req -> WebResponse.text("ok")
+                .header("content-type", "text/plain; charset=UTF-8")
+                .header("X-Trace-Id", "abc")
+                .header("x-trace-id", "def"));
+
+        WebTest.test(app, client -> {
+            var response = client.get("/");
+
+            assertThat(response.headers().allValues("Content-Type")).hasSize(1);
+            assertThat(response.headers().allValues("X-Trace-Id")).isEqualTo(List.of("def"));
+        });
     }
 
     @Test

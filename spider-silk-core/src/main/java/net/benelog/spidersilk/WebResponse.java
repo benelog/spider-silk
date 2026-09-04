@@ -12,8 +12,6 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -116,12 +114,11 @@ public final class WebResponse {
 
     /** Null means "not set", which answers 200 and lets {@link App#error} fill in a status. */
     private final HttpStatus status;
-    private final Map<String, String> headers;
+    private final Headers headers;
     private final List<Cookie> cookies;
     private final Body body;
 
-    private WebResponse(HttpStatus status, Map<String, String> headers, List<Cookie> cookies,
-            Body body) {
+    private WebResponse(HttpStatus status, Headers headers, List<Cookie> cookies, Body body) {
         this.status = status;
         this.headers = headers;
         this.cookies = cookies;
@@ -425,7 +422,7 @@ public final class WebResponse {
     }
 
     private static WebResponse of(Body body) {
-        return new WebResponse(null, Map.of(), List.of(), body);
+        return new WebResponse(null, Headers.EMPTY, List.of(), body);
     }
 
     // ---- Reading ----
@@ -440,6 +437,11 @@ public final class WebResponse {
         return status != null;
     }
 
+    /**
+     * The value of a header, whatever spelling it was set under. Field names are
+     * case-insensitive in HTTP, so {@code header("content-type")} answers what
+     * {@link #contentType(String)} set. Null when nothing set it.
+     */
     public String header(String name) {
         return headers.get(name);
     }
@@ -448,6 +450,13 @@ public final class WebResponse {
      * Every header set on this response, read-only and in the order they were
      * set. A response is built by replacement — {@link #header(String, String)}
      * returns a new one — so there is nothing here for a caller to alter.
+     *
+     * <p>The keys are case-insensitive, the way HTTP compares field names, and
+     * each holds the spelling it was first set under. One field therefore has one
+     * value here however many spellings set it, and a repeated header — several
+     * {@code Link} lines in one answer — is not something this can carry.
+     * Cookies have {@link #cookies()} of their own, and anything else that has to
+     * be sent twice is written through {@link #raw(ServletWriter)}.
      */
     public Map<String, String> headers() {
         return headers;
@@ -475,10 +484,14 @@ public final class WebResponse {
         return new WebResponse(Objects.requireNonNull(status, "status"), headers, cookies, body);
     }
 
+    /**
+     * Sets a header, replacing whatever spelling of that name was there before.
+     * The field keeps the name and the position it was first set under, so
+     * {@code header("content-type", ...)} over a {@code Content-Type} changes the
+     * value and nothing else.
+     */
     public WebResponse header(String name, String value) {
-        Map<String, String> copy = new LinkedHashMap<>(headers);
-        copy.put(Objects.requireNonNull(name, "name"), value);
-        return new WebResponse(status, unmodifiable(copy), cookies, body);
+        return new WebResponse(status, headers.with(name, value), cookies, body);
     }
 
     public WebResponse contentType(String contentType) {
@@ -518,35 +531,14 @@ public final class WebResponse {
     }
 
     /**
-     * The value of a header whatever its spelling. Field names are
-     * case-insensitive in HTTP, and {@link #header(String)} reads the map by
-     * the exact key it was set under, which is enough for a caller that set it
-     * and not enough for one asking what somebody else already set.
-     */
-    String headerIgnoringCase(String name) {
-        String exact = headers.get(name);
-        if (exact != null) {
-            return exact;
-        }
-        for (Map.Entry<String, String> header : headers.entrySet()) {
-            if (header.getKey().equalsIgnoreCase(name)) {
-                return header.getValue();
-            }
-        }
-        return null;
-    }
-
-    /**
      * This response without that header, whatever its spelling — what
      * compressing a stream has to do to the {@code Content-Length} the
      * uncompressed body had worked out.
      */
     WebResponse withoutHeader(String name) {
-        Map<String, String> copy = new LinkedHashMap<>(headers);
-        copy.keySet().removeIf(key -> key.equalsIgnoreCase(name));
-        return copy.size() == headers.size()
-                ? this
-                : new WebResponse(status, unmodifiable(copy), cookies, body);
+        return headers.containsKey(name)
+                ? new WebResponse(status, headers.without(name), cookies, body)
+                : this;
     }
 
     /**
@@ -586,22 +578,10 @@ public final class WebResponse {
      * to know about it.
      */
     WebResponse over(WebResponse base) {
-        Map<String, String> mergedHeaders = new LinkedHashMap<>(base.headers);
-        mergedHeaders.putAll(headers);
         List<Cookie> mergedCookies = new ArrayList<>(base.cookies);
         mergedCookies.addAll(cookies);
-        return new WebResponse(status, unmodifiable(mergedHeaders), List.copyOf(mergedCookies),
+        return new WebResponse(status, headers.over(base.headers), List.copyOf(mergedCookies),
                 body);
-    }
-
-    /**
-     * The map is freshly built here and its only reference goes into the wrapper,
-     * so a read-only view of it is as safe as a copy — and one allocation less.
-     * A {@code LinkedHashMap} behind the view is also what keeps the headers in
-     * the order they were set; {@link Map#copyOf} does not promise an order.
-     */
-    private static Map<String, String> unmodifiable(Map<String, String> fresh) {
-        return Collections.unmodifiableMap(fresh);
     }
 
     /**

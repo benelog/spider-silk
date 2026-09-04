@@ -61,8 +61,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 43 | A named tail variable, `/files/{path*}`, read with `pathParam` | ✅ shipped |
 | 44 | `JsonObject` iterates as members, with `optObject`/`optArray` and `isString`/`isNumber`/`isBoolean` beside it | ✅ shipped |
 | 45 | `SseStream.retry(Duration)`, written where it is called | ✅ shipped |
+| 46 | Response header names compare case-insensitively, and stay single-valued | ✅ shipped |
 
-Forty-seven of the forty-eight shipped.
+Forty-eight of the forty-nine shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -998,6 +999,35 @@ Decision 24's argument applies here too: failing at the call is better than ship
 Rejected on the way: a reconnection delay named once on `App` or on `WebResponse.sse`.
 It would read as a server setting, and it is not one.
 The value travels in the body, so it belongs to whatever writes the events, and a stream that wants to change it halfway through can.
+
+## 46 · The response header map
+
+### 46. Header names compare without regard to case, and a field still holds one value
+
+`WebResponse.headers()` is still a `Map<String, String>`, and its keys now compare the way HTTP compares field names.
+`res.header("content-type", ...)` followed by `res.header("Content-Type")` answered null, so a filter reading a header it had not set itself had to guess the spelling.
+Core worked around it with a package-private `headerIgnoringCase`, which `Gzip` and `SecurityHeaders` called and an application could not.
+That method is gone, and `header(name)` does what it did.
+The request side never had the problem, since the container compares field names for `req.header(name)`; the response was the half that did not.
+
+**The map stays single-valued, and the return type is the reason.**
+Decision 18 put `headers()` in the response's public surface, and decision 32's promise freezes its shape at 1.0.
+A `Map<String, String>` says one value per field, which is what almost every response has.
+Carrying a repeated header would mean changing that type, so the question is settled now rather than left to a release that can no longer answer it.
+Cookies are the exception that already has a list of its own.
+A header that must be sent twice, such as two `Link` lines in one answer, is written through `WebResponse.raw`, which is the escape hatch that exists for what the envelope deliberately does not cover.
+
+**Insertion order is kept, which rules out the obvious implementation.**
+A `TreeMap` with `String.CASE_INSENSITIVE_ORDER` compares names correctly and then sorts them alphabetically, and the order the headers were set in is part of what `headers()` answers today.
+A package-private `Headers extends AbstractMap<String, String>` holds a `LinkedHashMap` keyed by the lower-cased name, whose entries carry the spelling the field was first set under.
+A lookup is one hash rather than the scan `headerIgnoringCase` did, and the class stays package-private, so `headers()` still promises a `Map` and nothing else.
+
+The spelling that goes on the wire is the one the field was first set under, and so is the position.
+`header("content-type", ...)` over a `Content-Type` changes the value and leaves the rest alone, which is what a `put` on a key already there does.
+Nothing outside the class depends on which map it is: `AppServlet` walks `entrySet()` and calls `setHeader` once per entry, so one field is one line however many spellings set it.
+
+Rejected on the way: normalising in the setter and leaving the map itself alone.
+That fixes what the framework writes and not what a caller reads, so `headers().get("content-type")` would still answer null and something like `headerIgnoringCase` would still be needed to make sense of the map it hands out.
 
 ## Rejected — decisions, with the reason
 
