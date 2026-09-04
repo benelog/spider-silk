@@ -549,16 +549,34 @@ public final class Json {
                     case 't' -> sb.append('\t');
                     case 'b' -> sb.append('\b');
                     case 'f' -> sb.append('\f');
-                    case 'u' -> {
-                        if (pos + 4 > text.length()) {
-                            throw error("Expected 4 hex digits after \\u");
-                        }
-                        sb.append((char) Integer.parseInt(text, pos, pos + 4, 16));
-                        pos += 4;
-                    }
+                    case 'u' -> sb.append(parseHexEscape());
                     default -> throw error("Unknown escape: \\" + escaped);
                 }
             }
+        }
+
+        /**
+         * The character a backslash-u escape names, read as exactly four hex
+         * digits. Integer.parseInt would do the arithmetic, but it also accepts
+         * a leading sign, which is not a hex digit and which JSON's grammar
+         * does not allow here, and it reports what it will not read as a
+         * NumberFormatException rather than as this parser's positioned
+         * JsonException.
+         */
+        private char parseHexEscape() {
+            int value = 0;
+            for (int i = 0; i < 4; i++) {
+                if (atEnd()) {
+                    throw error("Expected 4 hex digits after \\u");
+                }
+                int digit = Character.digit(text.charAt(pos), 16);
+                if (digit < 0) {
+                    throw error("Expected 4 hex digits after \\u");
+                }
+                value = value * 16 + digit;
+                pos++;
+            }
+            return (char) value;
         }
 
         private JsonValue parseNumber() {

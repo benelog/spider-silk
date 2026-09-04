@@ -154,6 +154,32 @@ class JsonTest {
         assertThatThrownBy(() -> Json.parse("tru")).isInstanceOf(IllegalArgumentException.class);
     }
 
+    /**
+     * A &#92;u escape is exactly four hex digits. A sign is not one of them, and
+     * text that is not one fails the way every other syntax error here does.
+     */
+    @Test
+    void aUnicodeEscapeTakesFourHexDigits() {
+        assertThat(Json.parse("\"\\u0041\"").asString()).isEqualTo("A");
+        assertThat(Json.parse("\"\\u00e9\"").asString()).isEqualTo("\u00e9");
+
+        assertThatThrownBy(() -> Json.parse("\"\\u-001\""))
+                .isInstanceOf(Json.JsonException.class)
+                .hasMessageContaining("Expected 4 hex digits");
+        assertThatThrownBy(() -> Json.parse("\"\\u+041\""))
+                .isInstanceOf(Json.JsonException.class)
+                .hasMessageContaining("Expected 4 hex digits");
+        assertThatThrownBy(() -> Json.parse("\"\\uZZZZ\""))
+                .isInstanceOf(Json.JsonException.class)
+                .hasMessageContaining("Expected 4 hex digits");
+        assertThatThrownBy(() -> Json.parse("\"\\u12\""))
+                .isInstanceOf(Json.JsonException.class)
+                .hasMessageContaining("Expected 4 hex digits");
+        assertThatThrownBy(() -> Json.parse("\"\\u12"))
+                .isInstanceOf(Json.JsonException.class)
+                .hasMessageContaining("Expected 4 hex digits");
+    }
+
     @Test
     void rejectsNestingDeeperThanItCanRecurseThrough() {
         assertThatNoException().isThrownBy(() -> Json.parse("[".repeat(256) + "]".repeat(256)));
