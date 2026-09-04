@@ -14,6 +14,7 @@ Each of those methods also accepts a xref:route-introspection.adoc#descriptions[
 ----
 app.get("/decks", decks::list);                     // this path, exactly
 app.get("/decks/{deckId}", decks::show);            // {deckId} matches one segment
+app.get("/files/{path*}", files::serve);            // {path*} matches the rest of the path
 app.before("/admin/*", req -> requireAdmin(req));   // /admin and everything under it
 ----
 
@@ -26,7 +27,14 @@ A final `*` matches the rest of the path, including nothing at all.
 `/admin/*` therefore covers `/admin`, `/admin/users`, and `/admin/users/7`, which is what a filter path usually means: a prefix, and the prefix itself.
 `*` is allowed only as the last segment.
 A route can carry one as well.
-The matched remainder is not captured as a variable, so such a handler reads it from `req.path()`.
+A bare `*` captures nothing, so a handler that needs the remainder registers a named tail instead.
+
+A final `\{name*}` matches exactly what `*` matches, and binds what it matched.
+`/files/\{path*}` therefore covers `/files`, `/files/a.txt`, and `/files/docs/2026/a.txt`, and `req.pathParam("path")` reads `""`, `a.txt`, and `docs/2026/a.txt` in turn.
+The slashes inside the tail are kept, because the tail is a remainder and not a segment.
+An empty tail matches, exactly as it does for `*`, so `/files` and `/files/` reach the route with the variable bound to the empty string.
+A named tail is allowed only as the last segment.
+`/files/*` and `/files/\{path*}` match the same requests, so registering both under one method throws the way any other pair of identical shapes does.
 
 == Path variables
 
@@ -41,6 +49,7 @@ Direction direction = req.pathParamEnum("direction", Direction.class);
 
 The value always exists when the handler runs, because a request without the segment would not have matched the route.
 The 400 therefore covers the type, not the presence.
+A `\{name*}` tail is read the same way, and is the one variable that can come back empty.
 
 == Groups
 

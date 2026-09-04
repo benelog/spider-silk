@@ -58,8 +58,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 40 | Read-only delegates for what only `raw()` reached | ✅ shipped |
 | 41 | `sessionAttr(key, Class<T>)` and `invalidateSession()` | ✅ shipped |
 | 42 | Uploads that stream, an optional upload as null, and `files(name)` | ✅ shipped |
+| 43 | A named tail variable, `/files/{path*}`, read with `pathParam` | ✅ shipped |
 
-Forty-four of the forty-five shipped.
+Forty-five of the forty-six shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -912,6 +913,37 @@ One rule settles both: a part counts when it carries a submitted file name.
 
 `TestRequest` holds its parts as a list rather than as a map keyed by field name, so a test states a repeated file field the way a form sends it.
 Its stub part implements `write` by writing the bytes out, so `writeTo` is testable without a server, which is what decision 20 asks of that harness.
+## 43 · The tail of a wildcard route
+
+### 43. A named tail variable, `/files/{path*}`
+
+`/files/{path*}` binds everything under `/files` to `req.pathParam("path")`, with the slashes it arrived with.
+A route on `/files/*` matched the same requests and had no way to read what came after the prefix.
+`PathPattern.match` compared the length and dropped the tail, so the handler cut `req.path()` itself, repeating the prefix its own registration already named.
+The matcher has that remainder in hand by the time it answers, so what was missing was a name to hand it over under.
+
+**The bare `*` is unchanged.**
+It is the filter form, `before("/admin/*", ...)` and the `/*` a group registers for `before(filter)`, where there is no handler to read a variable and nothing worth naming.
+Nothing registered before this changes, and a pattern gains a tail only by being rewritten.
+
+**An empty tail matches, and binds `""`.**
+`/admin/*` covers `/admin` itself, and a named tail that insisted on at least one segment would be a second matching rule for one piece of syntax.
+`/files/{path*}` therefore answers `/files` and `/files/` as well as `/files/docs/a.txt`.
+Matching the same set of paths as `*` is also what lets the two erase to one canonical form, so registering `/files/*` and `/files/{path*}` under one method is refused as the dead second registration it is.
+
+The router's index is untouched, which is what decision 14 asks of any new pattern syntax.
+The index buckets by the first segment and a tail is the last one, so `/files/{path*}` indexes under `files` exactly as `/files/*` does, and `/{path*}` matches any first segment exactly as `/*` does.
+
+**In `routes()` a named tail is one variable in the path template**, which is the difference decision 13 exists to make useful.
+`spider-silk-openapi` refuses a bare `*`, having no template to write and no name to write into one.
+It writes `/files/{path*}` as the path `/files/{path}`, the star dropped, and describes that parameter as "The rest of the path, slashes included."
+OpenAPI has no wildcard in a path template, so the choice was between refusing a route the application does answer and publishing a template that reads as one segment where it matches many.
+A description on the parameter is the only place left to say which it is.
+
+Rejected on the way: `req.pathTail()`.
+It reads the same value off the request without a variable, and it means nothing on a route registered without a wildcard.
+Every handler holding a `WebRequest` would gain a method that is empty or meaningless for most of them.
+A name in the pattern is this framework's existing answer to what a segment matched, and a tail is one more thing a pattern can name.
 
 ## Rejected — decisions, with the reason
 

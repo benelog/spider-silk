@@ -241,6 +241,11 @@ public final class WebRequest {
     /**
      * A path variable the matched route declared.
      *
+     * <p>A {@code {name*}} tail comes back as the rest of the path with its
+     * slashes intact, and as {@code ""} when it matched nothing at all: a route
+     * on {@code "/files/{path*}"} reads {@code "a/b.txt"} out of
+     * {@code /files/a/b.txt} and {@code ""} out of {@code /files}.
+     *
      * @throws IllegalStateException if the route's pattern has no variable of
      *         that name. That is a mismatch between the pattern and the handler
      *         reading it, not bad input, so it is not the

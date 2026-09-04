@@ -257,4 +257,29 @@ class RoutingFeaturesTest {
         assertThatThrownBy(() -> new App().before("/*/edit", req -> null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    /** A named tail hands the handler what a bare "*" only matched. */
+    @Test
+    void aNamedTailReachesTheHandlerAsAPathVariable() {
+        App app = new App()
+                .get("/files/{path*}", req -> WebResponse.text("[" + req.pathParam("path") + "]"));
+
+        WebTest.test(app, client -> {
+            assertThat(client.get("/files/docs/2026/report.pdf").body())
+                    .isEqualTo("[docs/2026/report.pdf]");
+            assertThat(client.get("/files/report.pdf").body()).isEqualTo("[report.pdf]");
+            assertThat(client.get("/files").body()).isEqualTo("[]");
+            assertThat(client.get("/elsewhere/report.pdf").statusCode()).isEqualTo(404);
+        });
+    }
+
+    /** A tail is one variable in the route's path template, reported as written. */
+    @Test
+    void aNamedTailIsReportedByRoutesAsItWasWritten() {
+        App app = new App().get("/files/{path*}", "Anything under /files",
+                req -> WebResponse.text("file"));
+
+        assertThat(app.routes()).containsExactly(
+                new Route("GET", "/files/{path*}", "Anything under /files"));
+    }
 }

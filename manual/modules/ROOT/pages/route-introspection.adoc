@@ -20,6 +20,9 @@ for (Route route : app.routes()) {
 }
 ----
 
+A wildcard route is reported as it was written.
+`/files/\{path*}` is one variable in the path template, and `/files/*` is a pattern with none, which is the difference xref:openapi.adoc[the OpenAPI export] acts on: it renders the first and refuses the second.
+
 The handler is left out.
 It is a lambda, and the only name it has is what reflection would dig out of its synthetic class.
 What is built on top of the list is left out too, because the list is plain data: the example app renders a `/_routes` overview page from it, and xref:openapi.adoc[`spider-silk-openapi`] turns the same list into an OpenAPI 3.1 document.

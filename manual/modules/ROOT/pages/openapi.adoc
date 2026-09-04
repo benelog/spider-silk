@@ -49,9 +49,14 @@ List<Route> documented = app.routes().stream()
 That selection stays the application's, which is the reason `routes()` hands back a list in the first place.
 This module has no way to tell an HTML page from an endpoint, and a guess dressed up as a default would be wrong in some application every time.
 
-A route whose pattern contains `*` throws `IllegalArgumentException`.
-A wildcard has no OpenAPI path template, and dropping it quietly would publish a document claiming the application answers less than it does.
+A route whose pattern contains a bare `*` throws `IllegalArgumentException`.
+That wildcard has no OpenAPI path template and no name to put in one, and dropping it quietly would publish a document claiming the application answers less than it does.
 It is refused instead, and leaving it out is a filter you write, visibly, next to the one above.
+
+A xref:routing.adoc[named tail] is written out rather than refused.
+`/files/\{path*}` becomes the path `/files/\{path}`, and its parameter carries the description `The rest of the path, slashes included.`
+OpenAPI has no wildcard in a path template, so the star is core's syntax and the variable is what crosses over.
+That is the only translation this module does.
 
 == What the document contains
 

@@ -76,7 +76,7 @@ class OpenApiTest {
         assertThat(paths.getObject("/api/decks").getObject("get").has("parameters")).isFalse();
     }
 
-    /** A wildcard has no path template, and a document quietly missing it would lie. */
+    /** A bare wildcard has no path template, and a document quietly missing it would lie. */
     @Test
     void refusesAWildcardRouteInsteadOfDroppingIt() {
         List<Route> withWildcard = List.of(new Route("GET", "/api/*"));
@@ -84,6 +84,37 @@ class OpenApiTest {
         assertThatThrownBy(() -> OpenApi.document("Flashcard API", "1.0.0", withWildcard))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("GET /api/*");
+    }
+
+    /** A named tail has a template: the star is core's syntax, the variable is OpenAPI's. */
+    @Test
+    void writesANamedTailAsAPathVariable() {
+        List<Route> withTail = List.of(new Route("GET", "/api/files/{path*}"));
+        Json.JsonObject paths = OpenApi.document("Flashcard API", "1.0.0", withTail)
+                .asObject().getObject("paths");
+
+        assertThat(paths.has("/api/files/{path*}")).isFalse();
+        Json.JsonObject parameter = paths.getObject("/api/files/{path}").getObject("get")
+                .getArray("parameters").get(0).asObject();
+        assertThat(parameter.getString("name")).isEqualTo("path");
+        assertThat(parameter.getString("in")).isEqualTo("path");
+        assertThat(parameter.getBoolean("required")).isTrue();
+        assertThat(parameter.getString("description"))
+                .isEqualTo("The rest of the path, slashes included.");
+    }
+
+    /** The tail is one variable among the others, and the others say nothing new. */
+    @Test
+    void declaresTheVariablesBeforeATailToo() {
+        List<Route> withTail = List.of(new Route("GET", "/api/decks/{deckId}/files/{path*}"));
+        Json.JsonArray parameters = OpenApi.document("Flashcard API", "1.0.0", withTail).asObject()
+                .getObject("paths").getObject("/api/decks/{deckId}/files/{path}")
+                .getObject("get").getArray("parameters");
+
+        assertThat(parameters.size()).isEqualTo(2);
+        assertThat(parameters.get(0).asObject().getString("name")).isEqualTo("deckId");
+        assertThat(parameters.get(0).asObject().has("description")).isFalse();
+        assertThat(parameters.get(1).asObject().getString("name")).isEqualTo("path");
     }
 
     /** Which routes go in is the application's call, made before the list gets here. */

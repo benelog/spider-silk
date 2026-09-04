@@ -51,6 +51,18 @@ class JettyServerTest {
         assertThat(response.body()).isEqualTo("Hello spider");
     }
 
+    /** The tail of a wildcard route reaches the handler with its slashes intact. */
+    @Test
+    void aNamedTailCarriesTheRestOfThePath() throws Exception {
+        app = new App()
+                .get("/files/{path*}", req -> WebResponse.text("file " + req.pathParam("path")))
+                .start(0);
+
+        assertThat(get("/files/docs/2026/report.pdf").body())
+                .isEqualTo("file docs/2026/report.pdf");
+        assertThat(get("/files").body()).isEqualTo("file ");
+    }
+
     @Test
     void pickedPortIsReadable() {
         app = new App().start(0);

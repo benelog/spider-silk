@@ -9,12 +9,14 @@ Routes register on `App` (or a group) as one statement: `get`, `post`, `put`, `p
 ```java
 app.get("/decks", decks::list);                     // this path, exactly
 app.get("/decks/{deckId}", decks::show);            // {deckId} matches one segment, never a slash
+app.get("/files/{path*}", files::serve);            // {path*} matches the rest: req.pathParam("path")
 app.before("/admin/*", req -> requireAdmin(req));   // /admin and everything under it
 app.get("/api/decks", "List every deck", api::listDecks);   // description, kept as data
 ```
 
 - Patterns compare segment by segment; there are no regular expressions.
-- A trailing `*` (only allowed last) matches the rest including nothing, so `/admin/*` covers `/admin` itself; the remainder is not captured — read `req.path()`.
+- A trailing `*` (only allowed last) matches the rest including nothing, so `/admin/*` covers `/admin` itself, and it captures nothing.
+- A trailing `{name*}` matches the same paths and binds them: `req.pathParam("path")` is `docs/a.txt` under `/files/docs/a.txt`, and `""` under `/files`. `/files/*` and `/files/{path*}` are the same shape, so only one of them registers.
 - A trailing slash on the request is ignored.
 - Registration order breaks ties, so register a literal route (`/study/today`) before a variable one (`/study/{mode}`).
 - A second route matching the same requests (same path, or same shape with a variable renamed) throws `IllegalStateException` at registration.

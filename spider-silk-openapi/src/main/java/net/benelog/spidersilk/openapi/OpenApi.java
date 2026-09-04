@@ -17,8 +17,10 @@ import net.benelog.spidersilk.json.Json;
  *
  * <p>A reader over the route list, and nothing more. Core hands the list out as
  * plain data and needs no change to allow this: {@code PathPattern}'s
- * {@code {deckId}} is OpenAPI's path template verbatim, so there is nothing to
- * translate and nothing to reflect over. The module exists because that reading
+ * {@code {deckId}} is OpenAPI's path template verbatim, so there is almost
+ * nothing to translate and nothing at all to reflect over. The one translation
+ * is the star of a named tail, which a template has no room for.
+ * The module exists because that reading
  * is worth writing once rather than in every application, not because a spec
  * format belongs in the web tier — which is why it is a module of its own, the
  * way {@code spider-silk-test} is.
@@ -35,6 +37,9 @@ public final class OpenApi {
 
     /** The one version this writes. */
     private static final String OPENAPI_VERSION = "3.1.0";
+
+    /** What a named tail is, said in the document, since the star cannot be. */
+    private static final String TAIL_DESCRIPTION = "The rest of the path, slashes included.";
 
     private OpenApi() {
     }
@@ -56,31 +61,60 @@ public final class OpenApi {
      * the operation's {@code summary} — the field a spec UI shows beside the
      * route — and a route without one gets no {@code summary} at all, rather
      * than an empty string that would render as a blank line.
-     * A route whose pattern contains {@code *} throws:
-     * a wildcard has no OpenAPI equivalent, and dropping it quietly would
-     * publish a document that claims the application answers less than it does.
      *
-     * @throws IllegalArgumentException if a route's path contains a wildcard
+     * <p>A named tail, {@code /files/{path*}}, comes out as
+     * {@code /files/{path}} with the star dropped, and its parameter carries a
+     * description saying it is the rest of the path. OpenAPI has no wildcard
+     * path template, so the star is core's syntax and not a template's, and the
+     * variable is the one thing there is to say about the route.
+     * A route whose pattern contains a bare {@code *} throws:
+     * that wildcard has no OpenAPI equivalent and no name to give it, and
+     * dropping it quietly would publish a document that claims the application
+     * answers less than it does.
+     *
+     * @throws IllegalArgumentException if a route's path contains a bare wildcard
      */
     public static Json.JsonValue document(String title, String version, List<Route> routes) {
         Objects.requireNonNull(title, "title");
         Objects.requireNonNull(version, "version");
         Json.JsonObject paths = Json.obj();
         for (Route route : Objects.requireNonNull(routes, "routes")) {
-            String path = route.path();
+            String pattern = route.path();
+            String path = template(pattern);
             if (path.contains("*")) {
                 throw new IllegalArgumentException(
                         "A wildcard route has no OpenAPI path template: " + route.method() + " "
-                                + path + ". Leave it out of the list passed here.");
+                                + pattern + ". Name the tail as {name*}, or leave the route out of"
+                                + " the list passed here.");
             }
             Json.JsonObject operations = paths.has(path) ? paths.getObject(path) : Json.obj();
             paths.put(path, operations.put(route.method().toLowerCase(Locale.ROOT),
-                    operation(path, route.description())));
+                    operation(pattern, route.description())));
         }
         return Json.obj()
                 .put("openapi", OPENAPI_VERSION)
                 .put("info", Json.obj().put("title", title).put("version", version))
                 .put("paths", paths);
+    }
+
+    /**
+     * The OpenAPI path template of a route's pattern, which differs from the
+     * pattern only in a named tail: {@code /files/{path*}} is written
+     * {@code /files/{path}} here, since a template has no star to carry.
+     */
+    private static String template(String pattern) {
+        return isTail(lastSegment(pattern))
+                ? pattern.substring(0, pattern.length() - 2) + "}"
+                : pattern;
+    }
+
+    private static String lastSegment(String pattern) {
+        return pattern.substring(pattern.lastIndexOf('/') + 1);
+    }
+
+    /** A "{path*}" segment: a variable that matches the rest of the path. */
+    private static boolean isTail(String segment) {
+        return segment.length() >= 4 && segment.startsWith("{") && segment.endsWith("*}");
     }
 
     /** One operation: its summary, its path parameters, and the 200 every path answers with. */
@@ -101,14 +135,22 @@ public final class OpenApi {
     private static Json.JsonArray pathParameters(String path) {
         Json.JsonArray parameters = Json.arr();
         for (String segment : path.split("/", -1)) {
-            if (segment.length() >= 2 && segment.startsWith("{") && segment.endsWith("}")) {
-                parameters.add(Json.obj()
-                        .put("name", segment.substring(1, segment.length() - 1))
-                        .put("in", "path")
-                        .put("required", true)
-                        .put("schema", Json.obj().put("type", "string")));
+            if (isTail(segment)) {
+                parameters.add(parameter(segment.substring(1, segment.length() - 2))
+                        .put("description", TAIL_DESCRIPTION));
+            } else if (segment.length() >= 2 && segment.startsWith("{") && segment.endsWith("}")) {
+                parameters.add(parameter(segment.substring(1, segment.length() - 1)));
             }
         }
         return parameters;
+    }
+
+    /** One required path parameter of type string, which is all a pattern says. */
+    private static Json.JsonObject parameter(String name) {
+        return Json.obj()
+                .put("name", name)
+                .put("in", "path")
+                .put("required", true)
+                .put("schema", Json.obj().put("type", "string"));
     }
 }

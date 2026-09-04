@@ -25,7 +25,8 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 * Request info: `method()`, `path()`, `header(name)`, `headers(name)` for a repeated header, `headers()` for all of them, `contentType()`, `queryString()`, `isSecure()`, `scheme()`, `host()`, `remoteAddress()`, and `raw()` for the servlet request itself.
   `host()` carries the port when it is not the scheme's default, so `scheme()`, `host()`, and `path()` rebuild the absolute URL
 * Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`, and `pathParam(name, parser)` for any other type.
-  A name the pattern never declared throws `IllegalStateException`, not a 400
+  A name the pattern never declared throws `IllegalStateException`, not a 400.
+  A `\{name*}` tail binds the rest of the path with its slashes, and `""` when it matched nothing
 * Parameters: `param` (400 when missing), `paramLong`, `paramBoolean` (`true` or `false` only), `paramEnum`, each with a `(..., default)` form for optional parameters; `params(name)` for repeated values
 * Any other type: `param(name, parser)` and `param(name, parser, default)`, where the parser is a `Function<String, T>` such as `UUID::fromString` or `LocalDate::parse`.
   A parser that throws `IllegalArgumentException` or `DateTimeException` answers 400 naming the parameter

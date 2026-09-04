@@ -12,11 +12,21 @@ import java.util.Map;
  * "/admin/*" covers "/admin", "/admin/users", and "/admin/users/7". That is what
  * makes it useful for filters, which usually want to guard a prefix and the
  * prefix itself. "*" is only allowed as the last segment.
+ *
+ * <p>A final "{name*}" segment matches exactly the same paths and binds what it
+ * matched: "/files/{path*}" covers "/files", "/files/a.txt", and "/files/a/b.txt",
+ * binding "", "a.txt", and "a/b.txt" in turn. The slashes inside the tail are
+ * kept, since the tail is a remainder rather than a segment. Like "*", it is
+ * only allowed as the last segment, and the two forms match the same set of
+ * paths, so {@link #canonicalForm()} reports them as one shape.
  */
 final class PathPattern {
 
     private final String[] segments;
     private final boolean matchesRest;
+
+    /** The name a "{name*}" tail binds under, or null when there is no such tail. */
+    private final String tailName;
 
     PathPattern(String pattern) {
         String[] parsed = split(pattern);
@@ -25,8 +35,14 @@ final class PathPattern {
                 throw new IllegalArgumentException(
                         "\"*\" is only allowed as the last segment: " + pattern);
             }
+            if (tailVariableName(parsed[i]) != null) {
+                throw new IllegalArgumentException(
+                        "\"" + parsed[i] + "\" is only allowed as the last segment: " + pattern);
+            }
         }
-        this.matchesRest = parsed.length > 0 && parsed[parsed.length - 1].equals("*");
+        String last = parsed.length == 0 ? null : parsed[parsed.length - 1];
+        this.tailName = last == null ? null : tailVariableName(last);
+        this.matchesRest = last != null && (last.equals("*") || tailName != null);
         this.segments = matchesRest ? Arrays.copyOf(parsed, parsed.length - 1) : parsed;
     }
 
@@ -61,10 +77,21 @@ final class PathPattern {
     }
 
     /**
+     * The name inside a "{path*}" segment, or null when the segment is not one.
+     * "{*}" is not one: a tail has a name, and that is the whole point of it.
+     */
+    private static String tailVariableName(String segment) {
+        return segment.length() >= 4 && segment.startsWith("{") && segment.endsWith("*}")
+                ? segment.substring(1, segment.length() - 2)
+                : null;
+    }
+
+    /**
      * The set of paths this pattern matches, as a string: variable names erased,
      * slashes normalized. "/decks/{deckId}" and "decks/{id}/" both come back as
      * "/decks/{}", which is what lets the router spot a second registration that
-     * could never run.
+     * could never run. A named tail erases to the "*" it matches the same paths
+     * as, so "/files/{path*}" and "/files/*" are one shape.
      */
     String canonicalForm() {
         StringBuilder sb = new StringBuilder();
@@ -94,6 +121,20 @@ final class PathPattern {
                 return null;
             }
         }
+        if (tailName != null) {
+            if (params == null) {
+                params = new HashMap<>();
+            }
+            params.put(tailName, tail(actual));
+        }
         return params == null ? Map.of() : params;
+    }
+
+    /**
+     * Everything past the pattern's own segments, joined by the slashes that
+     * separated them, and "" when the tail matched nothing.
+     */
+    private String tail(String[] actual) {
+        return String.join("/", Arrays.copyOfRange(actual, segments.length, actual.length));
     }
 }

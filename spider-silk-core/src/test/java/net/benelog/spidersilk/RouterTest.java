@@ -91,6 +91,57 @@ class RouterTest {
         assertThat(router.find("GET", "/anything/at/all").handler()).isEqualTo(everything);
     }
 
+    /** The index reads the first segment, which a tail at the end does not touch. */
+    @Test
+    void aNamedTailIsIndexedByItsFirstSegment() {
+        Router router = new Router();
+        Handler files = req -> null;
+        router.add("GET", "/files/{path*}", files);
+        router.add("GET", "/decks", noop);
+
+        Router.Match match = router.find("GET", "/files/docs/a.txt");
+        assertThat(match.handler()).isEqualTo(files);
+        assertThat(match.pathParams().get("path")).isEqualTo("docs/a.txt");
+
+        assertThat(router.find("GET", "/files").pathParams().get("path")).isEmpty();
+        assertThat(router.find("GET", "/elsewhere/a.txt")).isNull();
+    }
+
+    /** A tail as the whole pattern can start anywhere, the way a bare "*" does. */
+    @Test
+    void aNamedTailAtTheRootMatchesAnyFirstSegment() {
+        Router router = new Router();
+        Handler everything = req -> null;
+        router.add("GET", "/{path*}", everything);
+
+        assertThat(router.find("GET", "/").pathParams().get("path")).isEmpty();
+        assertThat(router.find("GET", "/anything/at/all").pathParams().get("path"))
+                .isEqualTo("anything/at/all");
+    }
+
+    /** A literal route registered first still wins over a tail that also covers it. */
+    @Test
+    void registrationOrderStillDecidesAgainstANamedTail() {
+        Router router = new Router();
+        Handler index = req -> null;
+        router.add("GET", "/files/index.html", index);
+        router.add("GET", "/files/{path*}", noop);
+
+        assertThat(router.find("GET", "/files/index.html").handler()).isEqualTo(index);
+    }
+
+    /** Both spellings match the same requests, so the second could never run. */
+    @Test
+    void aNamedTailDuplicatesABareWildcardOverTheSamePrefix() {
+        Router router = new Router();
+        router.add("GET", "/files/*", noop);
+
+        assertThatThrownBy(() -> router.add("GET", "/files/{path*}", noop))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("GET /files/{path*} is already registered as /files/*,"
+                        + " which matches the same requests");
+    }
+
     @Test
     void allowedMethodsSeesVariablePatternsToo() {
         Router router = new Router();
