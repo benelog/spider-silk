@@ -18,9 +18,13 @@ import java.util.Set;
  */
 final class Router {
 
-    /** {@code order} is the registration index — the tie-breaker the index must not lose. */
+    /**
+     * One registered route. Registration order is the tie-breaker between two
+     * patterns that both match, and it is carried by the order of the lists the
+     * index holds rather than by a number on the route.
+     */
     record Entry(String method, String path, String description, PathPattern pattern,
-            Handler handler, int order) {
+            Handler handler) {
     }
 
     record Match(Handler handler, Map<String, String> pathParams) {
@@ -43,8 +47,7 @@ final class Router {
         // At the registration site rather than in routes(), where the stack trace
         // would name the reader instead of the line that left the argument out.
         Objects.requireNonNull(description, "description");
-        Entry entry = new Entry(method, path, description, new PathPattern(path), handler,
-                registrations.size());
+        Entry entry = new Entry(method, path, description, new PathPattern(path), handler);
         Entry existing = byShape.putIfAbsent(method + " " + entry.pattern().canonicalForm(), entry);
         if (existing != null) {
             throw new IllegalStateException(duplicateMessage(entry, existing));
@@ -101,46 +104,40 @@ final class Router {
                 .toList();
     }
 
-    /** The routes of one method, split by the first segment they can match. */
+    /**
+     * The routes of one method, split by the first segment they can match.
+     *
+     * <p>Each bucket already holds everything that could match a path starting
+     * with that segment — the routes whose own first segment is that literal, and
+     * the ones that can start with anything — in registration order. Registration
+     * happens at startup and a lookup happens per request, so the merging is done
+     * there rather than here: a route that starts with a variable is written into
+     * every bucket, and a bucket that comes later starts as a copy of them.
+     */
     private static final class MethodRoutes {
 
         private final Map<String, List<Entry>> byFirstSegment = new HashMap<>();
+
+        /** Routes that can match any first segment: what a path with no bucket asks. */
         private final List<Entry> anyFirstSegment = new ArrayList<>();
 
         void add(Entry entry) {
             String first = entry.pattern().literalFirstSegment();
             if (first == null) {
                 anyFirstSegment.add(entry);
+                byFirstSegment.values().forEach(bucket -> bucket.add(entry));
             } else {
-                byFirstSegment.computeIfAbsent(first, key -> new ArrayList<>()).add(entry);
+                // Order rises with every registration, so appending keeps every
+                // list sorted by it, and a new bucket starts with what it missed.
+                byFirstSegment.computeIfAbsent(first, key -> new ArrayList<>(anyFirstSegment))
+                        .add(entry);
             }
         }
 
         /** Everything that could match this path, in registration order. */
         List<Entry> candidates(String[] segments) {
-            List<Entry> literal = byFirstSegment.getOrDefault(
-                    segments.length == 0 ? "" : segments[0], List.of());
-            if (anyFirstSegment.isEmpty()) {
-                return literal;
-            }
-            if (literal.isEmpty()) {
-                return anyFirstSegment;
-            }
-            return mergeByOrder(literal, anyFirstSegment);
-        }
-
-        /** Both lists are in registration order already, so this is one merge step. */
-        private static List<Entry> mergeByOrder(List<Entry> left, List<Entry> right) {
-            List<Entry> merged = new ArrayList<>(left.size() + right.size());
-            int i = 0;
-            int j = 0;
-            while (i < left.size() && j < right.size()) {
-                merged.add(left.get(i).order() < right.get(j).order()
-                        ? left.get(i++) : right.get(j++));
-            }
-            merged.addAll(left.subList(i, left.size()));
-            merged.addAll(right.subList(j, right.size()));
-            return merged;
+            List<Entry> bucket = byFirstSegment.get(segments.length == 0 ? "" : segments[0]);
+            return bucket == null ? anyFirstSegment : bucket;
         }
     }
 }
