@@ -32,7 +32,7 @@ import java.util.Set;
  */
 final class Headers extends AbstractMap<String, String> {
 
-    static final Headers EMPTY = new Headers(new LinkedHashMap<>());
+    static final Headers EMPTY = new Headers(Map.of());
 
     /**
      * Keyed by the lower-cased field name, so a lookup is one hash and not a
@@ -41,8 +41,17 @@ final class Headers extends AbstractMap<String, String> {
      */
     private final Map<String, Entry<String, String>> fields;
 
+    /**
+     * Worked out once, because the fields never change and every method
+     * {@link AbstractMap} supplies — {@code keySet}, {@code values},
+     * {@code forEach}, {@code toString} — reads the response's headers through
+     * this one view.
+     */
+    private final Set<Entry<String, String>> entries;
+
     private Headers(Map<String, Entry<String, String>> fields) {
         this.fields = fields;
+        this.entries = Collections.unmodifiableSet(new LinkedHashSet<>(fields.values()));
     }
 
     /** These headers with that field set, replacing any spelling of it. */
@@ -55,11 +64,12 @@ final class Headers extends AbstractMap<String, String> {
 
     /** These headers without that field, whatever its spelling. */
     Headers without(String name) {
-        if (!fields.containsKey(key(name))) {
+        String key = key(name);
+        if (!fields.containsKey(key)) {
             return this;
         }
         Map<String, Entry<String, String>> copy = new LinkedHashMap<>(fields);
-        copy.remove(key(name));
+        copy.remove(key);
         return new Headers(copy);
     }
 
@@ -102,7 +112,7 @@ final class Headers extends AbstractMap<String, String> {
      */
     @Override
     public Set<Entry<String, String>> entrySet() {
-        return Collections.unmodifiableSet(new LinkedHashSet<>(fields.values()));
+        return entries;
     }
 
     /**
@@ -111,9 +121,10 @@ final class Headers extends AbstractMap<String, String> {
      */
     private static void putField(Map<String, Entry<String, String>> target, String name,
             String value) {
-        Entry<String, String> existing = target.get(key(name));
+        String key = key(name);
+        Entry<String, String> existing = target.get(key);
         String spelling = existing == null ? name : existing.getKey();
-        target.put(key(name), new SimpleImmutableEntry<>(spelling, value));
+        target.put(key, new SimpleImmutableEntry<>(spelling, value));
     }
 
     private Entry<String, String> field(Object name) {
