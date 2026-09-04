@@ -50,6 +50,7 @@ public final class WebRequest {
     private final Map<String, String> pathParams;
 
     private Map<String, List<String>> parsedQuery;
+    private String path;
     private String errorMessage;
 
     /**
@@ -75,12 +76,21 @@ public final class WebRequest {
         return req.getMethod();
     }
 
+    /**
+     * The path the request was made to, with no query string on the end.
+     *
+     * <p>Worked out once and kept, the way the parsed query string is: routing,
+     * CORS, the error path, and the request logger all ask, and the answer
+     * cannot change while the request is being served.
+     */
     public String path() {
-        String path = req.getServletPath();
-        if (req.getPathInfo() != null) {
-            path = path + req.getPathInfo();
+        if (path == null) {
+            String servletPath = req.getServletPath();
+            String pathInfo = req.getPathInfo();
+            String whole = pathInfo == null ? servletPath : servletPath + pathInfo;
+            path = whole.isEmpty() ? "/" : whole;
         }
-        return path.isEmpty() ? "/" : path;
+        return path;
     }
 
     public String header(String name) {
@@ -888,6 +898,9 @@ public final class WebRequest {
     /** The same request, with the path variables a matched route resolved. */
     WebRequest withPathParams(Map<String, String> resolved) {
         WebRequest copy = new WebRequest(req, resolved);
+        // The same servlet request, so the same path: the copy is made after
+        // routing has already asked for it.
+        copy.path = path;
         copy.errorMessage = errorMessage;
         return copy;
     }
