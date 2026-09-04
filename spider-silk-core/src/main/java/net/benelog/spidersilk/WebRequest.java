@@ -271,13 +271,7 @@ public final class WebRequest {
     }
 
     public <E extends Enum<E>> E pathParamEnum(String name, Class<E> type) {
-        String value = pathParam(name);
-        try {
-            return Enum.valueOf(type, value);
-        } catch (IllegalArgumentException e) {
-            throw new HttpException(HttpStatus.BAD_REQUEST,
-                    "Invalid value for path variable {%s}: %s".formatted(name, value));
-        }
+        return pathParam(name, value -> Enum.valueOf(type, value));
     }
 
     /**
@@ -356,7 +350,7 @@ public final class WebRequest {
     }
 
     public <E extends Enum<E>> E paramEnum(String name, Class<E> type) {
-        return parseEnum(name, type, param(name));
+        return param(name, value -> Enum.valueOf(type, value));
     }
 
     /**
@@ -364,8 +358,7 @@ public final class WebRequest {
      * value names no constant.
      */
     public <E extends Enum<E>> E paramEnum(String name, Class<E> type, E defaultValue) {
-        String value = req.getParameter(name);
-        return value == null ? defaultValue : parseEnum(name, type, value);
+        return param(name, value -> Enum.valueOf(type, value), defaultValue);
     }
 
     /**
@@ -429,15 +422,6 @@ public final class WebRequest {
         try {
             return parser.apply(value);
         } catch (IllegalArgumentException | DateTimeException e) {
-            throw new HttpException(HttpStatus.BAD_REQUEST,
-                    "Invalid value for parameter %s: %s".formatted(name, value));
-        }
-    }
-
-    private static <E extends Enum<E>> E parseEnum(String name, Class<E> type, String value) {
-        try {
-            return Enum.valueOf(type, value);
-        } catch (IllegalArgumentException e) {
             throw new HttpException(HttpStatus.BAD_REQUEST,
                     "Invalid value for parameter %s: %s".formatted(name, value));
         }
