@@ -1,6 +1,7 @@
 package net.benelog.spidersilk.undertow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -405,6 +406,35 @@ class UndertowServerTest {
         assertThat(server.undertow().getListenerInfo())
                 .as("the running server should have a listener bound")
                 .isNotEmpty();
+    }
+
+    /**
+     * A start that fails leaves nothing behind. Were the half-started Undertow
+     * left as it is, it would still hold the port when the retry came, so this
+     * asserts a third server binds the port the second one could not.
+     */
+    @Test
+    void aFailedStartDoesNotHoldThePort() throws Exception {
+        server = new UndertowServer(new App().get("/", req -> WebResponse.text("first"))).port(0);
+        server.start();
+        int taken = server.port();
+
+        UndertowServer second = new UndertowServer(new App()).port(taken);
+        assertThatThrownBy(second::start)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Failed to start Undertow on port " + taken);
+
+        server.stop();
+        server = null;
+
+        UndertowServer third = new UndertowServer(
+                new App().get("/", req -> WebResponse.text("third"))).port(taken);
+        third.start();
+        try {
+            assertThat(getFrom(third.port(), "/").body()).isEqualTo("third");
+        } finally {
+            third.stop();
+        }
     }
 
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {

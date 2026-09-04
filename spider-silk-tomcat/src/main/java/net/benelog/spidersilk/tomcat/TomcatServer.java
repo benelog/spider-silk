@@ -233,8 +233,11 @@ public final class TomcatServer implements WebServer {
             tomcat = candidate;
             connector = newConnector;
         } catch (LifecycleException | RuntimeException e) {
+            IllegalStateException failure =
+                    new IllegalStateException("Failed to start Tomcat on port " + port, e);
+            stopQuietly(candidate, failure);
             deleteTemporaryBaseDir();
-            throw new IllegalStateException("Failed to start Tomcat on port " + port, e);
+            throw failure;
         }
         startAwaitThread();
         if (shutdownHook) {
@@ -363,6 +366,22 @@ public final class TomcatServer implements WebServer {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
+        }
+    }
+
+    /**
+     * Unwinds a start that threw part-way. Deleting the temporary base
+     * directory is not enough on its own: a candidate that got as far as
+     * binding the connector holds the port against a retry, and its threads
+     * stay behind. The cleanup is best-effort, so whatever it fails at is
+     * reported on the start failure rather than replacing it.
+     */
+    private static void stopQuietly(Tomcat candidate, IllegalStateException failure) {
+        try {
+            candidate.stop();
+            candidate.destroy();
+        } catch (LifecycleException | RuntimeException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
         }
     }
 

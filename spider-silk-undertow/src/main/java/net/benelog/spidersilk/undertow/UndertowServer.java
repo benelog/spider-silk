@@ -204,9 +204,12 @@ public final class UndertowServer implements WebServer {
         try {
             candidate.start();
         } catch (RuntimeException e) {
+            IllegalStateException failure =
+                    new IllegalStateException("Failed to start Undertow on port " + port, e);
+            stopQuietly(candidate, failure);
             undeployQuietly(manager);
             graceful = null;
-            throw new IllegalStateException("Failed to start Undertow on port " + port, e);
+            throw failure;
         }
         server = candidate;
         deployment = manager;
@@ -350,6 +353,21 @@ public final class UndertowServer implements WebServer {
             // The hook is running: the JVM is already shutting down.
         }
         hook = null;
+    }
+
+    /**
+     * Unwinds a start that threw part-way. Undeploying the servlet is not
+     * enough on its own: a listener that did bind holds the port against a
+     * retry, and Undertow's XNIO worker keeps its threads. The cleanup is
+     * best-effort, so whatever it fails at is reported on the start failure
+     * rather than replacing it.
+     */
+    private static void stopQuietly(Undertow candidate, IllegalStateException failure) {
+        try {
+            candidate.stop();
+        } catch (RuntimeException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
+        }
     }
 
     private static void undeployQuietly(DeploymentManager manager) {

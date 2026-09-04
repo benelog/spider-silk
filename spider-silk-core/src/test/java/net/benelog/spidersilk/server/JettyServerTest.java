@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -338,6 +339,55 @@ class JettyServerTest {
     @Test
     void portBeforeStartIsRejected() {
         assertThatThrownBy(() -> new App().port()).isInstanceOf(IllegalStateException.class);
+    }
+
+    /**
+     * A start that fails leaves nothing behind: no bound port, no threads. Were
+     * the half-started server left as it is, the port would still be held when
+     * the retry came and its pool threads would keep the JVM alive.
+     */
+    @Test
+    void aFailedStartHoldsNeitherThePortNorItsThreads() throws Exception {
+        JettyServer first = new JettyServer(new App().get("/", req -> WebResponse.text("first")))
+                .port(0);
+        first.start();
+        int taken = first.port();
+
+        QueuedThreadPool pool = new QueuedThreadPool();
+        pool.setName("failed-start");
+        JettyServer second = new JettyServer(new App()).port(taken).threadPool(pool);
+        assertThatThrownBy(second::start)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Failed to start Jetty on port " + taken);
+        assertThat(threadNamesStartingWith("failed-start"))
+                .as("the pool of a start that failed should be stopped, not left running")
+                .isEmpty();
+
+        first.stop();
+
+        JettyServer third = new JettyServer(new App().get("/", req -> WebResponse.text("third")))
+                .port(taken);
+        third.start();
+        try {
+            assertThat(getFrom(third.port(), "/").body()).isEqualTo("third");
+        } finally {
+            third.stop();
+        }
+    }
+
+    private static List<String> threadNamesStartingWith(String prefix) {
+        return Thread.getAllStackTraces().keySet().stream()
+                .map(Thread::getName)
+                .filter(name -> name.startsWith(prefix))
+                .toList();
+    }
+
+    private HttpResponse<String> getFrom(int port, String path)
+            throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest
+                .newBuilder(URI.create("http://localhost:" + port + path))
+                .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {

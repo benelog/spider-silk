@@ -209,7 +209,26 @@ public final class JettyServer implements WebServer {
             server = candidate;
         } catch (Exception e) {
             connector = null;
-            throw new IllegalStateException("Failed to start Jetty on port " + port, e);
+            IllegalStateException failure =
+                    new IllegalStateException("Failed to start Jetty on port " + port, e);
+            stopQuietly(candidate, failure);
+            throw failure;
+        }
+    }
+
+    /**
+     * Unwinds a start that threw part-way. Jetty may already have bound the
+     * connector and started pool threads, so a candidate left as it is would
+     * hold the port against a retry and keep its non-daemon threads running.
+     * The cleanup is best-effort: whatever it fails at is reported on the
+     * start failure rather than replacing it.
+     */
+    private static void stopQuietly(Server candidate, IllegalStateException failure) {
+        try {
+            candidate.stop();
+            candidate.destroy();
+        } catch (Exception cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
         }
     }
 

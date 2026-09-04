@@ -1,6 +1,7 @@
 package net.benelog.spidersilk.tomcat;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -394,6 +395,39 @@ class TomcatServerTest {
         server.start();
 
         assertThat(server.tomcat()).as("tomcat() should hand out the running server").isNotNull();
+    }
+
+    /**
+     * A start that fails leaves nothing behind, so a third server takes the
+     * port the second one could not. The {@code setThrowOnFailure} customizer
+     * is Tomcat's, not ours: a connector that cannot bind is only logged unless
+     * {@code org.apache.catalina.startup.EXIT_ON_INIT_FAILURE} says otherwise,
+     * and the test wants the clash reported rather than written to the log.
+     */
+    @Test
+    void aFailedStartDoesNotHoldThePort() throws Exception {
+        server = new TomcatServer(new App().get("/", req -> WebResponse.text("first"))).port(0);
+        server.start();
+        int taken = server.port();
+
+        TomcatServer second = new TomcatServer(new App())
+                .port(taken)
+                .customizeConnector(connector -> connector.setThrowOnFailure(true));
+        assertThatThrownBy(second::start)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Failed to start Tomcat on port " + taken);
+
+        server.stop();
+        server = null;
+
+        TomcatServer third =
+                new TomcatServer(new App().get("/", req -> WebResponse.text("third"))).port(taken);
+        third.start();
+        try {
+            assertThat(getFrom(third.port(), "/").body()).isEqualTo("third");
+        } finally {
+            third.stop();
+        }
     }
 
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {
