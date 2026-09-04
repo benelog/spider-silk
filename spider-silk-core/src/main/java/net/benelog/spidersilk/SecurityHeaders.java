@@ -130,18 +130,11 @@ public final class SecurityHeaders {
      * exception that also depends on the request: it is only true over HTTPS.
      */
     WebResponse apply(WebResponse response, WebRequest request) {
-        WebResponse answer = response;
-        for (Map.Entry<String, String> header : headers.entrySet()) {
-            answer = addIfAbsent(answer, header.getKey(), header.getValue());
-        }
+        WebResponse answer = response.withHeadersIfAbsent(headers);
         if (hsts != null && request.isSecure()) {
-            answer = addIfAbsent(answer, HSTS, hsts);
+            answer = answer.withHeadersIfAbsent(Map.of(HSTS, hsts));
         }
         return answer;
-    }
-
-    private static WebResponse addIfAbsent(WebResponse response, String name, String value) {
-        return response.header(name) == null ? response.header(name, value) : response;
     }
 
     private SecurityHeaders set(String name, String value) {

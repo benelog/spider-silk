@@ -499,6 +499,32 @@ public final class WebResponse {
     }
 
     /**
+     * Sets several headers at once, in that map's order. CORS and the security
+     * headers each set three or four constants on every answer, and a
+     * {@link #header(String, String)} apiece would copy the header map and build
+     * a response for each one of them.
+     */
+    WebResponse withHeaders(Map<String, String> fields) {
+        return carrying(headers.withAll(fields));
+    }
+
+    /** The same, for the fields this response does not already say for itself. */
+    WebResponse withHeadersIfAbsent(Map<String, String> fields) {
+        return carrying(headers.withAllAbsent(fields));
+    }
+
+    /**
+     * This response with those headers, and this response itself when they are
+     * the ones it already had. Identity is what is asked here rather than
+     * equality: {@link Headers} answers with itself when a change left it as it
+     * was, and that is the one case worth not building a response for.
+     */
+    @SuppressWarnings("ReferenceEquality")
+    private WebResponse carrying(Headers updated) {
+        return updated == headers ? this : new WebResponse(status, updated, cookies, body);
+    }
+
+    /**
      * Adds a field name to {@code Vary}, keeping the ones already there.
      * Compression and CORS each make the answer depend on a request header —
      * {@code Accept-Encoding} for one, {@code Origin} for the other — and a
@@ -508,16 +534,26 @@ public final class WebResponse {
      */
     public WebResponse vary(String field) {
         Objects.requireNonNull(field, "field");
-        String existing = header("Vary");
+        String value = varyValue(header("Vary"), field);
+        return value == null ? this : header("Vary", value);
+    }
+
+    /**
+     * What {@code Vary} reads once that field is added to it, or null when it is
+     * already listed. Separate from {@link #vary(String)} so that a decorator
+     * setting several headers at once can put {@code Vary} among them rather
+     * than spend a copy of the response on it.
+     */
+    static String varyValue(String existing, String field) {
         if (existing == null || existing.isBlank()) {
-            return header("Vary", field);
+            return field;
         }
         for (String listed : existing.split(",", -1)) {
             if (listed.trim().equalsIgnoreCase(field)) {
-                return this;
+                return null;
             }
         }
-        return header("Vary", existing + ", " + field);
+        return existing + ", " + field;
     }
 
     /** Sets Content-Disposition so the response downloads as a file. */

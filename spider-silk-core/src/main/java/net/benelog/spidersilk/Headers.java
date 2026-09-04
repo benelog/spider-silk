@@ -62,6 +62,40 @@ final class Headers extends AbstractMap<String, String> {
         return new Headers(copy);
     }
 
+    /**
+     * These headers with every one of those set, in that map's order. One copy
+     * for the lot, which is what a decorator setting three or four constants
+     * wants instead of one copy per field.
+     */
+    Headers withAll(Map<String, String> fields) {
+        if (fields.isEmpty()) {
+            return this;
+        }
+        Map<String, Entry<String, String>> copy = new LinkedHashMap<>(this.fields);
+        fields.forEach((name, value) -> putField(copy, name, value));
+        return new Headers(copy);
+    }
+
+    /**
+     * These headers with every one of those they do not already carry, whatever
+     * spelling it is already carried under. A field already set keeps its value,
+     * and nothing is copied when they all are.
+     */
+    Headers withAllAbsent(Map<String, String> fields) {
+        Map<String, Entry<String, String>> copy = null;
+        for (Entry<String, String> field : fields.entrySet()) {
+            String key = key(field.getKey());
+            if (this.fields.containsKey(key)) {
+                continue;
+            }
+            if (copy == null) {
+                copy = new LinkedHashMap<>(this.fields);
+            }
+            copy.put(key, new SimpleImmutableEntry<>(field.getKey(), field.getValue()));
+        }
+        return copy == null ? this : new Headers(copy);
+    }
+
     /** These headers without that field, whatever its spelling. */
     Headers without(String name) {
         String key = key(name);

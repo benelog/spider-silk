@@ -1,8 +1,10 @@
 package net.benelog.spidersilk;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -157,18 +159,22 @@ public final class Cors {
         if (allowed == null) {
             return response;
         }
-        WebResponse answer = response.header("Access-Control-Allow-Origin", allowed);
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("Access-Control-Allow-Origin", allowed);
         if (!origins.isEmpty()) {
             // The answer differs per origin, so a shared cache must key on it.
-            answer = answer.vary("Origin");
+            String vary = WebResponse.varyValue(response.header("Vary"), "Origin");
+            if (vary != null) {
+                fields.put("Vary", vary);
+            }
         }
         if (credentials) {
-            answer = answer.header("Access-Control-Allow-Credentials", "true");
+            fields.put("Access-Control-Allow-Credentials", "true");
         }
         if (!exposed.isEmpty()) {
-            answer = answer.header("Access-Control-Expose-Headers", String.join(", ", exposed));
+            fields.put("Access-Control-Expose-Headers", String.join(", ", exposed));
         }
-        return answer;
+        return response.withHeaders(fields);
     }
 
     /**
@@ -188,24 +194,29 @@ public final class Cors {
                 || !covers(segments) || allowedOrigin(origin) == null) {
             return optionsAnswer;
         }
-        WebResponse answer = optionsAnswer.header("Access-Control-Allow-Methods",
+        Map<String, String> fields = new LinkedHashMap<>();
+        fields.put("Access-Control-Allow-Methods",
                 methods.isEmpty() ? allow : String.join(", ", methods));
         if (headers != null) {
             if (!headers.isEmpty()) {
-                answer = answer.header("Access-Control-Allow-Headers", String.join(", ", headers));
+                fields.put("Access-Control-Allow-Headers", String.join(", ", headers));
             }
         } else {
             String asked = request.header("Access-Control-Request-Headers");
             if (asked != null) {
-                answer = answer.header("Access-Control-Allow-Headers", asked);
+                fields.put("Access-Control-Allow-Headers", asked);
             }
             // Reflected, so the answer depends on what was asked for.
-            answer = answer.vary("Access-Control-Request-Headers");
+            String vary = WebResponse.varyValue(optionsAnswer.header("Vary"),
+                    "Access-Control-Request-Headers");
+            if (vary != null) {
+                fields.put("Vary", vary);
+            }
         }
         if (maxAge != null) {
-            answer = answer.header("Access-Control-Max-Age", Long.toString(maxAge.toSeconds()));
+            fields.put("Access-Control-Max-Age", Long.toString(maxAge.toSeconds()));
         }
-        return answer;
+        return optionsAnswer.withHeaders(fields);
     }
 
     private boolean covers(String[] segments) {
