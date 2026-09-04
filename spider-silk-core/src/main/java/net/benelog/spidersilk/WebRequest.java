@@ -109,7 +109,10 @@ public final class WebRequest {
      * these.
      */
     public List<String> headers(String name) {
-        return List.copyOf(Collections.list(req.getHeaders(name)));
+        // Collections.list already drains the enumeration into a list of its
+        // own, which nothing else can reach, so wrapping it is enough:
+        // List.copyOf on top of that copied the same values a second time.
+        return Collections.unmodifiableList(Collections.list(req.getHeaders(name)));
     }
 
     /**
@@ -121,7 +124,10 @@ public final class WebRequest {
     public Map<String, List<String>> headers() {
         Map<String, List<String>> byName = new LinkedHashMap<>();
         for (String name : Collections.list(req.getHeaderNames())) {
-            byName.putIfAbsent(name, headers(name));
+            // computeIfAbsent, so a name the container enumerates twice reads
+            // its values once: putIfAbsent had to have them before it could
+            // find out it was going to discard them.
+            byName.computeIfAbsent(name, this::headers);
         }
         // Read-only, and in the order the request sent them, which Map.copyOf
         // would lose.
