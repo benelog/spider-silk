@@ -18,6 +18,7 @@ import net.benelog.spidersilk.json.JsonWriter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** What a handler reads off a built request, and where it is meant to reject one. */
@@ -155,6 +156,65 @@ class TestRequestTest {
 
         assertThat(request.header("Content-Type")).isEqualTo("application/json");
         assertThat(request.bodyJson().asObject().getString("name")).isEqualTo("Spanish");
+    }
+
+    /**
+     * A body is read once. Jetty, Tomcat, and Undertow all refuse the crossing
+     * with an {@link IllegalStateException}, and a handler that would fail there
+     * has to fail here too — otherwise a double-read bug passes its unit test.
+     */
+    @Test
+    void takingTheBodyAsTextAndThenAsAStreamIsRefused() {
+        WebRequest request = TestRequest.post("/api/decks").body("plain text").build();
+
+        assertThat(request.body()).isEqualTo("plain text");
+        assertThatIllegalStateException()
+                .isThrownBy(request::bodyStream)
+                .withMessageContaining("getReader()");
+    }
+
+    @Test
+    void takingTheBodyAsAStreamAndThenAsTextIsRefused() {
+        WebRequest request = TestRequest.post("/api/decks").body("plain text").build();
+
+        request.bodyStream();
+        assertThatIllegalStateException()
+                .isThrownBy(request::body)
+                .withMessageContaining("getInputStream()");
+    }
+
+    /**
+     * The second read is empty rather than the body again: the servlet API hands
+     * back the same reader, and by then it is at its end. That is what all three
+     * containers do, so it is what a test has to see.
+     */
+    @Test
+    void theBodyIsGoneAfterItHasBeenRead() {
+        WebRequest request = TestRequest.post("/api/decks").body("plain text").build();
+
+        assertThat(request.body()).isEqualTo("plain text");
+        assertThat(request.body()).isEmpty();
+    }
+
+    /**
+     * The length counts the encoded bytes rather than the characters, and reading
+     * it does not spend the one read the body has left.
+     */
+    @Test
+    void theContentLengthIsTheEncodedLength() {
+        WebRequest request = TestRequest.post("/api/decks").body("café").build();
+
+        assertThat(request.raw().getContentLengthLong()).isEqualTo(5L);
+        assertThat(request.raw().getContentLength()).isEqualTo(5);
+        assertThat(request.body()).isEqualTo("café");
+    }
+
+    /** No body at all is -1, the way a container reports a request that sent none. */
+    @Test
+    void aRequestWithNoBodyHasNoContentLength() {
+        WebRequest request = TestRequest.get("/api/decks").build();
+
+        assertThat(request.raw().getContentLengthLong()).isEqualTo(-1L);
     }
 
     @Test

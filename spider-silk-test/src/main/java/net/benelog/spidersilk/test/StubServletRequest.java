@@ -47,6 +47,10 @@ import jakarta.servlet.http.Part;
  * the rest of the interface throws. The list of what it reads is short and does
  * not grow by accident — a method added there and missing here fails loudly on
  * the first test that reaches it, rather than returning a quiet null.
+ *
+ * <p>The body is one of those places: it is encoded once and read once, so a
+ * handler with a double-read bug fails its unit test instead of only failing in
+ * production.
  */
 final class StubServletRequest implements HttpServletRequest {
 
@@ -58,12 +62,16 @@ final class StubServletRequest implements HttpServletRequest {
     private final List<Cookie> cookies;
     private final List<Part> parts;
     private final boolean multipart;
-    private final String body;
+    private final byte[] body;
 
     private final Map<String, Object> attributes = new LinkedHashMap<>();
     private HttpSession session;
     private boolean secure;
     private String remoteAddress = "127.0.0.1";
+
+    /** The one reader or stream the body was handed out through; null until it was. */
+    private BufferedReader reader;
+    private ServletInputStream inputStream;
 
     StubServletRequest(String method, String path, Map<String, List<String>> headers,
             Map<String, List<String>> queryParams, Map<String, List<String>> formParams,
@@ -77,7 +85,7 @@ final class StubServletRequest implements HttpServletRequest {
         this.cookies = cookies;
         this.parts = parts;
         this.multipart = multipart;
-        this.body = body;
+        this.body = body.getBytes(StandardCharsets.UTF_8);
         this.session = session;
     }
 
@@ -227,15 +235,51 @@ final class StubServletRequest implements HttpServletRequest {
 
     // ---- Body ----
 
+    /**
+     * The one reader over the body, as Jetty, Tomcat, and Undertow all answer:
+     * the second call hands back the same object, already at its end, so a
+     * handler that reads the body twice sees the empty second read it would see
+     * behind a container rather than the body again.
+     *
+     * @throws IllegalStateException if the body was already taken as a stream
+     */
     @Override
     public BufferedReader getReader() {
-        return new BufferedReader(new InputStreamReader(
-                new ByteArrayInputStream(bodyBytes()), StandardCharsets.UTF_8));
+        if (inputStream != null) {
+            throw alreadyRead("getReader()", "getInputStream()");
+        }
+        if (reader == null) {
+            reader = new BufferedReader(new InputStreamReader(
+                    new ByteArrayInputStream(body), StandardCharsets.UTF_8));
+        }
+        return reader;
     }
 
+    /**
+     * The counterpart of {@link #getReader()}, under the same one-or-the-other
+     * rule and with the same repeated call answering the same stream.
+     *
+     * @throws IllegalStateException if the body was already taken as a reader
+     */
     @Override
     public ServletInputStream getInputStream() {
-        ByteArrayInputStream bytes = new ByteArrayInputStream(bodyBytes());
+        if (reader != null) {
+            throw alreadyRead("getInputStream()", "getReader()");
+        }
+        if (inputStream == null) {
+            inputStream = newInputStream();
+        }
+        return inputStream;
+    }
+
+    private static IllegalStateException alreadyRead(String asked, String taken) {
+        return new IllegalStateException("Cannot call " + asked + ": " + taken
+                + " has already been called for this request. A body is read once,"
+                + " here as behind a container.");
+    }
+
+    private ServletInputStream newInputStream() {
+        ByteArrayInputStream bytes = new ByteArrayInputStream(body);
         return new ServletInputStream() {
             @Override
             public int read() {
@@ -264,18 +308,15 @@ final class StubServletRequest implements HttpServletRequest {
         };
     }
 
-    private byte[] bodyBytes() {
-        return body.getBytes(StandardCharsets.UTF_8);
-    }
-
     @Override
     public int getContentLength() {
         return (int) getContentLengthLong();
     }
 
+    /** The encoded length, which is known without reading the body and does not consume it. */
     @Override
     public long getContentLengthLong() {
-        return body.isEmpty() ? -1 : bodyBytes().length;
+        return body.length == 0 ? -1 : body.length;
     }
 
     // ---- Multipart ----
