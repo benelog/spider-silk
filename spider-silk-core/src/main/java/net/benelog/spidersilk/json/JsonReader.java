@@ -27,8 +27,9 @@ public interface JsonReader<T> {
     /** A reader for a list, built from the reader for one element. */
     static <T> JsonReader<List<T>> list(JsonReader<T> element) {
         return json -> {
-            List<T> values = new ArrayList<>();
-            for (Json.JsonValue value : json.asArray().values()) {
+            Json.JsonArray array = json.asArray();
+            List<T> values = new ArrayList<>(array.size());
+            for (Json.JsonValue value : array) {
                 values.add(element.read(value));
             }
             return List.copyOf(values);

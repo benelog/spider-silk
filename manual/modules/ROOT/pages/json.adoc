@@ -61,7 +61,7 @@ for (var member : req.bodyJson().asObject()) {
 }
 ----
 
-The key list and the members handed to the loop are copies, so writing through one does not reach the object.
+The key list is a copy and the members handed to the loop are read-only, so writing through either does not reach the object.
 
 == `JsonCodec<T>`
 

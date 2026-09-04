@@ -99,7 +99,7 @@ class JsonTest {
                 Map.entry("toeic", 3L), Map.entry("basic", 1L), Map.entry("verbs", 7L));
     }
 
-    /** The keys read back are a copy: writing through one does not reach the object. */
+    /** What is read back is read-only: writing through it does not reach the object. */
     @Test
     void keysAndMembersAreReadOnly() {
         Json.JsonObject object = Json.obj().put("a", 1L);
@@ -111,6 +111,16 @@ class JsonTest {
         assertThatThrownBy(() -> object.iterator().next().setValue(Json.arr()))
                 .isInstanceOf(UnsupportedOperationException.class);
         assertThat(object.toJson()).isEqualTo("{\"a\":1}");
+
+        Json.JsonArray array = Json.arr().add(1L);
+        assertThatThrownBy(() -> array.values().add(Json.arr()))
+                .isInstanceOf(UnsupportedOperationException.class);
+        assertThatThrownBy(() -> {
+            var iterator = array.iterator();
+            iterator.next();
+            iterator.remove();
+        }).isInstanceOf(UnsupportedOperationException.class);
+        assertThat(array.toJson()).isEqualTo("[1]");
     }
 
     /** A value that may be a string or a number is told apart without a try/catch. */
@@ -152,6 +162,22 @@ class JsonTest {
         assertThatThrownBy(() -> Json.parse("[1,2")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> Json.parse("{} extra")).isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> Json.parse("tru")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Json.parse("\"abc")).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> Json.parse("\"a\\")).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** A string with no escape and one with an escape read the same, either way round. */
+    @Test
+    void parsesStringsWithAndWithoutEscapes() {
+        assertThat(Json.parse("\"plain text\"").asString()).isEqualTo("plain text");
+        assertThat(Json.parse("\"\"").asString()).isEmpty();
+        assertThat(Json.parse("\"a\\\"b\\\\c\\n\\t\\r\\b\\f\\/d\"").asString())
+                .isEqualTo("a\"b\\c\n\t\r\b\f/d");
+        assertThat(Json.parse("\"tail after \\u0041 escape\"").asString())
+                .isEqualTo("tail after A escape");
+
+        String source = "{\"plain\":\"no escape here\",\"escaped\":\"a\\nb\"}";
+        assertThat(Json.parse(source).toJson()).isEqualTo(source);
     }
 
     /**

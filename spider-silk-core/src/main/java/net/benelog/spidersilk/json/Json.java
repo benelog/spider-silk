@@ -1,6 +1,7 @@
 package net.benelog.spidersilk.json;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -306,13 +307,10 @@ public final class Json {
             return (value == null || value.isNull()) ? null : value.asArray();
         }
 
+        /** Members in document order, read-only: setValue throws rather than reaching the object. */
         @Override
         public Iterator<Map.Entry<String, JsonValue>> iterator() {
-            List<Map.Entry<String, JsonValue>> snapshot = new ArrayList<>(members.size());
-            for (var entry : members.entrySet()) {
-                snapshot.add(Map.entry(entry.getKey(), entry.getValue()));
-            }
-            return snapshot.iterator();
+            return Collections.unmodifiableMap(members).entrySet().iterator();
         }
 
         @Override
@@ -378,9 +376,10 @@ public final class Json {
             return List.copyOf(values);
         }
 
+        /** Elements in order, read-only: remove throws rather than reaching the array. */
         @Override
         public Iterator<JsonValue> iterator() {
-            return values().iterator();
+            return Collections.unmodifiableList(values).iterator();
         }
 
         @Override
@@ -527,9 +526,37 @@ public final class Json {
             }
         }
 
+        /**
+         * Most strings in a document hold no escape at all: keys, and every
+         * value that is plain text. Those are one substring of the body rather
+         * than a StringBuilder filled a character at a time, so the scan reads
+         * ahead to the closing quote and only hands over to
+         * {@link #parseEscapedString} when a backslash turns up.
+         */
         private String parseString() {
             expect('"');
-            StringBuilder sb = new StringBuilder();
+            int start = pos;
+            while (!atEnd()) {
+                char c = text.charAt(pos);
+                if (c == '"') {
+                    String value = text.substring(start, pos);
+                    pos++;
+                    return value;
+                }
+                if (c == '\\') {
+                    return parseEscapedString(start);
+                }
+                pos++;
+            }
+            throw error("Unexpected end of input");
+        }
+
+        /**
+         * The rest of a string that does hold an escape, with the run already
+         * scanned copied in as it stood. {@code pos} is at the backslash.
+         */
+        private String parseEscapedString(int start) {
+            StringBuilder sb = new StringBuilder().append(text, start, pos);
             while (true) {
                 char c = next();
                 if (c == '"') {
