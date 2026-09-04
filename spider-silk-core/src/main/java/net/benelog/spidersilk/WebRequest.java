@@ -3,7 +3,6 @@ package net.benelog.spidersilk;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringWriter;
 import java.io.UncheckedIOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -45,6 +44,12 @@ public final class WebRequest {
 
     static final String FLASH_ATTRIBUTE = "net.benelog.spidersilk.flash";
     static final String NEGOTIATED_ATTRIBUTE = "net.benelog.spidersilk.negotiated";
+
+    /** How much {@link #body()} reads at a time, and its buffer's floor. */
+    private static final int BODY_CHUNK = 8192;
+
+    /** The largest buffer a Content-Length header may reserve up front: 1MB. */
+    private static final int MAX_BODY_CAPACITY = 1024 * 1024;
 
     private final HttpServletRequest req;
     private final Map<String, String> pathParams;
@@ -541,12 +546,32 @@ public final class WebRequest {
      */
     public String body() {
         try {
-            StringWriter text = new StringWriter();
-            req.getReader().transferTo(text);
+            BufferedReader reader = req.getReader();
+            StringBuilder text = new StringBuilder(bodyCapacity());
+            char[] chunk = new char[BODY_CHUNK];
+            for (int read = reader.read(chunk); read >= 0; read = reader.read(chunk)) {
+                text.append(chunk, 0, read);
+            }
             return text.toString();
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /**
+     * How much room to give the buffer {@link #body()} fills. Content-Length
+     * counts bytes and the buffer holds characters, so for anything but ASCII
+     * this is an over-estimate — which is the right side to be on, since the
+     * point is to not grow at all. It is capped because the header is the
+     * caller's claim rather than a measurement, and a request that declares a
+     * gigabyte and sends nothing must not reserve one.
+     */
+    private int bodyCapacity() {
+        int declared = req.getContentLength();
+        if (declared <= 0) {
+            return BODY_CHUNK;
+        }
+        return Math.min(declared, MAX_BODY_CAPACITY);
     }
 
     /** Parses the body as JSON. Responds with 400 on invalid syntax. */
