@@ -201,7 +201,46 @@ class StaticFilesTest {
             assertThat(response.statusCode()).isEqualTo(200);
             assertThat(response.body()).isEmpty();
             assertThat(response.headers().firstValue("ETag")).isNotEmpty();
+            // The length the GET would have sent, taken off the file rather than
+            // off a body produced and thrown away.
+            assertThat(response.headers().firstValue("Content-Length").orElseThrow())
+                    .isEqualTo(String.valueOf(CSS.length()));
         });
+    }
+
+    /**
+     * A HEAD never produces the body, so nothing that reading the file's
+     * metadata opened is released by writing one. Five hundred in a row would
+     * hold five hundred descriptors if the release happened nowhere else, which
+     * is what counting them says.
+     */
+    @Test
+    void repeatedHeadsDoNotHoldTheFileOpen() {
+        WebTest.test(new App().staticFiles("/public"), client -> {
+            long before = openDescriptors();
+            for (int i = 0; i < 500; i++) {
+                HttpResponse<String> response = client.head("/style.css");
+
+                assertThat(response.statusCode()).isEqualTo(200);
+                assertThat(response.body()).isEmpty();
+                assertThat(response.headers().firstValue("Content-Length").orElseThrow())
+                        .isEqualTo(String.valueOf(CSS.length()));
+            }
+            // The container's own sockets move this a little; a leak moves it by
+            // one per request.
+            assertThat(openDescriptors() - before).isLessThan(100);
+        });
+    }
+
+    /** How many file descriptors this process holds, where the system will say. */
+    private static long openDescriptors() {
+        Path fds = Path.of("/proc/self/fd");
+        Assumptions.assumeTrue(Files.isDirectory(fds), "no /proc to count descriptors in");
+        try (var entries = Files.list(fds)) {
+            return entries.count();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     // ---- a directory on disk ----

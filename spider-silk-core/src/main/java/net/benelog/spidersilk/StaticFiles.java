@@ -187,6 +187,13 @@ public final class StaticFiles {
             response = response.header("Content-Encoding", encoded.encoding());
         }
         long bodyLength = body.length();
+        if ("HEAD".equals(req.getMethod())) {
+            // The length below is the whole answer, so the body is not written and
+            // nothing else will release what reading the metadata opened. The
+            // writer stays in place regardless: compression rewrites the answer
+            // after this point, and a discarded resource opens again if it runs.
+            body.discard();
+        }
         response = response
                 .body(new WebResponse.Stream(out -> {
                     try (InputStream in = body.open()) {
@@ -340,7 +347,7 @@ public final class StaticFiles {
             if (url == null || isDirectory(url)) {
                 return null;
             }
-            return new UrlResource(url.openConnection());
+            return new UrlResource(url);
         }
 
         /** An exploded classpath hands back directories too; a listing is not a file. */
@@ -356,7 +363,24 @@ public final class StaticFiles {
         }
     }
 
-    private record UrlResource(URLConnection connection) implements Resource {
+    /**
+     * A classpath resource, read through the connection that reading its
+     * metadata already opened. Asking a {@link URLConnection} for the
+     * modification time or the length connects it, and what that connects stays
+     * open until the body is read — so a resource whose body is not sent has to
+     * be discarded, and one that is discarded and then read after all opens the
+     * URL again rather than handing back a stream that is closed.
+     */
+    private static final class UrlResource implements Resource {
+
+        private final URL url;
+        private final URLConnection connection;
+        private boolean discarded;
+
+        UrlResource(URL url) throws IOException {
+            this.url = url;
+            this.connection = url.openConnection();
+        }
 
         @Override
         public long lastModified() {
@@ -370,11 +394,15 @@ public final class StaticFiles {
 
         @Override
         public InputStream open() throws IOException {
-            return connection.getInputStream();
+            return discarded ? url.openStream() : connection.getInputStream();
         }
 
         @Override
         public void discard() {
+            if (discarded) {
+                return;
+            }
+            discarded = true;
             try (InputStream ignored = connection.getInputStream()) {
                 // Opened only to be closed, which releases what the connection holds.
             } catch (IOException e) {

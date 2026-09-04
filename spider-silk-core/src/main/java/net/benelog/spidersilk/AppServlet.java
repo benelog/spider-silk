@@ -410,13 +410,20 @@ public class AppServlet extends HttpServlet {
     }
 
     /**
-     * A body produced as it goes. A HEAD still runs the writer, because only
-     * running it says how long the body would have been — and because the writer
-     * is what closes whatever it opened.
+     * A body produced as it goes. A HEAD runs the writer only to learn how long
+     * the body would have been, and throws the bytes away; when the answer
+     * already says how long it is — {@link WebResponse#file(java.nio.file.Path)} and
+     * {@link StaticFiles} both take the length off the file itself — there is
+     * nothing to learn, and the file is never read. What the writer would have
+     * released is released by whoever opened it, which for a static file is
+     * {@code StaticFiles} itself.
      */
     private void writeStream(StreamWriter writer, HttpServletResponse res, boolean head)
             throws Exception {
         if (head) {
+            if (res.getHeader("Content-Length") != null) {
+                return;
+            }
             CountingStream counted = new CountingStream();
             writer.write(counted);
             setLengthIfUnset(res, counted.written);
