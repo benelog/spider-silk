@@ -32,6 +32,10 @@
   `README.md` stays a Quick Start: installation, hello world, and links into the site.
   Do not grow the README back into the manual.
 - `notes/positioning.md` and `notes/decisions.md` stay Markdown; they are background, not the manual.
+- **Diagrams are draw.io sources in `manual/diagrams/`, exported to SVG in `manual/modules/ROOT/images/`.**
+  Edit the `.drawio` file and run `npm run diagrams` to regenerate the SVG; never edit an exported SVG by hand, and commit both files.
+  The export runs the draw.io desktop app (`drawio` on the path, under `xvfb-run` when there is no display), and the snap build of it cannot read `/tmp`.
+  A page embeds a diagram with a captioned `image::name.svg[alt,link=self]`, after the sentence that states what the diagram shows.
 - **The prose style is a skill**: `.claude/skills/doc-tone/SKILL.md`.
   Lead with the conclusion, one idea per sentence, the register of a technical reference manual.
   It covers `manual/`, `README.md`, and `notes/` alike, and carries the before/after examples and the verification steps.

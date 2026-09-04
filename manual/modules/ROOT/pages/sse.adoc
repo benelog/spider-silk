@@ -66,3 +66,8 @@ Ending a stream is not an error, and there are three ways it happens:
 
 A stream quieter than Jetty's 30-second connector idle timeout is closed by the server.
 `stream.comment("ping")` on a timer is what keeps it alive, and proxies in front usually want the same.
+
+The whole lifetime is one request, from the handler returning `WebResponse.sse(...)` to the stream closing:
+
+.The lifetime of an SSE stream
+image::sse.svg[The handler returns WebResponse.sse; AppServlet commits the headers, registers the stream with the app, and runs the writer, which sends events, heartbeats, and the retry delay until the handler returns, the browser goes away, or app.stop closes it; the stream is then closed, removed, and logged, and the browser reconnects with Last-Event-ID,link=self]

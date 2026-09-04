@@ -4,6 +4,13 @@
 A filter runs before or after a route handler.
 An exception handler turns an exception a handler threw into a response.
 An error handler fills in the body of a response that ended on a status with nothing to show.
+The diagram shows where each one runs, for one request through `AppServlet`.
+
+.One request through AppServlet
+image::request-pipeline.svg[The router finds a match; the before-filters, the handler, the after-filters, and the template renderer run in that order; an exception handler answers for anything that threw, and an error handler fills an empty error body; then the response is decorated, written, and logged,link=self]
+
+Static files answer only when no route matched, and only for `GET` and `HEAD`.
+The response-wide concerns from xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security] run after every answer, the static file and the error response included, which is why they are not after-filters.
 
 == Filters
 

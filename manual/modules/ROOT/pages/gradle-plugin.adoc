@@ -57,6 +57,10 @@ Applying the plugin applies `application`, https://github.com/GoogleContainerToo
   xref:native-image.adoc#container[The native image chapter] shows that switch in action.
 
 Every one of these lands before the build script's own blocks run, so overriding a convention is a matter of configuring `jib`, `graalvmNative`, or `java` as usual.
+The diagram shows what the plugin wires between the sources and the two images a build can produce:
+
+.From the sources to a container image
+image::build-pipeline.svg[The templates become Java classes through generateJte, compileJava and processResources produce the runtime classpath, and from there the Jib tasks build a JVM image on eclipse-temurin:21-jre in four layers, or nativeCompile builds the binary that the same Jib tasks put on distroless/base with -Pnative,link=self]
 
 == spiderSilk.jte()
 

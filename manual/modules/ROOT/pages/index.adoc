@@ -25,6 +25,12 @@ jte compiles templates to Java source, which matches how the rest of the framewo
 
 == Modules
 
+Every module depends on `spider-silk-core`, and core depends on none of them.
+A module is named after what it is tied to: a server, a template engine, or Jetty's WebSocket.
+
+.The modules and what they depend on
+image::modules.svg[Every module depends on spider-silk-core; the example application depends on core and openapi, and on the test harness and the server modules in test scope,link=self]
+
 [cols="1,2,2",options="header"]
 |===
 | Module | Contents | Dependencies

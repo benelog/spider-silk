@@ -48,6 +48,10 @@ A module only earns its place when there is something to settle beyond `compile(
 
 Rendering happens while the handler's exception handling still applies.
 A template that throws therefore reaches `app.exception(...)` like any other failure, and a `HEAD` of a rendered page reports the length the `GET` would have sent.
+The handler returns the template's name and model, and `AppServlet` renders them before the response is written:
+
+.Rendering a template
+image::template-rendering.svg[The handler returns WebResponse.template; AppServlet calls the TemplateRenderer, which appends the suffix and hands the name to jte, which renders a precompiled class, or compiles the template from the classpath, or from the source directory in development; the rendered text becomes the body,link=self]
 
 [#production]
 == Development and production

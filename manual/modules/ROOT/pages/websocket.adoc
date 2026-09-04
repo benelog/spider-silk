@@ -36,6 +36,10 @@ Paths are relative to the server's context path, the same as a route is.
 
 `WebSockets` is a `Consumer<Server>`, which is exactly what xref:server.adoc[`customizeServer`] takes.
 It is that hook and not `customizeContext` because Jetty's WebSocket container is built from the `Server`, from its buffer pool and its executor, and the context is not linked to a server until after the context customizers have run.
+The diagram shows where the upgrade handler lands in Jetty's handler chain, and which requests reach the servlet behind it:
+
+.Where the upgrade handler sits
+image::websocket-wiring.svg[JettyServer.start builds the Server, the ServletContextHandler, and AppServlet, then runs customizeServer; WebSockets.accept inserts a WebSocketUpgradeHandler ahead of the servlet; GET /echo with an Upgrade header is answered there, and GET / falls through to AppServlet,link=self]
 
 == The endpoint
 
@@ -69,6 +73,11 @@ A handler never calls `session.demand()`, because the module's endpoint is auto-
 
 The buffer passed to `onBinary` is Jetty's, and it goes back to the pool as soon as the method returns.
 Copy anything that has to outlive the call.
+
+One connection, from the upgrade request to the close, runs like this:
+
+.One WebSocket connection
+image::websocket-connection.svg[The upgrade handler calls the factory while the upgrade is still an HTTP request; a returned handler is wrapped in a SessionListener and the handshake is answered with 101, and null is answered with 403; each text or binary frame reaches onText or onBinary, and the connection ends through onClose, onError, or app.stop,link=self]
 
 == Refusing an upgrade
 

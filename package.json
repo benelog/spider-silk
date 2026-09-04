@@ -3,7 +3,8 @@
   "private": true,
   "description": "Antora documentation site for Spider Silk",
   "scripts": {
-    "docs": "antora --fetch antora-playbook.yml"
+    "docs": "antora --fetch antora-playbook.yml",
+    "diagrams": "sh manual/diagrams/export.sh"
   },
   "devDependencies": {
     "@antora/cli": "3.1.15",

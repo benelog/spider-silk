@@ -97,6 +97,9 @@ A source edit therefore re-runs compilation but never the download.
 That download is `resolveDependencies`, a task the xref:gradle-plugin.adoc[spider-silk plugin] registers to fetch the external runtime jars and nothing else.
 The stock `dependencies` report is not a substitute: it stops at metadata and caches no application jar at all.
 
+.The two stages of the Dockerfile
+image::dockerfile-stages.svg[The build stage copies the build scripts, runs resolveDependencies, copies the sources, runs installDist, and sorts the jars into tiers; the runtime stage copies the external jars, the spider-silk jars, the resources, and the loose classes as four layers, least volatile first, and starts the main class with an explicit classpath,link=self]
+
 The runtime stage then copies Jib's four tiers as four `COPY` instructions, least volatile first: the external jars, the `spider-silk-core` jar, the resources, and the application's classes as loose `.class` files rather than a jar.
 Skipping the jar removes the one thing that could change without the code changing.
 An archive repackaged with fresh timestamps reads as new content, where an unchanged `.class` file reads as what it is, so a comment-only edit that compiles to identical bytecode leaves even the classes layer cached.
