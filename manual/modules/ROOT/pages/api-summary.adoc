@@ -27,7 +27,7 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 * Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`, and `pathParam(name, parser)` for any other type.
   A name the pattern never declared throws `IllegalStateException`, not a 400.
   A `\{name*}` tail binds the rest of the path with its slashes, and `""` when it matched nothing
-* Parameters: `param` (400 when missing), `paramLong`, `paramBoolean` (`true` or `false` only), `paramEnum`, each with a `(..., default)` form for optional parameters; `params(name)` for repeated values
+* Parameters: `param` (400 when missing), `paramOrNull` (null when missing), `paramLong`, `paramBoolean` (`true` or `false` only), `paramEnum`, each with a `(..., default)` form for optional parameters; `params(name)` for repeated values
 * Any other type: `param(name, parser)` and `param(name, parser, default)`, where the parser is a `Function<String, T>` such as `UUID::fromString` or `LocalDate::parse`.
   A parser that throws `IllegalArgumentException` or `DateTimeException` answers 400 naming the parameter
 * Query vs. form: `queryParam`, `queryParams`, `formParam`, `formParams`
@@ -38,7 +38,7 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
   `UploadedFile` answers `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, and `writeTo(path)`
 * Body, unread: `bodyStream()` and `bodyReader()` hand it over for a parser from another library.
   `bodyNdjson(reader)` reads newline-delimited JSON lazily, and answers 400 naming the line; see xref:large-json.adoc[Large JSON and NDJSON] and xref:json-interop.adoc[External JSON Binding]
-* Session: `sessionAttr(key, Class<T>)` reads under a named type and fails on that line naming the key and both types, `sessionAttr(key)` leaves the cast to the call site, `sessionAttr(key, value)` writes, `removeSessionAttr(key)` removes one, and `invalidateSession()` ends the session
+* Session: `sessionAttr(key, Class<T>)` reads under a named type and fails on that line naming the key and both types, `sessionAttr(key)` leaves the cast to the call site, `setSessionAttr(key, value)` writes, `removeSessionAttr(key)` removes one, and `invalidateSession()` ends the session
 * Flash: `flash(key, value)`, read exactly once with `flashed(key)` on the request after a redirect, and a null value removes the key as it does for a session attribute
 * Errors: `errorMessage()` inside an `error(status, handler)` handler
 

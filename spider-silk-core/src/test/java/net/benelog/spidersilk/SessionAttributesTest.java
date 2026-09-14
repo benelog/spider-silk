@@ -2,6 +2,7 @@ package net.benelog.spidersilk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -57,12 +58,43 @@ class SessionAttributesTest {
     void aWrongTypeIsAServerError() {
         App app = new App()
                 .before(req -> {
-                    req.sessionAttr("user", "Ada");
+                    req.setSessionAttr("user", "Ada");
                     return null;
                 })
                 .get("/me", req -> WebResponse.text(req.sessionAttr("user", User.class).name()));
 
         WebTest.test(app, client -> assertThat(client.get("/me").statusCode()).isEqualTo(500));
+    }
+
+    /** A {@code Class} is a value like any other once the write has its own name. */
+    @Test
+    void aClassIsStoredWithoutACast() {
+        WebRequest request = TestRequest.get("/me").build();
+
+        request.setSessionAttr("kind", User.class);
+
+        assertThat(request.sessionAttr("kind", Class.class)).isEqualTo(User.class);
+    }
+
+    /** A null type is not a removal in disguise: it fails, and leaves the attribute where it was. */
+    @Test
+    void aNullTypeFailsAndNamesTheRemoval() {
+        WebRequest request = TestRequest.get("/me").sessionAttr("user", new User("Ada")).build();
+
+        assertThatNullPointerException()
+                .isThrownBy(() -> request.sessionAttr("user", null))
+                .withMessageContaining("removeSessionAttr");
+        assertThat(request.sessionAttr("user", User.class)).isEqualTo(new User("Ada"));
+    }
+
+    @Test
+    void removingAnAttributeWithoutASessionStartsNone() {
+        App app = new App().post("/forget", req -> {
+            req.removeSessionAttr("user");
+            return WebResponse.noContent();
+        });
+
+        WebTest.test(app, client -> assertThat(client.post("/forget").headers().firstValue("Set-Cookie")).isEmpty());
     }
 
     @Test
@@ -89,7 +121,7 @@ class SessionAttributesTest {
     void aLoggedOutVisitorStartsANewSession() {
         App app = new App()
                 .post("/login", req -> {
-                    req.sessionAttr("user", new User("Ada"));
+                    req.setSessionAttr("user", new User("Ada"));
                     return WebResponse.noContent();
                 })
                 .get("/me", req -> {
@@ -114,19 +146,18 @@ class SessionAttributesTest {
 
     /**
      * A null value removes the attribute, which is the container's rule for
-     * setAttribute. The value is a typed variable, because a literal null in
-     * that position resolves to the {@code Class} overload, which reads.
+     * setAttribute. The null is a literal: the write has a name of its own, so
+     * nothing resolves it to a read.
      */
     @Test
     void writingNullRemovesASessionAttribute() {
         App app = new App()
                 .post("/login", req -> {
-                    req.sessionAttr("user", new User("Ada"));
+                    req.setSessionAttr("user", new User("Ada"));
                     return WebResponse.noContent();
                 })
                 .post("/forget", req -> {
-                    User nobody = null;
-                    req.sessionAttr("user", nobody);
+                    req.setSessionAttr("user", null);
                     return WebResponse.noContent();
                 })
                 .get("/me", req -> WebResponse.text(String.valueOf(req.sessionAttr("user", User.class))));
@@ -139,7 +170,7 @@ class SessionAttributesTest {
         });
     }
 
-    /** Flashing null follows sessionAttr: it withdraws a flash set earlier in the same request. */
+    /** Flashing null follows setSessionAttr: it withdraws a flash set earlier in the same request. */
     @Test
     void flashingNullWithdrawsAFlashSetEarlier() {
         App app = new App()

@@ -10,10 +10,10 @@ Session attributes are read and written through the request:
 
 [source,java]
 ----
-req.sessionAttr("user", user);                    // creates the session if there is none yet
+req.setSessionAttr("user", user);                 // creates the session if there is none yet
 User user = req.sessionAttr("user", User.class);  // null when absent
 User same = req.sessionAttr("user");              // the same read, cast by the caller
-req.removeSessionAttr("user");
+req.removeSessionAttr("user");                    // creates no session to remove from
 ----
 
 Reading never creates a session, so a visitor who has not signed in costs no session object.
@@ -26,12 +26,12 @@ Name the type to be told where a wrong one is.
 Both are `IllegalStateException` territory rather than a 400: the value was put in the session by the application itself, so a type it does not expect is the application's own mistake and answers 500.
 Neither is reflection in the sense this framework avoids, since the type is written at the call site.
 
-`sessionAttr(key, User.class)` reads, which is the one place the two-argument forms overlap.
-Storing a `Class` as a session value therefore says `sessionAttr(key, (Object) User.class)`.
+The write is named `setSessionAttr`, and every read is named `sessionAttr`.
+No argument turns one into the other, so a `Class` is stored like any other value.
+A literal `null` passed as the type to `sessionAttr(key, type)` throws `NullPointerException`, and the message names `removeSessionAttr(key)`.
 
 Writing a null value removes the attribute, which is the container's rule for `HttpSession.setAttribute`.
-The value has to arrive typed, as a variable that holds null.
-A literal `null` in that position resolves to the `Class` overload and reads, so removing by name says `removeSessionAttr(key)`.
+`setSessionAttr(key, null)` and `removeSessionAttr(key)` therefore do the same thing, and only the second says so by name.
 
 == Ending a session
 

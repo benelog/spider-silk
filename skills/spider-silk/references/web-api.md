@@ -76,6 +76,7 @@ String name = req.pathParam("name");
 Direction d = req.pathParamEnum("direction", Direction.class);
 
 String q = req.param("q");                                  // missing -> 400
+String search = req.paramOrNull("q");                       // missing -> null; param(name, null) does not compile
 long page = req.paramLong("page", 1);                       // default covers absence, not garbage
 boolean archived = req.paramBoolean("archived", false);     // "true"/"false" only
 LocalDate since = req.param("since", LocalDate::parse);     // any other type: a parser
@@ -182,11 +183,11 @@ app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of(
 ## Sessions and flash
 
 ```java
-req.sessionAttr("user", user);                    // writing creates the session on demand
+req.setSessionAttr("user", user);                 // writing creates the session on demand
 User user = req.sessionAttr("user", User.class);  // reading never creates one; null when absent
                                                   //   wrong type -> IllegalStateException here (500)
 User same = req.sessionAttr("user");              // caller's cast; wrong type fails on the assignment
-req.removeSessionAttr("user");
+req.removeSessionAttr("user");                    // setSessionAttr(key, null) does the same
 req.invalidateSession();                          // logging out; no session = nothing to do
 
 // Post/Redirect/Get: a flash value is visible exactly once, on the request after the redirect

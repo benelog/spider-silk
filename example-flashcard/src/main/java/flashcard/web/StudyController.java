@@ -28,20 +28,20 @@ public class StudyController {
 
     public WebResponse startDeckStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
-        req.sessionAttr(SESSION_KEY,
+        req.setSessionAttr(SESSION_KEY,
                 studyService.startDeckSession(req.pathParamLong("deckId"), direction));
         return WebResponse.redirect("/study");
     }
 
     public WebResponse startTodayStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
-        req.sessionAttr(SESSION_KEY, studyService.startTodaySession(direction));
+        req.setSessionAttr(SESSION_KEY, studyService.startTodaySession(direction));
         return WebResponse.redirect("/study");
     }
 
     public WebResponse startSmartStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
-        req.sessionAttr(SESSION_KEY, studyService.startSmartSession(
+        req.setSessionAttr(SESSION_KEY, studyService.startSmartSession(
                 smartDeckService.getSmartDeck(req.pathParamLong("smartDeckId")), direction));
         return WebResponse.redirect("/study");
     }
@@ -49,7 +49,7 @@ public class StudyController {
     public WebResponse startPresetStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
         SmartCondition condition = req.pathParamEnum("condition", SmartCondition.class);
-        req.sessionAttr(SESSION_KEY, studyService.startPresetSession(condition, direction));
+        req.setSessionAttr(SESSION_KEY, studyService.startPresetSession(condition, direction));
         return WebResponse.redirect("/study");
     }
 

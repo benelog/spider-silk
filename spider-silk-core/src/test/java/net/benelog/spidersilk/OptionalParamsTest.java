@@ -38,6 +38,27 @@ class OptionalParamsTest {
         assertThat(request.paramBoolean("flipped")).isFalse();
     }
 
+    /** The optional string with no default: null for absence, the value, from query or form alike. */
+    @Test
+    void paramOrNullAnswersNullForAnAbsentParameter() {
+        WebRequest request = TestRequest.post("/decks")
+                .queryParam("q", "verbs")
+                .formParam("name", "Spanish")
+                .build();
+
+        assertThat(request.paramOrNull("q")).isEqualTo("verbs");
+        assertThat(request.paramOrNull("name")).isEqualTo("Spanish");
+        assertThat(request.paramOrNull("absent")).isNull();
+    }
+
+    /** An empty value was sent, so it is the value and not an absence. */
+    @Test
+    void paramOrNullKeepsAnEmptyValue() {
+        WebRequest request = TestRequest.get("/decks").queryParam("q", "").build();
+
+        assertThat(request.paramOrNull("q")).isEmpty();
+    }
+
     /** The default covers absence only: a value that is there but wrong is a 400. */
     @Test
     void anUnparseableValueIsStillA400RatherThanTheDefault() {

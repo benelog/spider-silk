@@ -62,8 +62,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 44 | `JsonObject` iterates as members, with `optObject`/`optArray` and `isString`/`isNumber`/`isBoolean` beside it | ✅ shipped |
 | 45 | `SseStream.retry(Duration)`, written where it is called | ✅ shipped |
 | 46 | Response header names compare case-insensitively, and stay single-valued | ✅ shipped |
+| 47 | `setSessionAttr` for the write, and `paramOrNull` for the optional string | ✅ shipped |
 
-Forty-eight of the forty-nine shipped.
+Forty-nine of the fifty shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -1039,6 +1040,33 @@ Nothing outside the class depends on which map it is: `AppServlet` walks `entryS
 
 Rejected on the way: normalising in the setter and leaving the map itself alone.
 That fixes what the framework writes and not what a caller reads, so `headers().get("content-type")` would still answer null and something like `headerIgnoringCase` would still be needed to make sense of the map it hands out.
+
+## 47 · A call site that says whether it reads or writes
+
+### 47. `setSessionAttr(key, value)` for the write, and `paramOrNull(name)` for the optional string
+
+A session write is `setSessionAttr(key, value)`, and `sessionAttr` is only ever a read.
+The write used to be `sessionAttr(key, Object)`, which shared a name and an arity with decision 41's `sessionAttr(key, Class<T>)`.
+Overload resolution chose between them by the static type of the second argument, so the call site did not say which one ran.
+`sessionAttr("user", null)` picked the read, because `Class<T>` is more specific than `Object`, and the attribute a caller meant to remove stayed in the session.
+Storing a `Class` needed an `(Object)` cast for the same reason.
+Decision 41 recorded that price as paid by nobody, and the literal `null` is the case that showed it was paid by the ordinary removal instead.
+
+The rename removes the overlap rather than documenting it.
+A read and a write under two names cannot be confused by any argument, a `Class` value included.
+`sessionAttr(key, type)` also checks its type argument now, so a literal `null` fails with a message naming `removeSessionAttr(key)` rather than with an anonymous `NullPointerException` further in.
+
+No deprecated overload was left behind, for the reason decision 35 gives.
+Every write with a non-`Class` value stops compiling, because no remaining overload takes an `Object`, so the break is mechanical and each error shows its fix.
+`TestRequest.sessionAttr(key, value)` keeps its name: it is a builder method with no read beside it, like `header(name, value)` and `cookie(name, value)`.
+
+`paramOrNull(name)` answers the value or null.
+`param(name, null)` was the obvious way to ask for that, and it does not compile, since `null` fits both `param(name, String)` and decision 38's `param(name, Function)`.
+That ambiguity is a compile error rather than a wrong answer, so both overloads stay, and the null default gains a name of its own.
+`OrNull` is decision 42's suffix, and `queryParam`, `formParam`, `cookie`, and `flashed` already answer null for an absent value.
+
+Rejected on the way: removing `param(name, defaultValue)` so that `null` resolves to the parser form.
+That turns a compile error into a `NullPointerException` at runtime, which is the trade this decision exists to undo.
 
 ## Rejected — decisions, with the reason
 

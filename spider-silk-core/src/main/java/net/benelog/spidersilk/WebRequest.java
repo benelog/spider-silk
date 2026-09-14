@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -32,7 +33,7 @@ import net.benelog.spidersilk.json.JsonReader;
  * asked in. The answer is the {@link WebResponse} the handler returns.
  *
  * <p>Reading is the whole of it, with one deliberate exception: the session.
- * {@link #sessionAttr(String, Object)} and {@link #flash(String, String)} write,
+ * {@link #setSessionAttr(String, Object)} and {@link #flash(String, String)} write,
  * because a session outlives the response and cannot be a value returned from
  * one. Cookies are the other half of that split — the ones the client sent are
  * read here, the ones the server sets belong to {@link WebResponse}.
@@ -335,9 +336,33 @@ public final class WebRequest {
         return value;
     }
 
+    /**
+     * An optional parameter: the value sent, or the default when it is absent.
+     * A default of null is {@link #paramOrNull(String)}, which says so by name —
+     * a literal {@code null} here matches the parser overload as well, and does
+     * not compile.
+     */
     public String param(String name, String defaultValue) {
         String value = parameter(name);
         return value != null ? value : defaultValue;
+    }
+
+    /**
+     * An optional parameter, or null when the request did not send it — the
+     * shape {@link #queryParam(String)}, {@link #cookie(String)}, and
+     * {@link #fileOrNull(String)} already have for a value whose absence is an
+     * answer rather than an error.
+     *
+     * <pre>{@code
+     * String search = req.paramOrNull("q");
+     * List<Deck> decks = search == null ? service.decks() : service.search(search);
+     * }</pre>
+     *
+     * <p>It reads the same merged view as {@link #param(String)}, and a query
+     * string that will not decode still answers 400.
+     */
+    public String paramOrNull(String name) {
+        return parameter(name);
     }
 
     public long paramLong(String name) {
@@ -870,11 +895,14 @@ public final class WebRequest {
      * {@link #pathParam(String)} gives an undeclared variable, and not the 400
      * that a caller's bad input earns.
      *
-     * <p>Storing a {@code Class} is the one case this overload gets in the way of:
-     * {@code sessionAttr(key, User.class)} reads, so writing that value says
-     * {@code sessionAttr(key, (Object) User.class)}.
+     * <p>Writing is {@link #setSessionAttr(String, Object)}, under a name of its
+     * own, so no argument makes this call write instead of read. A literal
+     * {@code null} as the type is not a removal either: it throws, naming
+     * {@link #removeSessionAttr(String)}.
      */
     public <T> T sessionAttr(String key, Class<T> type) {
+        Objects.requireNonNull(type,
+                "type: sessionAttr(key, type) reads; removing an attribute is removeSessionAttr(key)");
         HttpSession session = req.getSession(false);
         Object value = session == null ? null : session.getAttribute(key);
         if (value != null && !type.isInstance(value)) {
@@ -887,16 +915,24 @@ public final class WebRequest {
     /**
      * Stores a session attribute, creating the session if there is none yet.
      *
+     * <pre>{@code
+     * req.setSessionAttr("user", user);
+     * }</pre>
+     *
+     * <p>The write has a name of its own rather than sharing
+     * {@code sessionAttr} with the reads, so every value is stored as it is — a
+     * {@code Class} included — and no argument turns the call into a read.
+     *
      * <p>A null value removes the attribute, which is what
      * {@link HttpSession#setAttribute} does with one; {@link #flash(String, String)}
-     * follows the same rule. A literal {@code null} in this position resolves to
-     * {@link #sessionAttr(String, Class)} and reads instead, so removing by name
-     * says {@link #removeSessionAttr(String)}.
+     * follows the same rule. {@link #removeSessionAttr(String)} says the same
+     * thing by name, and does not create a session to remove from.
      */
-    public void sessionAttr(String key, Object value) {
+    public void setSessionAttr(String key, Object value) {
         req.getSession(true).setAttribute(key, value);
     }
 
+    /** Removes a session attribute. Does nothing, and creates no session, when there is none. */
     public void removeSessionAttr(String key) {
         HttpSession session = req.getSession(false);
         if (session != null) {
@@ -927,7 +963,7 @@ public final class WebRequest {
      * {@link #flashed(String)} and is the only request that can.
      *
      * <p>A null value removes the key, as it does for
-     * {@link #sessionAttr(String, Object)}: a handler withdraws a flash it set
+     * {@link #setSessionAttr(String, Object)}: a handler withdraws a flash it set
      * earlier in the same request by flashing null under that key. It withdraws
      * only what waits for the next request; a value this request received is
      * still what {@link #flashed(String)} answers. Withdrawing never creates a

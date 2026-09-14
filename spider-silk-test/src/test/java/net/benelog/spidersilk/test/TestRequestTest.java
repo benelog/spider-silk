@@ -334,7 +334,7 @@ class TestRequestTest {
     void whatAHandlerPutsInTheSessionIsReadableAfterwards() {
         WebRequest request = TestRequest.get("/decks").build();
 
-        request.sessionAttr("userId", 7L);
+        request.setSessionAttr("userId", 7L);
 
         assertThat((Long) request.sessionAttr("userId")).isEqualTo(7L);
     }

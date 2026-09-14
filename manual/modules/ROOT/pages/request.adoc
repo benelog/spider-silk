@@ -56,6 +56,8 @@ List<String> tags = req.params("tag");      // ?tag=java&tag=web, or a checkbox 
 
 The values come back in request order, and an absent parameter gives an empty list: "no boxes checked" is an answer, not a 400.
 `param(name)` still returns the first value and still answers 400 when there is none.
+`paramOrNull(name)` returns the first value, or null when there is none.
+`param(name, default)` returns the default instead, and a null default is spelled `paramOrNull(name)`: `param(name, null)` matches the parser form as well and does not compile.
 `paramLong("page", 1)` and `paramEnum("direction", Direction.class, Direction.FRONT)` supply a default for an optional typed parameter.
 The default covers absence only.
 A parameter that is present but unparseable is still a 400.

@@ -194,9 +194,10 @@ class JettyServerTest {
         app = new App()
                 .get("/param", req -> WebResponse.text(req.param("q")))
                 .get("/params", req -> WebResponse.text(req.params("q").toString()))
+                .get("/paramOrNull", req -> WebResponse.text(String.valueOf(req.paramOrNull("q"))))
                 .start(0);
 
-        for (String path : List.of("/param", "/params")) {
+        for (String path : List.of("/param", "/params", "/paramOrNull")) {
             String response = rawGet(path + "?q=%zz");
 
             assertThat(response).as(path).startsWith("HTTP/1.1 400");
