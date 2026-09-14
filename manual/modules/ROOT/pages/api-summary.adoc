@@ -34,10 +34,10 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 * Query vs. form: `queryParam`, `queryParams`, `formParam`, `formParams`
 * Content negotiation: `accepts(types...)` answers with the type the caller prefers out of the ones offered, 406 when it will take none of them; `acceptedTypes()` for the parsed `Accept` header
 * Cookies the client sent: `cookie(name)`, `cookies()`
-* Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects)
+* Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects); the text is read once and kept, so every call answers the whole body
 * Multipart uploads: `file(name)` (400 when absent), `fileOrNull(name)` (null when absent), `files(name)` for a field that carries several.
   `UploadedFile` answers `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, and `writeTo(path)`
-* Body, unread: `bodyStream()` and `bodyReader()` hand it over for a parser from another library.
+* Body, unread: `bodyStream()` and `bodyReader()` hand it over for a parser from another library, and neither mixes with the kept text: whichever goes second throws `IllegalStateException`.
   `bodyNdjson(reader)` reads newline-delimited JSON lazily, and answers 400 naming the line; see xref:large-json.adoc[Large JSON and NDJSON] and xref:json-interop.adoc[External JSON Binding]
 * Session: `sessionAttr(key, Class<T>)` reads under a named type and fails on that line naming the key and both types, `sessionAttr(key)` leaves the cast to the call site, `setSessionAttr(key, value)` writes, `removeSessionAttr(key)` removes one, and `invalidateSession()` ends the session
 * Flash: `flash(key, value)`, read exactly once with `flashed(key)` on the request after a redirect, and a null value removes the key as it does for a session attribute

@@ -64,8 +64,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 46 | Response header names compare case-insensitively, and stay single-valued | ✅ shipped |
 | 47 | `setSessionAttr` for the write, and `paramOrNull` for the optional string | ✅ shipped |
 | 48 | `queryParam(name, parser)` and `formParam(name, parser)`: a parser on a named source | ✅ shipped |
+| 49 | `body()` keeps the text it read, and the unread body goes out once | ✅ shipped |
 
-Fifty of the fifty-one shipped.
+Fifty-one of the fifty-two shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -1090,6 +1091,35 @@ The optional typed read takes a default, as `param(name, parser, default)` does.
 Rejected on the way: `queryParam(name, defaultString)` and `formParam(name, defaultString)`.
 Each would sit beside a `(name, Function)` overload, and a literal `null` would match both, which is the ambiguity decision 47 names.
 `queryParam(name)` and `formParam(name)` already answer null, so the string default would add a spelling and no capability.
+
+## 49 · A body read twice
+
+### 49. `body()` keeps the text it read, and the unread body goes out once
+
+`body()` reads the body into a string once and keeps it for the rest of the request.
+It used to read the container's reader on every call, and the servlet API hands back the same reader each time, so the second call answered `""`.
+A before-filter that read the body to verify a signature therefore left the handler's `bodyJson()` parsing an empty document, and the handler answered 400 for a body that was valid.
+
+The text was already whole in memory, so keeping it costs one reference.
+`bodyJson()` parses the kept text, and so does `bodyJson(reader)` through it.
+
+**The record lives on the servlet request, not on `WebRequest`.**
+A before-filter and the handler share one `WebRequest`, but decision 11's `RequestLogger` receives the one `AppServlet` built before routing, and `withPathParams` copies it.
+A field would be one per copy.
+A request attribute is shared by every wrapper of one servlet request, which is how flash and the negotiation flag already travel.
+
+**The unread body is a separate mode, and the two do not mix.**
+`bodyStream()`, `bodyReader()`, and `bodyNdjson()` still hand the body over unread, and decision 33 keeps NDJSON lazy.
+After the text was read, each of them throws `IllegalStateException`, because the container's reader is at its end and the stream would answer nothing.
+After the body was handed over, `body()` throws, because nobody can say how much of it the caller consumed.
+Both failures used to be the container's own `IllegalStateException` for one direction and an empty answer for the other, and the empty answer is the silent case this closes.
+
+Rejected on the way: caching the bytes so that `bodyStream()` could replay them after `body()`.
+It holds a large upload in memory, which the unread modes exist to avoid, and a caller who asks for the stream after the text already has the text.
+
+Form parsing and `raw()` stay outside the bookkeeping.
+A form-encoded POST is still spent by its first `param()` read, which the container performs and core does not see, so `body()` after it answers `""`, as decision 20's stub already models.
+What is read through `raw()` is read behind the framework's back, which is what decision 32 says of that hatch.
 
 ## Rejected — decisions, with the reason
 

@@ -46,6 +46,17 @@ public final class WebRequest {
     static final String FLASH_ATTRIBUTE = "net.benelog.spidersilk.flash";
     static final String NEGOTIATED_ATTRIBUTE = "net.benelog.spidersilk.negotiated";
 
+    /**
+     * How the body has been read so far: the text {@link #body()} read, or
+     * {@link #HANDED_OVER} once it went out unread. A request attribute rather
+     * than a field, because a before-filter, the handler, and the request logger
+     * each hold a {@code WebRequest} of their own over the one servlet request.
+     */
+    static final String BODY_ATTRIBUTE = "net.benelog.spidersilk.body";
+
+    /** The marker {@link #BODY_ATTRIBUTE} holds once the body went out as a stream or a reader. */
+    private static final Object HANDED_OVER = new Object();
+
     /** How much {@link #body()} reads at a time, and its buffer's floor. */
     private static final int BODY_CHUNK = 8192;
 
@@ -248,8 +259,8 @@ public final class WebRequest {
      *
      * <p>An escape hatch and not a shortcut. What is read through it is read
      * behind the framework's back — {@link #accepts} records that the answer
-     * varies by {@code Accept} and reading the header here does not, a body
-     * consumed here is a body {@link #body()} can no longer read — and a
+     * varies by {@code Accept} and reading the header here does not, and a body
+     * consumed here is one {@link #body()} neither keeps nor knows is gone — and a
      * handler that uses it is a handler tied to the servlet API rather than to
      * this one. {@link WebResponse#raw(ServletWriter)} is the same hatch on the
      * way out.
@@ -662,8 +673,38 @@ public final class WebRequest {
      * The body as text, exactly as it arrived: line endings are not rewritten
      * and a trailing newline is kept, so a signature over the raw body still
      * verifies.
+     *
+     * <p>The text is read once and kept for the rest of the request, so every
+     * call answers the whole body. A before-filter that reads it to check a
+     * signature leaves it in place for the handler's {@link #bodyJson()}.
+     *
+     * <p>The body goes out one way or the other: as this text, or unread through
+     * {@link #bodyStream()}, {@link #bodyReader()}, or {@link #bodyNdjson}.
+     * Asking for the text once it went out unread throws
+     * {@link IllegalStateException} rather than answering the part nobody read.
+     *
+     * <p>A form-encoded POST is spent by its first {@link #param} read, because
+     * the container parses the form by reading the body to its end, and this
+     * then answers {@code ""}. The reverse order leaves the form with nothing to
+     * parse. What is read through {@link #raw()} is read behind this method's
+     * back, and is not tracked.
      */
     public String body() {
+        Object read = req.getAttribute(BODY_ATTRIBUTE);
+        if (read instanceof String text) {
+            return text;
+        }
+        if (read != null) {
+            // Anything but the text is the marker handOver(...) left.
+            throw new IllegalStateException("The body was already handed over unread, through"
+                    + " bodyStream(), bodyReader(), or bodyNdjson(), so body() cannot read it as text");
+        }
+        String text = readBody();
+        req.setAttribute(BODY_ATTRIBUTE, text);
+        return text;
+    }
+
+    private String readBody() {
         try {
             BufferedReader reader = req.getReader();
             StringBuilder text = new StringBuilder(bodyCapacity());
@@ -675,6 +716,19 @@ public final class WebRequest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /**
+     * Records that the body goes out unread, after checking that nobody read it
+     * as text first. The container enforces the stream-or-reader rule on its
+     * own; this adds the rule the cached text needs.
+     */
+    private void handOver(String asked) {
+        if (req.getAttribute(BODY_ATTRIBUTE) instanceof String) {
+            throw new IllegalStateException("The body was already read as text by body() or bodyJson(),"
+                    + " so " + asked + " has nothing left to hand over. Read the text again with body()");
+        }
+        req.setAttribute(BODY_ATTRIBUTE, HANDED_OVER);
     }
 
     /**
@@ -693,7 +747,12 @@ public final class WebRequest {
         return Math.min(declared, MAX_BODY_CAPACITY);
     }
 
-    /** Parses the body as JSON. Responds with 400 on invalid syntax. */
+    /**
+     * Parses the body as JSON. Responds with 400 on invalid syntax.
+     *
+     * <p>It parses the text {@link #body()} keeps, so a filter that read the
+     * body first does not leave this with nothing to parse.
+     */
     public Json.JsonValue bodyJson() {
         try {
             return Json.parse(body());
@@ -727,11 +786,12 @@ public final class WebRequest {
      * }
      * }</pre>
      *
-     * <p>The servlet API allows one or the other, not both: a request that has
-     * already gone through {@link #body()}, {@link #bodyJson()}, or
-     * {@link #bodyNdjson} — all of which read characters — throws
-     * {@link IllegalStateException} here, and the reverse holds too.
-     * Whichever a handler picks, it picks once.
+     * <p>The body goes out once, one way: a request whose text
+     * {@link #body()} or {@link #bodyJson()} already read throws
+     * {@link IllegalStateException} here, and so does one whose body went out
+     * through {@link #bodyReader()} or {@link #bodyNdjson}. {@code body()} after
+     * this throws as well. The stream itself is the container's, so a second
+     * call answers the same stream, at wherever the first reader left it.
      *
      * <p>A form-encoded POST is spent by its first {@link #param} read as well,
      * because the container parses the form by reading the body to its end. The
@@ -740,6 +800,7 @@ public final class WebRequest {
      * {@link #formParam} with nothing to parse once the body has been read here.
      */
     public InputStream bodyStream() {
+        handOver("bodyStream()");
         try {
             return req.getInputStream();
         } catch (IOException e) {
@@ -750,9 +811,10 @@ public final class WebRequest {
     /**
      * The body as characters, unread, decoded with the charset the request
      * declared. The counterpart of {@link #bodyStream()} for a library that
-     * reads text, and subject to the same one-or-the-other rule.
+     * reads text, and subject to the same one-way rule.
      */
     public BufferedReader bodyReader() {
+        handOver("bodyReader()");
         try {
             return req.getReader();
         } catch (IOException e) {
@@ -776,6 +838,10 @@ public final class WebRequest {
      * reader rejects answers 400 naming the line — which is the reason to read
      * NDJSON rather than one big array when the body is large: the report says
      * where the body went wrong, not just that it did.
+     *
+     * <p>The body goes out unread, as it does through {@link #bodyReader()}, so
+     * {@link #body()} cannot read it afterwards and a body already read as text
+     * throws {@link IllegalStateException} here.
      *
      * <p>The stream is lazy, so those failures happen where it is consumed. Do
      * that before returning the response: inside a

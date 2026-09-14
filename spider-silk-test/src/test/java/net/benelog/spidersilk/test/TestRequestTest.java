@@ -170,7 +170,7 @@ class TestRequestTest {
         assertThat(request.body()).isEqualTo("plain text");
         assertThatIllegalStateException()
                 .isThrownBy(request::bodyStream)
-                .withMessageContaining("getReader()");
+                .withMessageContaining("already read as text");
     }
 
     @Test
@@ -180,20 +180,22 @@ class TestRequestTest {
         request.bodyStream();
         assertThatIllegalStateException()
                 .isThrownBy(request::body)
-                .withMessageContaining("getInputStream()");
+                .withMessageContaining("handed over unread");
     }
 
     /**
-     * The second read is empty rather than the body again: the servlet API hands
-     * back the same reader, and by then it is at its end. That is what all three
-     * containers do, so it is what a test has to see.
+     * The second read is the body again, because {@code body()} keeps the text it
+     * read. The stub hands back one reader, already at its end on the second
+     * call, as all three containers do, so this passes only because the text is
+     * kept and not because the stub reads the body afresh.
      */
     @Test
-    void theBodyIsGoneAfterItHasBeenRead() {
+    void theBodyReadsTheSameTextTwice() throws Exception {
         WebRequest request = TestRequest.post("/api/decks").body("plain text").build();
 
         assertThat(request.body()).isEqualTo("plain text");
-        assertThat(request.body()).isEmpty();
+        assertThat(request.body()).isEqualTo("plain text");
+        assertThat(request.raw().getReader().read()).isEqualTo(-1);
     }
 
     /** Form fields are the body too, encoded the way a browser posts a form. */

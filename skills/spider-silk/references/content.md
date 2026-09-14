@@ -92,8 +92,8 @@ NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
 ```
 
 - Never route a library's output through `JsonWriter<T>`: it returns a `Json.JsonValue`, so the document would be re-parsed the moment the library finished writing it.
-- A body reads as bytes or as characters, never both.
-  After `body()`, `bodyJson()`, or `bodyNdjson()` — all of which read characters — `bodyStream()` throws `IllegalStateException`, and the reverse holds too.
+- A body is read one way: as the text `body()` keeps (so `bodyJson()` and a second `body()` see the whole body, even after a filter read it), or unread through `bodyStream()`, `bodyReader()`, or `bodyNdjson()`.
+  Mixing the two throws `IllegalStateException` whichever comes second, and the stream and the reader exclude each other too.
 - A form-encoded POST is spent by its first `param()` read, since the container parses the form by reading the body.
   `bodyStream()` afterwards answers an empty stream rather than throwing, and a body read as bytes first leaves `formParam()` with no fields.
 - Core has not been told the body is JSON, so the library's own failures are the application's to answer: map them with `app.exception(JsonProcessingException.class, ...)` or throw `HttpException(HttpStatus.BAD_REQUEST, ...)`.

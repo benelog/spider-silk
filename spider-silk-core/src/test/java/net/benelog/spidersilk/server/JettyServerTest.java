@@ -257,6 +257,28 @@ class JettyServerTest {
         assertThat(postForm("/bytes-first").body()).isEqualTo("name=English|null");
     }
 
+    /**
+     * The body read as text is kept, so a filter that reads it leaves it for the
+     * handler, and handing it over unread afterwards is refused rather than
+     * answered with an empty stream. The container hands back one reader, already
+     * at its end, so this is the claim that core keeps the text and not that the
+     * container reads the body twice.
+     */
+    @Test
+    void theBodyReadAsTextIsKeptForTheRestOfTheRequest() throws Exception {
+        app = new App()
+                .before(req -> {
+                    req.body();
+                    return null;
+                })
+                .post("/text-twice", req -> WebResponse.text(req.body() + "|" + req.body()))
+                .post("/text-then-bytes", req -> WebResponse.text(bytesOf(req.bodyStream())))
+                .start(0);
+
+        assertThat(postForm("/text-twice").body()).isEqualTo("name=English|name=English");
+        assertThat(postForm("/text-then-bytes").statusCode()).isEqualTo(500);
+    }
+
     private HttpResponse<String> postForm(String path) throws IOException, InterruptedException {
         HttpRequest request = HttpRequest
                 .newBuilder(URI.create("http://localhost:" + app.port() + path))

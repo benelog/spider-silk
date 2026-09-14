@@ -94,12 +94,12 @@ int pg = req.queryParam("page", Integer::parseInt, 1);      // ...or the default
 String theme = req.cookie("theme");                         // null when absent
 Map<String, String> all = req.cookies();
 
-String body = req.body();
+String body = req.body();                                   // read once, kept: a filter's read leaves it for the handler
 Json.JsonValue json = req.bodyJson();                       // unparseable -> 400
 NewDeck deck = req.bodyJson(NEW_DECK_READER);               // reader rejection -> 400
 Stream<Card> cards = req.bodyNdjson(CARD_READER);           // lazy; a bad line -> 400 naming it
 InputStream in = req.bodyStream();                          // unread bytes, for another library's parser
-BufferedReader r = req.bodyReader();                        // unread characters; bytes or characters, never both
+BufferedReader r = req.bodyReader();                        // unread characters; never mixed with body() or each other
 UploadedFile file = req.file("file");                       // missing part or not multipart -> 400
 UploadedFile avatar = req.fileOrNull("avatar");             // optional upload; null when absent
 List<UploadedFile> pages = req.files("pages");              // one field, several files; empty when none
