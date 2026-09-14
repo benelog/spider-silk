@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -13,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -237,6 +240,55 @@ class UndertowServerTest {
         HttpResponse<String> traversal = get("/../secret.txt");
         assertThat(traversal.statusCode()).isGreaterThanOrEqualTo(400);
         assertThat(traversal.body()).doesNotContain("not yours");
+    }
+
+    /**
+     * A query string that will not decode is a 400 through the merged readers
+     * too. Undertow decodes the query string while it parses the request, so
+     * here the 400 is its own and the handler never runs; the status is what
+     * core promises, and it holds.
+     */
+    @Test
+    void aMalformedQueryStringIsA400ThroughParamAndParams() {
+        startOnUndertow(new App()
+                .get("/param", req -> WebResponse.text(req.param("q")))
+                .get("/params", req -> WebResponse.text(req.params("q").toString())));
+
+        for (String path : List.of("/param", "/params")) {
+            assertThat(rawGet(path + "?q=%zz")).as(path).startsWith("HTTP/1.1 400");
+        }
+    }
+
+    /** Decoding the query string first leaves a form body to the container, as before. */
+    @Test
+    void aFormBodyIsStillReadThroughParam() throws Exception {
+        startOnUndertow(new App()
+                .post("/submit", req -> WebResponse.text(req.param("name") + " " + req.params("tag"))));
+
+        HttpRequest request = HttpRequest
+                .newBuilder(URI.create("http://localhost:" + app.port() + "/submit?tag=a"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("name=Ada&tag=b"))
+                .build();
+
+        assertThat(client.send(request, HttpResponse.BodyHandlers.ofString()).body())
+                .isEqualTo("Ada [a, b]");
+    }
+
+    /**
+     * Sends a GET the java.net.http client cannot build, since {@link URI}
+     * refuses a percent-escape that is not two hex digits. The whole response
+     * is returned as text.
+     */
+    private String rawGet(String target) {
+        String request = "GET " + target + " HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+        try (Socket socket = new Socket("localhost", app.port())) {
+            socket.getOutputStream().write(request.getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+            return new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     @Test

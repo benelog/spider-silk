@@ -143,6 +143,62 @@ class RequestApiTest {
     }
 
     /**
+     * The merged readers decode the query string before the container parses
+     * it, so they answer the same 400 as {@code queryParam} rather than the
+     * container's own failure.
+     */
+    @Test
+    void theMergedReadersAnswer400ForAMalformedQueryStringToo() {
+        App app = new App()
+                .get("/param", req -> WebResponse.text(req.param("q")))
+                .get("/param-default", req -> WebResponse.text(req.param("q", "none")))
+                .get("/params", req -> WebResponse.text(req.params("q").toString()))
+                .get("/page", req -> WebResponse.text(String.valueOf(req.paramLong("page", 1))));
+
+        WebTest.test(app, client -> {
+            for (String path : List.of("/param", "/param-default", "/params", "/page")) {
+                String response = raw(client, "",
+                        "GET " + path + "?q=%zz HTTP/1.1", "Host: localhost", "Connection: close");
+
+                assertThat(response).as(path).startsWith("HTTP/1.1 400");
+                assertThat(response).as(path).contains("Query string is not valid URL encoding");
+            }
+        });
+    }
+
+    /** Checking the query string first changes nothing about how a form body is read. */
+    @Test
+    void aFormBodyIsStillReadThroughParam() {
+        App app = new App().post("/submit", req -> WebResponse.text(
+                req.param("name") + " " + req.params("tag")));
+
+        WebTest.test(app, client -> {
+            var response = client.send(request -> request.uri(URI.create(client.url(
+                            "/submit?tag=a")))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString("name=Ada&tag=b")));
+
+            assertThat(response.body()).isEqualTo("Ada [a, b]");
+        });
+    }
+
+    /** Reading a query parameter through param leaves a body that is not a form unread. */
+    @Test
+    void aQueryParameterReadThroughParamLeavesTheBodyUnread() {
+        App app = new App().post("/echo", req -> WebResponse.text(
+                req.param("page") + " " + req.body()));
+
+        WebTest.test(app, client -> {
+            var response = client.send(request -> request.uri(URI.create(client.url(
+                            "/echo?page=2")))
+                    .header("Content-Type", "text/plain")
+                    .POST(HttpRequest.BodyPublishers.ofString("hello")));
+
+            assertThat(response.body()).isEqualTo("2 hello");
+        });
+    }
+
+    /**
      * Sends a request the java.net.http client cannot build: {@link URI} refuses
      * a percent-escape that is not two hex digits, so a malformed query string
      * has to go on the wire by hand. The whole response is returned as text.

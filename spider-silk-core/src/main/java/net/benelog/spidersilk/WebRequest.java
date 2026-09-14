@@ -322,9 +322,13 @@ public final class WebRequest {
 
     // ---- Query string and form parameters ----
 
-    /** A required parameter. Responds with 400 if missing. */
+    /**
+     * A required parameter. Responds with 400 if missing, and with 400 when the
+     * query string will not decode, the same answer {@link #queryParam(String)}
+     * gives.
+     */
     public String param(String name) {
-        String value = req.getParameter(name);
+        String value = parameter(name);
         if (value == null) {
             throw new HttpException(HttpStatus.BAD_REQUEST, "Missing required parameter: " + name);
         }
@@ -332,7 +336,7 @@ public final class WebRequest {
     }
 
     public String param(String name, String defaultValue) {
-        String value = req.getParameter(name);
+        String value = parameter(name);
         return value != null ? value : defaultValue;
     }
 
@@ -346,7 +350,7 @@ public final class WebRequest {
      * not a number is still a 400, the same contract as {@link #paramLong(String)}.
      */
     public long paramLong(String name, long defaultValue) {
-        String value = req.getParameter(name);
+        String value = parameter(name);
         return value == null ? defaultValue : parseLong(name, value);
     }
 
@@ -366,7 +370,7 @@ public final class WebRequest {
      * the value is neither {@code true} nor {@code false}.
      */
     public boolean paramBoolean(String name, boolean defaultValue) {
-        String value = req.getParameter(name);
+        String value = parameter(name);
         return value == null ? defaultValue : parseBoolean(name, value);
     }
 
@@ -415,8 +419,21 @@ public final class WebRequest {
      * }</pre>
      */
     public <T> T param(String name, Function<String, T> parser, T defaultValue) {
-        String value = req.getParameter(name);
+        String value = parameter(name);
         return value == null ? defaultValue : parse(name, value, parser);
+    }
+
+    /**
+     * The container's merged view of one parameter, once the query string has
+     * been through {@link #parsedQuery()}. A query string that will not decode
+     * therefore answers 400 here, as it does for {@link #queryParam(String)},
+     * rather than reaching the container's parser, which fails on it in a way
+     * of its own and differently on each server. Only the query string is read
+     * first: the body is still read by the container, when and as it was.
+     */
+    private String parameter(String name) {
+        parsedQuery();
+        return req.getParameter(name);
     }
 
     private static long parseLong(String name, String value) {
@@ -455,6 +472,8 @@ public final class WebRequest {
      * {@link #param(String)} returns the first of these.
      */
     public List<String> params(String name) {
+        // The query string is checked first, for the reason parameter(name) gives.
+        parsedQuery();
         String[] values = req.getParameterValues(name);
         return values == null ? List.of() : List.of(values);
     }
@@ -487,8 +506,6 @@ public final class WebRequest {
 
     /** Every value of a repeated form field. */
     public List<String> formParams(String name) {
-        // The query string is read first so that a malformed one answers 400
-        // here too, rather than reaching the container's own parser as a 500.
         List<String> fromQuery = queryParams(name);
         List<String> merged = params(name);
         if (fromQuery.isEmpty()) {
@@ -981,6 +998,7 @@ public final class WebRequest {
         // The same servlet request, so the same path: the copy is made after
         // routing has already asked for it.
         copy.path = path;
+        copy.parsedQuery = parsedQuery;
         copy.errorMessage = errorMessage;
         return copy;
     }

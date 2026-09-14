@@ -91,6 +91,8 @@ String name = req.formParam("name");      // form body only
 List<String> tags = req.formParams("tag");
 ----
 
+A query string that will not decode, such as `?q=%zz`, answers 400 through `param`, `queryParam`, and `formParam` in every form, whichever name is read.
+
 == Content negotiation
 
 `accepts` reads the `Accept` header and reports which of the media types a handler offers the caller wants:

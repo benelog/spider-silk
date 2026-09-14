@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -179,6 +181,59 @@ class JettyServerTest {
                 .header("Content-Type", "multipart/form-data; boundary=" + boundary)
                 .POST(HttpRequest.BodyPublishers.ofString(body))
                 .build();
+    }
+
+    /**
+     * A query string that will not decode is a 400 through the merged readers
+     * too. Jetty's own parser fails on it differently, so this is the claim
+     * that core decodes the query string before the container does.
+     */
+    @Test
+    void aMalformedQueryStringIsA400ThroughParamAndParams() {
+        app = new App()
+                .get("/param", req -> WebResponse.text(req.param("q")))
+                .get("/params", req -> WebResponse.text(req.params("q").toString()))
+                .start(0);
+
+        for (String path : List.of("/param", "/params")) {
+            String response = rawGet(path + "?q=%zz");
+
+            assertThat(response).as(path).startsWith("HTTP/1.1 400");
+            assertThat(response).as(path).contains("Query string is not valid URL encoding");
+        }
+    }
+
+    /** Decoding the query string first leaves a form body to the container, as before. */
+    @Test
+    void aFormBodyIsStillReadThroughParam() throws Exception {
+        app = new App()
+                .post("/submit", req -> WebResponse.text(req.param("name") + " " + req.params("tag")))
+                .start(0);
+
+        HttpRequest request = HttpRequest
+                .newBuilder(URI.create("http://localhost:" + app.port() + "/submit?tag=a"))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("name=Ada&tag=b"))
+                .build();
+
+        assertThat(client.send(request, HttpResponse.BodyHandlers.ofString()).body())
+                .isEqualTo("Ada [a, b]");
+    }
+
+    /**
+     * Sends a GET the java.net.http client cannot build, since {@link URI}
+     * refuses a percent-escape that is not two hex digits. The whole response
+     * is returned as text.
+     */
+    private String rawGet(String target) {
+        String request = "GET " + target + " HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n";
+        try (Socket socket = new Socket("localhost", app.port())) {
+            socket.getOutputStream().write(request.getBytes(StandardCharsets.US_ASCII));
+            socket.getOutputStream().flush();
+            return new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 
     @Test
