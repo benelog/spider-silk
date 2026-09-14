@@ -22,9 +22,11 @@ Do not route another library's output through `JsonWriter<T>`: it returns a `Jso
 The library serializes, and `json(String)` sends what it produced.
 
 The servlet API allows a body to be read as bytes or as characters, not both.
-A request that has already been through `body()`, `bodyJson()`, `bodyNdjson()`, or `param()` throws `IllegalStateException` from `bodyStream()`, because all four read characters.
+A request that has already been through `body()`, `bodyJson()`, or `bodyNdjson()` throws `IllegalStateException` from `bodyStream()`, because all three read characters.
 The reverse holds as well.
 Whichever a handler picks, it picks once.
+A form-encoded POST is also spent by its first `param()` read, because the container parses the form by reading the body to its end.
+`bodyStream()` then answers an empty stream rather than throwing, and a body read as bytes first leaves `formParam()` with no fields.
 
 == Jackson
 

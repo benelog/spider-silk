@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.StringJoiner;
 
 import jakarta.servlet.AsyncContext;
 import jakarta.servlet.DispatcherType;
@@ -51,6 +50,13 @@ import jakarta.servlet.http.Part;
  * <p>The body is one of those places: it is encoded once and read once, so a
  * handler with a double-read bug fails its unit test instead of only failing in
  * production.
+ *
+ * <p>Parameters are part of that rule when the body is a form. A container
+ * parses a form body by reading it to its end, so the first parameter read
+ * leaves the reader and the stream nothing, and a body already taken as a
+ * reader or a stream is not parsed at all. The stub keeps the fields in a map
+ * rather than parsing them out of the bytes, but it answers both orders the
+ * way Jetty, Tomcat, and Undertow do.
  */
 final class StubServletRequest implements HttpServletRequest {
 
@@ -72,6 +78,9 @@ final class StubServletRequest implements HttpServletRequest {
     /** The one reader or stream the body was handed out through; null until it was. */
     private BufferedReader reader;
     private ServletInputStream inputStream;
+
+    /** Whether a parameter read has parsed the form body, which leaves none of it to read. */
+    private boolean formParsed;
 
     StubServletRequest(String method, String path, Map<String, List<String>> headers,
             Map<String, List<String>> queryParams, Map<String, List<String>> formParams,
@@ -191,7 +200,7 @@ final class StubServletRequest implements HttpServletRequest {
     @Override
     public String[] getParameterValues(String name) {
         List<String> merged = new ArrayList<>(queryParams.getOrDefault(name, List.of()));
-        merged.addAll(formParams.getOrDefault(name, List.of()));
+        merged.addAll(form().getOrDefault(name, List.of()));
         return merged.isEmpty() ? null : merged.toArray(new String[0]);
     }
 
@@ -217,20 +226,34 @@ final class StubServletRequest implements HttpServletRequest {
 
     private Set<String> parameterNames() {
         Set<String> names = new LinkedHashSet<>(queryParams.keySet());
-        names.addAll(formParams.keySet());
+        names.addAll(form().keySet());
         return names;
+    }
+
+    /**
+     * The form fields a container would parse out of the body at this point.
+     *
+     * <p>The first read parses the form, and the body is spent from then on.
+     * A body already handed out as a reader or a stream is never parsed, so the
+     * fields are absent: Tomcat and Undertow answer that as soon as either was
+     * taken, and all three containers once a byte of it was read. The fields of
+     * a multipart form are parts rather than this body, so they stay outside the
+     * rule.
+     */
+    private Map<String, List<String>> form() {
+        if (formParsed || formParams.isEmpty() || multipart) {
+            return formParams;
+        }
+        if (reader != null || inputStream != null) {
+            return Map.of();
+        }
+        formParsed = true;
+        return formParams;
     }
 
     @Override
     public String getQueryString() {
-        if (queryParams.isEmpty()) {
-            return null;
-        }
-        StringJoiner query = new StringJoiner("&");
-        queryParams.forEach((name, values) ->
-                values.forEach(value -> query.add(TestRequest.encode(name)
-                        + "=" + TestRequest.encode(value))));
-        return query.toString();
+        return queryParams.isEmpty() ? null : TestRequest.urlEncoded(queryParams);
     }
 
     // ---- Body ----
@@ -239,7 +262,8 @@ final class StubServletRequest implements HttpServletRequest {
      * The one reader over the body, as Jetty, Tomcat, and Undertow all answer:
      * the second call hands back the same object, already at its end, so a
      * handler that reads the body twice sees the empty second read it would see
-     * behind a container rather than the body again.
+     * behind a container rather than the body again. A form body a parameter
+     * read has parsed is already at its end the first time.
      *
      * @throws IllegalStateException if the body was already taken as a stream
      */
@@ -250,7 +274,7 @@ final class StubServletRequest implements HttpServletRequest {
         }
         if (reader == null) {
             reader = new BufferedReader(new InputStreamReader(
-                    new ByteArrayInputStream(body), StandardCharsets.UTF_8));
+                    new ByteArrayInputStream(unread()), StandardCharsets.UTF_8));
         }
         return reader;
     }
@@ -278,8 +302,13 @@ final class StubServletRequest implements HttpServletRequest {
                 + " here as behind a container.");
     }
 
+    /** The bytes left to read: none once a parameter read has parsed the form out of them. */
+    private byte[] unread() {
+        return formParsed ? new byte[0] : body;
+    }
+
     private ServletInputStream newInputStream() {
-        ByteArrayInputStream bytes = new ByteArrayInputStream(body);
+        ByteArrayInputStream bytes = new ByteArrayInputStream(unread());
         return new ServletInputStream() {
             @Override
             public int read() {

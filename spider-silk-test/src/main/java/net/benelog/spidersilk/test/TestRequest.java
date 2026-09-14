@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.StringJoiner;
 import java.util.TreeMap;
 
 import jakarta.servlet.http.Cookie;
@@ -48,10 +49,13 @@ import net.benelog.spidersilk.json.JsonWriter;
  * <p>What the request answers is what a container would answer, in the places
  * that a handler can tell apart: query and form parameters stay distinguishable
  * ({@link #queryParam} versus {@link #formParam}), a header lookup ignores case,
- * and asking for a file on a request that has none fails the way a real
- * non-multipart request fails.
+ * asking for a file on a request that has none fails the way a real
+ * non-multipart request fails, and a form body is read once, either as fields
+ * or as bytes.
  */
 public final class TestRequest {
+
+    private static final String FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
 
     private final String method;
     private final String path;
@@ -130,6 +134,12 @@ public final class TestRequest {
      * arrives in. Kept apart from {@link #queryParam} so that
      * {@code req.formParam} and {@code req.queryParam} answer differently, the
      * way they do behind a real container.
+     *
+     * <p>The fields are also the body: the request carries them URL-encoded,
+     * under {@code application/x-www-form-urlencoded} unless a
+     * {@code Content-Type} header says otherwise. A form is one body, so it
+     * cannot be combined with {@link #body}. On a request with a {@link #file},
+     * the fields are the text fields of the multipart form instead.
      */
     public TestRequest formParam(String name, String value) {
         formParams.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
@@ -266,9 +276,18 @@ public final class TestRequest {
     public WebRequest build() {
         Map<String, List<String>> headerCopy = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         headerCopy.putAll(copyOf(headers));
+        String wholeBody = body;
+        if (!formParams.isEmpty() && parts.isEmpty()) {
+            if (!body.isEmpty()) {
+                throw new IllegalStateException("A request carries one body:"
+                        + " state it as formParam(name, value) fields or as body(text), not both");
+            }
+            wholeBody = urlEncoded(formParams);
+            headerCopy.putIfAbsent("Content-Type", List.of(FORM_CONTENT_TYPE));
+        }
         StubServletRequest raw = new StubServletRequest(method, path, headerCopy,
                 copyOf(queryParams), copyOf(formParams), List.copyOf(cookies), List.copyOf(parts),
-                !parts.isEmpty(), body, session);
+                !parts.isEmpty(), wholeBody, session);
         raw.secure(secure);
         raw.remoteAddress(remoteAddress);
         return new WebRequest(raw, Map.copyOf(pathParams));
@@ -281,7 +300,15 @@ public final class TestRequest {
         return copy;
     }
 
-    static String encode(String value) {
+    /** {@code name=value} pairs joined by {@code &}, in order: a query string, or a form body. */
+    static String urlEncoded(Map<String, List<String>> values) {
+        StringJoiner pairs = new StringJoiner("&");
+        values.forEach((name, list) ->
+                list.forEach(value -> pairs.add(encode(name) + "=" + encode(value))));
+        return pairs.toString();
+    }
+
+    private static String encode(String value) {
         return URLEncoder.encode(value, StandardCharsets.UTF_8);
     }
 

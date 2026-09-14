@@ -343,6 +343,10 @@ The four decisions:
 - **Faithful where a handler can tell the difference.**
   `getParameterValues` returns query values then form values, which is what makes 10b's subtraction behave as it does behind a container.
   That is precisely what a mock holding one parameter map cannot show.
+  The body is read once for the same reason, and a form body counts parameters as a read of it.
+  The first parameter read leaves `bodyStream()` an empty stream, and a body taken as a stream first leaves no form fields.
+  Both orders were measured against Jetty, Tomcat, and Undertow rather than assumed.
+  None of the three throws `IllegalStateException` when the stream follows a parameter read.
 
 A query string in the path is rejected rather than parsed, since a path that quietly kept its `?` would fail much later as a routing mismatch.
 

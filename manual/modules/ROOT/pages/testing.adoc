@@ -53,4 +53,6 @@ Raw text is the form for a body no writer would produce, such as the malformed o
 Path variables are supplied rather than matched, since no route is involved: `pathParam("deckId", "3")` is what the router would have resolved.
 Everything a handler can tell apart still holds: a query parameter and a form field of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 the way a non-multipart request does.
 The body is read once here as it is behind a container, so a second `req.body()` is empty and `req.bodyStream()` after it throws `IllegalStateException` — a handler that reads the body twice fails the unit test rather than only failing in production.
+`formParam` fields are the body as well, URL-encoded under `application/x-www-form-urlencoded`, so a form cannot also take `body`.
+A parameter read spends a form body as a container's form parsing does, so `req.bodyStream()` after it is empty, and a form body read as bytes first leaves no fields.
 `file` called twice with one name builds the field that carries several files, which `req.files(name)` reads back, and an empty file name is the input a browser sent with nothing chosen, which `req.fileOrNull(name)` answers null for.

@@ -93,7 +93,9 @@ NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
 
 - Never route a library's output through `JsonWriter<T>`: it returns a `Json.JsonValue`, so the document would be re-parsed the moment the library finished writing it.
 - A body reads as bytes or as characters, never both.
-  After `body()`, `bodyJson()`, `bodyNdjson()`, or `param()` — all of which read characters — `bodyStream()` throws `IllegalStateException`, and the reverse holds too.
+  After `body()`, `bodyJson()`, or `bodyNdjson()` — all of which read characters — `bodyStream()` throws `IllegalStateException`, and the reverse holds too.
+- A form-encoded POST is spent by its first `param()` read, since the container parses the form by reading the body.
+  `bodyStream()` afterwards answers an empty stream rather than throwing, and a body read as bytes first leaves `formParam()` with no fields.
 - Core has not been told the body is JSON, so the library's own failures are the application's to answer: map them with `app.exception(JsonProcessingException.class, ...)` or throw `HttpException(HttpStatus.BAD_REQUEST, ...)`.
 - Under a [native image](servers-and-deployment.md#graalvm-native-image), Jackson and Gson need a reflection entry per bound type; avaje-jsonb generates an adapter per type at compile time and needs none.
 

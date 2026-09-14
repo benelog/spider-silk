@@ -632,10 +632,16 @@ public final class WebRequest {
      * }</pre>
      *
      * <p>The servlet API allows one or the other, not both: a request that has
-     * already gone through {@link #body()}, {@link #bodyJson()},
-     * {@link #bodyNdjson}, or {@link #param} — all of which read characters —
-     * throws {@link IllegalStateException} here, and the reverse holds too.
+     * already gone through {@link #body()}, {@link #bodyJson()}, or
+     * {@link #bodyNdjson} — all of which read characters — throws
+     * {@link IllegalStateException} here, and the reverse holds too.
      * Whichever a handler picks, it picks once.
+     *
+     * <p>A form-encoded POST is spent by its first {@link #param} read as well,
+     * because the container parses the form by reading the body to its end. The
+     * stream is then already at its end and answers no bytes, which Jetty,
+     * Tomcat, and Undertow all do instead of throwing. The reverse order leaves
+     * {@link #formParam} with nothing to parse once the body has been read here.
      */
     public InputStream bodyStream() {
         try {

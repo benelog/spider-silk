@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.net.Socket;
 import java.net.URI;
@@ -234,6 +235,38 @@ class JettyServerTest {
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /**
+     * A form body is read once, as fields or as bytes. The container parses the
+     * form by reading the body, so the stream answers nothing after a parameter
+     * read rather than throwing, and a body read as bytes first leaves no fields.
+     * {@code TestRequest} answers both orders the same way.
+     */
+    @Test
+    void aFormBodyIsReadAsFieldsOrAsBytesNotBoth() throws Exception {
+        app = new App()
+                .post("/fields-first", req -> WebResponse.text(
+                        req.param("name") + "|" + bytesOf(req.bodyStream())))
+                .post("/bytes-first", req -> WebResponse.text(
+                        bytesOf(req.bodyStream()) + "|" + req.formParam("name")))
+                .start(0);
+
+        assertThat(postForm("/fields-first").body()).isEqualTo("English|");
+        assertThat(postForm("/bytes-first").body()).isEqualTo("name=English|null");
+    }
+
+    private HttpResponse<String> postForm(String path) throws IOException, InterruptedException {
+        HttpRequest request = HttpRequest
+                .newBuilder(URI.create("http://localhost:" + app.port() + path))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString("name=English"))
+                .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static String bytesOf(InputStream in) throws IOException {
+        return new String(in.readAllBytes(), StandardCharsets.UTF_8);
     }
 
     @Test

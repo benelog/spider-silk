@@ -196,6 +196,74 @@ class TestRequestTest {
         assertThat(request.body()).isEmpty();
     }
 
+    /** Form fields are the body too, encoded the way a browser posts a form. */
+    @Test
+    void formFieldsAreCarriedAsAnEncodedBody() {
+        WebRequest request = TestRequest.post("/decks")
+                .formParam("name", "Spanish verbs")
+                .formParam("tag", "a&b")
+                .build();
+
+        assertThat(request.contentType()).isEqualTo("application/x-www-form-urlencoded");
+        assertThat(request.body()).isEqualTo("name=Spanish+verbs&tag=a%26b");
+    }
+
+    /**
+     * A container parses a form by reading the body to its end, so the stream
+     * after a parameter read is empty. Jetty, Tomcat, and Undertow all answer
+     * that rather than throwing, and the parsed fields stay readable.
+     */
+    @Test
+    void aParameterReadSpendsAFormBody() throws Exception {
+        WebRequest request = TestRequest.post("/decks").formParam("name", "English").build();
+
+        assertThat(request.param("name")).isEqualTo("English");
+        try (InputStream body = request.bodyStream()) {
+            assertThat(body.readAllBytes()).isEmpty();
+        }
+        assertThat(request.formParam("name")).isEqualTo("English");
+    }
+
+    /** The reverse order: a form body read as bytes is never parsed, so only the query is left. */
+    @Test
+    void aFormBodyReadAsBytesLeavesNoFields() throws Exception {
+        WebRequest request = TestRequest.post("/decks")
+                .queryParam("page", "2")
+                .formParam("name", "English")
+                .build();
+
+        try (InputStream body = request.bodyStream()) {
+            assertThat(new String(body.readAllBytes(), StandardCharsets.UTF_8))
+                    .isEqualTo("name=English");
+        }
+        assertThat(request.formParam("name")).isNull();
+        assertThat(request.params("name")).isEmpty();
+        assertThat(request.param("page")).isEqualTo("2");
+    }
+
+    /** Only a form body is parsed, so a parameter read leaves any other body unread. */
+    @Test
+    void aParameterReadLeavesABodyThatIsNotAFormUnread() {
+        WebRequest request = TestRequest.post("/api/decks")
+                .queryParam("dryRun", "true")
+                .jsonBody("{\"name\": \"Spanish\"}")
+                .build();
+
+        assertThat(request.paramBoolean("dryRun")).isTrue();
+        assertThat(request.body()).isEqualTo("{\"name\": \"Spanish\"}");
+    }
+
+    @Test
+    void aFormCannotAlsoCarryARawBody() {
+        TestRequest request = TestRequest.post("/decks")
+                .formParam("name", "English")
+                .body("plain text");
+
+        assertThatIllegalStateException()
+                .isThrownBy(request::build)
+                .withMessageContaining("one body");
+    }
+
     /**
      * The length counts the encoded bytes rather than the characters, and reading
      * it does not spend the one read the body has left.
