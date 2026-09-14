@@ -4,7 +4,7 @@ package net.benelog.spidersilk;
  * Runs after a route handler returns normally, and may replace what it answers.
  *
  * <pre>{@code
- * app.after((req, res) -> res.header("X-Request-Id", requestId()));
+ * app.after("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
  * }</pre>
  *
  * <p>Returning null keeps the response unchanged, which is what an after-filter
@@ -12,7 +12,9 @@ package net.benelog.spidersilk;
  *
  * <p>Only a route that completed normally reaches here: a response from a
  * {@link BeforeFilter}, from an {@link ExceptionHandler}, or from
- * {@link App#error(HttpStatus, Handler)} does not.
+ * {@link App#error(HttpStatus, Handler)} does not. A header every response has
+ * to carry, such as a request id, belongs in a {@link ResponseFilter}, which
+ * runs on those as well.
  */
 @FunctionalInterface
 public interface AfterFilter {

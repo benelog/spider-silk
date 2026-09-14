@@ -59,7 +59,7 @@ xref:openapi.adoc[`spider-silk-openapi`] writes a non-empty description as the o
 == Guards
 
 `routes()` lists what answers a path.
-`app.guards()` lists what else runs around it: the `before`/`after` filters and the `error(status, ...)` handlers, read off the same registrations, as an immutable snapshot of a sealed `Guard`:
+`app.guards()` lists what else runs around it: the `before`/`after` filters, the `error(status, ...)` handlers, and the `responseFilter(...)` filters, read off the same registrations, as an immutable snapshot of a sealed `Guard`:
 
 [source,java]
 ----
@@ -68,13 +68,15 @@ for (Guard guard : app.guards()) {
         case Guard.Before before -> "before " + before.path();
         case Guard.After after -> "after " + after.path();
         case Guard.Error error -> "error " + error.status().code();
+        case Guard.ResponseFilter ignored -> "every response";
     };
 }
 ----
 
-There are three records rather than one with a kind field, because a filter is scoped to a path and an error handler is scoped to a status, and a component that is null half the time would report that dishonestly.
+There are four records rather than one with a kind field, because a filter is scoped to a path, an error handler to a status, and a response filter to nothing, and a component that is null half the time would report that dishonestly.
+`Guard.ResponseFilter` has no components, since it runs on every response, and two registrations are two entries.
 
-The list is grouped by when it runs: the before-filters, then the after-filters, then the error handlers.
+The list is grouped by when it runs: the before-filters, then the after-filters, then the error handlers, then the response filters.
 Within each group it is in registration order, which is the order they run in.
 
 A filter's coverage is a pattern and not a path, and it is reported as one.

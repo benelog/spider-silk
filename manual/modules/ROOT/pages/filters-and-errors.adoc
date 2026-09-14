@@ -1,13 +1,13 @@
 = Filters and Errors
 :navtitle: Filters and Errors
 
-A filter runs before or after a route handler.
+A filter runs before or after a route handler, and a response filter runs on every response.
 An exception handler turns an exception a handler threw into a response.
 An error handler fills in the body of a response that ended on a status with nothing to show.
 The diagram shows where each one runs, for one request through `AppServlet`.
 
 .One request through AppServlet
-image::request-pipeline.svg[The router finds a match; the before-filters, the handler, the after-filters, and the template renderer run in that order; an exception handler answers for anything that threw, and an error handler fills an empty error body; then the response is decorated, written, and logged,link=self]
+image::request-pipeline.svg[The router finds a match; the before-filters, the handler, the after-filters, and the template renderer run in that order; an exception handler answers for anything that threw, and an error handler fills an empty error body; then the response filters run, and the response is decorated, written, and logged,link=self]
 
 Static files answer only when no route matched, and only for `GET` and `HEAD`.
 The response-wide concerns from xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security] run after every answer, the static file and the error response included, which is why they are not after-filters.
@@ -32,8 +32,45 @@ An after-filter takes the response the route returned and hands back a replaceme
 
 [source,java]
 ----
-app.after((req, res) -> res.header("X-Request-Id", requestId()));
+app.after("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
 ----
+
+An after-filter runs only when a route handler returned normally.
+A before-filter's early answer, an exception handler's answer, a router 404 or 405, the automatic `OPTIONS` answer, and a static file never reach it.
+A before-filter is route-scoped in the same way: `before("/admin/*", ...)` does not run for a static file served under `/admin`, so a static root holds nothing that needs a guard.
+
+[#response-filters]
+== Response filters
+
+`responseFilter(filter)` runs on every response the framework answers, including the ones an after-filter never sees.
+A header that every response has to carry belongs here:
+
+[source,java]
+----
+app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));
+----
+
+The filter takes the request and the response about to be sent, and returns a replacement or `null` to leave it alone.
+Several filters run in registration order, each on what the one before it answered.
+The request carries the path variables of the route that matched, when one did.
+
+A response filter runs once the answer has been worked out and before it is decorated:
+
+. The route handler, the before-filters, and the after-filters answer, or a static file does.
+. An exception handler answers for anything that threw, the template is rendered, and an error handler fills an empty error body.
+. The response filters run, and a template body one of them returns is rendered.
+. `Vary: Accept`, CORS, the security headers, and compression are applied, in that order.
+. The response is written and logged.
+
+A response filter therefore sees the error body and the rendered page, and cannot undo CORS, a security header, or compression, since those are applied to what it returns.
+Its answer is final: an empty 404 it returns does not go back to `error(HttpStatus.NOT_FOUND, ...)` for a body.
+
+A filter that throws is answered the way a handler that throws is.
+The exception reaches the `exception(Type, handler)` handlers, then `error(status, ...)`, and the answer to it is decorated and written without running the response filters again, so a filter that always fails cannot fail in a loop.
+
+A response filter shapes a response and does not authorize a request.
+The handler has already run by the time it is called, so a guard stays a before-filter.
+What a `WebResponse.raw(...)` writer writes to the servlet response, and a failure after the response is committed, happen after the filter and are out of its reach.
 
 == Exception handlers
 
@@ -62,5 +99,5 @@ What the error handler returns keeps the headers the framework had already worke
 It answers with the registered status unless it sets one of its own.
 Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.
 
-Both lists are readable back.
-`app.guards()` reports the filters and the error handlers the way `app.routes()` reports the routes, in xref:route-introspection.adoc#guards[Route Introspection].
+The registrations are readable back.
+`app.guards()` reports the filters, the response filters, and the error handlers the way `app.routes()` reports the routes, in xref:route-introspection.adoc#guards[Route Introspection].

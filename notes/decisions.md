@@ -67,8 +67,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 49 | `body()` keeps the text it read, and the unread body goes out once | ✅ shipped |
 | 50 | A response copies its cookies and its template model, and not its bytes | ✅ shipped |
 | 51 | Registration closes when a servlet is initialized, and settings are copied when registered | ✅ shipped |
+| 52 | `responseFilter(filter)`: one filter that sees every response, before CORS, security headers, and gzip | ✅ shipped |
 
-Fifty-three of the fifty-four shipped.
+Fifty-four of the fifty-five shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -1189,6 +1190,45 @@ Rejected on the way: a public builder that freezes into an immutable `App`.
 It would turn every registration site into a different API for one guarantee that an internal snapshot already gives.
 Also rejected: taking the snapshot in the `AppServlet` constructor.
 A server that fails to start before it initializes the servlet never destroys it, so registration would close for good on an application nothing served.
+
+## 52 · A filter over every response
+
+### 52. `responseFilter(filter)`, which sees every response and runs before CORS, security headers, and gzip
+
+`app.responseFilter((req, res) -> ...)` runs on every response `AppServlet` answers, and may replace it.
+Decision 4's after-filter runs only after a route handler returned normally.
+A before-filter's early answer, an exception handler's answer, a router 404 or 405, the automatic `OPTIONS` answer, and a static file all bypass it.
+The manual's own after-filter example set an `X-Request-Id`, and that header was missing on exactly the responses an operator most wants to trace.
+An application had no extension point that reached them, because decision 27 gave that position to three named concerns and to nothing an application wrote.
+
+**`after` keeps its meaning.**
+A filter scoped to a route that completed is still the right tool for a header that only makes sense on one, and changing what `after` covers would change every filter already written against it.
+The new filter is a separate registration with a separate interface, `ResponseFilter`, whose shape matches `AfterFilter` so that a lambda moves between the two unchanged.
+It takes no path: it exists to cover every response, and a filter that wants a subset branches on `req.path()`, the answer the rejected path-scoped `error(...)` already gives.
+
+**It runs after the answer is final and before the decoration.**
+The error body is filled in and the template rendered first, so the filter sees what would be sent.
+`Vary: Accept`, CORS, the security headers, and compression are applied to what the filter returns, so a filter cannot strip a security header or leave a body uncompressed that gzip would have compressed.
+A template body a filter returns is rendered after it, since the writer does not accept a template.
+Its answer is not sent back through `error(status, ...)`: a filter that returns an empty 404 on purpose gets an empty 404.
+
+**A filter that throws is answered as a handler that throws is, once.**
+The exception goes through decision 34's most-specific exception handler and then through `error(status, ...)`, so a styled 500 stays styled and decorated.
+The response filters do not run over that answer.
+Running them again would call the filter that just failed on the answer to its own failure, and a filter that always fails would never produce a response.
+
+**`guards()` reports it as `Guard.ResponseFilter()`.**
+Decision 13 promises that what runs around a route is listed, and this runs around all of them.
+The record has no components because it has no scope to report.
+Adding a case to the sealed `Guard` breaks an exhaustive `switch` over it, which is a compile error with an obvious fix, and is taken before 1.0 for the reason decision 34 gives.
+
+It shapes responses and does not authorize requests.
+The handler has already run when the filter is called, so a guard stays a before-filter, and a before-filter still does not run for a static file.
+A `Raw` writer's own writes and a failure after the response is committed happen after the filter, and the javadoc says so.
+
+Rejected on the way: making CORS, gzip, and security headers response filters.
+They would then be ordinary entries whose order an application could get wrong, and a CORS preflight is answered while the `Allow` header is worked out, before any filter runs.
+Decision 27's reasons for naming them on `App` stand, and the response filter sits in front of them rather than among them.
 
 ## Rejected — decisions, with the reason
 

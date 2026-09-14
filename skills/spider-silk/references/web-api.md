@@ -166,7 +166,9 @@ app.before("/admin/*", req -> req.sessionAttr("user") == null
         ? WebResponse.redirect("/login")    // answers here; the route never runs
         : null);                            // null = carry on
 
-app.after((req, res) -> res.header("X-Request-Id", requestId()));   // null = leave alone
+app.after("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));   // a route that completed; null = leave alone
+
+app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));  // every answer: early, error, 404, static file
 
 app.exception(NoSuchDeckException.class,
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
@@ -176,6 +178,7 @@ app.exception(Json.JsonException.class,       // most specific type wins, whatev
 app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 ```
 
+- `after` sees only a route that returned normally; `responseFilter` sees every response (before-filter answers, exception answers, 404/405, OPTIONS, static files), runs before CORS/security headers/gzip, and a filter that throws goes to `exception`/`error` without the filters running again. It is not authorization: guards stay `before`.
 - `exception(Type, handler)` runs the handler for the most specific registered type the exception is an instance of, in any registration order.
 - `Json.JsonException` is an `IllegalArgumentException`, so map it separately when `IllegalArgumentException` means 404.
 - Register everything before `app.start(...)`: a route, filter, or setting added while an `AppServlet` serves the app (embedded, a server started directly, or an external container) throws `IllegalStateException`; `stop()` reopens it.

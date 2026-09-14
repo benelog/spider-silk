@@ -20,6 +20,7 @@ class GuardIntrospectionTest {
                 .after("/api/*", passAfter)
                 .before("/admin/*", passBefore)
                 .error(HttpStatus.NOT_FOUND, noop)
+                .responseFilter((req, res) -> null)
                 .before("/api/*", passBefore)
                 .error(HttpStatus.INTERNAL_SERVER_ERROR, noop);
 
@@ -28,7 +29,8 @@ class GuardIntrospectionTest {
                 new Guard.Before("/api/*"),
                 new Guard.After("/api/*"),
                 new Guard.Error(HttpStatus.NOT_FOUND),
-                new Guard.Error(HttpStatus.INTERNAL_SERVER_ERROR)));
+                new Guard.Error(HttpStatus.INTERNAL_SERVER_ERROR),
+                new Guard.ResponseFilter()));
     }
 
     /** The coverage is the pattern as written, not the paths it expands to. */

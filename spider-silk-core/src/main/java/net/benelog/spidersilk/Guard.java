@@ -4,9 +4,9 @@ package net.benelog.spidersilk;
  * One registered guard — something that runs around a route rather than being
  * one — as {@link App#guards()} reports it.
  *
- * <p>Sealed over the three kinds, because a filter is scoped to a path and an
- * error handler is scoped to a status, and one record with a component that is
- * null half the time would report that dishonestly.
+ * <p>Sealed over the four kinds, because a filter is scoped to a path, an error
+ * handler to a status, and a response filter to nothing at all, and one record
+ * with a component that is null half the time would report that dishonestly.
  *
  * <pre>{@code
  * for (Guard guard : app.guards()) {
@@ -14,6 +14,7 @@ package net.benelog.spidersilk;
  *         case Guard.Before before -> "before " + before.path();
  *         case Guard.After after -> "after " + after.path();
  *         case Guard.Error error -> "error " + error.status().code();
+ *         case Guard.ResponseFilter ignored -> "every response";
  *     };
  * }
  * }</pre>
@@ -54,5 +55,14 @@ public sealed interface Guard {
      */
     @SuppressWarnings("AvoidCommonTypeNames")
     record Error(HttpStatus status) implements Guard {
+    }
+
+    /**
+     * A filter registered through {@link App#responseFilter(net.benelog.spidersilk.ResponseFilter)}.
+     * It has no scope to report, because it runs on every response: the ones
+     * the router, a before-filter, an exception handler, and the static files
+     * answer, as well as a route's. Two registrations are two entries.
+     */
+    record ResponseFilter() implements Guard {
     }
 }

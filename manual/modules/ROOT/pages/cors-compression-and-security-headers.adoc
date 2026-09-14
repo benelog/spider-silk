@@ -23,6 +23,8 @@ Security headers belong on an error page as much as on any other page.
 The largest thing most applications send is the stylesheet, and that is a static file, answered before routing gets as far as a filter.
 
 They therefore run in `AppServlet`, after the answer is worked out and before it goes on the wire, which is where every path meets: routes, static files, and errors alike.
+A xref:filters-and-errors.adoc#response-filters[response filter] reaches those answers too, and runs before these three.
+They stay named on `App` because a filter that runs before them cannot undo them, and because a CORS preflight is answered while the `Allow` header is worked out, before any filter runs.
 Each is one named method taking one inert value, the same shape as `staticFiles(StaticFiles)` and `requestLogger(...)`.
 That is deliberately not a plugin registry: a registry of things that configure themselves is the beginning of a container.
 

@@ -20,6 +20,7 @@ record Deployment(
         Router router,
         List<BeforeEntry> beforeFilters,
         List<AfterEntry> afterFilters,
+        List<ResponseFilter> responseFilters,
         Map<Class<? extends Exception>, ExceptionHandler<? extends Exception>> exceptionHandlers,
         Map<HttpStatus, Handler> errorHandlers,
         List<StaticFiles> staticFiles,
@@ -31,6 +32,7 @@ record Deployment(
     Deployment {
         beforeFilters = List.copyOf(beforeFilters);
         afterFilters = List.copyOf(afterFilters);
+        responseFilters = List.copyOf(responseFilters);
         // Insertion order is kept, which Map.copyOf would not promise.
         exceptionHandlers = Collections.unmodifiableMap(new LinkedHashMap<>(exceptionHandlers));
         errorHandlers = Collections.unmodifiableMap(new LinkedHashMap<>(errorHandlers));

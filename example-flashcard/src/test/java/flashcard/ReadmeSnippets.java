@@ -163,7 +163,9 @@ class ReadmeSnippets {
                 ? WebResponse.redirect("/login")    // answers here, so the route handler never runs
                 : null);                            // carry on
 
-        app.after((req, res) -> res.header("X-Request-Id", requestId()));
+        app.after("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
+
+        app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));
     }
 
     // ---- blocks 10, 11: JSON writers and readers ----

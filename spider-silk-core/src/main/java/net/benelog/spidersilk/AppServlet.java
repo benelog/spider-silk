@@ -135,7 +135,8 @@ public class AppServlet extends HttpServlet {
     /**
      * The concerns that belong to every answer rather than to a route: CORS,
      * security headers, compression. They run here rather than in an
-     * {@link AfterFilter} because here is the only place all the answers meet —
+     * {@link AfterFilter} because here is the only place all the answers meet,
+     * after {@link #filterResponse} too —
      * {@link #dispatch} returns a static file without ever reaching a filter,
      * and an error response never reaches one either.
      *
@@ -176,7 +177,10 @@ public class AppServlet extends HttpServlet {
 
     // ---- Working out the answer ----
 
-    /** Never throws and never returns null: every path here ends in a response. */
+    /**
+     * Never throws and never returns null: every path here ends in a response,
+     * and every response goes through the response filters on the way out.
+     */
     private WebResponse dispatch(WebRequest request, String[] segments) {
         HttpServletRequest req = request.raw();
         String method = req.getMethod();
@@ -197,7 +201,7 @@ public class AppServlet extends HttpServlet {
             } else if (isReadMethod(method)) {
                 WebResponse file = staticFile(path, req);
                 if (file != null) {
-                    return file;
+                    return filterResponse(file, current);
                 }
                 response = noRoute(current, method, path, segments);
             } else {
@@ -207,7 +211,36 @@ public class AppServlet extends HttpServlet {
         } catch (Exception e) {
             response = handleException(e, current);
         }
-        return completeErrorResponse(response, current);
+        return filterResponse(completeErrorResponse(response, current), current);
+    }
+
+    /**
+     * Runs the {@link App#responseFilter} filters over the response that has
+     * been worked out, each on what the one before it answered, and renders a
+     * template one of them put in.
+     *
+     * <p>A filter that throws is answered the way a handler that throws is, and
+     * that answer skips the filters: running them over the answer to their own
+     * failure could fail the same way again.
+     */
+    private WebResponse filterResponse(WebResponse response, WebRequest request) {
+        if (deployment.responseFilters().isEmpty()) {
+            return response;
+        }
+        WebResponse current = response;
+        try {
+            for (ResponseFilter filter : deployment.responseFilters()) {
+                WebResponse replaced = filter.handle(request, current);
+                if (replaced != null) {
+                    current = replaced;
+                }
+            }
+            return renderTemplate(current);
+        } catch (Exception e) {
+            // The message of an error answered earlier does not describe this one.
+            request.errorMessage(null);
+            return completeErrorResponse(handleException(e, request), request);
+        }
     }
 
     /** The first configured root that holds the file answers; null when none does. */

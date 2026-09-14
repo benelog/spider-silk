@@ -48,6 +48,7 @@ public final class App {
     final Router router = new Router();
     final List<BeforeEntry> beforeFilters = new ArrayList<>();
     final List<AfterEntry> afterFilters = new ArrayList<>();
+    final List<ResponseFilter> responseFilters = new ArrayList<>();
     final LinkedHashMap<Class<? extends Exception>, ExceptionHandler<? extends Exception>> exceptionHandlers =
             new LinkedHashMap<>();
     final Map<HttpStatus, Handler> errorHandlers = new LinkedHashMap<>();
@@ -240,6 +241,28 @@ public final class App {
     }
 
     /**
+     * A filter that runs on every response, the ones no after-filter sees
+     * included: a before-filter's early answer, an exception handler's, a 404, a
+     * 405, the automatic {@code OPTIONS} answer, and a static file.
+     *
+     * <pre>{@code
+     * app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));
+     * }</pre>
+     *
+     * <p>Several run in registration order, each on what the one before it
+     * answered. They run once the error body is filled in and the template is
+     * rendered, and before {@link #cors}, {@link #securityHeaders}, and
+     * {@link #gzip} are applied, so a filter can neither undo those nor be
+     * compressed away from them. {@link ResponseFilter} describes what a filter
+     * that throws answers.
+     */
+    public App responseFilter(ResponseFilter filter) {
+        Objects.requireNonNull(filter, "filter");
+        register(() -> responseFilters.add(filter));
+        return this;
+    }
+
+    /**
      * A per-exception-type handler. The handler for the most specific type the
      * exception is an instance of runs, whatever order the handlers were
      * registered in: with handlers for {@code IllegalArgumentException} and for
@@ -279,13 +302,14 @@ public final class App {
 
     /**
      * Everything registered that runs around a route rather than being one:
-     * the {@link #before} and {@link #after} filters, and the
+     * the {@link #before} and {@link #after} filters, the
+     * {@link #responseFilter} filters, and the
      * {@link #error(HttpStatus, Handler)} bodies. It answers "which guard
      * covers this path", which {@link #routes()} holds no part of.
      *
      * <p>Grouped by when it runs — the before-filters, then the after-filters,
-     * then the error handlers — and within each group in registration order,
-     * which is the order they run in.
+     * then the error handlers, then the response filters — and within each group
+     * in registration order, which is the order they run in.
      *
      * <p>A filter's coverage is a pattern and not a path, and it is reported as
      * one: {@code "/admin/*"} stays {@code "/admin/*"} and covers
@@ -301,10 +325,11 @@ public final class App {
      */
     public List<Guard> guards() {
         List<Guard> guards = new ArrayList<>(
-                beforeFilters.size() + afterFilters.size() + errorHandlers.size());
+                beforeFilters.size() + afterFilters.size() + errorHandlers.size() + responseFilters.size());
         beforeFilters.forEach(entry -> guards.add(new Guard.Before(entry.path())));
         afterFilters.forEach(entry -> guards.add(new Guard.After(entry.path())));
         errorHandlers.keySet().forEach(status -> guards.add(new Guard.Error(status)));
+        responseFilters.forEach(filter -> guards.add(new Guard.ResponseFilter()));
         return List.copyOf(guards);
     }
 
@@ -513,7 +538,7 @@ public final class App {
     Deployment deploy() {
         synchronized (registrationLock) {
             deployments++;
-            return new Deployment(router.copy(), beforeFilters, afterFilters, exceptionHandlers,
+            return new Deployment(router.copy(), beforeFilters, afterFilters, responseFilters, exceptionHandlers,
                     errorHandlers, staticFiles, requestLogger, cors, gzip, securityHeaders);
         }
     }
