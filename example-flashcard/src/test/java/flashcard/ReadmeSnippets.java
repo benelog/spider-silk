@@ -2,6 +2,7 @@ package flashcard;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -83,6 +84,9 @@ class ReadmeSnippets {
     }
 
     record NewDeck(String name) {
+    }
+
+    record User(String name) {
     }
 
     static final class MyUndertowServer implements WebServer {
@@ -201,10 +205,24 @@ class ReadmeSnippets {
         String name = req.formParam("name");           // form body only
         List<String> formTags = req.formParams("tag");
 
+        String search = req.paramOrNull("q");                         // null when absent
+        LocalDate due = req.formParam("due", LocalDate::parse);       // 400 when the form carries none
+        int pageNumber = req.queryParam("page", Integer::parseInt, 1); // default covers absence only
+
         return WebResponse.html(page)
                 .cookie("theme", "dark")                    // session cookie
                 .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
                 .removeCookie("stale");
+    }
+
+    // ---- sessions ----
+
+    void sessions(WebRequest req, User user) {
+        req.setSessionAttr("user", user);                 // creates the session if there is none yet
+        User read = req.sessionAttr("user", User.class);  // null when absent
+        User same = req.sessionAttr("user");              // the same read, cast by the caller
+        req.removeSessionAttr("user");                    // creates no session to remove from
+        req.invalidateSession();
     }
 
     // ---- block 14: Server-Sent Events ----
