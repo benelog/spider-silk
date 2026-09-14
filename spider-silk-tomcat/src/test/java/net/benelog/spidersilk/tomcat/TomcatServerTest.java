@@ -399,10 +399,9 @@ class TomcatServerTest {
 
     /**
      * A start that fails leaves nothing behind, so a third server takes the
-     * port the second one could not. The {@code setThrowOnFailure} customizer
-     * is Tomcat's, not ours: a connector that cannot bind is only logged unless
-     * {@code org.apache.catalina.startup.EXIT_ON_INIT_FAILURE} says otherwise,
-     * and the test wants the clash reported rather than written to the log.
+     * port the second one could not. No customizer is needed to see the clash:
+     * {@code TomcatServer} turns the connector's {@code throwOnFailure} on
+     * itself, so the bind failure is thrown rather than written to the log.
      */
     @Test
     void aFailedStartDoesNotHoldThePort() throws Exception {
@@ -410,9 +409,7 @@ class TomcatServerTest {
         server.start();
         int taken = server.port();
 
-        TomcatServer second = new TomcatServer(new App())
-                .port(taken)
-                .customizeConnector(connector -> connector.setThrowOnFailure(true));
+        TomcatServer second = new TomcatServer(new App()).port(taken);
         assertThatThrownBy(second::start)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Failed to start Tomcat on port " + taken);

@@ -190,7 +190,16 @@ public final class TomcatServer implements WebServer {
         return this;
     }
 
-    /** Runs against the {@link Connector} before startup. */
+    /**
+     * Runs against the {@link Connector} before startup.
+     *
+     * <p>The connector arrives with {@code throwOnFailure} already on, so a port
+     * that cannot be bound fails {@link #start()} with an
+     * {@link IllegalStateException} instead of being logged while Tomcat starts
+     * with nothing listening. Tomcat's own default, taken from
+     * {@code org.apache.catalina.startup.EXIT_ON_INIT_FAILURE}, is off; a
+     * customizer that turns it back off opts out of that guarantee.
+     */
     public TomcatServer customizeConnector(Consumer<Connector> customizer) {
         connectorCustomizers.add(Objects.requireNonNull(customizer, "customizer"));
         return this;
@@ -222,6 +231,7 @@ public final class TomcatServer implements WebServer {
             candidate.setPort(port);
 
             Connector newConnector = candidate.getConnector();
+            newConnector.setThrowOnFailure(true);
             applyHost(newConnector);
             applyExecutor(newConnector);
             connectorCustomizers.forEach(customizer -> customizer.accept(newConnector));
