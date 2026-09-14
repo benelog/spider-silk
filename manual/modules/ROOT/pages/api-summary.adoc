@@ -9,7 +9,7 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 * Introspection: `routes()` reports every registered route as `Route(method, path, description)`, in registration order.
   `guards()` reports the filters and error handlers beside them as `Guard.Before(path)`, `Guard.After(path)`, `Guard.Error(status)`, and `Guard.ResponseFilter()`.
   xref:openapi.adoc[`spider-silk-openapi`] turns the route list into an OpenAPI 3.1 document
-* Filters: `before(filter)` / `before(path, filter)`, same for `after`
+* Filters: `before(filter)` / `before(path, filter)`, same for `after`, and `responseFilter(filter)` for every response, the ones no after-filter sees included
 * Errors: `exception(Type, handler)`, where the most specific registered type wins, `error(HttpStatus, handler)`
 * Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
   Each is off until named, and applies to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
@@ -35,7 +35,8 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 * Query vs. form: `queryParam`, `queryParams`, `formParam`, `formParams`
 * Content negotiation: `accepts(types...)` answers with the type the caller prefers out of the ones offered, 406 when it will take none of them; `acceptedTypes()` for the parsed `Accept` header
 * Cookies the client sent: `cookie(name)`, `cookies()`
-* Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects); the text is read once and kept, so every call answers the whole body
+* Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects).
+  The text is read once and kept, so every call answers the whole body
 * Multipart uploads: `file(name)` (400 when absent), `fileOrNull(name)` (null when absent), `files(name)` for a field that carries several.
   `UploadedFile` answers `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, and `writeTo(path)`
 * Body, unread: `bodyStream()` and `bodyReader()` hand it over for a parser from another library, and neither mixes with the kept text: whichever goes second throws `IllegalStateException`.

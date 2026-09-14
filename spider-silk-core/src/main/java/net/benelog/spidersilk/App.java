@@ -197,8 +197,9 @@ public final class App {
     /**
      * Every route registered so far, in registration order — which is also the
      * order the router resolves ties in. Routes are an explicit list, so this
-     * needs no annotation scanning and no reflection; it is the same list the
-     * dispatcher walks, read back as data.
+     * needs no annotation scanning and no reflection; it is the list the
+     * dispatcher's copy is taken from when {@link AppServlet} is initialized,
+     * read back as data, and registration is closed while that copy is served.
      *
      * <pre>{@code
      * app.get("/_routes", req -> WebResponse.template("routes", Map.of("routes", app.routes())));
@@ -605,6 +606,10 @@ public final class App {
      * change made now would never reach it, and {@link #routes()} — documented as
      * the list the dispatcher walks — would describe routes nothing answers.
      * {@link #stop()} opens it again, once the server has destroyed its servlet.
+     *
+     * <p>While a stop drains its requests, the server is already detached from
+     * this {@code App} and the servlet not yet destroyed, so a registration then
+     * is refused with the external-container message rather than the port.
      */
     private void register(Runnable change) {
         synchronized (registrationLock) {

@@ -146,6 +146,7 @@ Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus
 - `WebResponse` is immutable: every builder method returns a new value, so chains work and after-filters can rewrite responses.
 - Response header names compare without regard to case, and one field holds one value: `res.header("content-type")` reads what `.contentType(...)` set, and setting it again under another spelling replaces the value in place. A header that has to be sent twice (two `Link` lines) is not something `headers()` can carry — write it through `WebResponse.raw`; cookies have `cookie(...)` / `cookies()` of their own.
 - Statuses are `HttpStatus` constants, never raw ints; `HttpStatus.of(int)` when the number arrives at runtime.
+- A header every response must carry (a request id) is `app.responseFilter((req, res) -> ...)`, not `app.after(...)`: an after-filter never sees a before-filter's answer, an exception or error response, a 404/405, or a static file. Neither one authorizes; guards stay before-filters.
 - A before-filter returning `null` continues to the route; returning a response ends the request; `throw new HttpException(status, msg)` rejects and lets `error(status, ...)` render the body.
 - Registering a second route that matches the same requests throws `IllegalStateException` at registration.
 - `redirect(location)` is 302; say `HttpStatus.SEE_OTHER` (303) after a POST.
