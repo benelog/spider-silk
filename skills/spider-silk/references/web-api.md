@@ -149,7 +149,7 @@ response.status(HttpStatus.CREATED).header("Location", "/api/decks/1")
         .removeCookie("stale");
 // cookie(jakarta.servlet.http.Cookie) for Secure, Domain, SameSite=None
 
-// Reading back (assertions, after-filters)
+// Reading back (assertions, filters); cookies() hands out copies
 response.status(); response.header(name); response.headers(); response.cookies(); response.body();
 response.header("content-type");            // names compare without regard to case
 ```
@@ -208,7 +208,8 @@ Sessions are the servlet container's, on by default (`JettyServer` can turn them
 
 ## Response-wide concerns
 
-CORS, compression, and security headers are named on `App`, not registered as filters, because they must also reach answers no filter sees (preflights, 404s, static files, error pages).
+CORS, compression, and security headers are named on `App`, not registered as filters, because they must also reach answers no route-scoped filter sees (preflights, 404s, static files, error pages).
+They run after `responseFilter`, so a response filter cannot undo them, and each value is copied when registered.
 Nothing is on until it is named.
 
 ```java
@@ -242,13 +243,13 @@ app.requestLogger((req, res, took) -> logger.info("{} {} -> {} ({}ms)",
         req.method(), req.path(), res.status().code(), took.toMillis()));
 ```
 
-Runs once per request after the response is complete; the status it sees is the one actually sent.
+Runs once per request after the response is complete; the status it sees is the one actually sent, after response filters, CORS, security headers, and gzip. `req.body()` there answers the text a filter or handler already read.
 Core carries no logging framework — which logger and format is the application's call.
 
 ## Route introspection
 
 `app.routes()` is an immutable snapshot of `record Route(String method, String path, String description)`, in registration order, with group prefixes resolved; `{name}` segments are OpenAPI path-template syntax verbatim.
-`app.guards()` lists filters and error handlers the same way, as a sealed `Guard` (`Before(path)`, `After(path)`, `Error(status)`).
+`app.guards()` lists filters, error handlers, and response filters the same way, as a sealed `Guard` (`Before(path)`, `After(path)`, `Error(status)`, `ResponseFilter()`); an exhaustive `switch` needs all four cases.
 A route registered without a description reports `""`, not null.
 The automatic HEAD/OPTIONS answers and `exception(...)` handlers are not listed.
 Build on the list directly (a `/_routes` page, audits) or hand it to `spider-silk-openapi` — see content.md.

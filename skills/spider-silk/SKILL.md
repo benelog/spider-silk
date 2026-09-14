@@ -140,15 +140,18 @@ Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus
 
 - Typed extraction fails as a 400, not a null: `pathParamLong`, `paramLong`, `paramEnum`, `bodyJson(reader)`, `file(name)` all answer the request with 400 on bad or missing input, so handlers have no null branches to write.
 - A type with no named form takes a parser: `req.param("since", LocalDate::parse)`, `req.param("page", Integer::parseInt, 1)`, `req.pathParam("deckId", UUID::fromString)`. A parser that throws `IllegalArgumentException` or `DateTimeException` answers 400 naming the parameter. Do not write `Long.parseLong(req.param(...))` by hand: that is a 500 on bad input.
-- `param(name, default)` forms cover absence only; a present-but-unparseable value is still a 400.
+- One source only, with a parser: `req.queryParam("page", Integer::parseInt, 1)`, `req.formParam("due", LocalDate::parse)`. Same contract as `param(name, parser)`; a value in the other source does not count. The one-argument `queryParam(name)` / `formParam(name)` still answer null.
+- `param(name, default)` forms cover absence only; a present-but-unparseable value is still a 400. An optional string with no default is `req.paramOrNull(name)` — `param(name, null)` does not compile.
+- `req.body()` reads the text once and keeps it: a before-filter that reads it (a signature check) leaves it for the handler's `bodyJson()`. `bodyStream()`, `bodyReader()`, and `bodyNdjson()` hand the body over unread instead, and mixing the two throws `IllegalStateException` whichever comes second. A form POST is still spent by its first `param()` read.
 - Ordinary reads about the request have a method, so do not reach through `raw()` for them: `isSecure()`, `scheme()`, `host()`, `remoteAddress()`, `contentType()`, `queryString()`, `headers(name)`, `headers()`. `raw()` is for an async context, a client certificate, or a container-specific attribute.
 - A large upload never becomes a `byte[]`: `req.file(name).writeTo(path)` writes it to disk and `inputStream()` hands it to a parser. An optional upload is `req.fileOrNull(name)` (null when absent, including a file input left empty), and a field carrying several files is `req.files(name)`.
-- `WebResponse` is immutable: every builder method returns a new value, so chains work and after-filters can rewrite responses.
+- `WebResponse` is immutable: every builder method returns a new value, so chains work and filters can rewrite responses. `cookie(Cookie)` keeps a copy and `cookies()` hands out copies; a template model is copied into a read-only map (null values kept). A `bytes(...)` array and a stream writer are handed over, not copied.
 - Response header names compare without regard to case, and one field holds one value: `res.header("content-type")` reads what `.contentType(...)` set, and setting it again under another spelling replaces the value in place. A header that has to be sent twice (two `Link` lines) is not something `headers()` can carry — write it through `WebResponse.raw`; cookies have `cookie(...)` / `cookies()` of their own.
 - Statuses are `HttpStatus` constants, never raw ints; `HttpStatus.of(int)` when the number arrives at runtime.
 - A header every response must carry (a request id) is `app.responseFilter((req, res) -> ...)`, not `app.after(...)`: an after-filter never sees a before-filter's answer, an exception or error response, a 404/405, or a static file. Neither one authorizes; guards stay before-filters.
 - A before-filter returning `null` continues to the route; returning a response ends the request; `throw new HttpException(status, msg)` rejects and lets `error(status, ...)` render the body.
 - Registering a second route that matches the same requests throws `IllegalStateException` at registration.
+- Register everything before the app is served. Registration closes while an `AppServlet` serves the app — `app.start`, `new JettyServer(app).start()`, or an external container — and `stop()` reopens it. `app.cors/gzip/securityHeaders/staticFiles(value)` copy the value, so changing it afterwards does nothing. An external container maps `AppServlet` with load-on-startup (`holder.setInitOrder(0)`, `<load-on-startup>0</load-on-startup>`).
 - `redirect(location)` is 302; say `HttpStatus.SEE_OTHER` (303) after a POST.
 - Template names carry no extension (`template("deck")` renders `deck.jte`).
 - Sessions are on by default; `req.flash(key, value)` + `req.flashed(key)` is the Post/Redirect/Get message pattern.
@@ -195,7 +198,12 @@ To watch it serve a real request, `app.start(8080)` and `curl` it.
 | `401`, or `Could not resolve net.benelog.spidersilk:...` | GitHub Packages rejects anonymous downloads — see [First-run setup](#first-run-setup) |
 | `IllegalStateException` at startup, naming a path | Two routes match exactly the same requests (the same path, or the same shape with a variable renamed). Registration is the check, because one of them could never run |
 | A template is not found | The name carried an extension. `template("deck")`, never `template("deck.jte")` — the engine appends its own suffix |
-| A 400 where you expected a null | Typed extraction rejects rather than returning null. Use the `(name, default)` form for a parameter that may be absent; a present-but-unparseable value is still a 400 |
+| A 400 where you expected a null | Typed extraction rejects rather than returning null. Use `paramOrNull(name)`, `queryParam(name)`, or a `(name, default)` form for a parameter that may be absent; a present-but-unparseable value is still a 400 |
+| `req.sessionAttr("user", user)` does not compile | The write is `req.setSessionAttr("user", user)`; `sessionAttr` only reads. Removing is `removeSessionAttr(key)` |
+| `req.param("q", null)` does not compile | `null` matches both the default and the parser overloads. Say `req.paramOrNull("q")` |
+| `IllegalStateException` adding a route, filter, or setting | The app is being served. Register before `start()` (or before the container initializes `AppServlet`), or `stop()` first |
+| `IllegalStateException` from `bodyStream()`, `bodyReader()`, or `body()` | The body was already taken the other way: text (`body()`/`bodyJson()`) and unread (`bodyStream()`/`bodyReader()`/`bodyNdjson()`) do not mix. Pick one per request |
+| A header set in `after(...)` is missing on 404s, error pages, redirects from a before-filter, or static files | An after-filter sees only a route that returned normally. Use `app.responseFilter(...)` for a header every response carries |
 | A `{name}` route swallows a literal one | Registration order breaks ties, so register `/study/today` before `/study/{mode}` |
 | A before-filter never runs for paths under its own | A filter path needs the trailing `*` to cover what is under it: `/admin/*`, not `/admin` |
 | A wildcard route's handler cannot see what came after the prefix | A bare `*` captures nothing. Register `/files/{path*}` and read the remainder with `req.pathParam("path")` |

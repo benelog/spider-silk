@@ -91,7 +91,7 @@ app.start(8080);                                // embedded Jetty, sessions on
 ----
 
 `start` returns as soon as the port is bound.
-Everything is registered before it: a route, a filter, or a setting added to a running application throws `IllegalStateException`, and `stop()` opens registration again.
+Everything is registered before it: a route, a filter, or a setting added while the application is served throws `IllegalStateException`, and `stop()` opens registration again.
 The server's threads keep the JVM alive from there, so `join()` is only needed when you want to block the main thread as well.
 `stop()` shuts the server down.
 `port()` reports the bound port, which is how a test reads back the port the OS picked for `start(0)`.

@@ -11,4 +11,6 @@ app.requestLogger((req, res, took) -> logger.info("{} {} -> {} ({}ms)",
 
 Core carries no logging framework, so which logger, at which level, and in which format is the application's call.
 The lambda runs after the response is complete, so the status it sees is the one that was actually sent, the error handler's if one ran.
+The response is the one the response filters returned, with CORS, the security headers, and compression applied.
+`req.body()` reads the text a filter or handler already read, since the text is kept for the whole request.
 A logger that throws is reported to the servlet log and leaves the response alone.
