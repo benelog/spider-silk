@@ -62,6 +62,19 @@ public final class SecurityHeaders {
         headers.put(REFERRER_POLICY, "strict-origin-when-cross-origin");
     }
 
+    /**
+     * The copy {@link App#securityHeaders(SecurityHeaders)} keeps, so a reference
+     * the caller holds on to cannot change the headers of an application that has
+     * already been handed this.
+     */
+    SecurityHeaders copy() {
+        SecurityHeaders copy = new SecurityHeaders();
+        copy.headers.clear();
+        copy.headers.putAll(headers);
+        copy.hsts = hsts;
+        return copy;
+    }
+
     /** The three headers described on this class. */
     public static SecurityHeaders defaults() {
         return new SecurityHeaders();

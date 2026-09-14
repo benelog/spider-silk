@@ -105,6 +105,19 @@ public final class StaticFiles {
         return new StaticFiles(new DirectorySource(Objects.requireNonNull(root, "root")));
     }
 
+    /**
+     * The copy {@link App#staticFiles(StaticFiles...)} keeps, so a reference the
+     * caller holds on to cannot move or re-cache what an application has already
+     * been handed. The source is never changed once built, so it is shared.
+     */
+    StaticFiles copy() {
+        StaticFiles copy = new StaticFiles(source);
+        copy.hostedPath = hostedPath;
+        copy.cacheControl = cacheControl;
+        copy.precompressed = precompressed;
+        return copy;
+    }
+
     /** The URL prefix the files appear under. The default, "/", is the root. */
     public StaticFiles hostedPath(String hostedPath) {
         this.hostedPath = withoutTrailingSlash(Objects.requireNonNull(hostedPath, "hostedPath"));

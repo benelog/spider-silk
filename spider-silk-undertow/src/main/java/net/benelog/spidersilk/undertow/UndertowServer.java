@@ -277,7 +277,11 @@ public final class UndertowServer implements WebServer {
         ServletInfo servlet = Servlets
                 .servlet(SERVLET_NAME, AppServlet.class,
                         new ImmediateInstanceFactory<>(new AppServlet(app)))
-                .addMapping("/*");
+                .addMapping("/*")
+                // Initialized when the deployment starts rather than on the first
+                // request, which is when AppServlet takes the routes and closes
+                // registration.
+                .setLoadOnStartup(0);
         if (multipart != null) {
             servlet.setMultipartConfig(multipart);
         }

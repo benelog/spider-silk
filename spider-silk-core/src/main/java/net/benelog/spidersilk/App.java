@@ -1,6 +1,7 @@
 package net.benelog.spidersilk;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,8 +33,15 @@ import net.benelog.spidersilk.server.WebServerFactory;
  * {@link #start(int)} runs the bundled Jetty. To deploy to an external servlet
  * container instead, skip it and map {@link AppServlet} yourself.
  *
- * <p>Everything is registered before {@code start}: a route, a filter, or a
- * setting added to a running application throws {@link IllegalStateException}.
+ * <p>Everything is registered before the application serves: a route, a filter,
+ * or a setting added while an {@link AppServlet} is serving it throws
+ * {@link IllegalStateException}. That covers {@code start}, a server started
+ * directly, and an external container alike, because the servlet takes what it
+ * serves when it is initialized and gives it back when it is destroyed.
+ *
+ * <p>A setting object — {@link Cors}, {@link Gzip}, {@link SecurityHeaders},
+ * {@link StaticFiles} — is copied when it is registered. Changing the one you
+ * passed afterwards changes nothing this application does.
  */
 public final class App {
 
@@ -55,12 +63,23 @@ public final class App {
     /** Guards the one lazy assignment in {@link #templateRenderer()}. */
     private final Object templatesLock = new Object();
 
+    /**
+     * Held for every registration and for every deployment that opens or
+     * closes, so that a route cannot be half-added while a servlet copies the
+     * table, and a check that registration is open cannot go stale before the
+     * change it allowed is made. Registration happens at startup, so nothing
+     * on the request path ever waits for it.
+     */
+    private final Object registrationLock = new Object();
+
+    /** How many {@link AppServlet}s are initialized over this application and not yet destroyed. */
+    private int deployments;
+
     private WebServerFactory serverFactory = (app, port) -> new JettyServer(app).port(port);
     private WebServer server;
 
     public App get(String path, Handler handler) {
-        requireNotStarted();
-        router.add("GET", path, handler);
+        register(() -> router.add("GET", path, handler));
         return this;
     }
 
@@ -79,60 +98,51 @@ public final class App {
      * argument instead of an annotation.
      */
     public App get(String path, String description, Handler handler) {
-        requireNotStarted();
-        router.add("GET", path, description, handler);
+        register(() -> router.add("GET", path, description, handler));
         return this;
     }
 
     public App post(String path, Handler handler) {
-        requireNotStarted();
-        router.add("POST", path, handler);
+        register(() -> router.add("POST", path, handler));
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for POST. */
     public App post(String path, String description, Handler handler) {
-        requireNotStarted();
-        router.add("POST", path, description, handler);
+        register(() -> router.add("POST", path, description, handler));
         return this;
     }
 
     public App put(String path, Handler handler) {
-        requireNotStarted();
-        router.add("PUT", path, handler);
+        register(() -> router.add("PUT", path, handler));
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for PUT. */
     public App put(String path, String description, Handler handler) {
-        requireNotStarted();
-        router.add("PUT", path, description, handler);
+        register(() -> router.add("PUT", path, description, handler));
         return this;
     }
 
     public App patch(String path, Handler handler) {
-        requireNotStarted();
-        router.add("PATCH", path, handler);
+        register(() -> router.add("PATCH", path, handler));
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for PATCH. */
     public App patch(String path, String description, Handler handler) {
-        requireNotStarted();
-        router.add("PATCH", path, description, handler);
+        register(() -> router.add("PATCH", path, description, handler));
         return this;
     }
 
     public App delete(String path, Handler handler) {
-        requireNotStarted();
-        router.add("DELETE", path, handler);
+        register(() -> router.add("DELETE", path, handler));
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for DELETE. */
     public App delete(String path, String description, Handler handler) {
-        requireNotStarted();
-        router.add("DELETE", path, description, handler);
+        register(() -> router.add("DELETE", path, description, handler));
         return this;
     }
 
@@ -141,15 +151,13 @@ public final class App {
      * its headers and no body.
      */
     public App head(String path, Handler handler) {
-        requireNotStarted();
-        router.add("HEAD", path, handler);
+        register(() -> router.add("HEAD", path, handler));
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for HEAD. */
     public App head(String path, String description, Handler handler) {
-        requireNotStarted();
-        router.add("HEAD", path, description, handler);
+        register(() -> router.add("HEAD", path, description, handler));
         return this;
     }
 
@@ -158,15 +166,13 @@ public final class App {
      * is answered with the {@code Allow} header the path's routes imply.
      */
     public App options(String path, Handler handler) {
-        requireNotStarted();
-        router.add("OPTIONS", path, handler);
+        register(() -> router.add("OPTIONS", path, handler));
         return this;
     }
 
     /** {@link #get(String, String, Handler)}, for OPTIONS. */
     public App options(String path, String description, Handler handler) {
-        requireNotStarted();
-        router.add("OPTIONS", path, description, handler);
+        register(() -> router.add("OPTIONS", path, description, handler));
         return this;
     }
 
@@ -218,8 +224,7 @@ public final class App {
      * "/admin" as well as "/admin/users".
      */
     public App before(String path, BeforeFilter filter) {
-        requireNotStarted();
-        beforeFilters.add(new BeforeEntry(path, filter));
+        register(() -> beforeFilters.add(new BeforeEntry(path, filter)));
         return this;
     }
 
@@ -230,8 +235,7 @@ public final class App {
 
     /** A filter that runs after matching routes complete normally. */
     public App after(String path, AfterFilter filter) {
-        requireNotStarted();
-        afterFilters.add(new AfterEntry(path, filter));
+        register(() -> afterFilters.add(new AfterEntry(path, filter)));
         return this;
     }
 
@@ -243,9 +247,10 @@ public final class App {
      * one. Registering a type twice replaces the first handler.
      */
     public <E extends Exception> App exception(Class<E> type, ExceptionHandler<E> handler) {
-        requireNotStarted();
-        exceptionHandlers.put(Objects.requireNonNull(type, "type"),
-                Objects.requireNonNull(handler, "handler"));
+        register(() -> {
+            exceptionHandlers.put(Objects.requireNonNull(type, "type"),
+                    Objects.requireNonNull(handler, "handler"));
+        });
         return this;
     }
 
@@ -265,9 +270,10 @@ public final class App {
      * with the registered status unless it sets one of its own.
      */
     public App error(HttpStatus status, Handler handler) {
-        requireNotStarted();
-        errorHandlers.put(Objects.requireNonNull(status, "status"),
-                Objects.requireNonNull(handler, "handler"));
+        register(() -> {
+            errorHandlers.put(Objects.requireNonNull(status, "status"),
+                    Objects.requireNonNull(handler, "handler"));
+        });
         return this;
     }
 
@@ -315,8 +321,7 @@ public final class App {
      * already been sent by then.
      */
     public App requestLogger(RequestLogger logger) {
-        requireNotStarted();
-        this.requestLogger = Objects.requireNonNull(logger, "logger");
+        register(() -> this.requestLogger = Objects.requireNonNull(logger, "logger"));
         return this;
     }
 
@@ -330,8 +335,7 @@ public final class App {
      * }</pre>
      */
     public App templates(TemplateRenderer renderer) {
-        requireNotStarted();
-        this.templates = Objects.requireNonNull(renderer, "renderer");
+        register(() -> this.templates = Objects.requireNonNull(renderer, "renderer"));
         return this;
     }
 
@@ -372,6 +376,9 @@ public final class App {
      * Static files with a hosted path, a cache policy, or a root of their own,
      * replacing the default {@code classpath:/public}.
      *
+     * <p>Each is copied as it is now, so changing one afterwards changes nothing
+     * this application serves.
+     *
      * <p>Several roots are read in the order given, and the first that holds
      * the file answers — which is how a directory on disk sits beside the
      * assets that shipped in the jar:
@@ -386,8 +393,10 @@ public final class App {
      * path is left to routing.
      */
     public App staticFiles(StaticFiles... staticFiles) {
-        requireNotStarted();
-        this.staticFiles = List.of(Objects.requireNonNull(staticFiles, "staticFiles"));
+        List<StaticFiles> copies = Arrays.stream(Objects.requireNonNull(staticFiles, "staticFiles"))
+                .map(files -> Objects.requireNonNull(files, "staticFiles").copy())
+                .toList();
+        register(() -> this.staticFiles = copies);
         return this;
     }
 
@@ -402,10 +411,13 @@ public final class App {
      * CORS has to reach are the two a filter cannot: the {@code OPTIONS} answer
      * for a preflight, which no handler is registered for, and the error
      * responses a cross-origin caller has to be able to read.
+     *
+     * <p>The value is copied as it is now, so changing it afterwards changes
+     * nothing this application answers.
      */
     public App cors(Cors cors) {
-        requireNotStarted();
-        this.cors = Objects.requireNonNull(cors, "cors");
+        Cors copy = Objects.requireNonNull(cors, "cors").copy();
+        register(() -> this.cors = copy);
         return this;
     }
 
@@ -424,10 +436,13 @@ public final class App {
      * <p>Named here rather than registered as a filter: the largest thing most
      * applications send is a static file, and a static file is answered before
      * any filter runs.
+     *
+     * <p>The value is copied as it is now, so changing it afterwards changes
+     * nothing this application compresses.
      */
     public App gzip(Gzip gzip) {
-        requireNotStarted();
-        this.gzip = Objects.requireNonNull(gzip, "gzip");
+        Gzip copy = Objects.requireNonNull(gzip, "gzip").copy();
+        register(() -> this.gzip = copy);
         return this;
     }
 
@@ -445,10 +460,13 @@ public final class App {
      *
      * <p>Named here rather than registered as a filter, because a 404 is a page
      * a browser renders like any other and no after-filter runs for one.
+     *
+     * <p>The value is copied as it is now, so changing it afterwards changes
+     * nothing this application sends.
      */
     public App securityHeaders(SecurityHeaders securityHeaders) {
-        requireNotStarted();
-        this.securityHeaders = Objects.requireNonNull(securityHeaders, "securityHeaders");
+        SecurityHeaders copy = Objects.requireNonNull(securityHeaders, "securityHeaders").copy();
+        register(() -> this.securityHeaders = copy);
         return this;
     }
 
@@ -465,8 +483,7 @@ public final class App {
      * }</pre>
      */
     public App server(WebServerFactory factory) {
-        requireNotStarted();
-        this.serverFactory = Objects.requireNonNull(factory, "factory");
+        register(() -> this.serverFactory = Objects.requireNonNull(factory, "factory"));
         return this;
     }
 
@@ -484,6 +501,34 @@ public final class App {
         started.start();
         server = started;
         return this;
+    }
+
+    // ---- Deployment ----
+
+    /**
+     * Closes registration and hands a servlet what it is to serve. Called from
+     * {@link AppServlet#init}, so a server started by {@link #start}, one started
+     * directly, and an external container all go through it.
+     */
+    Deployment deploy() {
+        synchronized (registrationLock) {
+            deployments++;
+            return new Deployment(router.copy(), beforeFilters, afterFilters, exceptionHandlers,
+                    errorHandlers, staticFiles, requestLogger, cors, gzip, securityHeaders);
+        }
+    }
+
+    /**
+     * Gives back what {@link #deploy()} took. Called from
+     * {@link AppServlet#destroy}, which a container calls once the requests in
+     * flight have finished, so registration reopens only after the last of them.
+     */
+    void undeploy() {
+        synchronized (registrationLock) {
+            if (deployments > 0) {
+                deployments--;
+            }
+        }
     }
 
     /**
@@ -528,15 +573,23 @@ public final class App {
     }
 
     /**
-     * Registration stops at {@link #start}. The routing table is read by every
-     * request thread without a lock, and {@link #routes()} is documented as the
-     * list the dispatcher walks, so a route added to a running server would be
-     * both a race and a snapshot that lies. {@link #stop()} opens it again.
+     * Makes one registration, if registration is open.
+     *
+     * <p>It closes while any {@link AppServlet} serves this application. Each
+     * servlet serves a copy of the table taken when it was initialized, so a
+     * change made now would never reach it, and {@link #routes()} — documented as
+     * the list the dispatcher walks — would describe routes nothing answers.
+     * {@link #stop()} opens it again, once the server has destroyed its servlet.
      */
-    private void requireNotStarted() {
-        if (server != null) {
-            throw new IllegalStateException(
-                    "Already started on port " + port() + ": register before start()");
+    private void register(Runnable change) {
+        synchronized (registrationLock) {
+            if (deployments > 0) {
+                WebServer running = server;
+                throw new IllegalStateException(running != null
+                        ? "Already started on port " + running.port() + ": register before start()"
+                        : "Already serving in a servlet container: register before AppServlet is initialized");
+            }
+            change.run();
         }
     }
 

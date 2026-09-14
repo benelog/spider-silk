@@ -18,7 +18,8 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
   `StaticFiles.directory(path)` serves a directory on disk instead of the classpath, several roots given at once are read in order, and `precompressed()` answers with a `.br` or `.gz` sibling where a build left one.
   `FreeMarkerTemplates`, `HandlebarsTemplates`, and `ThymeleafTemplates` are `TemplateRenderer` implementations in modules of their own
 * Server: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`.
-  Registration closes at `start`: a route, filter, or setting added to a running application throws `IllegalStateException`, and `stop()` opens it again
+  Registration closes while an `AppServlet` serves the application, however it was started: a route, filter, or setting added then throws `IllegalStateException`, and `stop()` opens it again.
+  `Cors`, `Gzip`, `SecurityHeaders`, and `StaticFiles` are copied when they are registered
 
 == What `WebRequest` provides
 

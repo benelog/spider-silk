@@ -68,6 +68,20 @@ final class Router {
                 : base + " as " + existing.path() + ", which matches the same requests";
     }
 
+    /**
+     * A router holding the same routes in the same order, which a later
+     * registration on this one does not reach. Built once per deployment, so the
+     * index is rebuilt at startup rather than shared with a table that can still
+     * change.
+     */
+    Router copy() {
+        Router copy = new Router();
+        for (Entry entry : registrations) {
+            copy.add(entry.method(), entry.path(), entry.description(), entry.handler());
+        }
+        return copy;
+    }
+
     /** The path arrives already split, because one request asks this more than once. */
     Match find(String method, String[] segments) {
         MethodRoutes routes = byMethod.get(method);

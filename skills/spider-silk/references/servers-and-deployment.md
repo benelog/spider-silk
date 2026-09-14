@@ -99,8 +99,12 @@ Everything core provides works the same on all three, and `WebTest` starts no se
 
 ```java
 ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
-context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
+ServletHolder holder = new ServletHolder(new AppServlet(app));
+holder.setInitOrder(0);                           // web.xml: <load-on-startup>0</load-on-startup>
+context.addServlet(holder, "/*");
 ```
+
+The servlet takes the app's routes and settings in `init()` and closes registration until `destroy()`; load it on startup so that happens at deploy, not on the first request.
 
 Exclude the bundled Jetty when deploying this way:
 

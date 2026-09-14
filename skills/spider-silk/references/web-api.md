@@ -178,7 +178,8 @@ app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of(
 
 - `exception(Type, handler)` runs the handler for the most specific registered type the exception is an instance of, in any registration order.
 - `Json.JsonException` is an `IllegalArgumentException`, so map it separately when `IllegalArgumentException` means 404.
-- Register everything before `app.start(...)`: a route, filter, or setting added to a running app throws `IllegalStateException`.
+- Register everything before `app.start(...)`: a route, filter, or setting added while an `AppServlet` serves the app (embedded, a server started directly, or an external container) throws `IllegalStateException`; `stop()` reopens it.
+- `app.cors(...)`, `app.gzip(...)`, `app.securityHeaders(...)`, and `app.staticFiles(...)` copy the value they are given, so changing it afterwards does nothing.
 - `throw new HttpException(HttpStatus.UNAUTHORIZED, "...")` rejects from anywhere and lets `error(status, ...)` render the body.
 - `error(status, handler)` fills the body for any response that ended on that status with no body (router 404s, `HttpException`, `WebResponse.empty(status)`); a response that already carries a body is left alone.
 - Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.

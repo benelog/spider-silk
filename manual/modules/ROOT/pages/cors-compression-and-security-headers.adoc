@@ -11,6 +11,9 @@ app.cors(Cors.allowOrigin("https://app.example.com").forPath("/api/*"))
    .securityHeaders();
 ----
 
+Each value is copied when it is registered.
+A `Cors`, `Gzip`, or `SecurityHeaders` changed afterwards changes nothing the application sends, so a value kept in a field cannot reconfigure a running server.
+
 == Why not filters, and why not plugins
 
 A `before` or `after` filter runs only once a route has matched, and these three have to reach the answers where no route did.

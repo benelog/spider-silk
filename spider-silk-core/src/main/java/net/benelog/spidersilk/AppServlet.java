@@ -10,8 +10,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
+import jakarta.servlet.ServletConfig;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletOutputStream;
 import jakarta.servlet.WriteListener;
 import jakarta.servlet.http.Cookie;
@@ -39,6 +42,14 @@ import jakarta.servlet.http.HttpSession;
  * lifecycle is open to that subclass — {@link #dispatch} and {@link #write} are
  * this class's own.
  *
+ * <p>The servlet takes what it serves from the {@link App} in {@link #init},
+ * and registration on that {@code App} is closed from then until
+ * {@link #destroy}. A container that initializes the servlet lazily leaves
+ * registration open until the first request, so a deployment maps it with
+ * {@code <load-on-startup>} or the container's equivalent. A subclass that
+ * overrides {@code init(ServletConfig)} or {@code destroy()} calls the
+ * superclass's, as the servlet API asks of every servlet.
+ *
  * <pre>{@code
  * public final class MyServlet extends AppServlet {
  *     public MyServlet() {
@@ -51,13 +62,54 @@ public class AppServlet extends HttpServlet {
 
     private final App app;
 
+    /**
+     * What {@link App#deploy()} handed over at {@link #init}: the routes and
+     * settings every request reads. Replaced, never cleared, so a request still
+     * running when a container gives up waiting and destroys the servlet reads a
+     * table rather than null.
+     */
+    private volatile Deployment deployment;
+
+    /** Whether this servlet holds registration on {@link #app} closed. */
+    private boolean deployed;
+
     /** The application this serves. Every request is routed against it. */
     public AppServlet(App app) {
-        this.app = app;
+        this.app = Objects.requireNonNull(app, "app");
+    }
+
+    /**
+     * Takes the routes and settings the {@link App} holds now, and closes
+     * registration on it until {@link #destroy}.
+     */
+    @Override
+    public void init(ServletConfig config) throws ServletException {
+        super.init(config);
+        synchronized (this) {
+            if (!deployed) {
+                deployment = app.deploy();
+                deployed = true;
+            }
+        }
+    }
+
+    /** Opens registration on the {@link App} again, once the container has finished with this servlet. */
+    @Override
+    public void destroy() {
+        synchronized (this) {
+            if (deployed) {
+                deployed = false;
+                app.undeploy();
+            }
+        }
+        super.destroy();
     }
 
     @Override
     protected void service(HttpServletRequest req, HttpServletResponse res) throws IOException {
+        if (deployment == null) {
+            throw new IllegalStateException("AppServlet has not been initialized: the container calls init() first");
+        }
         if (req.getCharacterEncoding() == null) {
             // The request declared no charset. One that did is read as it said.
             req.setCharacterEncoding("UTF-8");
@@ -98,25 +150,25 @@ public class AppServlet extends HttpServlet {
         if (Boolean.TRUE.equals(request.raw().getAttribute(WebRequest.NEGOTIATED_ATTRIBUTE))) {
             decorated = decorated.vary("Accept");
         }
-        if (app.cors != null) {
-            decorated = app.cors.apply(decorated, request, segments);
+        if (deployment.cors() != null) {
+            decorated = deployment.cors().apply(decorated, request, segments);
         }
-        if (app.securityHeaders != null) {
-            decorated = app.securityHeaders.apply(decorated, request);
+        if (deployment.securityHeaders() != null) {
+            decorated = deployment.securityHeaders().apply(decorated, request);
         }
-        if (app.gzip != null) {
-            decorated = app.gzip.apply(decorated, request);
+        if (deployment.gzip() != null) {
+            decorated = deployment.gzip().apply(decorated, request);
         }
         return decorated;
     }
 
     /** Reports the finished request, with the response it was finally answered with. */
     private void logRequest(WebRequest request, WebResponse response, long startedAt) {
-        if (app.requestLogger == null) {
+        if (deployment.requestLogger() == null) {
             return;
         }
         try {
-            app.requestLogger.log(request, response, Duration.ofNanos(System.nanoTime() - startedAt));
+            deployment.requestLogger().log(request, response, Duration.ofNanos(System.nanoTime() - startedAt));
         } catch (Exception e) {
             log("Request logger failed", e);
         }
@@ -160,7 +212,7 @@ public class AppServlet extends HttpServlet {
 
     /** The first configured root that holds the file answers; null when none does. */
     private WebResponse staticFile(String path, HttpServletRequest req) throws IOException {
-        for (StaticFiles files : app.staticFiles) {
+        for (StaticFiles files : deployment.staticFiles()) {
             WebResponse file = files.resolve(path, req);
             if (file != null) {
                 return file;
@@ -171,9 +223,9 @@ public class AppServlet extends HttpServlet {
 
     /** A HEAD with no route of its own is answered by the GET route, minus the body. */
     private Router.Match routeFor(String method, String[] segments) {
-        Router.Match match = app.router.find(method, segments);
+        Router.Match match = deployment.router().find(method, segments);
         if (match == null && "HEAD".equals(method)) {
-            return app.router.find("GET", segments);
+            return deployment.router().find("GET", segments);
         }
         return match;
     }
@@ -195,9 +247,9 @@ public class AppServlet extends HttpServlet {
                     WebResponse.empty().header("Allow", allow).header("Content-Length", "0");
             // A preflight is this same answer, told in the words CORS uses. The
             // methods it may name are the ones the Allow header just worked out.
-            return app.cors == null
+            return deployment.cors() == null
                     ? answer
-                    : app.cors.preflight(answer, request, allow, segments);
+                    : deployment.cors().preflight(answer, request, allow, segments);
         }
         return fail(request, HttpStatus.METHOD_NOT_ALLOWED, "Method Not Allowed: " + method + " " + path)
                 .header("Allow", allow);
@@ -209,7 +261,7 @@ public class AppServlet extends HttpServlet {
      * answers them without a route being registered for either.
      */
     private Set<String> allowedMethods(String[] segments) {
-        Set<String> registered = app.router.allowedMethods(segments);
+        Set<String> registered = deployment.router().allowedMethods(segments);
         if (registered.isEmpty()) {
             return registered;
         }
@@ -233,7 +285,7 @@ public class AppServlet extends HttpServlet {
      * {@link HttpException}.
      */
     private WebResponse runBefore(String[] segments, WebRequest request) throws Exception {
-        for (BeforeEntry entry : app.beforeFilters) {
+        for (BeforeEntry entry : deployment.beforeFilters()) {
             if (entry.matches(segments)) {
                 WebResponse answered = entry.filter().handle(request);
                 if (answered != null) {
@@ -248,7 +300,7 @@ public class AppServlet extends HttpServlet {
     private WebResponse runAfter(String[] segments, WebRequest request, WebResponse response)
             throws Exception {
         WebResponse current = response;
-        for (AfterEntry entry : app.afterFilters) {
+        for (AfterEntry entry : deployment.afterFilters()) {
             if (entry.matches(segments)) {
                 WebResponse replaced = entry.filter().handle(request, current);
                 if (replaced != null) {
@@ -396,7 +448,7 @@ public class AppServlet extends HttpServlet {
     private ExceptionHandler<Exception> exceptionHandlerFor(Exception e) {
         Class<?> bestType = null;
         ExceptionHandler<? extends Exception> best = null;
-        for (var entry : app.exceptionHandlers.entrySet()) {
+        for (var entry : deployment.exceptionHandlers().entrySet()) {
             Class<?> type = entry.getKey();
             if (type.isInstance(e) && (bestType == null || bestType.isAssignableFrom(type))) {
                 bestType = type;
@@ -436,7 +488,7 @@ public class AppServlet extends HttpServlet {
             return response;
         }
         HttpStatus status = response.status();
-        Handler handler = app.errorHandlers.get(status);
+        Handler handler = deployment.errorHandlers().get(status);
         if (handler != null) {
             try {
                 WebResponse answered = renderTemplate(required(handler.handle(request),

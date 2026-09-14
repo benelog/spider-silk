@@ -274,7 +274,9 @@ class ReadmeSnippets {
         app.server((a, port) -> new MyUndertowServer(a, port));   // implements WebServer
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
-        context.addServlet(new ServletHolder(new AppServlet(app)), "/*");
+        ServletHolder holder = new ServletHolder(new AppServlet(app));
+        holder.setInitOrder(0);                           // initialize while the context starts
+        context.addServlet(holder, "/*");
     }
 
     abstract static class MyFilter implements jakarta.servlet.Filter {

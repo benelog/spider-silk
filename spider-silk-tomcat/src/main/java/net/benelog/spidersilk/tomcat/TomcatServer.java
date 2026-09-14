@@ -313,6 +313,9 @@ public final class TomcatServer implements WebServer {
 
         Context context = tomcat.addContext(path, docBase.toString());
         Wrapper wrapper = Tomcat.addServlet(context, SERVLET_NAME, new AppServlet(app));
+        // Loaded while the context starts rather than on the first request,
+        // which is when AppServlet takes the routes and closes registration.
+        wrapper.setLoadOnStartup(0);
         if (multipart != null) {
             wrapper.setMultipartConfigElement(multipart);
         }

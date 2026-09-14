@@ -1,6 +1,8 @@
 package net.benelog.spidersilk.undertow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
@@ -525,10 +527,14 @@ class UndertowServerTest {
         server.start();
         int taken = server.port();
 
-        UndertowServer second = new UndertowServer(new App()).port(taken);
+        App refused = new App();
+        UndertowServer second = new UndertowServer(refused).port(taken);
         assertThatThrownBy(second::start)
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Failed to start Undertow on port " + taken);
+        assertThatCode(() -> refused.get("/", req -> WebResponse.text("second")))
+                .as("a start that failed never served, so registration stays open")
+                .doesNotThrowAnyException();
 
         server.stop();
         server = null;
@@ -541,6 +547,27 @@ class UndertowServerTest {
         } finally {
             third.stop();
         }
+    }
+
+    /**
+     * The servlet is initialized while Undertow starts, and that is when it takes
+     * the routes: registration closes then, whoever started the server, and
+     * reopens once stopping has destroyed the servlet.
+     */
+    @Test
+    void registrationClosesWhileTheServerServesTheApp() throws Exception {
+        App served = new App().get("/", req -> WebResponse.text("ok"));
+        server = new UndertowServer(served).port(0);
+        server.start();
+
+        assertThatIllegalStateException()
+                .isThrownBy(() -> served.get("/late", req -> WebResponse.text("late")));
+        assertThat(getFrom(server.port(), "/").body()).isEqualTo("ok");
+
+        server.stop();
+        server = null;
+        assertThatCode(() -> served.get("/late", req -> WebResponse.text("late")))
+                .doesNotThrowAnyException();
     }
 
     private HttpResponse<String> get(String path) throws IOException, InterruptedException {

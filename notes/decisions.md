@@ -66,8 +66,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 48 | `queryParam(name, parser)` and `formParam(name, parser)`: a parser on a named source | ✅ shipped |
 | 49 | `body()` keeps the text it read, and the unread body goes out once | ✅ shipped |
 | 50 | A response copies its cookies and its template model, and not its bytes | ✅ shipped |
+| 51 | Registration closes when a servlet is initialized, and settings are copied when registered | ✅ shipped |
 
-Fifty-two of the fifty-three shipped.
+Fifty-three of the fifty-four shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -1149,6 +1150,45 @@ So the claim is precise rather than total: the envelope is immutable, and the la
 
 Rejected on the way: copying the `Bytes` array defensively.
 It doubles the memory of every in-memory download to protect against a caller writing into an array it has already returned, which nothing in the API invites.
+
+## 51 · When registration closes
+
+### 51. Registration closes when `AppServlet` is initialized, and a setting is copied when it is registered
+
+`AppServlet.init` takes a snapshot of the `App`'s routes and settings, and registration on that `App` stays closed until `AppServlet.destroy`.
+Decision 34 closed registration at `start()`, which it detected as `App.server` being non-null.
+`App.start` is only one of three ways a servlet comes to serve an application.
+A `new JettyServer(app).start()` and an external container both left the field null, so a route could still be added while requests were being routed through the table it changed, which is the race decision 34 set out to remove.
+
+**The servlet lifecycle is the one path all three share.**
+Every deployment constructs an `AppServlet`, and every container calls `init` before the first request and `destroy` after the last.
+`App` counts the servlets between the two calls, so two servers over one `App` keep registration closed until both are gone.
+The check and the change it allows are made under one lock, which a snapshot taken on another thread also takes.
+Registration happens at startup, so no request waits for that lock.
+
+**The snapshot is a copy, not the live table.**
+The router is rebuilt from its registrations, and the filter lists and handler maps are unmodifiable copies, held in a package-private `Deployment` record that every request reads.
+A stop, a registration, and a second start therefore build a second table rather than changing the one a draining request may still be reading.
+
+**All three server modules initialize the servlet at startup.**
+Jetty, Tomcat, and Undertow each initialize a servlet on its first request by default, which would leave registration open between `start` returning and that request arriving.
+`JettyServer`, `TomcatServer`, and `UndertowServer` each set the servlet to load on startup, and the deployment chapter tells an external deployment to do the same with `<load-on-startup>`.
+
+**Stop, restart, and a failed start follow from the lifecycle.**
+`stop()` keeps working as decision 34 promised, because each server destroys its servlet before its `stop` returns.
+A container destroys a servlet only after the requests in flight have drained, so registration stays closed during the drain, which a test holds a request open to show.
+A start that fails after the servlet was initialized unwinds through the same `destroy`, because each server already stops a half-started context before it rethrows, so registration is open again for the retry.
+
+**A setting is copied when it is registered.**
+`app.gzip(config)`, `app.cors(...)`, `app.securityHeaders(...)`, and `app.staticFiles(...)` copy their values through a package-private `copy()` on each class.
+Before this, a `Gzip` kept in a field could be retuned with `minBytes` on a running server, and the same held for the other three.
+The copy is taken at registration rather than at `init`, so the rule is stated once, at the call: the value is what it was when `App` was handed it.
+A `TemplateRenderer` is not copied, because it is an interface an application implements and there is no general way to copy one.
+
+Rejected on the way: a public builder that freezes into an immutable `App`.
+It would turn every registration site into a different API for one guarantee that an internal snapshot already gives.
+Also rejected: taking the snapshot in the `AppServlet` constructor.
+A server that fails to start before it initializes the servlet never destroys it, so registration would close for good on an application nothing served.
 
 ## Rejected — decisions, with the reason
 

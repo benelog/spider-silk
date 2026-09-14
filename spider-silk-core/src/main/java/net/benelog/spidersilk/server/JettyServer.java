@@ -290,6 +290,9 @@ public final class JettyServer implements WebServer {
         context.setContextPath(contextPath);
 
         ServletHolder holder = new ServletHolder(new AppServlet(app));
+        // Initialized while the server starts rather than on the first request,
+        // which is when AppServlet takes the routes and closes registration.
+        holder.setInitOrder(0);
         if (multipart != null) {
             holder.getRegistration().setMultipartConfig(multipart);
         }

@@ -54,6 +54,22 @@ public final class Cors {
     }
 
     /**
+     * The copy {@link App#cors(Cors)} keeps, so a reference the caller holds on
+     * to cannot widen what an application has already been handed. Every list
+     * and the origin set are never changed once built, so they are shared.
+     */
+    Cors copy() {
+        Cors copy = new Cors(origins);
+        copy.pattern = pattern;
+        copy.methods = methods;
+        copy.headers = headers;
+        copy.exposed = exposed;
+        copy.credentials = credentials;
+        copy.maxAge = maxAge;
+        return copy;
+    }
+
+    /**
      * The origins allowed, spelled as a browser sends them: scheme, host, and
      * port, with no trailing slash — {@code "https://app.example.com"}.
      *

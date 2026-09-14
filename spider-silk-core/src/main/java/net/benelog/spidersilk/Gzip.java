@@ -70,6 +70,17 @@ public final class Gzip {
     private Gzip() {
     }
 
+    /**
+     * The copy {@link App#gzip(Gzip)} keeps, so a reference the caller holds on
+     * to cannot retune an application that has already been handed this.
+     */
+    Gzip copy() {
+        Gzip copy = new Gzip();
+        copy.minBytes = minBytes;
+        copy.types = types;
+        return copy;
+    }
+
     /** Compression as described on this class. */
     public static Gzip defaults() {
         return new Gzip();
