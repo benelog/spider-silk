@@ -24,8 +24,10 @@ It brings nothing along: the module is one class over core's route list and core
 
 [source,java]
 ----
-app.get("/openapi.json", req -> WebResponse.json(
-        OpenApi.document("Flashcard API", "1.0.0", app.routes())));
+app.get("/openapi.json", req -> {
+    Json.JsonValue resBody = OpenApi.document("Flashcard API", "1.0.0", app.routes());
+    return WebResponse.json(resBody);
+});
 ----
 
 The title and version are arguments because OpenAPI requires both under `info`, and a default for either would be this module naming someone's API.

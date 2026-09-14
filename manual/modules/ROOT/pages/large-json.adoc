@@ -65,7 +65,8 @@ The body is parsed as the stream is consumed, so an upload of a hundred thousand
 app.post("/api/decks/{deckId}/cards.ndjson", req -> {
     long deckId = req.pathParamLong("deckId");
     int imported = cardService.importCards(deckId, req.bodyNdjson(Codecs.CARD_DRAFT));
-    return WebResponse.json(Json.obj().put("imported", imported));
+    Json.JsonObject resBody = Json.obj().put("imported", imported);
+    return WebResponse.json(resBody);
 });
 ----
 

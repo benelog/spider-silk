@@ -34,7 +34,8 @@ static final ObjectMapper MAPPER = new ObjectMapper();
 
 app.get("/api/decks", req -> {
     try {
-        return WebResponse.json(MAPPER.writeValueAsString(deckService.decks()));
+        String resBody = MAPPER.writeValueAsString(deckService.decks());
+        return WebResponse.json(resBody);
     } catch (JsonProcessingException e) {
         throw new IllegalStateException(e);
     }
@@ -47,7 +48,8 @@ app.post("/api/decks", req -> {
     } catch (IOException e) {
         throw new HttpException(HttpStatus.BAD_REQUEST, "Malformed JSON body");
     }
-    return WebResponse.json(MAPPER.writeValueAsString(deckService.create(body.name())));
+    String resBody = MAPPER.writeValueAsString(deckService.create(body.name()));
+    return WebResponse.json(resBody);
 });
 ----
 
@@ -62,11 +64,15 @@ Move the two `try` blocks into an `exception(JsonProcessingException.class, ...)
 ----
 static final Gson GSON = new Gson();
 
-app.get("/api/decks", req -> WebResponse.json(GSON.toJson(deckService.decks())));
+app.get("/api/decks", req -> {
+    String resBody = GSON.toJson(deckService.decks());
+    return WebResponse.json(resBody);
+});
 
 app.post("/api/decks", req -> {
     NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
-    return WebResponse.json(GSON.toJson(deckService.create(body.name())));
+    String resBody = GSON.toJson(deckService.create(body.name()));
+    return WebResponse.json(resBody);
 });
 ----
 
@@ -92,8 +98,10 @@ public record Deck(long id, String name) { }
 static final Jsonb JSONB = Jsonb.builder().build();
 static final JsonType<Deck> DECK = JSONB.type(Deck.class);
 
-app.get("/api/decks/{deckId}", req ->
-        WebResponse.json(DECK.toJson(deckService.deck(req.pathParamLong("deckId")))));
+app.get("/api/decks/{deckId}", req -> {
+    String resBody = DECK.toJson(deckService.deck(req.pathParamLong("deckId")));
+    return WebResponse.json(resBody);
+});
 ----
 
 Its annotation processor generates a Java source adapter per type at compile time and registers it through `ServiceLoader`.

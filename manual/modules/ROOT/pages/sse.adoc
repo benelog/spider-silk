@@ -9,8 +9,9 @@ app.get("/decks/{deckId}/events", req -> {
     long deckId = req.pathParamLong("deckId");
     return WebResponse.sse(stream -> {
         while (stream.isOpen()) {
+            Json.JsonObject eventData = Json.obj().put("count", service.due(deckId));
             stream.id(String.valueOf(revision))
-                  .send("due", Json.obj().put("count", service.due(deckId)).toJson());
+                  .send("due", eventData.toJson());
             Thread.sleep(1000);
         }
     });

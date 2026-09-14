@@ -36,8 +36,9 @@ Reading it as bytes is what a xref:cors-compression-and-security-headers.adoc[co
 ----
 @Test
 void createDeckRespondsWith201() {
+    Json.JsonObject requestBody = Json.obj().put("name", "Spanish");
     WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
-            .jsonBody(Json.obj().put("name", "Spanish"))
+            .jsonBody(requestBody)
             .build());
 
     assertThat(response.status()).isEqualTo(HttpStatus.CREATED);

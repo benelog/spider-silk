@@ -59,12 +59,19 @@ app.get("/decks/{deckId}", req -> {
     return WebResponse.template("deck", model); // classpath:/jte/deck.jte
 });
 
-app.get("/api/decks", req -> WebResponse.json(
-        Json.arr().add(Json.obj().put("id", 1L).put("name", "English"))));
+app.get("/api/decks", req -> {
+    Json.JsonArray resBody = Json.arr().add(
+        Json.obj()
+            .put("id", 1L)
+            .put("name", "English")
+    );
+    return WebResponse.json(resBody);
+});
 
 app.post("/api/decks", req -> {
     String name = req.bodyJson().asObject().getString("name");
-    return WebResponse.json(Json.obj().put("name", name)).status(HttpStatus.CREATED);
+    Json.JsonObject resBody = Json.obj().put("name", name);
+    return WebResponse.json(resBody).status(HttpStatus.CREATED);
 });
 
 app.path("/api/decks", group -> {

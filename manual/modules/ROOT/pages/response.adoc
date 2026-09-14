@@ -16,8 +16,9 @@ A `switch` over it needs no default case, and a test can assert on the answer wi
 
 [source,java]
 ----
+Json.JsonObject requestBody = Json.obj().put("name", "Spanish");
 WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
-        .jsonBody(Json.obj().put("name", "Spanish"))
+        .jsonBody(requestBody)
         .build());
 
 assertThat(response.status()).isEqualTo(HttpStatus.CREATED);

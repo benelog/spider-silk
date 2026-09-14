@@ -10,8 +10,10 @@ Use a lambda when there is no state worth a class:
 
 [source,java]
 ----
-app.get("/openapi.json", req -> WebResponse.json(
-        OpenApi.document("Flashcard API", "1.0.0", app.routes())));
+app.get("/openapi.json", req -> {
+    Json.JsonValue resBody = OpenApi.document("Flashcard API", "1.0.0", app.routes());
+    return WebResponse.json(resBody);
+});
 ----
 
 == An `Action` class
