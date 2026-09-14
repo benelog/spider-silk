@@ -119,8 +119,7 @@ public final class Gzip {
             return varying;
         }
         return switch (response.body()) {
-            case WebResponse.Text text ->
-                    compressed(varying, text.content().getBytes(StandardCharsets.UTF_8));
+            case WebResponse.Text text -> compressed(varying, text.content());
             case WebResponse.Bytes bytes -> compressed(varying, bytes.data());
             case WebResponse.Stream stream -> compressed(varying, stream.writer());
             case WebResponse.Empty ignored -> varying;
@@ -171,6 +170,57 @@ public final class Gzip {
      */
     private static boolean acceptsGzip(WebRequest request) {
         return AcceptHeader.accepts(request.header("Accept-Encoding"), "gzip");
+    }
+
+    /**
+     * A text body, measured before it is encoded. A declined body stays the
+     * {@link WebResponse.Text} it came in as, so the request logger sees the same
+     * body with gzip on as with it off, and the writer encodes it once. Only a
+     * body that reaches the threshold is encoded here; if that one then comes out
+     * no smaller, the writer encodes it a second time, which is the rare case.
+     */
+    private WebResponse compressed(WebResponse response, String content) {
+        if (!reachesUtf8Bytes(content, minBytes)) {
+            return response;
+        }
+        // Text is written as UTF-8, so this is the byte count the writer would send.
+        return compressed(response, content.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * Whether {@code content} encodes to at least {@code threshold} bytes of
+     * UTF-8, answered without allocating the bytes. A char encodes to at least
+     * one byte and at most three (a surrogate pair is two chars and four bytes),
+     * so most strings are decided by their length alone; the rest are counted
+     * until the count reaches the threshold. An unpaired surrogate counts as the
+     * one byte {@link String#getBytes} replaces it with.
+     */
+    static boolean reachesUtf8Bytes(String content, int threshold) {
+        int length = content.length();
+        if (length >= threshold) {
+            return true;
+        }
+        if ((long) length * 3 < threshold) {
+            return false;
+        }
+        long bytes = 0;
+        for (int i = 0; i < length && bytes < threshold; i++) {
+            char c = content.charAt(i);
+            if (c < 0x80) {
+                bytes += 1;
+            } else if (c < 0x800) {
+                bytes += 2;
+            } else if (Character.isHighSurrogate(c)
+                    && i + 1 < length && Character.isLowSurrogate(content.charAt(i + 1))) {
+                bytes += 4;
+                i++;
+            } else if (Character.isSurrogate(c)) {
+                bytes += 1;
+            } else {
+                bytes += 3;
+            }
+        }
+        return bytes >= threshold;
     }
 
     /** A body already in memory, compressed now so its length is known now. */

@@ -9,6 +9,8 @@ import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.zip.GZIPInputStream;
 
 import org.junit.jupiter.api.Test;
@@ -99,6 +101,70 @@ class GzipTest {
 
         WebTest.test(app, client ->
                 assertThat(header(gzipped(client, "/small"), "Content-Encoding")).isEqualTo("gzip"));
+    }
+
+    /**
+     * A declined body leaves as the {@code Text} it entered as, so the request
+     * logger sees the same body with gzip on as with it off. Both ways of
+     * declining are covered: too small to try, and no smaller once tried, which
+     * twelve bytes under a twenty-byte gzip header always are.
+     */
+    @Test
+    void aDeclinedTextBodyIsStillTextToTheRequestLogger() {
+        List<WebResponse.Body> logged = new CopyOnWriteArrayList<>();
+        App app = new App().gzip(Gzip.defaults().minBytes(8))
+                .requestLogger((req, res, took) -> logged.add(res.body()))
+                .get("/small", req -> WebResponse.text("hello"))
+                .get("/no-smaller", req -> WebResponse.text("hello, world"));
+
+        WebTest.test(app, client -> {
+            assertThat(gzipped(client, "/small").headers().firstValue("Content-Encoding")).isEmpty();
+            assertThat(gzipped(client, "/no-smaller").headers().firstValue("Content-Encoding")).isEmpty();
+        });
+
+        assertThat(logged).containsExactly(
+                new WebResponse.Text("hello"), new WebResponse.Text("hello, world"));
+    }
+
+    /** The threshold is in bytes as sent, and Korean text is three bytes a character. */
+    @Test
+    void theThresholdCountsEncodedBytesNotCharacters() {
+        App app = new App().gzip(Gzip.defaults().minBytes(300))
+                .get("/below", req -> WebResponse.text("가".repeat(99) + "ab"))
+                .get("/at", req -> WebResponse.text("가".repeat(99) + "abc"));
+
+        WebTest.test(app, client -> {
+            // 101 chars and 299 bytes: under the threshold, although not by its length alone.
+            HttpResponse<byte[]> below = gzipped(client, "/below");
+            assertThat(below.headers().firstValue("Content-Encoding")).isEmpty();
+            assertThat(new String(below.body(), StandardCharsets.UTF_8)).isEqualTo("가".repeat(99) + "ab");
+
+            // 102 chars and 300 bytes: exactly at it.
+            HttpResponse<byte[]> at = gzipped(client, "/at");
+            assertThat(header(at, "Content-Encoding")).isEqualTo("gzip");
+            assertThat(inflate(at.body())).isEqualTo("가".repeat(99) + "abc");
+        });
+    }
+
+    @Test
+    void theByteCountMatchesWhatTheWriterEncodes() {
+        List<String> samples = List.of(
+                "",
+                "hello",
+                "가".repeat(40),
+                "😀".repeat(30),
+                "é".repeat(50) + "가나다" + "😀",
+                "a\uD83Db",                            // an unpaired high surrogate
+                "\uDE00".repeat(20),                   // unpaired low surrogates
+                "\uD83D".repeat(3) + "😀");  // unpaired highs, then a pair
+        for (String sample : samples) {
+            int encoded = sample.getBytes(StandardCharsets.UTF_8).length;
+            for (int threshold = 0; threshold <= encoded + 4; threshold++) {
+                assertThat(Gzip.reachesUtf8Bytes(sample, threshold))
+                        .as("%s against %d (encodes to %d bytes)", sample, threshold, encoded)
+                        .isEqualTo(encoded >= threshold);
+            }
+        }
     }
 
     /** A JPEG is already compressed; deflating it spends CPU to make it larger. */

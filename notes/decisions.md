@@ -472,6 +472,11 @@ SSE is excluded by what it is: a stream buffered until it is worth deflating is 
 `Raw` is excluded by definition.
 It also had to agree with decision 9's validators: a compressed answer's `ETag` is marked weak, since the two bodies are the same file and not the same bytes, and `StaticFiles` already accepts the weak form back, so revalidation keeps working without an inbound rewrite.
 Every compressible answer carries `Vary: Accept-Encoding` whether or not it ended up compressed, which is what `WebResponse.vary(field)` exists for: `header(name, value)` overwrites, and CORS and compression each add a field to the same header.
+A body that compression declines leaves as the type it arrived as, so a `Text` too small to compress, or no smaller compressed, is still a `Text` to decision 11's `requestLogger`.
+Handing back the UTF-8 bytes it had already encoded would spare the writer a second encode, but it would make the body type `decorate` passes on depend on whether gzip is on.
+A `Text` is instead measured before it is encoded.
+Its length alone decides most cases, because a char encodes to between one and three bytes, and the rest are counted char by char without allocating.
+The one body still encoded twice is one that reaches the threshold and comes out no smaller, which is rare.
 
 Gzip's stream wrapping is the one container-sensitive piece, so it is in the acceptance tests decision 22 and 23 mirror onto Tomcat and Undertow.
 
