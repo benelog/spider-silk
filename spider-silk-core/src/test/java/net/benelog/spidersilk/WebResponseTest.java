@@ -1,7 +1,10 @@
 package net.benelog.spidersilk;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+
+import jakarta.servlet.http.Cookie;
 
 import org.junit.jupiter.api.Test;
 
@@ -181,5 +184,79 @@ class WebResponseTest {
                 .vary("Accept-Encoding");
 
         assertThat(response.header("Vary")).isEqualTo("accept-encoding");
+    }
+
+    // ---- What a caller still holds cannot change a response already made ----
+
+    @Test
+    void aCookieChangedAfterItWasAddedDoesNotChangeTheResponse() {
+        Cookie cookie = new Cookie("theme", "dark");
+        cookie.setSecure(true);
+        cookie.setAttribute("SameSite", "None");
+        WebResponse response = WebResponse.empty().cookie(cookie);
+
+        cookie.setValue("light");
+        cookie.setAttribute("SameSite", "Strict");
+
+        Cookie sent = response.cookies().get(0);
+        assertThat(sent.getValue()).isEqualTo("dark");
+        assertThat(sent.getSecure()).isTrue();
+        assertThat(sent.getAttribute("SameSite")).isEqualTo("None");
+    }
+
+    @Test
+    void aCookieTakenFromTheResponseIsACopy() {
+        WebResponse response = WebResponse.empty().cookie("theme", "dark");
+
+        Cookie taken = response.cookies().get(0);
+        taken.setValue("light");
+        taken.setAttribute("SameSite", "None");
+
+        Cookie again = response.cookies().get(0);
+        assertThat(again.getValue()).isEqualTo("dark");
+        assertThat(again.getPath()).isEqualTo("/");
+        assertThat(again.isHttpOnly()).isTrue();
+        assertThat(again.getAttribute("SameSite")).isEqualTo("Lax");
+    }
+
+    /** What reaches the wire is the copy, so a cookie changed afterwards is not what the browser gets. */
+    @Test
+    void theCookieSentIsTheOneAddedNotTheOneChangedLater() {
+        Cookie cookie = new Cookie("theme", "dark");
+        WebResponse answer = WebResponse.text("ok").cookie(cookie);
+        cookie.setValue("light");
+        App app = new App().get("/", req -> answer);
+
+        WebTest.test(app, client -> assertThat(client.get("/").headers().firstValue("Set-Cookie"))
+                .hasValueSatisfying(header -> assertThat(header).startsWith("theme=dark")));
+    }
+
+    @Test
+    void aModelChangedAfterTheTemplateWasBuiltDoesNotChangeTheTemplate() {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("title", "Decks");
+        WebResponse response = WebResponse.template("decks", model);
+
+        model.put("title", "Changed");
+        model.put("extra", "added");
+
+        WebResponse.Template template = (WebResponse.Template) response.body();
+        assertThat(template.model()).containsExactly(Map.entry("title", "Decks"));
+    }
+
+    /** The copy is read-only, keeps a null value, and keeps the order the model iterated in. */
+    @Test
+    void theModelCopyIsReadOnlyAndKeepsNullsAndOrder() {
+        Map<String, Object> model = new LinkedHashMap<>();
+        model.put("b", 2);
+        model.put("message", null);
+        model.put("a", 1);
+
+        WebResponse.Template template = new WebResponse.Template("decks", model);
+
+        assertThat(List.copyOf(template.model().keySet())).containsExactly("b", "message", "a");
+        assertThat(template.model()).containsEntry("message", null);
+        assertThatThrownBy(() -> template.model().put("c", 3))
+                .isInstanceOf(UnsupportedOperationException.class);
     }
 }

@@ -467,7 +467,7 @@ public class AppServlet extends HttpServlet {
                 res.setHeader(header.getKey(), header.getValue());
             }
         }
-        for (Cookie cookie : response.cookies()) {
+        for (Cookie cookie : response.cookiesToSend()) {
             res.addCookie(cookie);
         }
 

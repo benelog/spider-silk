@@ -12,6 +12,8 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -40,6 +42,15 @@ import net.benelog.spidersilk.json.JsonWriter;
  * {@link #status(HttpStatus)}, {@link #header(String, String)}, {@link #cookie(String, String)} —
  * returns a new response rather than changing this one, which is what lets an
  * {@link AfterFilter} take a response and hand back a different one.
+ *
+ * <p>The immutability covers the envelope and what is cheap to copy: the status,
+ * the headers, the cookies, and the template model's entries. A cookie is copied
+ * when it is added and again when {@link #cookies()} hands it out, and a model is
+ * copied into a read-only map when the {@link Template} is built, so nothing a
+ * caller still holds changes a response already made. The copies are shallow: a
+ * model value that is itself mutable is still the object the caller passed. The
+ * bytes of a {@link Bytes} body and the writer of a streamed one are handed over
+ * rather than copied, as their own descriptions say.
  *
  * <p>The envelope is always the same; what differs between an HTML page, a JSON
  * document, a file download, and an SSE stream is the {@link Body}. That is a
@@ -91,11 +102,18 @@ public final class WebResponse {
      * handler's exception handling still applies, so a template that throws is
      * routed to {@link App#exception} like any other failure.
      *
-     * <p>The model is held as it was given, not copied: a template model takes
-     * null values, which the unmodifiable copies would refuse. Hand over a map
-     * nothing else still writes to.
+     * <p>The model is copied, in its iteration order, into a map that cannot be
+     * changed, so a map the caller keeps writing to after this does not reach
+     * the page. The copy keeps null values, which a template model takes and
+     * {@link Map#copyOf} would refuse. It copies the entries and not the values
+     * they point to.
      */
     public record Template(String name, Map<String, Object> model) implements Body {
+
+        public Template {
+            Objects.requireNonNull(name, "name");
+            model = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(model, "model")));
+        }
     }
 
     /** A body written straight to the output stream, for content too big to hold. */
@@ -251,8 +269,7 @@ public final class WebResponse {
      * handler.
      */
     public static WebResponse template(String template, Map<String, Object> model) {
-        return of(new Template(Objects.requireNonNull(template, "template"),
-                Objects.requireNonNull(model, "model")))
+        return of(new Template(Objects.requireNonNull(template, "template"), model))
                 .contentType("text/html; charset=UTF-8");
     }
 
@@ -464,13 +481,26 @@ public final class WebResponse {
 
     /**
      * The cookies this response sets, read-only and in the order they were
-     * added. The list is; a {@link Cookie} is not, because the servlet API's
-     * cookie is a mutable object and this hands back the ones it was given
-     * rather than copies. Setting one is {@link #cookie(Cookie)}, which returns
-     * a new response; altering one taken from here changes what this response
-     * sends.
+     * added.
+     *
+     * <p>Each {@link Cookie} is a copy. The servlet API's cookie is a mutable
+     * object, so altering one taken from here changes that copy and not what this
+     * response sends. Setting one is {@link #cookie(Cookie)}, which returns a new
+     * response.
      */
     public List<Cookie> cookies() {
+        if (cookies.isEmpty()) {
+            return cookies;
+        }
+        List<Cookie> copies = new ArrayList<>(cookies.size());
+        for (Cookie cookie : cookies) {
+            copies.add((Cookie) cookie.clone());
+        }
+        return Collections.unmodifiableList(copies);
+    }
+
+    /** The cookies themselves, for the writer, which sends them and hands them to nobody. */
+    List<Cookie> cookiesToSend() {
         return cookies;
     }
 
@@ -583,28 +613,38 @@ public final class WebResponse {
      * cookie should be; {@link #cookie(Cookie)} is there for the rest.
      */
     public WebResponse cookie(String name, String value) {
-        return cookie(defaultCookie(name, value));
+        return withCookie(defaultCookie(name, value));
     }
 
     /** Sets a cookie that outlives the browser session, with the same defaults. */
     public WebResponse cookie(String name, String value, Duration maxAge) {
         Cookie cookie = defaultCookie(name, value);
         cookie.setMaxAge((int) Math.min(maxAge.toSeconds(), Integer.MAX_VALUE));
-        return cookie(cookie);
+        return withCookie(cookie);
     }
 
-    /** Sets a cookie built by hand — the way to Secure, a Domain, or SameSite=None. */
+    /**
+     * Sets a cookie built by hand — the way to Secure, a Domain, or SameSite=None.
+     *
+     * <p>The response keeps a copy, attributes included, so changing the cookie
+     * after this call does not change what the response sends.
+     */
     public WebResponse cookie(Cookie cookie) {
-        List<Cookie> copy = new ArrayList<>(cookies);
-        copy.add(Objects.requireNonNull(cookie, "cookie"));
-        return new WebResponse(status, headers, List.copyOf(copy), body);
+        return withCookie((Cookie) Objects.requireNonNull(cookie, "cookie").clone());
     }
 
     /** Expires a cookie that was set with the defaults. */
     public WebResponse removeCookie(String name) {
         Cookie cookie = defaultCookie(name, "");
         cookie.setMaxAge(0);
-        return cookie(cookie);
+        return withCookie(cookie);
+    }
+
+    /** Adds a cookie nothing outside this class holds, so it needs no copy of its own. */
+    private WebResponse withCookie(Cookie owned) {
+        List<Cookie> copy = new ArrayList<>(cookies);
+        copy.add(owned);
+        return new WebResponse(status, headers, List.copyOf(copy), body);
     }
 
     /**

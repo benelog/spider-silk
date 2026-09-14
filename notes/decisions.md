@@ -65,8 +65,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 47 | `setSessionAttr` for the write, and `paramOrNull` for the optional string | ✅ shipped |
 | 48 | `queryParam(name, parser)` and `formParam(name, parser)`: a parser on a named source | ✅ shipped |
 | 49 | `body()` keeps the text it read, and the unread body goes out once | ✅ shipped |
+| 50 | A response copies its cookies and its template model, and not its bytes | ✅ shipped |
 
-Fifty-one of the fifty-two shipped.
+Fifty-two of the fifty-three shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -1120,6 +1121,34 @@ It holds a large upload in memory, which the unread modes exist to avoid, and a 
 Form parsing and `raw()` stay outside the bookkeeping.
 A form-encoded POST is still spent by its first `param()` read, which the container performs and core does not see, so `body()` after it answers `""`, as decision 20's stub already models.
 What is read through `raw()` is read behind the framework's back, which is what decision 32 says of that hatch.
+
+## 50 · What an immutable response is immutable about
+
+### 50. A response copies its cookies and its template model, and not its bytes
+
+`WebResponse` copies a `Cookie` when `cookie(Cookie)` adds it and again when `cookies()` hands it out, and `Template` copies its model into a read-only map.
+Decision 18 called the response an immutable value, and three references let a caller change one after it was built.
+A cookie added and then changed was sent changed, a cookie read back through `cookies()` could be altered in place, and a model map the handler kept writing to was rendered with the later writes.
+An `AfterFilter` or a test that reused a response could therefore not rely on what it had read from it.
+
+**The copy is `Cookie.clone()`.**
+The servlet API's cookie is `Cloneable`, and its `clone` copies the attribute map that `SameSite` lives in, which a test asserts because a copy that dropped it would quietly weaken every cookie.
+Cloning is not reflection in the sense this framework avoids: it is a method the type declares.
+The writer reads the list without cloning it, since it hands the cookies only to the container.
+
+**The model copy keeps nulls, so it is not `Map.copyOf`.**
+The copy is an `unmodifiableMap` over a `LinkedHashMap`, which keeps a null value, which a template model takes, and the order the caller's map iterated in.
+It lives in the record's compact constructor rather than in `WebResponse.template`, because `Template` is a public record and `new WebResponse.Template(...)` does not go through the factory.
+The copy is shallow, and the javadoc says so: a list inside the model is still the handler's list.
+No renderer in the repository writes into its model, which the FreeMarker, Handlebars, and Thymeleaf modules' own tests confirm against the read-only map.
+
+**Bytes and writers are handed over, not copied.**
+`Bytes` already documented that its array belongs to the response once handed over, because a download is the case where a second copy is what the caller was avoiding.
+A `Stream`, `Sse`, or `Raw` body holds a writer, which has no content to copy.
+So the claim is precise rather than total: the envelope is immutable, and the large bodies carry an ownership contract instead.
+
+Rejected on the way: copying the `Bytes` array defensively.
+It doubles the memory of every in-memory download to protect against a caller writing into an array it has already returned, which nothing in the API invites.
 
 ## Rejected — decisions, with the reason
 

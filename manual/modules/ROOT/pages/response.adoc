@@ -4,6 +4,12 @@
 A `WebResponse` is an immutable value.
 Every method returns a new response, which is what lets an after-filter rewrite what a route answered.
 
+The immutability covers the envelope: the status, the headers, the cookies, and the entries of a template model.
+A cookie is copied when it is added and again when `cookies()` hands it out, so changing a `Cookie` object afterwards changes nothing the response sends.
+A template model is copied into a read-only map when the template body is built, so a map the handler keeps writing to does not reach the page.
+The copies are shallow, and a mutable object stored as a model value is still the one the handler passed.
+The array of a `bytes` body and the writer of a `stream` body are handed over rather than copied, because a second copy of a large body is what those bodies exist to avoid.
+
 == Bodies
 
 `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `file(path)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
@@ -136,6 +142,7 @@ return WebResponse.html(page)
 
 The two-argument form sets `Path=/`, `HttpOnly`, and `SameSite=Lax`, which is what a cookie holding anything worth stealing should have.
 `cookie(Cookie)` takes a hand-built `jakarta.servlet.http.Cookie` for `Secure`, a `Domain`, or `SameSite=None`.
+The response keeps a copy of it, attributes included.
 xref:request.adoc[The Request] covers reading the cookies the client sent.
 
 == The lambda families

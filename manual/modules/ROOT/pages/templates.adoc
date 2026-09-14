@@ -13,6 +13,7 @@ app.get("/decks/{deckId}", req ->
 Nothing has to be configured for that.
 An `App` renders with https://jte.gg[jte] over `classpath:/jte` and appends `.jte`, so the handler above renders `classpath:/jte/deck.jte`.
 The model is a `Map`, passed to jte's parameters by name, and `ContentType.Html` escapes `${}` output for you.
+The response copies the model's entries into a read-only map, null values and iteration order kept, so the renderer receives a map it cannot change.
 
 == A root or a suffix of your own
 
