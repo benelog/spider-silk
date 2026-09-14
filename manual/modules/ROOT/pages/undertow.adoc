@@ -18,7 +18,8 @@ dependencies {
 ----
 
 The module depends on `undertow-servlet` 2.3.x, the Jakarta EE 10 line.
-That is Servlet 6.0, the same level as core's servlet API, Jetty's `ee10`, and Tomcat 10.1.
+That is Servlet 6.0, the same level as core's servlet API and Jetty's `ee10`.
+Tomcat 11.0.x is one level above, at Servlet 6.1.
 `undertow-core` has a 2.4.x, but `undertow-servlet`, the half this module needs, has not followed it yet.
 
 == Running

@@ -6,8 +6,8 @@ dependencies {
     api project(':spider-silk-core')
 
     // api, not implementation: the customizers hand out Tomcat's own types.
-    // 10.1.x is the Servlet 6.0 line, the same level as core's servlet API and
-    // Jetty's ee10 — Tomcat 11 would be Servlet 6.1 and a version skew for nothing.
+    // 11.0.x is the Servlet 6.1 line, one level above core's servlet API, Jetty's
+    // ee10, and Undertow 2.3.x. Core calls nothing 6.1 added, so the skew is harmless.
     api 'org.apache.tomcat.embed:tomcat-embed-core:11.0.25'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'

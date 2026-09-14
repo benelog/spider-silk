@@ -18,8 +18,9 @@ dependencies {
 }
 ----
 
-The module depends on `tomcat-embed-core` 10.1.x, the Servlet 6.0 line, which is the same level as core's servlet API, as Jetty's `ee10`, and as Undertow 2.3.x.
-Tomcat 11 implements Servlet 6.1 and would be a version skew for no gain.
+The module depends on `tomcat-embed-core` 11.0.x, the Servlet 6.1 line.
+That is one level above core's servlet API, Jetty's `ee10`, and Undertow 2.3.x, which are all Servlet 6.0.
+Core calls nothing that Servlet 6.1 added, so the same application runs on all three servers.
 
 Excluding Jetty is optional.
 It only keeps an unused server off the classpath.

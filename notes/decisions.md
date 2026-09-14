@@ -369,6 +369,8 @@ Three calls inside that decision:
 Decision 2 cashed in: `WebServer` was made four methods so a second server would be a small job, and this is what proves it.
 A module rather than a class in core, following 17: a tie to one server is stated in the artifact's name.
 The dependency tracks Servlet 6.0, matching core's servlet API, so the three servers stay on one specification level.
+It has since moved to Tomcat 11.0.x, which is Servlet 6.1 and one level above the other two.
+Core calls nothing that Servlet 6.1 added, so that skew does not reach an application.
 
 Jetty stays the default, which is the actual decision.
 Tomcat wants a working directory on disk where Jetty runs diskless, and logs through JULI rather than slf4j.
