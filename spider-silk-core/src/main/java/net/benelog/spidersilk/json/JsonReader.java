@@ -7,10 +7,11 @@ import java.util.List;
  * Builds a value out of parsed JSON. Like {@link JsonWriter}, the mapping is
  * written by hand and uses no reflection.
  *
- * <p>A reader rejects bad input by throwing {@link IllegalArgumentException}.
+ * <p>A reader rejects bad input by throwing {@link IllegalArgumentException}
+ * or {@link java.time.DateTimeException}, as parameter parsers do.
  * {@code Json}'s own accessors throw {@link Json.JsonException}, a subtype, for
  * a missing key or a value of the wrong type. {@code req.bodyJson(reader)}
- * turns either into a 400, so a reader never has to return a half-built object.
+ * turns these into a 400, so a reader never has to return a half-built object.
  *
  * <pre>{@code
  * static final JsonReader<NewDeck> NEW_DECK =

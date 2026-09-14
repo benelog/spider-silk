@@ -1,15 +1,17 @@
 package net.benelog.spidersilk;
 
 /**
- * Runs before the route handler, and may answer instead of it.
+ * Runs before routing or a matched route handler, and may answer immediately.
+ * Register with {@link App#beforeRequest} for every request in scope, or
+ * {@link App#beforeRoute} for matched routes with their path variables.
  *
  * <pre>{@code
- * app.before("/admin/*", req -> req.sessionAttr("user") == null
+ * app.beforeRoute("/admin/*", req -> req.sessionAttr("user") == null
  *         ? WebResponse.redirect("/login")     // answers here; the route never runs
  *         : null);                             // carry on
  * }</pre>
  *
- * <p>Returning null continues to the next filter and then to the route.
+ * <p>Returning null continues to the next filter and then to routing or the matched handler.
  * Returning a response ends the request there: a guard that turned the caller
  * away must not be followed by the handler it was guarding. Rejecting with a
  * status and the framework's own body is

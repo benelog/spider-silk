@@ -25,7 +25,7 @@ class RequestApiTest {
     @Test
     void formParamAndQueryParamAreToldApart() {
         App app = new App().post("/submit", req -> WebResponse.text(
-                "query=" + req.queryParam("source") + " form=" + req.formParam("source")));
+                "query=" + req.queryParamOrNull("source") + " form=" + req.formParamOrNull("source")));
 
         WebTest.test(app, client -> {
             var response = client.send(request -> request.uri(URI.create(client.url(
@@ -94,7 +94,7 @@ class RequestApiTest {
     @Test
     void aFormOnlyPostHasNoQueryParameters() {
         App app = new App().post("/submit", req -> WebResponse.text(
-                "query=" + req.queryParam("name") + " form=" + req.formParam("name")));
+                "query=" + req.queryParamOrNull("name") + " form=" + req.formParamOrNull("name")));
 
         WebTest.test(app, client ->
                 assertThat(client.postForm("/submit", Map.of("name", "Ada")).body())
@@ -103,7 +103,7 @@ class RequestApiTest {
 
     @Test
     void queryParametersAreUrlDecoded() {
-        App app = new App().get("/search", req -> WebResponse.text(req.queryParam("q")));
+        App app = new App().get("/search", req -> WebResponse.text(req.queryParamOrNull("q")));
 
         WebTest.test(app, client ->
                 assertThat(client.get("/search?q=a+b%26c").body()).isEqualTo("a b&c"));
@@ -112,7 +112,7 @@ class RequestApiTest {
     /** A percent-escape that will not decode is bad input, so it answers 400 and not 500. */
     @Test
     void aMalformedQueryStringIsRejectedAsBadInput() {
-        App app = new App().get("/search", req -> WebResponse.text(req.queryParam("q")));
+        App app = new App().get("/search", req -> WebResponse.text(req.queryParamOrNull("q")));
 
         WebTest.test(app, client -> {
             String response = raw(client, "",
@@ -126,7 +126,7 @@ class RequestApiTest {
     /** A form read consults the query string to tell the two apart, so it answers 400 too. */
     @Test
     void aFormReadBehindAMalformedQueryStringIsAlsoA400() {
-        App app = new App().post("/submit", req -> WebResponse.text(req.formParam("name")));
+        App app = new App().post("/submit", req -> WebResponse.text(req.formParamOrNull("name")));
 
         WebTest.test(app, client -> {
             String body = "name=Ada";

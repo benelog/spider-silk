@@ -82,7 +82,7 @@ Its static-import DSL is the thing *not* to borrow, because process-global mutab
 8. **The three every deployment turns on are named methods, not plugins.**
    `cors(Cors)`, `gzip(Gzip)`, and `securityHeaders(SecurityHeaders)` each take one inert value, each is off until it is named, and each applies to every answer: a static file, an error page, and the automatic `OPTIONS` a preflight lands on.
    Javalin ships the same three as bundled plugins, which is the registry decision 27 refuses.
-   The same decision carries why they are named methods rather than `before`/`after` filters.
+   The same decision carries why they are named methods rather than `beforeRoute`/`afterRoute` filters.
 9. **Startup cost is close to zero** because there is nothing to scan.
 
 ## Weaknesses, stated precisely

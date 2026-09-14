@@ -136,7 +136,7 @@ A socket kept open across quiet stretches survives that only if the two ends pin
 An upgrade leaves servlet dispatch for good, so none of the framework follows it:
 
 * the router does not, and `app.routes()` does not list a socket,
-* `before` and `after` filters do not run,
+* `beforeRequest`, `beforeRoute`, `afterRoute`, and `responseFilter` filters do not run,
 * `error(status, ...)` does not cover it,
 * the request logger never sees the connection, the upgrade included, because the upgrade handler answers ahead of `AppServlet` and the servlet never runs,
 * `WebTest` cannot reach it at all, since it never starts a server.

@@ -26,7 +26,7 @@ app.post("/api/decks", req -> {
 });
 ```
 
-- `getString`/`getLong`/... throw `Json.JsonException` (an `IllegalArgumentException`) on a missing key or wrong type, and `req.bodyJson(reader)` turns that into a 400: a handler gets a whole value or none. `asLong`/`getLong` reject `1.5` rather than truncating it.
+- `getString`/`getLong`/... throw `Json.JsonException` (an `IllegalArgumentException`) on a missing key or wrong type, and `req.bodyJson(reader)` turns that or a `DateTimeException` into a 400: a handler gets a whole value or none. `asLong`/`getLong` reject `1.5` rather than truncating it.
 - For keys allowed to be absent: `optString`/`optLong`/`optDouble`/`optBoolean` answer a default, for a missing key and an explicit JSON `null` alike. `optObject`/`optArray` answer `null` on the same terms, since a container has no literal default to name.
 - `isString()`/`isNumber()`/`isBoolean()`, beside `isNull()`, tell a primitive's type without a try/catch; `instanceof Json.JsonObject` and `instanceof Json.JsonArray` do it for the containers.
 - A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
@@ -68,7 +68,7 @@ app.post("/api/decks/{deckId}/cards.ndjson", req -> {
 
 - `sink.write(value, writer)` takes the same hand-written `JsonWriter<T>` as everything else: a different way of framing the output, not a different way of mapping it.
   It throws `UncheckedIOException` rather than a checked `IOException`, so `card -> sink.write(card, CARD)` is an ordinary `Consumer` and fits a row callback over a database cursor.
-- Both are a `stream` body underneath, so the headers commit before the writer runs.
+- Both are a `stream` body underneath, and their writer runs outside handler exception handling. A failure before commitment gets a generic 500; after commitment the status cannot change. `RequestCompletion.failure()` reports the write failure in either case.
   Anything that can fail in a way the client should hear about — a missing deck, an unauthorized caller — must be settled *before* the response is returned; a failure inside the writer can no longer change the status.
 - `req.bodyNdjson(reader)` is a lazy `Stream<T>`.
   A line that is not valid JSON, or that the reader rejects, answers 400 naming the line — but only where the stream is consumed, so consume it before returning the response, ideally inside one transaction so a bad line rolls the import back.
@@ -95,7 +95,7 @@ NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
 - A body is read one way: as the text `body()` keeps (so `bodyJson()` and a second `body()` see the whole body, even after a filter read it), or unread through `bodyStream()`, `bodyReader()`, or `bodyNdjson()`.
   Mixing the two throws `IllegalStateException` whichever comes second, and the stream and the reader exclude each other too.
 - A form-encoded POST is spent by its first `param()` read, since the container parses the form by reading the body.
-  `bodyStream()` afterwards answers an empty stream rather than throwing, and a body read as bytes first leaves `formParam()` with no fields.
+  `bodyStream()` afterwards answers an empty stream rather than throwing, and a body read as bytes first leaves `formParamOrNull()` with no fields.
 - Core has not been told the body is JSON, so the library's own failures are the application's to answer: map them with `app.exception(JsonProcessingException.class, ...)` or throw `HttpException(HttpStatus.BAD_REQUEST, ...)`.
 - Under a [native image](servers-and-deployment.md#graalvm-native-image), Jackson and Gson need a reflection entry per bound type; avaje-jsonb generates an adapter per type at compile time and needs none.
 

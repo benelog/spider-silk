@@ -48,8 +48,8 @@ public class ApiController {
      * before the next arrives.
      *
      * <p>The deck is looked up before the response is returned, because that is
-     * the last moment a missing one can still answer 404 — once the stream
-     * starts, the headers are committed.
+     * the last moment a missing one can still answer 404 — the stream writer
+     * runs outside handler exception handling.
      */
     public WebResponse exportCards(WebRequest req) {
         long deckId = req.pathParamLong("deckId");

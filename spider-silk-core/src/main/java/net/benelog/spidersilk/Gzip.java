@@ -21,7 +21,7 @@ import java.util.zip.GZIPOutputStream;
  *
  * <p>Registered through {@link App#gzip(Gzip)}, not as a filter: the stylesheet
  * a browser spends the most time downloading is a static file, and a static file
- * is answered before any filter runs.
+ * bypasses route filters. Compression runs after response filters.
  *
  * <p>Compression is a transform over the {@link WebResponse}, not a wrapper
  * around the servlet response. A body already in memory — {@link WebResponse.Text},

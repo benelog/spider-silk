@@ -71,12 +71,12 @@ app.post("/api/decks/{deckId}/cards.ndjson", req -> {
 ----
 
 Blank lines are skipped.
-A line that is not valid JSON, or that the reader rejects, answers 400 naming the line.
+A line that is not valid JSON, or that the reader rejects with `IllegalArgumentException` or `DateTimeException`, answers 400 naming the line.
 That is the other reason to read NDJSON rather than one large array: the report says where the body went wrong, not just that it did.
 
 Because the stream is lazy, those failures happen where it is consumed.
 Consume it before returning the response.
-Inside a `stream` or `ndjson` writer the headers are already committed and a 400 can no longer be sent.
+Inside a `stream` or `ndjson` writer, handler exception handling has finished and a rejection no longer produces a 400.
 
 Reading the whole import inside one transaction is what makes a malformed line safe: the exception leaves the service, the transaction rolls back, and the client is told which line rather than being left with a deck half filled.
 
@@ -86,8 +86,10 @@ Both are a `WebResponse.stream(...)` body underneath.
 There is no new body kind, so nothing in the servers, the filters, or the compression had to learn about them.
 That inheritance is the whole list of caveats:
 
-* **The headers are committed before the writer runs.**
-  A failure partway through can no longer change the status into an error the client would understand.
+* **The writer runs outside handler exception handling.**
+  A failure before commitment gets a generic 500.
+  After commitment the status cannot change, and the response may be partial.
+  `RequestCompletion.failure()` reports the write failure independently of the status.
   Anything that can fail in a way the client should hear about, such as a missing deck or an unauthorized caller, belongs before the response is returned.
   The example looks the deck up first for exactly this reason.
 * **A HEAD runs the writer.**

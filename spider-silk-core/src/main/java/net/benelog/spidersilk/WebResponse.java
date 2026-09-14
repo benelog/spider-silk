@@ -188,9 +188,9 @@ public final class WebResponse {
      * thing alive is one element.
      *
      * <p>It is a {@link #stream(String, StreamWriter)} body underneath, so the
-     * same rule applies: the headers are committed before the writer runs, and a
-     * failure partway through can no longer change the status into an error the
-     * client would understand. It also means a HEAD runs the writer to find the
+     * same rule applies: the writer runs outside handler exception handling.
+     * A failure before commitment gets a generic 500; after commitment the
+     * status cannot change and the client may receive an incomplete document. It also means a HEAD runs the writer to find the
      * length, and that gzip covers it like any other JSON.
      */
     public static WebResponse jsonArray(JsonStreamWriter writer) {
@@ -283,8 +283,9 @@ public final class WebResponse {
      *         .attachment("deck.csv"));
      * }</pre>
      *
-     * <p>The stream is written after the response headers are committed, so a
-     * failure partway through can no longer change the status. Anything that can
+     * <p>The writer runs after handler exception handling has finished. A failure
+     * before commitment gets a generic 500; after commitment the status cannot
+     * change. {@link RequestCompletion} reports the write failure in either case. Anything that can
      * fail in a way the client should hear about belongs before the response is
      * returned, not inside the writer.
      */
@@ -591,7 +592,13 @@ public final class WebResponse {
         return header("Content-Disposition", "attachment; filename=\"%s\"".formatted(filename));
     }
 
-    /** The same response carrying a different body, which is what a filter rewrites. */
+    /**
+     * Replaces the body and preserves the status, headers, and cookies.
+     * The caller must update or remove headers describing the previous body,
+     * including Content-Length, ETag, Last-Modified, and Content-Encoding.
+     * Use {@link #withoutHeader(String)} to remove a header before sending the
+     * replacement. Content-Type is preserved and must also describe the new body.
+     */
     public WebResponse body(Body body) {
         return new WebResponse(status, headers, cookies, Objects.requireNonNull(body, "body"));
     }
@@ -601,7 +608,7 @@ public final class WebResponse {
      * compressing a stream has to do to the {@code Content-Length} the
      * uncompressed body had worked out.
      */
-    WebResponse withoutHeader(String name) {
+    public WebResponse withoutHeader(String name) {
         return headers.containsKey(name)
                 ? new WebResponse(status, headers.without(name), cookies, body)
                 : this;

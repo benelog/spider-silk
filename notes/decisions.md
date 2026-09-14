@@ -68,8 +68,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 50 | A response copies its cookies and its template model, and not its bytes | ✅ shipped |
 | 51 | Registration closes when a servlet is initialized, and settings are copied when registered | ✅ shipped |
 | 52 | `responseFilter(filter)`: one filter that sees every response, before CORS, security headers, and gzip | ✅ shipped |
+| 53 | Explicit filter scope, parameter absence, response mutation, and transmission results | ✅ shipped |
 
-Fifty-four of the fifty-five shipped.
+Fifty-five of the fifty-six shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -1229,6 +1230,55 @@ A `Raw` writer's own writes and a failure after the response is committed happen
 Rejected on the way: making CORS, gzip, and security headers response filters.
 They would then be ordinary entries whose order an application could get wrong, and a CORS preflight is answered while the `Allow` header is worked out, before any filter runs.
 Decision 27's reasons for naming them on `App` stand, and the response filter sits in front of them rather than among them.
+
+## 53 · Consistent API contracts before 1.0
+
+### 53. Filter scope, parameter absence, response mutation, and transmission results are explicit
+
+This decision supersedes the API contracts in decisions 4, 10b, 11, 37, 46, 48, and 52 where they differ below.
+The earlier sections retain the reasons for their original choices.
+
+`beforeRoute` and `afterRoute` replace `before` and `after` on `App` and `RouteGroup`.
+Their names state that only matched routes reach them.
+`beforeRequest`, with an optional path pattern, runs before routing and covers static files, missing routes, and automatic OPTIONS too.
+It has no path variables, and an early response or exception follows the normal error, response-filter, and decoration pipeline.
+A request filter's policy must explicitly allow preflights when required, since the filter runs before automatic CORS handling.
+`Guard.BeforeRequest`, `Guard.BeforeRoute`, and `Guard.AfterRoute` report the scopes separately.
+All registrations are included in the deployment snapshot and close with the servlet lifecycle.
+
+`afterRoute` and `responseFilter` require a non-null response.
+Returning the response passed in preserves it without a second convention for the same operation.
+A null result follows exception handling as a programming error.
+`BeforeFilter` keeps null as the signal to continue because it has no response to return yet.
+
+`queryParam(name)` and `formParam(name)` require a value, just as their parser overloads do.
+`queryParamOrNull(name)` and `formParamOrNull(name)` are the optional reads.
+A supplied default makes a parser read optional, and a value in another source never counts as present.
+This replaces decision 48's overload-dependent absence policy.
+Existing optional string reads must migrate to the `OrNull` methods.
+
+JSON and NDJSON readers reject input with `IllegalArgumentException` or `DateTimeException`, matching parameter parsers.
+A malformed date therefore produces a 400 whether it came from the query string or from a JSON field.
+Other reader exceptions remain server errors.
+NDJSON errors continue to name the line and occur during stream consumption.
+
+`WebResponse.withoutHeader(name)` is public and compares names without regard to case.
+`body(replacement)` preserves headers, so the caller must update or remove metadata describing the old content, including Content-Length, ETag, Last-Modified, Content-Encoding, and the content type when it changes.
+Automatic deletion is not part of body replacement: internal template rendering and compression also replace bodies and deliberately carry or update their metadata.
+The public removal method lets application filters perform the same operation without switching to a raw servlet writer.
+
+`RequestLogger` takes `(request, completion)`.
+`RequestCompletion` carries the response definition, the final servlet status code, the elapsed Duration, and an exception from decoration or writing when one occurred.
+The status is an int because a raw servlet writer can set a code outside the framework's enum.
+A raw writer's status or a write failure can differ from the response definition's status.
+A failure before commitment can produce a 500, and a failure after commitment can leave a 200 with a partial body.
+The failure and status are independent observations.
+Handled application exceptions are represented by their response, and normal SSE closure remains normal completion.
+Completion does not confirm that the remote client received the entire body.
+
+These changes are made before 1.0 without deprecated aliases.
+Old filter and logger call sites fail to compile, while optional parameter reads require explicit migration because the required string signatures remain valid.
+The examples, agent references, and manual use the new contracts.
 
 ## Rejected — decisions, with the reason
 

@@ -360,7 +360,7 @@ public final class WebRequest {
 
     /**
      * An optional parameter, or null when the request did not send it — the
-     * shape {@link #queryParam(String)}, {@link #cookie(String)}, and
+     * shape {@link #queryParamOrNull(String)}, {@link #cookie(String)}, and
      * {@link #fileOrNull(String)} already have for a value whose absence is an
      * answer rather than an error.
      *
@@ -515,12 +515,17 @@ public final class WebRequest {
     }
 
     /**
-     * A parameter from the query string only, or null. The servlet API merges
+     * A required parameter from the query string only. The servlet API merges
      * the query string with a form body, so an {@code id} in the URL and an
      * {@code id} in the form both answer to {@link #param(String)}; this is the
      * way to say which one you meant.
      */
     public String queryParam(String name) {
+        return required(name, queryParamOrNull(name), "query parameter");
+    }
+
+    /** A query-string parameter, or null when absent. */
+    public String queryParamOrNull(String name) {
         List<String> values = queryParams(name);
         return values.isEmpty() ? null : values.get(0);
     }
@@ -544,12 +549,12 @@ public final class WebRequest {
      * {@link IllegalArgumentException} or {@link DateTimeException}. Anything
      * else the parser throws stays a 500.
      *
-     * <p>{@link #queryParam(String)} is the optional string, and answers null.
+     * <p>{@link #queryParamOrNull(String)} is the optional string, and answers null.
      * The optional typed form takes a default:
      * {@link #queryParam(String, Function, Object)}.
      */
     public <T> T queryParam(String name, Function<String, T> parser) {
-        return parse(name, required(name, queryParam(name), "query parameter"), parser);
+        return parse(name, queryParam(name), parser);
     }
 
     /**
@@ -562,16 +567,21 @@ public final class WebRequest {
      * }</pre>
      */
     public <T> T queryParam(String name, Function<String, T> parser, T defaultValue) {
-        String value = queryParam(name);
+        String value = queryParamOrNull(name);
         return value == null ? defaultValue : parse(name, value, parser);
     }
 
     /**
-     * A parameter from the form body only, or null — the counterpart to
+     * A required parameter from the form body only — the counterpart to
      * {@link #queryParam(String)}. Only present for a form-encoded body the
      * container parsed; a JSON body is read with {@link #body()}.
      */
     public String formParam(String name) {
+        return required(name, formParamOrNull(name), "form field");
+    }
+
+    /** A form field, or null when absent. */
+    public String formParamOrNull(String name) {
         List<String> values = formParams(name);
         return values.isEmpty() ? null : values.get(0);
     }
@@ -602,11 +612,11 @@ public final class WebRequest {
      *
      * <p>A field the form body does not carry answers 400, even when the query
      * string carries a parameter of that name, and so does a parser that rejects
-     * the text. {@link #formParam(String)} is the optional string, and answers
+     * the text. {@link #formParamOrNull(String)} is the optional string, and answers
      * null.
      */
     public <T> T formParam(String name, Function<String, T> parser) {
-        return parse(name, required(name, formParam(name), "form field"), parser);
+        return parse(name, formParam(name), parser);
     }
 
     /**
@@ -615,7 +625,7 @@ public final class WebRequest {
      * carry.
      */
     public <T> T formParam(String name, Function<String, T> parser, T defaultValue) {
-        String value = formParam(name);
+        String value = formParamOrNull(name);
         return value == null ? defaultValue : parse(name, value, parser);
     }
 
@@ -766,12 +776,14 @@ public final class WebRequest {
      * with 400 both on invalid syntax and on a body the reader rejects — a
      * missing key or a value of the wrong type — so a handler receives a whole
      * value or nothing at all, the same contract as {@link #pathParamLong}.
+     * Reader rejection means IllegalArgumentException or DateTimeException,
+     * matching the parameter parser contract. Other exceptions remain server errors.
      */
     public <T> T bodyJson(JsonReader<T> reader) {
         Json.JsonValue json = bodyJson();
         try {
             return reader.read(json);
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | DateTimeException e) {
             throw new HttpException(HttpStatus.BAD_REQUEST, "Request body was rejected: " + e.getMessage());
         }
     }
@@ -845,8 +857,8 @@ public final class WebRequest {
      *
      * <p>The stream is lazy, so those failures happen where it is consumed. Do
      * that before returning the response: inside a
-     * {@link WebResponse#stream(String, StreamWriter)} writer the headers are
-     * already committed and a 400 can no longer be sent.
+     * {@link WebResponse#stream(String, StreamWriter)} writer handler exception
+     * handling has finished, so rejection cannot become a 400 response.
      */
     public <T> Stream<T> bodyNdjson(JsonReader<T> reader) {
         AtomicLong line = new AtomicLong();
@@ -861,7 +873,7 @@ public final class WebRequest {
     private static <T> T readLine(String text, long number, JsonReader<T> reader) {
         try {
             return reader.read(Json.parse(text));
-        } catch (IllegalArgumentException e) {
+        } catch (IllegalArgumentException | DateTimeException e) {
             throw new HttpException(HttpStatus.BAD_REQUEST,
                     "Line %d of the NDJSON body was rejected: %s".formatted(number, e.getMessage()));
         }

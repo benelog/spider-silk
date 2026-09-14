@@ -7,10 +7,10 @@ Contents: [Routing](#routing) · [Handlers](#handler-shapes) · [Request](#webre
 Routes register on `App` (or a group) as one statement: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, each also as `(path, description, handler)`.
 
 ```java
-app.get("/decks", decks::list);                     // this path, exactly
-app.get("/decks/{deckId}", decks::show);            // {deckId} matches one segment, never a slash
-app.get("/files/{path*}", files::serve);            // {path*} matches the rest: req.pathParam("path")
-app.before("/admin/*", req -> requireAdmin(req));   // /admin and everything under it
+app.get("/decks", decks::list);                           // this path, exactly
+app.get("/decks/{deckId}", decks::show);                  // {deckId} matches one segment, never a slash
+app.get("/files/{path*}", files::serve);                  // {path*} matches the rest: req.pathParam("path")
+app.beforeRoute("/admin/*", req -> requireAdmin(req));    // matched routes under /admin
 app.get("/api/decks", "List every deck", api::listDecks);   // description, kept as data
 ```
 
@@ -27,8 +27,8 @@ Groups share a prefix; the group is a lambda argument, not ambient state, and pr
 
 ```java
 app.path("/api/decks", decks -> {
-    decks.before(req -> requireApiKey(req));    // guards the whole group
-    decks.get("", api::listDecks);              // GET /api/decks ("" or "/" is the prefix itself)
+    decks.beforeRoute(req -> requireApiKey(req));    // guards matched routes in the group
+    decks.get("", api::listDecks);                   // GET /api/decks ("" or "/" is the prefix itself)
     decks.get("/{deckId}", api::showDeck);
     decks.path("/{deckId}/cards", cards -> cards.get("", api::listCards));  // groups nest
 });
@@ -85,8 +85,8 @@ int page = req.param("page", Integer::parseInt, 1);         //   or DateTimeExce
 int deckId = req.pathParam("deckId", Integer::parseInt);    // path variables take one too; "yes" -> 400
 List<String> tags = req.params("tag");                      // repeated values; empty list when absent
 
-String p = req.queryParam("page");                          // query string only, null when absent
-String n = req.formParam("name");                           // form body only
+String p = req.queryParamOrNull("page");                    // query string only, null when absent
+String n = req.formParam("name");                           // form body only, missing -> 400
 List<String> t = req.formParams("tag");
 LocalDate due = req.formParam("due", LocalDate::parse);     // one source, a parser: absent -> 400
 int pg = req.queryParam("page", Integer::parseInt, 1);      // ...or the default; the other source never counts
@@ -154,6 +154,10 @@ response.status(); response.header(name); response.headers(); response.cookies()
 response.header("content-type");            // names compare without regard to case
 ```
 
+`body(replacement)` preserves headers.
+Remove or update old body metadata (`Content-Length`, `ETag`, `Last-Modified`, `Content-Encoding`) with `withoutHeader(name)` when the content changes.
+Set the new content type explicitly when needed.
+
 Header names are case-insensitive both ways: `header("content-type", ...)` over a `Content-Type` replaces the value and keeps the first name and its position, so `headers()` is one value per field, in the order they were set.
 A header that has to be sent more than once — two `Link` lines in one answer — is out of scope: cookies have `cookie(...)` / `cookies()`, and everything else repeated is written through `WebResponse.raw((req, res) -> res.addHeader(...))`.
 
@@ -162,11 +166,11 @@ A header that has to be sent more than once — two `Link` lines in one answer �
 ## Filters and errors
 
 ```java
-app.before("/admin/*", req -> req.sessionAttr("user") == null
+app.beforeRoute("/admin/*", req -> req.sessionAttr("user") == null
         ? WebResponse.redirect("/login")    // answers here; the route never runs
         : null);                            // null = carry on
 
-app.after("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));   // a route that completed; null = leave alone
+app.afterRoute("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));   // a route that completed; return res to leave alone
 
 app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));  // every answer: early, error, 404, static file
 
@@ -178,7 +182,8 @@ app.exception(Json.JsonException.class,       // most specific type wins, whatev
 app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 ```
 
-- `after` sees only a route that returned normally; `responseFilter` sees every response (before-filter answers, exception answers, 404/405, OPTIONS, static files), runs before CORS/security headers/gzip, and a filter that throws goes to `exception`/`error` without the filters running again. It is not authorization: guards stay `before`.
+- `afterRoute` sees only a route that returned normally; `responseFilter` sees every response (before-filter answers, exception answers, 404/405, OPTIONS, static files), runs before CORS/security headers/gzip, and a filter that throws goes to `exception`/`error` without the filters running again. Authorization uses `beforeRequest` for every matching request, including static files and missing routes, or `beforeRoute` for a matched route with path variables. `afterRoute` and `responseFilter` reject null results as programming errors.
+- `beforeRequest(filter)` / `beforeRequest(path, filter)` runs before routing, including automatic OPTIONS, and has no path variables. Return null to continue or a response to stop. Its errors and early responses use the normal response pipeline. Route groups support the same two forms.
 - `exception(Type, handler)` runs the handler for the most specific registered type the exception is an instance of, in any registration order.
 - `Json.JsonException` is an `IllegalArgumentException`, so map it separately when `IllegalArgumentException` means 404.
 - Register everything before `app.start(...)`: a route, filter, or setting added while an `AppServlet` serves the app (embedded, a server started directly, or an external container) throws `IllegalStateException`; `stop()` reopens it.
@@ -239,17 +244,22 @@ CORS is a browser rule about what a script may read; authentication stays a befo
 ## Request logging
 
 ```java
-app.requestLogger((req, res, took) -> logger.info("{} {} -> {} ({}ms)",
-        req.method(), req.path(), res.status().code(), took.toMillis()));
+app.requestLogger((req, completion) -> logger.info("{} {} -> {} ({}ms)",
+        req.method(), req.path(), completion.statusCode(), completion.took().toMillis()));
 ```
 
-Runs once per request after the response is complete; the status it sees is the one actually sent, after response filters, CORS, security headers, and gzip. `req.body()` there answers the text a filter or handler already read.
+`RequestCompletion.statusCode()` reports the servlet status after writing.
+`response()` is the response definition and may differ from a raw writer's output.
+`took()` is the elapsed Duration, and `failure()` / `failed()` record an exception during decoration or writing independently of status.
+A write failure can leave a 200 after commitment or cause a 500 before commitment.
+Handled application exceptions are represented by their response status.
+`req.body()` there answers the text a filter or handler already read.
 Core carries no logging framework — which logger and format is the application's call.
 
 ## Route introspection
 
 `app.routes()` is an immutable snapshot of `record Route(String method, String path, String description)`, in registration order, with group prefixes resolved; `{name}` segments are OpenAPI path-template syntax verbatim.
-`app.guards()` lists filters, error handlers, and response filters the same way, as a sealed `Guard` (`Before(path)`, `After(path)`, `Error(status)`, `ResponseFilter()`); an exhaustive `switch` needs all four cases.
+`app.guards()` lists filters, error handlers, and response filters the same way, as a sealed `Guard` (`BeforeRequest(path)`, `BeforeRoute(path)`, `AfterRoute(path)`, `Error(status)`, `ResponseFilter()`); an exhaustive `switch` needs all five cases.
 A route registered without a description reports `""`, not null.
 The automatic HEAD/OPTIONS answers and `exception(...)` handlers are not listed.
 Build on the list directly (a `/_routes` page, audits) or hand it to `spider-silk-openapi` — see content.md.

@@ -17,17 +17,17 @@ class GuardIntrospectionTest {
     @Test
     void groupsByWhenItRunsAndKeepsRegistrationOrderWithin() {
         App app = new App()
-                .after("/api/*", passAfter)
-                .before("/admin/*", passBefore)
+                .afterRoute("/api/*", passAfter)
+                .beforeRoute("/admin/*", passBefore)
                 .error(HttpStatus.NOT_FOUND, noop)
                 .responseFilter((req, res) -> null)
-                .before("/api/*", passBefore)
+                .beforeRoute("/api/*", passBefore)
                 .error(HttpStatus.INTERNAL_SERVER_ERROR, noop);
 
         assertThat(app.guards()).isEqualTo(List.of(
-                new Guard.Before("/admin/*"),
-                new Guard.Before("/api/*"),
-                new Guard.After("/api/*"),
+                new Guard.BeforeRoute("/admin/*"),
+                new Guard.BeforeRoute("/api/*"),
+                new Guard.AfterRoute("/api/*"),
                 new Guard.Error(HttpStatus.NOT_FOUND),
                 new Guard.Error(HttpStatus.INTERNAL_SERVER_ERROR),
                 new Guard.ResponseFilter()));
@@ -36,31 +36,31 @@ class GuardIntrospectionTest {
     /** The coverage is the pattern as written, not the paths it expands to. */
     @Test
     void thePatternIsReportedAsItWasRegistered() {
-        App app = new App().before("/decks/{deckId}/*", passBefore);
+        App app = new App().beforeRoute("/decks/{deckId}/*", passBefore);
 
-        assertThat(app.guards()).isEqualTo(List.of(new Guard.Before("/decks/{deckId}/*")));
+        assertThat(app.guards()).isEqualTo(List.of(new Guard.BeforeRoute("/decks/{deckId}/*")));
     }
 
     /** The whole-app overloads register "/*", so that is what they report. */
     @Test
     void theNoPathOverloadsReportTheStarTheyRegister() {
-        App app = new App().before(passBefore).after(passAfter);
+        App app = new App().beforeRoute(passBefore).afterRoute(passAfter);
 
         assertThat(app.guards()).isEqualTo(List.of(
-                new Guard.Before("/*"),
-                new Guard.After("/*")));
+                new Guard.BeforeRoute("/*"),
+                new Guard.AfterRoute("/*")));
     }
 
     /** A group's filter reports the resolved path, the way its routes do. */
     @Test
     void groupPrefixesAreAlreadyResolved() {
         App app = new App().path("/api/decks", decks -> decks
-                .before(passBefore)
-                .before("/{deckId}/cards", passBefore));
+                .beforeRoute(passBefore)
+                .beforeRoute("/{deckId}/cards", passBefore));
 
         assertThat(app.guards()).isEqualTo(List.of(
-                new Guard.Before("/api/decks/*"),
-                new Guard.Before("/api/decks/{deckId}/cards")));
+                new Guard.BeforeRoute("/api/decks/*"),
+                new Guard.BeforeRoute("/api/decks/{deckId}/cards")));
     }
 
     /** One body per status: registering a second replaces the first, and stays in its place. */
@@ -98,14 +98,14 @@ class GuardIntrospectionTest {
 
     @Test
     void theSnapshotIsImmutableAndTakenPerCall() {
-        App app = new App().before("/admin/*", passBefore);
+        App app = new App().beforeRoute("/admin/*", passBefore);
         List<Guard> before = app.guards();
 
-        app.after("/admin/*", passAfter);
+        app.afterRoute("/admin/*", passAfter);
 
         assertThat(before).hasSize(1);
         assertThat(app.guards()).hasSize(2);
-        assertThatThrownBy(() -> before.add(new Guard.Before("/nowhere")))
+        assertThatThrownBy(() -> before.add(new Guard.BeforeRoute("/nowhere")))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
@@ -113,7 +113,7 @@ class GuardIntrospectionTest {
     @Test
     void routesAreUnaffected() {
         App app = new App()
-                .before("/admin/*", passBefore)
+                .beforeRoute("/admin/*", passBefore)
                 .get("/admin/users", noop);
 
         assertThat(app.routes()).isEqualTo(List.of(new Route("GET", "/admin/users")));

@@ -17,7 +17,7 @@ class RoutingFeaturesTest {
     void pathScopedFilterRunsOnlyOnMatchingPaths() {
         List<String> visited = new ArrayList<>();
         App app = new App()
-                .before("/admin/*", req -> {
+                .beforeRoute("/admin/*", req -> {
                     visited.add("filter:" + req.path());
                     return null;
                 })
@@ -38,7 +38,7 @@ class RoutingFeaturesTest {
     @Test
     void aFilterThatAnswersEndsTheRequest() {
         App app = new App()
-                .before("/admin/*", req -> WebResponse.text("Unauthorized").status(HttpStatus.UNAUTHORIZED))
+                .beforeRoute("/admin/*", req -> WebResponse.text("Unauthorized").status(HttpStatus.UNAUTHORIZED))
                 .get("/admin/users", req -> WebResponse.text("secret"));
 
         WebTest.test(app, client -> {
@@ -51,7 +51,7 @@ class RoutingFeaturesTest {
     @Test
     void aRedirectingFilterAlsoEndsTheRequest() {
         App app = new App()
-                .before("/admin/*", req -> WebResponse.redirect("/login"))
+                .beforeRoute("/admin/*", req -> WebResponse.redirect("/login"))
                 .get("/admin/users", req -> WebResponse.text("secret"));
 
         WebTest.test(app, client -> {
@@ -66,7 +66,7 @@ class RoutingFeaturesTest {
     void aFilterCanRejectByThrowingHttpException() {
         App app = new App()
                 .error(HttpStatus.UNAUTHORIZED, req -> WebResponse.text("login required"))
-                .before("/admin/*", req -> {
+                .beforeRoute("/admin/*", req -> {
                     throw new HttpException(HttpStatus.UNAUTHORIZED, "no session");
                 })
                 .get("/admin/users", req -> WebResponse.text("secret"));
@@ -78,18 +78,18 @@ class RoutingFeaturesTest {
         });
     }
 
-    /** A filter that returns null carries on: before to the route, after to the response. */
+    /** A before-filter continues with null; an after-filter keeps the response by returning it. */
     @Test
     void globalFiltersStillRunOnEveryRoute() {
         List<String> visited = new ArrayList<>();
         App app = new App()
-                .before(req -> {
+                .beforeRoute(req -> {
                     visited.add("before");
                     return null;
                 })
-                .after((req, res) -> {
+                .afterRoute((req, res) -> {
                     visited.add("after");
-                    return null;
+                    return res;
                 })
                 .get("/", req -> WebResponse.text("ok"));
 
@@ -102,7 +102,7 @@ class RoutingFeaturesTest {
     @Test
     void anAfterFilterCanReplaceTheResponse() {
         App app = new App()
-                .after((req, res) -> res.header("X-Served-By", "spider-silk"))
+                .afterRoute((req, res) -> res.header("X-Served-By", "spider-silk"))
                 .get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> {
@@ -141,7 +141,7 @@ class RoutingFeaturesTest {
     void aGroupFilterCoversThePrefixAndEverythingUnderIt() {
         List<String> visited = new ArrayList<>();
         App app = new App().path("/api", api -> {
-            api.before(req -> {
+            api.beforeRoute(req -> {
                 visited.add(req.path());
                 return null;
             });
@@ -254,7 +254,7 @@ class RoutingFeaturesTest {
 
     @Test
     void wildcardIsOnlyAllowedAsTheLastSegment() {
-        assertThatThrownBy(() -> new App().before("/*/edit", req -> null))
+        assertThatThrownBy(() -> new App().beforeRoute("/*/edit", req -> null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 

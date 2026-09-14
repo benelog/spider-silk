@@ -134,9 +134,9 @@ class ReadmeSnippets {
 
         // Routes sharing a prefix — the group is an argument, not ambient state
         app.path("/api/decks", group -> {
-            group.before(req -> requireApiKey(req));    // covers /api/decks and everything under it
-            group.get("", api::listDecks);              // GET  /api/decks
-            group.get("/{deckId}", api::listCards);     // GET  /api/decks/{deckId}
+            group.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
+            group.get("", api::listDecks);                   // GET  /api/decks
+            group.get("/{deckId}", api::listCards);          // GET  /api/decks/{deckId}
         });
 
         // Exception-to-response mapping
@@ -163,11 +163,11 @@ class ReadmeSnippets {
     // ---- blocks 8, 9: filters ----
 
     void filters(App app) {
-        app.before("/admin/*", req -> req.sessionAttr("user") == null
+        app.beforeRoute("/admin/*", req -> req.sessionAttr("user") == null
                 ? WebResponse.redirect("/login")    // answers here, so the route handler never runs
                 : null);                            // carry on
 
-        app.after("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
+        app.afterRoute("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
 
         app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));
     }
@@ -201,8 +201,8 @@ class ReadmeSnippets {
         String theme = req.cookie("theme");                 // null when absent
         List<String> tags = req.params("tag");              // ?tag=java&tag=web, or a checkbox group
 
-        String queryPage = req.queryParam("page");     // query string only, null when absent
-        String name = req.formParam("name");           // form body only
+        String queryPage = req.queryParamOrNull("page");    // query string only, null when absent
+        String name = req.formParam("name");                // form body only, 400 when absent
         List<String> formTags = req.formParams("tag");
 
         String search = req.paramOrNull("q");                         // null when absent
@@ -243,8 +243,8 @@ class ReadmeSnippets {
     // ---- blocks 15, 16: request logging, static files ----
 
     void loggingAndAssets(App app) {
-        app.requestLogger((req, res, took) -> logger.info("{} {} -> {} ({}ms)",
-                req.method(), req.path(), res.status().code(), took.toMillis()));
+        app.requestLogger((req, completion) -> logger.info("{} {} -> {} ({}ms)",
+                req.method(), req.path(), completion.statusCode(), completion.took().toMillis()));
 
         app.staticFiles(new StaticFiles("/public")
                 .hostedPath("/assets")              // classpath:/public/* at /assets/*

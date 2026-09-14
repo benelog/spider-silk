@@ -16,8 +16,8 @@ app.staticFiles(new StaticFiles("/public")
 Routes are matched first, so a route can shadow a file.
 Directories are never served.
 
-A static file is answered without running a before-filter or an after-filter, since no route matched.
-`before("/admin/*", ...)` therefore guards no file served under `/admin`, and a root holds only what anyone may fetch.
+A static file bypasses `beforeRoute` and `afterRoute`, since no route matched.
+`beforeRequest("/admin/*", ...)` can guard files served under `/admin` before static-file lookup.
 A xref:filters-and-errors.adoc#response-filters[response filter] does run on a static file, as do CORS, compression, and the security headers.
 
 == A directory on disk

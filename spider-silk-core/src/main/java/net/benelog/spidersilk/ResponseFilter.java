@@ -14,7 +14,8 @@ package net.benelog.spidersilk;
  * filled in and the template rendered — and before CORS, the security headers,
  * and compression are applied to it.
  *
- * <p>Returning null keeps the response unchanged. A replacement carrying a
+ * <p>Return the response passed in to leave it unchanged. Returning null is a
+ * programming error. A replacement carrying a
  * template body is rendered like any other. An exception thrown here is routed
  * to {@link App#exception} and {@link App#error(HttpStatus, Handler)}, and the
  * answer to it is not filtered again.
@@ -33,7 +34,7 @@ public interface ResponseFilter {
      *
      * @param request  the request, with the path variables of the route that matched, if one did
      * @param response the response the framework is about to send
-     * @return the response to answer with, or null to keep the one passed in
+     * @return the response to answer with, or the response passed in to keep it
      * @throws Exception anything the filter cannot handle, routed to {@link App#exception}
      */
     WebResponse handle(WebRequest request, WebResponse response) throws Exception;

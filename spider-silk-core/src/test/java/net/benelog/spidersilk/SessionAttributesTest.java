@@ -57,7 +57,7 @@ class SessionAttributesTest {
     @Test
     void aWrongTypeIsAServerError() {
         App app = new App()
-                .before(req -> {
+                .beforeRoute(req -> {
                     req.setSessionAttr("user", "Ada");
                     return null;
                 })

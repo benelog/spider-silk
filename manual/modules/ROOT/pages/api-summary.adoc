@@ -7,9 +7,10 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 
 * Routes: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, each also as `(path, description, handler)`, and `path(prefix, group -> ...)`; patterns and matching order in xref:routing.adoc[Routing]
 * Introspection: `routes()` reports every registered route as `Route(method, path, description)`, in registration order.
-  `guards()` reports the filters and error handlers beside them as `Guard.Before(path)`, `Guard.After(path)`, `Guard.Error(status)`, and `Guard.ResponseFilter()`.
+  `guards()` reports the filters and error handlers beside them as `Guard.BeforeRequest(path)`, `Guard.BeforeRoute(path)`, `Guard.AfterRoute(path)`, `Guard.Error(status)`, and `Guard.ResponseFilter()`.
   xref:openapi.adoc[`spider-silk-openapi`] turns the route list into an OpenAPI 3.1 document
-* Filters: `before(filter)` / `before(path, filter)`, same for `after`, and `responseFilter(filter)` for every response, the ones no after-filter sees included
+* Filters: `beforeRequest(filter)` / `beforeRequest(path, filter)` before routing, `beforeRoute(filter)` / `beforeRoute(path, filter)`, same for `afterRoute`, and `responseFilter(filter)` for every response, the ones no after-filter sees included
+* Logging: `requestLogger((request, completion) -> ...)`, with the servlet status, elapsed time, response definition, and transmission failure in `RequestCompletion`; see xref:request-logging.adoc[Request Logging]
 * Errors: `exception(Type, handler)`, where the most specific registered type wins, `error(HttpStatus, handler)`
 * Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
   Each is off until named, and applies to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
@@ -31,7 +32,9 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 * Parameters: `param` (400 when missing), `paramOrNull` (null when missing), `paramLong`, `paramBoolean` (`true` or `false` only), `paramEnum`, each with a `(..., default)` form for optional parameters; `params(name)` for repeated values
 * Any other type: `param(name, parser)` and `param(name, parser, default)`, where the parser is a `Function<String, T>` such as `UUID::fromString` or `LocalDate::parse`.
   A parser that throws `IllegalArgumentException` or `DateTimeException` answers 400 naming the parameter
-* One source only: `queryParam(name)` and `formParam(name)` answer null when absent, and `queryParam(name, parser)` and `formParam(name, parser)` answer 400, each with a `(..., parser, default)` form
+* One source only: `queryParam(name)` and `formParam(name)` require a value and answer 400 when absent.
+  `queryParamOrNull(name)` and `formParamOrNull(name)` return null when absent.
+  Parser overloads are required unless a `(..., parser, default)` supplies a default
 * Query vs. form: `queryParam`, `queryParams`, `formParam`, `formParams`
 * Content negotiation: `accepts(types...)` answers with the type the caller prefers out of the ones offered, 406 when it will take none of them; `acceptedTypes()` for the parsed `Accept` header
 * Cookies the client sent: `cookie(name)`, `cookies()`
@@ -51,9 +54,9 @@ This chapter lists the whole API surface, each entry pointing at the chapter tha
 * `file(path)` reads the content type from the name and the length from the file.
   A path that is not a readable regular file throws `UncheckedIOException`, so a 404 for a missing file is the handler's line to write
 * Bodies written a value at a time: `jsonArray(sink -> ...)` for an array too big to hold, and `ndjson(sink -> ...)` for one value per line.
-  Both are a `stream` body underneath, so the headers commit before the writer runs
+  Both are a `stream` body underneath, and the writer runs outside handler exception handling
 * Statuses: `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`
-* Building on: `status`, `header`, `contentType`, `vary(field)`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
+* Building on: `status`, `header`, `withoutHeader(name)`, `contentType`, `vary(field)`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
 * Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`.
   Header names compare without regard to case, and one field holds one value however many spellings set it.
   A header that must be sent twice is written through `raw`; see xref:response.adoc#headers[Headers]

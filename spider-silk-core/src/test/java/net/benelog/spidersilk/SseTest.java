@@ -92,10 +92,10 @@ class SseTest {
     @Test
     void anSseEndpointIsAnOrdinaryRoute() {
         List<String> filtered = new ArrayList<>();
-        List<HttpStatus> logged = new ArrayList<>();
+        List<Integer> logged = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, took) -> logged.add(res.status()))
-                .before("/events", req -> {
+                .requestLogger((req, completion) -> logged.add(completion.statusCode()))
+                .beforeRoute("/events", req -> {
                     filtered.add("before " + req.path());
                     return null;
                 })
@@ -107,7 +107,7 @@ class SseTest {
                 assertThat(client.get("/events").body()).isEqualTo("data: one\n\n"));
 
         assertThat(filtered).isEqualTo(List.of("before /events"));
-        assertThat(logged).isEqualTo(List.of(HttpStatus.OK));
+        assertThat(logged).isEqualTo(List.of(200));
     }
 
     /** A stream with the body thrown away would never end, so HEAD stops at the headers. */

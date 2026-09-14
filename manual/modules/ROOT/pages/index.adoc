@@ -75,9 +75,9 @@ app.post("/api/decks", req -> {
 });
 
 app.path("/api/decks", group -> {
-    group.before(req -> requireApiKey(req));    // covers /api/decks and everything under it
-    group.get("", api::listDecks);              // GET  /api/decks
-    group.get("/{deckId}", api::showDeck);      // GET  /api/decks/{deckId}
+    group.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
+    group.get("", api::listDecks);                   // GET  /api/decks
+    group.get("/{deckId}", api::showDeck);           // GET  /api/decks/{deckId}
 });
 
 app.exception(IllegalArgumentException.class,

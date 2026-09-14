@@ -52,9 +52,11 @@ class RegistrationAfterStartTest {
         assertThatIllegalStateException()
                 .isThrownBy(() -> app.path("/api", api -> api.post("/x", req -> WebResponse.empty())));
         assertThatIllegalStateException()
-                .isThrownBy(() -> app.before(req -> null));
+                .isThrownBy(() -> app.beforeRoute(req -> null));
         assertThatIllegalStateException()
-                .isThrownBy(() -> app.after((req, res) -> null));
+                .isThrownBy(() -> app.beforeRequest(req -> null));
+        assertThatIllegalStateException()
+                .isThrownBy(() -> app.afterRoute((req, res) -> res));
         assertThatIllegalStateException()
                 .isThrownBy(() -> app.exception(Exception.class, (req, e) -> WebResponse.empty()));
         assertThatIllegalStateException()

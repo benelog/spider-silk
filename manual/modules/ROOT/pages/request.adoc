@@ -88,8 +88,8 @@ Name the source when the difference matters:
 
 [source,java]
 ----
-String page = req.queryParam("page");     // query string only, null when absent
-String name = req.formParam("name");      // form body only
+String page = req.queryParamOrNull("page");     // query string only, null when absent
+String name = req.formParam("name");            // form body only, 400 when absent
 List<String> tags = req.formParams("tag");
 ----
 
@@ -101,10 +101,12 @@ LocalDate due = req.formParam("due", LocalDate::parse);       // 400 when the fo
 int page = req.queryParam("page", Integer::parseInt, 1);      // default covers absence only
 ----
 
-The one-argument forms answer null for an absent value, and the parser forms answer 400 for one.
+`queryParam(name)` and `formParam(name)` require a value, with or without a parser, and answer 400 when it is absent.
+`queryParamOrNull(name)` and `formParamOrNull(name)` return null when it is absent.
+An empty string is a supplied value and is passed to the parser unchanged.
 A default makes the parser form optional, and a value the parser rejects is a 400 either way.
 A name the other source carries does not count, so `formParam("page", parser)` answers 400 on a request whose only `page` is in the URL.
-There is no `(name, defaultString)` form, since `queryParam(name)` already covers the optional string.
+There is no `(name, defaultString)` form, since `queryParamOrNull(name)` already covers the optional string without overlapping the parser overload.
 
 A query string that will not decode, such as `?q=%zz`, answers 400 through `param`, `queryParam`, and `formParam` in every form, whichever name is read.
 
@@ -172,7 +174,7 @@ The caller closes the stream, and it is the same content either way: what has be
 `writeTo` takes an absolute path, or a relative one resolved against the working directory.
 It writes the content once, because a container that had already buffered the upload to disk may move that file rather than copy it.
 
-`req.fileOrNull(name)` answers null for an upload the form need not carry, which is the shape `req.cookie(name)` and `req.queryParam(name)` already have for a value whose absence is an answer.
+`req.fileOrNull(name)` answers null for an upload the form need not carry, which is the shape `req.cookie(name)` and `req.queryParamOrNull(name)` already have for a value whose absence is an answer.
 Null covers every way the file can be absent: no part of that name, a file input the browser sent empty because nothing was chosen, and a request that is not multipart at all.
 `req.file(name)` answers 400 for all three of those, since a handler that asked for the file plainly needs it.
 

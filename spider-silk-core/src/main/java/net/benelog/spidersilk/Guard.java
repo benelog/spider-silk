@@ -4,15 +4,16 @@ package net.benelog.spidersilk;
  * One registered guard — something that runs around a route rather than being
  * one — as {@link App#guards()} reports it.
  *
- * <p>Sealed over the four kinds, because a filter is scoped to a path, an error
+ * <p>Sealed over the five kinds, because a filter is scoped to a path, an error
  * handler to a status, and a response filter to nothing at all, and one record
  * with a component that is null half the time would report that dishonestly.
  *
  * <pre>{@code
  * for (Guard guard : app.guards()) {
  *     String scope = switch (guard) {
- *         case Guard.Before before -> "before " + before.path();
- *         case Guard.After after -> "after " + after.path();
+ *         case Guard.BeforeRequest before -> "before request " + before.path();
+ *         case Guard.BeforeRoute before -> "before " + before.path();
+ *         case Guard.AfterRoute after -> "after " + after.path();
  *         case Guard.Error error -> "error " + error.status().code();
  *         case Guard.ResponseFilter ignored -> "every response";
  *     };
@@ -26,22 +27,26 @@ package net.benelog.spidersilk;
  */
 public sealed interface Guard {
 
+    /** A filter registered through {@link App#beforeRequest(String, BeforeFilter)}, before routing. */
+    record BeforeRequest(String path) implements Guard {
+    }
+
     /**
-     * A filter registered through {@link App#before(String, BeforeFilter)}, and
+     * A filter registered through {@link App#beforeRoute(String, BeforeFilter)}, and
      * the paths it covers.
      *
      * <p>{@code path} is the pattern as it was registered, prefixes from
      * {@link RouteGroup} already resolved. It is a pattern and not a path: a
      * trailing {@code "*"} covers the prefix and everything under it, so
      * {@code "/admin/*"} guards {@code "/admin"} as well as {@code "/admin/users"}.
-     * {@link App#before(BeforeFilter)} reports {@code "/*"}, which is what it
+     * {@link App#beforeRoute(BeforeFilter)} reports {@code "/*"}, which is what it
      * registers.
      */
-    record Before(String path) implements Guard {
+    record BeforeRoute(String path) implements Guard {
     }
 
-    /** A filter registered through {@link App#after(String, AfterFilter)}, and the paths it covers. */
-    record After(String path) implements Guard {
+    /** A filter registered through {@link App#afterRoute(String, AfterFilter)}, and the paths it covers. */
+    record AfterRoute(String path) implements Guard {
     }
 
     /**
@@ -49,7 +54,7 @@ public sealed interface Guard {
      * responses that ended on this status with no body. It is scoped to a
      * status rather than to a path, so it covers every path.
      *
-     * <p>The name mirrors {@link App#error}, as {@code Before} and {@code After}
+     * <p>The name mirrors {@link App#error}, as {@code BeforeRequest}, {@code BeforeRoute}, and {@code AfterRoute}
      * mirror their registrations, and is written {@code Guard.Error} everywhere
      * outside this file, where {@link java.lang.Error} is never referred to.
      */

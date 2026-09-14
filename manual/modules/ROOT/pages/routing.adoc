@@ -12,10 +12,10 @@ Each of those methods also accepts a xref:route-introspection.adoc#descriptions[
 
 [source,java]
 ----
-app.get("/decks", decks::list);                     // this path, exactly
-app.get("/decks/{deckId}", decks::show);            // {deckId} matches one segment
-app.get("/files/{path*}", files::serve);            // {path*} matches the rest of the path
-app.before("/admin/*", req -> requireAdmin(req));   // /admin and everything under it
+app.get("/decks", decks::list);                           // this path, exactly
+app.get("/decks/{deckId}", decks::show);                  // {deckId} matches one segment
+app.get("/files/{path*}", files::serve);                  // {path*} matches the rest of the path
+app.beforeRoute("/admin/*", req -> requireAdmin(req));    // matched routes under /admin
 ----
 
 Patterns are compared segment by segment.
@@ -59,16 +59,17 @@ The group arrives as an argument rather than as ambient state:
 [source,java]
 ----
 app.path("/api/decks", decks -> {
-    decks.before(req -> requireApiKey(req));    // guards /api/decks and everything under it
-    decks.get("", api::listDecks);              // GET  /api/decks
-    decks.get("/{deckId}", api::showDeck);      // GET  /api/decks/{deckId}
-    decks.path("/{deckId}/cards", cards ->     // groups nest, prefixes concatenate
-        cards.get("", api::listCards));         // GET  /api/decks/{deckId}/cards
+    decks.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
+    decks.get("", api::listDecks);                   // GET  /api/decks
+    decks.get("/{deckId}", api::showDeck);           // GET  /api/decks/{deckId}
+    decks.path("/{deckId}/cards", cards ->           // groups nest, prefixes concatenate
+        cards.get("", api::listCards));              // GET  /api/decks/{deckId}/cards
 });
 ----
 
 An empty path, or `"/"`, registers the prefix itself.
-A group's `before` and `after` filter the whole group when given no path of their own.
+A group's `beforeRoute` and `afterRoute` filter its matched routes when given no path of their own.
+`beforeRequest` uses the same prefix but also covers static files and unmatched paths, before route variables are available.
 The prefix is resolved at registration, so `app.routes()` reports full paths.
 A group changes how routes are written, not what is registered.
 

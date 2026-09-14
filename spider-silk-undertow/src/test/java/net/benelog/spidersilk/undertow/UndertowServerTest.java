@@ -211,7 +211,7 @@ class UndertowServerTest {
                 .post("/fields-first", req -> WebResponse.text(
                         req.param("name") + "|" + bytesOf(req.bodyStream())))
                 .post("/bytes-first", req -> WebResponse.text(
-                        bytesOf(req.bodyStream()) + "|" + req.formParam("name"))));
+                        bytesOf(req.bodyStream()) + "|" + req.formParamOrNull("name"))));
 
         assertThat(postForm("/fields-first").body()).isEqualTo("English|");
         assertThat(postForm("/bytes-first").body()).isEqualTo("name=English|null");
@@ -227,7 +227,7 @@ class UndertowServerTest {
     @Test
     void theBodyReadAsTextIsKeptForTheRestOfTheRequest() throws Exception {
         startOnUndertow(new App()
-                .before(req -> {
+                .beforeRoute(req -> {
                     req.body();
                     return null;
                 })

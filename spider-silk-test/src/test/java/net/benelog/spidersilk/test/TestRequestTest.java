@@ -92,16 +92,16 @@ class TestRequestTest {
                 .build();
 
         assertThat(request.params("name")).isEqualTo(List.of("from-query", "from-form"));
-        assertThat(request.queryParam("name")).isEqualTo("from-query");
-        assertThat(request.formParam("name")).isEqualTo("from-form");
+        assertThat(request.queryParamOrNull("name")).isEqualTo("from-query");
+        assertThat(request.formParamOrNull("name")).isEqualTo("from-form");
     }
 
     @Test
     void aParameterSetOnlyOnOneSideIsAbsentFromTheOther() {
         WebRequest request = TestRequest.post("/decks").formParam("name", "English").build();
 
-        assertThat(request.queryParam("name")).isNull();
-        assertThat(request.formParam("name")).isEqualTo("English");
+        assertThat(request.queryParamOrNull("name")).isNull();
+        assertThat(request.formParamOrNull("name")).isEqualTo("English");
         assertThat(request.param("name")).isEqualTo("English");
     }
 
@@ -223,7 +223,7 @@ class TestRequestTest {
         try (InputStream body = request.bodyStream()) {
             assertThat(body.readAllBytes()).isEmpty();
         }
-        assertThat(request.formParam("name")).isEqualTo("English");
+        assertThat(request.formParamOrNull("name")).isEqualTo("English");
     }
 
     /** The reverse order: a form body read as bytes is never parsed, so only the query is left. */
@@ -238,7 +238,7 @@ class TestRequestTest {
             assertThat(new String(body.readAllBytes(), StandardCharsets.UTF_8))
                     .isEqualTo("name=English");
         }
-        assertThat(request.formParam("name")).isNull();
+        assertThat(request.formParamOrNull("name")).isNull();
         assertThat(request.params("name")).isEmpty();
         assertThat(request.param("page")).isEqualTo("2");
     }

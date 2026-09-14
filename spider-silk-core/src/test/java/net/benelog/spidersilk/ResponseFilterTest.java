@@ -23,7 +23,7 @@ class ResponseFilterTest {
     void everyKindOfAnswerCarriesTheHeader() {
         App app = new App()
                 .responseFilter(REQUEST_ID)
-                .before("/admin/*", req -> WebResponse.redirect("/login"))
+                .beforeRoute("/admin/*", req -> WebResponse.redirect("/login"))
                 .get("/admin/users", req -> WebResponse.text("never"))
                 .get("/ok", req -> WebResponse.text("ok"))
                 .post("/only-post", req -> WebResponse.empty())
@@ -65,7 +65,7 @@ class ResponseFilterTest {
                         case WebResponse.Text text -> text.content().strip();
                         default -> res.body().getClass().getSimpleName();
                     });
-                    return null;
+                    return res;
                 });
 
         WebTest.test(app, client -> {
@@ -167,7 +167,7 @@ class ResponseFilterTest {
     @Test
     void anAfterFilterStillSeesOnlyARouteThatCompleted() {
         App app = new App()
-                .after((req, res) -> res.header("X-After", "yes"))
+                .afterRoute((req, res) -> res.header("X-After", "yes"))
                 .responseFilter((req, res) -> res.header("X-Response", "yes"))
                 .get("/ok", req -> WebResponse.text("ok"));
 

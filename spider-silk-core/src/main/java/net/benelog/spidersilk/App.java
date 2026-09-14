@@ -46,6 +46,7 @@ import net.benelog.spidersilk.server.WebServerFactory;
 public final class App {
 
     final Router router = new Router();
+    final List<BeforeEntry> requestFilters = new ArrayList<>();
     final List<BeforeEntry> beforeFilters = new ArrayList<>();
     final List<AfterEntry> afterFilters = new ArrayList<>();
     final List<ResponseFilter> responseFilters = new ArrayList<>();
@@ -215,9 +216,26 @@ public final class App {
         return router.routes();
     }
 
-    /** A filter that runs before every route. */
-    public App before(BeforeFilter filter) {
-        return before("/*", filter);
+    /** A filter that runs before every request reaches routing or static files. */
+    public App beforeRequest(BeforeFilter filter) {
+        return beforeRequest("/*", filter);
+    }
+
+    /**
+     * Runs before routing for requests matching the path pattern, including
+     * static files, missing routes, and automatic OPTIONS. Return null to
+     * continue, or a response to stop. Path variables are not available yet.
+     * Exceptions and early responses use the normal error and response filters.
+     */
+    public App beforeRequest(String path, BeforeFilter filter) {
+        Objects.requireNonNull(filter, "filter");
+        register(() -> requestFilters.add(new BeforeEntry(path, filter)));
+        return this;
+    }
+
+    /** A filter that runs before every matched route, with its path variables. */
+    public App beforeRoute(BeforeFilter filter) {
+        return beforeRoute("/*", filter);
     }
 
     /**
@@ -225,18 +243,20 @@ public final class App {
      * covers the prefix and everything under it, so "/admin/*" guards
      * "/admin" as well as "/admin/users".
      */
-    public App before(String path, BeforeFilter filter) {
+    public App beforeRoute(String path, BeforeFilter filter) {
+        Objects.requireNonNull(filter, "filter");
         register(() -> beforeFilters.add(new BeforeEntry(path, filter)));
         return this;
     }
 
     /** A filter that runs after a route completes normally. */
-    public App after(AfterFilter filter) {
-        return after("/*", filter);
+    public App afterRoute(AfterFilter filter) {
+        return afterRoute("/*", filter);
     }
 
     /** A filter that runs after matching routes complete normally. */
-    public App after(String path, AfterFilter filter) {
+    public App afterRoute(String path, AfterFilter filter) {
+        Objects.requireNonNull(filter, "filter");
         register(() -> afterFilters.add(new AfterEntry(path, filter)));
         return this;
     }
@@ -303,12 +323,12 @@ public final class App {
 
     /**
      * Everything registered that runs around a route rather than being one:
-     * the {@link #before} and {@link #after} filters, the
+     * the {@link #beforeRequest}, {@link #beforeRoute}, and {@link #afterRoute} filters, the
      * {@link #responseFilter} filters, and the
      * {@link #error(HttpStatus, Handler)} bodies. It answers "which guard
      * covers this path", which {@link #routes()} holds no part of.
      *
-     * <p>Grouped by when it runs — the before-filters, then the after-filters,
+     * <p>Grouped by when it runs — request filters, before-route filters, after-route filters,
      * then the error handlers, then the response filters — and within each group
      * in registration order, which is the order they run in.
      *
@@ -326,20 +346,22 @@ public final class App {
      */
     public List<Guard> guards() {
         List<Guard> guards = new ArrayList<>(
-                beforeFilters.size() + afterFilters.size() + errorHandlers.size() + responseFilters.size());
-        beforeFilters.forEach(entry -> guards.add(new Guard.Before(entry.path())));
-        afterFilters.forEach(entry -> guards.add(new Guard.After(entry.path())));
+                requestFilters.size() + beforeFilters.size() + afterFilters.size()
+                        + errorHandlers.size() + responseFilters.size());
+        requestFilters.forEach(entry -> guards.add(new Guard.BeforeRequest(entry.path())));
+        beforeFilters.forEach(entry -> guards.add(new Guard.BeforeRoute(entry.path())));
+        afterFilters.forEach(entry -> guards.add(new Guard.AfterRoute(entry.path())));
         errorHandlers.keySet().forEach(status -> guards.add(new Guard.Error(status)));
         responseFilters.forEach(filter -> guards.add(new Guard.ResponseFilter()));
         return List.copyOf(guards);
     }
 
     /**
-     * Called after every response, with how long the request took.
+     * Called after writing, with the servlet status, elapsed time, and any write failure.
      *
      * <pre>{@code
-     * app.requestLogger((req, res, took) -> logger.info("{} {} -> {} ({}ms)",
-     *         req.method(), req.path(), res.status().code(), took.toMillis()));
+     * app.requestLogger((req, completion) -> logger.info("{} {} -> {} ({}ms)",
+     *         req.method(), req.path(), completion.statusCode(), completion.took().toMillis()));
      * }</pre>
      *
      * One lambda, and no logging framework in core. A logger that throws is
@@ -460,8 +482,8 @@ public final class App {
      * }</pre>
      *
      * <p>Named here rather than registered as a filter: the largest thing most
-     * applications send is a static file, and a static file is answered before
-     * any filter runs.
+     * applications send is a static file, and a static file bypasses
+     * route filters.
      *
      * <p>The value is copied as it is now, so changing it afterwards changes
      * nothing this application compresses.
@@ -539,7 +561,7 @@ public final class App {
     Deployment deploy() {
         synchronized (registrationLock) {
             deployments++;
-            return new Deployment(router.copy(), beforeFilters, afterFilters, responseFilters, exceptionHandlers,
+            return new Deployment(router.copy(), requestFilters, beforeFilters, afterFilters, responseFilters, exceptionHandlers,
                     errorHandlers, staticFiles, requestLogger, cors, gzip, securityHeaders);
         }
     }

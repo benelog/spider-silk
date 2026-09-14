@@ -21,7 +21,7 @@ for (Route route : app.routes()) {
 ----
 
 A wildcard route is reported as it was written.
-`/files/\{path*}` is one variable in the path template, and `/files/*` is a pattern with none, which is the difference xref:openapi.adoc[the OpenAPI export] acts on: it renders the first and refuses the second.
+`/files/\{path*}` is one variable in the path template, and `++/files/*++` is a pattern with none, which is the difference xref:openapi.adoc[the OpenAPI export] acts on: it renders the first and refuses the second.
 
 The handler is left out.
 It is a lambda, and the only name it has is what reflection would dig out of its synthetic class.
@@ -59,32 +59,33 @@ xref:openapi.adoc[`spider-silk-openapi`] writes a non-empty description as the o
 == Guards
 
 `routes()` lists what answers a path.
-`app.guards()` lists what else runs around it: the `before`/`after` filters, the `error(status, ...)` handlers, and the `responseFilter(...)` filters, read off the same registrations, as an immutable snapshot of a sealed `Guard`:
+`app.guards()` lists what else runs around it: the `beforeRequest`, `beforeRoute`, and `afterRoute` filters, the `error(status, ...)` handlers, and the `responseFilter(...)` filters, read off the same registrations, as an immutable snapshot of a sealed `Guard`:
 
 [source,java]
 ----
 for (Guard guard : app.guards()) {
     String scope = switch (guard) {
-        case Guard.Before before -> "before " + before.path();
-        case Guard.After after -> "after " + after.path();
+        case Guard.BeforeRequest before -> "before request " + before.path();
+        case Guard.BeforeRoute before -> "before " + before.path();
+        case Guard.AfterRoute after -> "after " + after.path();
         case Guard.Error error -> "error " + error.status().code();
         case Guard.ResponseFilter ignored -> "every response";
     };
 }
 ----
 
-There are four records rather than one with a kind field, because a filter is scoped to a path, an error handler to a status, and a response filter to nothing, and a component that is null half the time would report that dishonestly.
+There are five records rather than one with a kind field, because a filter is scoped to a path, an error handler to a status, and a response filter to nothing, and a component that is null half the time would report that dishonestly.
 `Guard.ResponseFilter` has no components, since it runs on every response, and two registrations are two entries.
 
-The list is grouped by when it runs: the before-filters, then the after-filters, then the error handlers, then the response filters.
+The list is grouped by when it runs: the request filters, then the before-route filters, then the after-route filters, then the error handlers, then the response filters.
 Within each group it is in registration order, which is the order they run in.
 
 A filter's coverage is a pattern and not a path, and it is reported as one.
-`/admin/*` stays `/admin/*`, and covers `/admin` along with everything under it.
-`before(filter)` reports the `/*` it registers, and a group's `decks.before(filter)` reports the resolved `/api/decks/*`.
+`++/admin/*++` stays `++/admin/*++`, and covers `/admin` along with everything under it.
+`beforeRoute(filter)` reports the `++/*++` it registers, and a group's `decks.beforeRoute(filter)` reports the resolved `++/api/decks/*++`.
 Matching a request against those patterns is the dispatcher's job, not this list's: what is exposed here is plain strings, the same as for routes.
 An audit of which paths a guard leaves open is built on top of the list, the way xref:openapi.adoc[the OpenAPI export] is built on `routes()`.
 
 The `exception(Type, handler)` handlers are not listed.
 An exception handler is scoped to a type, so neither a path nor a status describes where it applies.
-Neither are CORS, compression, and the security headers: those are xref:cors-compression-and-security-headers.adoc[named on `App`] rather than registered as filters, precisely because they apply to answers no filter ever sees.
+Neither are CORS, compression, and the security headers: those are xref:cors-compression-and-security-headers.adoc[named on `App`] rather than registered as filters, with a fixed order after response filters.

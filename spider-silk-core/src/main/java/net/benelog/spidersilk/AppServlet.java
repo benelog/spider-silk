@@ -9,6 +9,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -122,13 +123,15 @@ public class AppServlet extends HttpServlet {
         // path all read the same segments, and the path cannot change under them.
         String[] segments = PathPattern.split(request.path());
         WebResponse response = dispatch(request, segments);
+        Exception failure = null;
         try {
             response = decorate(response, request, segments);
             write(response, req, res, "HEAD".equals(req.getMethod()));
         } catch (Exception e) {
+            failure = e;
             writeFailed(e, res);
         } finally {
-            logRequest(request, response, startedAt);
+            logRequest(request, response, res.getStatus(), startedAt, failure);
         }
     }
 
@@ -137,8 +140,8 @@ public class AppServlet extends HttpServlet {
      * security headers, compression. They run here rather than in an
      * {@link AfterFilter} because here is the only place all the answers meet,
      * after {@link #filterResponse} too —
-     * {@link #dispatch} returns a static file without ever reaching a filter,
-     * and an error response never reaches one either.
+     * {@link #dispatch} returns static files and errors without running route
+     * after-filters.
      *
      * <p>The order is the order they depend on each other. A handler that asked
      * {@link WebRequest#accepts} says so here, because only the servlet sees
@@ -164,12 +167,14 @@ public class AppServlet extends HttpServlet {
     }
 
     /** Reports the finished request, with the response it was finally answered with. */
-    private void logRequest(WebRequest request, WebResponse response, long startedAt) {
+    private void logRequest(WebRequest request, WebResponse response, int statusCode,
+            long startedAt, Exception failure) {
         if (deployment.requestLogger() == null) {
             return;
         }
         try {
-            deployment.requestLogger().log(request, response, Duration.ofNanos(System.nanoTime() - startedAt));
+            deployment.requestLogger().log(request, new RequestCompletion(response, statusCode,
+                    Duration.ofNanos(System.nanoTime() - startedAt), failure));
         } catch (Exception e) {
             log("Request logger failed", e);
         }
@@ -188,10 +193,14 @@ public class AppServlet extends HttpServlet {
         WebRequest current = request;
         WebResponse response;
         try {
+            WebResponse early = runBefore(deployment.requestFilters(), segments, current);
+            if (early != null) {
+                return filterResponse(completeErrorResponse(renderTemplate(early), current), current);
+            }
             Router.Match match = routeFor(method, segments);
             if (match != null) {
                 current = request.withPathParams(match.pathParams());
-                WebResponse answered = runBefore(segments, current);
+                WebResponse answered = runBefore(deployment.beforeFilters(), segments, current);
                 if (answered != null) {
                     response = answered;
                 } else {
@@ -230,10 +239,8 @@ public class AppServlet extends HttpServlet {
         WebResponse current = response;
         try {
             for (ResponseFilter filter : deployment.responseFilters()) {
-                WebResponse replaced = filter.handle(request, current);
-                if (replaced != null) {
-                    current = replaced;
-                }
+                current = required(filter.handle(request, current), "Response filter",
+                        request.method(), request.path());
             }
             return renderTemplate(current);
         } catch (Exception e) {
@@ -317,8 +324,9 @@ public class AppServlet extends HttpServlet {
      * turned the caller away. To reject with the framework's own body, throw an
      * {@link HttpException}.
      */
-    private WebResponse runBefore(String[] segments, WebRequest request) throws Exception {
-        for (BeforeEntry entry : deployment.beforeFilters()) {
+    private WebResponse runBefore(List<BeforeEntry> filters, String[] segments,
+            WebRequest request) throws Exception {
+        for (BeforeEntry entry : filters) {
             if (entry.matches(segments)) {
                 WebResponse answered = entry.filter().handle(request);
                 if (answered != null) {
@@ -329,16 +337,14 @@ public class AppServlet extends HttpServlet {
         return null;
     }
 
-    /** Lets each matching after-filter replace the response, or leave it alone by returning null. */
+    /** Lets each matching after-filter return a replacement or the current response. */
     private WebResponse runAfter(String[] segments, WebRequest request, WebResponse response)
             throws Exception {
         WebResponse current = response;
         for (AfterEntry entry : deployment.afterFilters()) {
             if (entry.matches(segments)) {
-                WebResponse replaced = entry.filter().handle(request, current);
-                if (replaced != null) {
-                    current = replaced;
-                }
+                current = required(entry.filter().handle(request, current), "After-route filter",
+                        request.method(), request.path());
             }
         }
         return current;

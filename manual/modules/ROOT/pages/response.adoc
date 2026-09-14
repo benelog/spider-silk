@@ -32,6 +32,24 @@ assertThat(response.header("Location")).isEqualTo("/api/decks/1");
 assertThat(((WebResponse.Text) response.body()).content()).isEqualTo("{\"id\":1}");
 ----
 
+`body(replacement)` preserves all headers.
+You must update or remove metadata that describes the previous body, including `Content-Length`, `ETag`, `Last-Modified`, and `Content-Encoding`.
+Set `Content-Type` to the replacement type when it changes.
+For example, a filter replacing a body with plain text removes its old metadata:
+
+[source,java]
+----
+return response.body(new WebResponse.Text(replacement))
+        .contentType("text/plain; charset=UTF-8")
+        .withoutHeader("Content-Length")
+        .withoutHeader("ETag")
+        .withoutHeader("Last-Modified")
+        .withoutHeader("Content-Encoding");
+----
+
+The writer computes the new length for text and bytes when no length is set.
+A streaming replacement may omit a length.
+
 == A file on disk
 
 `file(path)` answers with the content type the file's name implies, its size as `Content-Length`, and a `Stream` body.
@@ -69,6 +87,7 @@ A file a handler chose is not a static file, and only the handler knows whether 
 
 `header(name, value)` sets a header and `header(name)` reads one back, under any spelling of the name.
 Field names are case-insensitive in HTTP, and the map behind them compares the same way.
+`withoutHeader(name)` removes a header under any spelling and preserves the other headers, cookies, status, and body.
 
 [source,java]
 ----

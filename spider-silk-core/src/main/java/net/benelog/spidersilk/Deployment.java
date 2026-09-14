@@ -18,6 +18,7 @@ import java.util.Map;
  */
 record Deployment(
         Router router,
+        List<BeforeEntry> requestFilters,
         List<BeforeEntry> beforeFilters,
         List<AfterEntry> afterFilters,
         List<ResponseFilter> responseFilters,
@@ -30,6 +31,7 @@ record Deployment(
         SecurityHeaders securityHeaders) {
 
     Deployment {
+        requestFilters = List.copyOf(requestFilters);
         beforeFilters = List.copyOf(beforeFilters);
         afterFilters = List.copyOf(afterFilters);
         responseFilters = List.copyOf(responseFilters);

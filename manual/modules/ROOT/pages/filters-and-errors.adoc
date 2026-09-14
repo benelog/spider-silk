@@ -1,43 +1,64 @@
 = Filters and Errors
 :navtitle: Filters and Errors
 
-A filter runs before or after a route handler, and a response filter runs on every response.
+A request filter runs before routing, a route filter runs around a matched handler, and a response filter runs on every response.
 An exception handler turns an exception a handler threw into a response.
 An error handler fills in the body of a response that ended on a status with nothing to show.
 The diagram shows where each one runs, for one request through `AppServlet`.
 
 .One request through AppServlet
-image::request-pipeline.svg[The router finds a match; the before-filters, the handler, the after-filters, and the template renderer run in that order; an exception handler answers for anything that threw, and an error handler fills an empty error body; then the response filters run, and the response is decorated, written, and logged,link=self]
+image::request-pipeline.svg[Request filters run before routing; the router finds a match; the before-route filters, the handler, the after-route filters, and the template renderer run in that order; an exception handler answers for anything that threw, and an error handler fills an empty error body; then the response filters run, and the response is decorated, written, and logged,link=self]
 
 Static files answer only when no route matched, and only for `GET` and `HEAD`.
 The response-wide concerns from xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security] run after every answer, the static file and the error response included, which is why they are not after-filters.
 
 == Filters
 
-`before` and `after` take an optional path, and cover everything in scope when given none.
-A trailing `*` covers the prefix _and_ everything under it, so `/admin/*` guards `/admin` as well as `/admin/users`, which is what a guard almost always means:
+`beforeRequest` runs before routing for every matching request, including static files, 404s, 405s, HEAD, and automatic OPTIONS.
+`beforeRoute` runs only for a matched route and exposes its path variables.
+`afterRoute` runs only when that handler returns normally.
+All three take an optional path pattern and cover their whole scope when given none.
+A route group's `beforeRequest` resolves its prefix in the same way as its route filters.
+Path variables are unavailable in request filters, even when the filter pattern contains a variable.
+
+Use `beforeRequest` when authorization must also cover static files and unmatched paths:
 
 [source,java]
 ----
-app.before("/admin/*", req -> req.sessionAttr("user") == null
+app.beforeRequest("/admin/*", req -> req.sessionAttr("user") == null
+        ? WebResponse.redirect("/login")
+        : null);
+----
+
+A request filter's early response or exception uses the normal template, error, response-filter, and decoration pipeline.
+Request filters execute in registration order before all route filters, regardless of the order the two kinds were registered.
+A request filter can reject an OPTIONS request before CORS preflight handling, so its authorization policy must allow preflights when required.
+
+For a guard that needs a matched route's path variables, use `beforeRoute`.
+A trailing `*` covers the prefix _and_ everything under it, so `++/admin/*++` guards `/admin` as well as `/admin/users`, which is what a guard almost always means:
+
+[source,java]
+----
+app.beforeRoute("/admin/*", req -> req.sessionAttr("user") == null
         ? WebResponse.redirect("/login")    // answers here, so the route handler never runs
         : null);                            // carry on
 ----
 
 A before-filter that returns a response ends the request there.
-Returning `null` continues to the route.
+Returning `null` continues to the next filter and then to routing or the matched handler.
 Throw `new HttpException(HttpStatus.UNAUTHORIZED, "...")` to reject without a body of your own, and let `error(HttpStatus.UNAUTHORIZED, ...)` render it.
 
-An after-filter takes the response the route returned and hands back a replacement, or `null` to leave it alone:
+An after-filter takes the response the route returned and hands back a replacement, or that same response to leave it unchanged:
 
 [source,java]
 ----
-app.after("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
+app.afterRoute("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
 ----
 
 An after-filter runs only when a route handler returned normally.
 A before-filter's early answer, an exception handler's answer, a router 404 or 405, the automatic `OPTIONS` answer, and a static file never reach it.
-A before-filter is route-scoped in the same way: `before("/admin/*", ...)` does not run for a static file served under `/admin`, so a static root holds nothing that needs a guard.
+`++beforeRoute("/admin/*", ...)++` does not run for a static file served under `/admin`.
+Use `++beforeRequest("/admin/*", ...)++` to guard those files as well.
 
 [#response-filters]
 == Response filters
@@ -50,13 +71,15 @@ A header that every response has to carry belongs here:
 app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));
 ----
 
-The filter takes the request and the response about to be sent, and returns a replacement or `null` to leave it alone.
+The filter takes the request and the response about to be sent, and returns a replacement or the response passed in to leave it unchanged.
+Returning null from `afterRoute` or `responseFilter` is a programming error and follows exception handling.
 Several filters run in registration order, each on what the one before it answered.
 The request carries the path variables of the route that matched, when one did.
 
 A response filter runs once the answer has been worked out and before it is decorated:
 
-. The route handler, the before-filters, and the after-filters answer, or a static file does.
+. Request filters run before routing and may answer immediately.
+. Route filters and the matched handler answer, or static files and routing produce the answer.
 . An exception handler answers for anything that threw, the template is rendered, and an error handler fills an empty error body.
 . The response filters run, and a template body one of them returns is rendered.
 . `Vary: Accept`, CORS, the security headers, and compression are applied, in that order.
@@ -69,7 +92,7 @@ A filter that throws is answered the way a handler that throws is.
 The exception reaches the `exception(Type, handler)` handlers, then `error(status, ...)`, and the answer to it is decorated and written without running the response filters again, so a filter that always fails cannot fail in a loop.
 
 A response filter shapes a response and does not authorize a request.
-The handler has already run by the time it is called, so a guard stays a before-filter.
+The handler has already run by the time it is called, so authorization belongs in `beforeRequest` or `beforeRoute`, depending on its scope.
 What a `WebResponse.raw(...)` writer writes to the servlet response, and a failure after the response is committed, happen after the filter and are out of its reach.
 
 == Exception handlers

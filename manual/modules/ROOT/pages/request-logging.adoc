@@ -5,12 +5,23 @@
 
 [source,java]
 ----
-app.requestLogger((req, res, took) -> logger.info("{} {} -> {} ({}ms)",
-        req.method(), req.path(), res.status().code(), took.toMillis()));
+app.requestLogger((req, completion) -> logger.info("{} {} -> {} ({}ms)",
+        req.method(), req.path(), completion.statusCode(), completion.took().toMillis()));
 ----
 
 Core carries no logging framework, so which logger, at which level, and in which format is the application's call.
-The lambda runs after the response is complete, so the status it sees is the one that was actually sent, the error handler's if one ran.
-The response is the one the response filters returned, with CORS, the security headers, and compression applied.
+The lambda receives a `RequestCompletion` after response writing finishes.
+`statusCode()` is the final status reported by the servlet response, including a status changed by a raw writer or by recovery from a write failure.
+`took()` is a `Duration` covering dispatch, rendering, decoration, and writing.
+`response()` is the response definition after decoration, or the last definition available if decoration failed.
+Its status and headers may differ from what a raw writer sent.
+
+`failure()` is the exception from decoration or writing, or null when neither failed.
+`failed()` reports whether that exception is present.
+A failure before commitment can produce a 500; a failure after commitment can leave a 200 with a partial body.
+Inspect the failure independently of the status code.
+An application exception handled during dispatch is represented by its response status, not by a transmission failure.
+Normal SSE closure is not a transmission failure.
+Completion does not confirm receipt of the entire body by the remote client.
 `req.body()` reads the text a filter or handler already read, since the text is kept for the whole request.
 A logger that throws is reported to the servlet log and leaves the response alone.

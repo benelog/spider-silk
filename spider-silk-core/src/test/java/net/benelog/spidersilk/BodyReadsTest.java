@@ -89,12 +89,12 @@ class BodyReadsTest {
     void aBeforeFilterThatReadsTheBodyLeavesItForTheHandler() {
         List<String> signed = new ArrayList<>();
         App app = new App()
-                .before(req -> {
+                .beforeRoute(req -> {
                     signed.add(req.body());
                     return null;
                 })
                 .post("/decks", req -> WebResponse.text(req.bodyJson(NAME)))
-                .requestLogger((req, res, took) -> signed.add(req.body()));
+                .requestLogger((req, completion) -> signed.add(req.body()));
 
         WebTest.test(app, client -> {
             var response = client.send(builder -> builder

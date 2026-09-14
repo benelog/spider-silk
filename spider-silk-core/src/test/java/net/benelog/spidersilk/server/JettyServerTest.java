@@ -250,7 +250,7 @@ class JettyServerTest {
                 .post("/fields-first", req -> WebResponse.text(
                         req.param("name") + "|" + bytesOf(req.bodyStream())))
                 .post("/bytes-first", req -> WebResponse.text(
-                        bytesOf(req.bodyStream()) + "|" + req.formParam("name")))
+                        bytesOf(req.bodyStream()) + "|" + req.formParamOrNull("name")))
                 .start(0);
 
         assertThat(postForm("/fields-first").body()).isEqualTo("English|");
@@ -267,7 +267,7 @@ class JettyServerTest {
     @Test
     void theBodyReadAsTextIsKeptForTheRestOfTheRequest() throws Exception {
         app = new App()
-                .before(req -> {
+                .beforeRoute(req -> {
                     req.body();
                     return null;
                 })

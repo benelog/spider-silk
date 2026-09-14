@@ -41,7 +41,10 @@ The mapping is code you wrote, so a field rename changes the wire format only if
 `getString` throws `Json.JsonException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400.
 A handler gets a whole value or none, the same contract as `pathParamLong`.
 `Json.JsonException` is an `IllegalArgumentException`, so a reader that throws the plain type for a rule of its own is rejected the same way.
-It is also a type of its own, so an application that maps `IllegalArgumentException` to a status maps a body that failed to parse separately, and the handler for the more specific type runs whatever the registration order.
+`DateTimeException` from a reader, such as a failed `LocalDate.parse`, also becomes a 400.
+Other reader exceptions remain server errors.
+`bodyJson(reader)` wraps input rejection in `HttpException`, so custom handling of these errors targets that type or the 400 error handler.
+A `Json.JsonException` thrown directly by handler code remains eligible for its own exception handler.
 `asLong` and `getLong` reject a number with a fractional part rather than truncating it: `1.5` is not a long, while `2.0` and `1e3` are whole and read as one.
 For a key that is allowed to be absent, `optString`, `optLong`, `optDouble`, and `optBoolean` answer a default instead, for a missing key and for an explicit JSON `null` alike.
 `optObject` and `optArray` answer `null` on the same terms, and throw when the key is present with a value of another type.

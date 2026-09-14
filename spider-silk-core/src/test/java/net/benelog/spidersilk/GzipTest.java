@@ -113,7 +113,7 @@ class GzipTest {
     void aDeclinedTextBodyIsStillTextToTheRequestLogger() {
         List<WebResponse.Body> logged = new CopyOnWriteArrayList<>();
         App app = new App().gzip(Gzip.defaults().minBytes(8))
-                .requestLogger((req, res, took) -> logged.add(res.body()))
+                .requestLogger((req, completion) -> logged.add(completion.response().body()))
                 .get("/small", req -> WebResponse.text("hello"))
                 .get("/no-smaller", req -> WebResponse.text("hello, world"));
 
@@ -218,7 +218,7 @@ class GzipTest {
 
     /**
      * The reason this is not an after-filter: the stylesheet is the biggest thing
-     * most pages download, and a static file is answered before any filter runs.
+     * most pages download, and a static file bypasses route filters.
      */
     @Test
     void aStaticFileIsCompressedAsItIsWritten() {

@@ -2,9 +2,12 @@ package net.benelog.spidersilk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.junit.jupiter.api.Test;
 
@@ -14,11 +17,65 @@ import net.benelog.spidersilk.test.WebTest;
 class RequestLoggerTest {
 
     @Test
+    void rawWritersReportTheServletStatusSeparatelyFromTheDefinition() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        App app = new App().requestLogger((req, completion) -> logged.add(completion))
+                .get("/", req -> WebResponse.raw((request, response) -> {
+                    response.setStatus(202);
+                    response.getWriter().write("accepted");
+                }));
+        WebTest.test(app, client -> assertThat(client.get("/").statusCode()).isEqualTo(202));
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(202);
+            assertThat(completion.response().status()).isEqualTo(HttpStatus.OK);
+            assertThat(completion.failed()).isFalse();
+            assertThat(completion.failure()).isNull();
+        });
+    }
+
+    @Test
+    void aWriteFailureBeforeCommitReports500AndItsCause() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        IOException failure = new IOException("export failed");
+        App app = new App().requestLogger((req, completion) -> logged.add(completion))
+                .get("/", req -> WebResponse.stream("text/plain", out -> { throw failure; }));
+        WebTest.test(app, client -> assertThat(client.get("/").statusCode()).isEqualTo(500));
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(500);
+            assertThat(completion.response().status()).isEqualTo(HttpStatus.OK);
+            assertThat(completion.failed()).isTrue();
+            assertThat(completion.failure()).isSameAs(failure);
+        });
+    }
+
+    @Test
+    void aWriteFailureAfterCommitReports200AndItsCause() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        IOException failure = new IOException("export interrupted");
+        App app = new App().requestLogger((req, completion) -> logged.add(completion))
+                .get("/", req -> WebResponse.stream("text/plain", out -> {
+                    out.write("partial".getBytes(StandardCharsets.UTF_8));
+                    out.flush();
+                    throw failure;
+                }));
+        WebTest.test(app, client -> {
+            var response = client.get("/");
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("partial");
+        });
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(200);
+            assertThat(completion.failed()).isTrue();
+            assertThat(completion.failure()).isSameAs(failure);
+        });
+    }
+
+    @Test
     void everyRequestIsReportedWithItsStatus() {
         List<String> logged = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, took) -> logged.add(
-                        req.method() + " " + req.path() + " -> " + res.status().code()))
+                .requestLogger((req, completion) -> logged.add(
+                        req.method() + " " + req.path() + " -> " + completion.statusCode()))
                 .get("/decks", req -> WebResponse.text("list"));
 
         WebTest.test(app, client -> {
@@ -32,36 +89,36 @@ class RequestLoggerTest {
     /** The status has to be the one that was sent, not the one before the error handler ran. */
     @Test
     void theStatusIsTheOneTheErrorHandlerLeftBehind() {
-        List<HttpStatus> statuses = new ArrayList<>();
+        List<Integer> statuses = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, took) -> statuses.add(res.status()))
+                .requestLogger((req, completion) -> statuses.add(completion.statusCode()))
                 .error(HttpStatus.NOT_FOUND, req -> WebResponse.text("gone for good").status(HttpStatus.GONE))
                 .get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> client.get("/missing"));
 
-        assertThat(statuses).isEqualTo(List.of(HttpStatus.GONE));
+        assertThat(statuses).isEqualTo(List.of(410));
     }
 
     @Test
     void anUncaughtExceptionIsStillReported() {
-        List<HttpStatus> statuses = new ArrayList<>();
+        List<Integer> statuses = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, took) -> statuses.add(res.status()))
+                .requestLogger((req, completion) -> statuses.add(completion.statusCode()))
                 .get("/boom", req -> {
                     throw new IllegalStateException("kaboom");
                 });
 
         WebTest.test(app, client -> client.get("/boom"));
 
-        assertThat(statuses).isEqualTo(List.of(HttpStatus.INTERNAL_SERVER_ERROR));
+        assertThat(statuses).isEqualTo(List.of(500));
     }
 
     @Test
     void theElapsedTimeIsReported() {
         List<Duration> times = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, took) -> times.add(took))
+                .requestLogger((req, completion) -> times.add(completion.took()))
                 .get("/slow", req -> {
                     Thread.sleep(15);
                     return WebResponse.text("done");
@@ -78,7 +135,7 @@ class RequestLoggerTest {
     void aRequestFasterThanAMillisecondIsStillReported() {
         List<Duration> times = new ArrayList<>();
         App app = new App()
-                .requestLogger((req, res, took) -> times.add(took))
+                .requestLogger((req, completion) -> times.add(completion.took()))
                 .get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> client.get("/"));
@@ -91,7 +148,7 @@ class RequestLoggerTest {
     @Test
     void aLoggerThatThrowsDoesNotAffectTheResponse() {
         App app = new App()
-                .requestLogger((req, res, took) -> {
+                .requestLogger((req, completion) -> {
                     throw new IllegalStateException("logger is broken");
                 })
                 .get("/", req -> WebResponse.text("ok"));

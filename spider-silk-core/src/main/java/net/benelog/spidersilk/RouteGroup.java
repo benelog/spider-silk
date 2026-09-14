@@ -9,10 +9,10 @@ import java.util.function.Consumer;
  *
  * <pre>{@code
  * app.path("/api/decks", decks -> {
- *     decks.before(req -> requireApiKey(req));   // guards /api/decks and everything under it
- *     decks.get("", this::listDecks);            // GET  /api/decks
- *     decks.post("", this::createDeck);          // POST /api/decks
- *     decks.get("/{deckId}", this::showDeck);    // GET  /api/decks/{deckId}
+ *     decks.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
+ *     decks.get("", this::listDecks);                  // GET  /api/decks
+ *     decks.post("", this::createDeck);                // POST /api/decks
+ *     decks.get("/{deckId}", this::showDeck);          // GET  /api/decks/{deckId}
  * });
  * }</pre>
  *
@@ -116,23 +116,34 @@ public final class RouteGroup {
         return this;
     }
 
-    /** A filter over the whole group: the prefix itself and everything below it. */
-    public RouteGroup before(BeforeFilter filter) {
-        return before("/*", filter);
+    /** A request filter over the prefix and everything below it, before routing. */
+    public RouteGroup beforeRequest(BeforeFilter filter) {
+        return beforeRequest("/*", filter);
     }
 
-    public RouteGroup before(String path, BeforeFilter filter) {
-        app.before(resolve(path), filter);
+    /** A request filter under this prefix, including static files and missing routes. */
+    public RouteGroup beforeRequest(String path, BeforeFilter filter) {
+        app.beforeRequest(resolve(path), filter);
         return this;
     }
 
-    /** A filter over the whole group: the prefix itself and everything below it. */
-    public RouteGroup after(AfterFilter filter) {
-        return after("/*", filter);
+    /** A filter over matched routes in the group: the prefix and everything below it. */
+    public RouteGroup beforeRoute(BeforeFilter filter) {
+        return beforeRoute("/*", filter);
     }
 
-    public RouteGroup after(String path, AfterFilter filter) {
-        app.after(resolve(path), filter);
+    public RouteGroup beforeRoute(String path, BeforeFilter filter) {
+        app.beforeRoute(resolve(path), filter);
+        return this;
+    }
+
+    /** A filter over matched routes in the group: the prefix and everything below it. */
+    public RouteGroup afterRoute(AfterFilter filter) {
+        return afterRoute("/*", filter);
+    }
+
+    public RouteGroup afterRoute(String path, AfterFilter filter) {
+        app.afterRoute(resolve(path), filter);
         return this;
     }
 

@@ -16,7 +16,7 @@ A `Cors`, `Gzip`, or `SecurityHeaders` changed afterwards changes nothing the ap
 
 == Why not filters, and why not plugins
 
-A `before` or `after` filter runs only once a route has matched, and these three have to reach the answers where no route did.
+A `beforeRoute` or `afterRoute` filter runs only once a route has matched, and these three have to reach the answers where no route did.
 A CORS preflight is an `OPTIONS` nobody registered a handler for.
 A cross-origin 404 has to carry the CORS headers, or the browser reports a CORS failure instead of the 404 that actually happened.
 Security headers belong on an error page as much as on any other page.
@@ -24,7 +24,7 @@ The largest thing most applications send is the stylesheet, and that is a static
 
 They therefore run in `AppServlet`, after the answer is worked out and before it goes on the wire, which is where every path meets: routes, static files, and errors alike.
 A xref:filters-and-errors.adoc#response-filters[response filter] reaches those answers too, and runs before these three.
-They stay named on `App` because a filter that runs before them cannot undo them, and because a CORS preflight is answered while the `Allow` header is worked out, before any filter runs.
+They stay named on `App` because a filter that runs before them cannot undo them, and because a CORS preflight is answered while the `Allow` header is worked out, after request filters and before response filters.
 Each is one named method taking one inert value, the same shape as `staticFiles(StaticFiles)` and `requestLogger(...)`.
 That is deliberately not a plugin registry: a registry of things that configure themselves is the beginning of a container.
 
