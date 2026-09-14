@@ -4,6 +4,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A path pattern such as "/decks/{deckId}/cards".
  * Compares string segments only; no regular expressions, no reflection.
@@ -26,7 +28,7 @@ final class PathPattern {
     private final boolean matchesRest;
 
     /** The name a "{name*}" tail binds under, or null when there is no such tail. */
-    private final String tailName;
+    private final @Nullable String tailName;
 
     PathPattern(String pattern) {
         String[] parsed = split(pattern);
@@ -64,7 +66,7 @@ final class PathPattern {
      * can match any first segment — it starts with a variable, or it is a bare
      * "*".
      */
-    String literalFirstSegment() {
+    @Nullable String literalFirstSegment() {
         if (segments.length == 0) {
             return matchesRest ? null : "";
         }
@@ -80,7 +82,7 @@ final class PathPattern {
      * The name inside a "{path*}" segment, or null when the segment is not one.
      * "{*}" is not one: a tail has a name, and that is the whole point of it.
      */
-    private static String tailVariableName(String segment) {
+    private static @Nullable String tailVariableName(String segment) {
         return segment.length() >= 4 && segment.startsWith("{") && segment.endsWith("*}")
                 ? segment.substring(1, segment.length() - 2)
                 : null;
@@ -105,7 +107,7 @@ final class PathPattern {
     }
 
     /** Returns the path variable map on a match, or null otherwise. */
-    Map<String, String> match(String[] actual) {
+    @Nullable Map<String, String> match(String[] actual) {
         if (matchesRest ? actual.length < segments.length : actual.length != segments.length) {
             return null;
         }

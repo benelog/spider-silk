@@ -19,6 +19,8 @@ import java.util.Objects;
 
 import jakarta.servlet.http.HttpServletRequest;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Files served off the classpath or off a directory, with the caching headers
  * that stop a browser re-downloading the stylesheet on every page load.
@@ -163,7 +165,7 @@ public final class StaticFiles {
      * routing should carry on. The body is a stream rather than a byte array, so
      * a large file never lands in memory whole.
      */
-    WebResponse resolve(String path, HttpServletRequest req) throws IOException {
+    @Nullable WebResponse resolve(String path, HttpServletRequest req) throws IOException {
         String relative = relativePath(path);
         if (relative == null) {
             return null;
@@ -224,7 +226,7 @@ public final class StaticFiles {
      * take, or null when the build left none, the client reads none, or the one
      * that is there is older than the file it claims to be a copy of.
      */
-    private Encoded sibling(String relative, long lastModified, HttpServletRequest req)
+    private @Nullable Encoded sibling(String relative, long lastModified, HttpServletRequest req)
             throws IOException {
         String accepted = req.getHeader("Accept-Encoding");
         for (Encoding encoding : ENCODINGS) {
@@ -267,7 +269,7 @@ public final class StaticFiles {
      * The path under {@link #hostedPath} a request asks for, or null when the
      * request is not for this directory at all.
      */
-    private String relativePath(String path) {
+    private @Nullable String relativePath(String path) {
         if (path.contains("..") || !path.startsWith(hostedPath)) {
             return null;
         }
@@ -332,7 +334,7 @@ public final class StaticFiles {
          * The file the given path — always starting with "/" — names under this
          * root, or null when the root holds no such file.
          */
-        Resource find(String relative) throws IOException;
+        @Nullable Resource find(String relative) throws IOException;
     }
 
     /**
@@ -355,7 +357,7 @@ public final class StaticFiles {
     private record ClasspathSource(String root) implements Source {
 
         @Override
-        public Resource find(String relative) throws IOException {
+        public @Nullable Resource find(String relative) throws IOException {
             URL url = StaticFiles.class.getResource(root + relative);
             if (url == null || isDirectory(url)) {
                 return null;
@@ -432,7 +434,7 @@ public final class StaticFiles {
     private record DirectorySource(Path root) implements Source {
 
         @Override
-        public Resource find(String relative) {
+        public @Nullable Resource find(String relative) {
             Path candidate;
             try {
                 candidate = root.resolve(relative.substring(1));

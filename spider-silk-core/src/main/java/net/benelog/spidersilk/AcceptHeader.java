@@ -5,6 +5,8 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The {@code Accept} family of headers, parsed once so no application has to
  * parse it again: {@code Accept}, {@code Accept-Encoding}, and anything else
@@ -29,7 +31,7 @@ final class AcceptHeader {
      * What the client will take, best first, with the values it refused dropped.
      * Weights are gone by then: the order is the answer they produced.
      */
-    static List<String> preferences(String header) {
+    static List<String> preferences(@Nullable String header) {
         List<Entry> entries = new ArrayList<>(parse(header));
         entries.sort(Comparator.comparingDouble(Entry::quality).reversed()
                 .thenComparingInt(entry -> wildcards(entry.value()))
@@ -50,7 +52,7 @@ final class AcceptHeader {
      * order the handler prefers. Candidates the client weighted equally are
      * settled the same way.
      */
-    static String best(String header, List<String> candidates) {
+    static @Nullable String best(@Nullable String header, List<String> candidates) {
         if (header == null || header.isBlank()) {
             return candidates.get(0);
         }
@@ -73,7 +75,7 @@ final class AcceptHeader {
      * that was never sent is a client that never said it could read gzip, which
      * is why an absent header is a no here and an "anything" in {@link #best}.
      */
-    static boolean accepts(String header, String value) {
+    static boolean accepts(@Nullable String header, String value) {
         return header != null && quality(parse(header), value) > 0;
     }
 
@@ -115,7 +117,7 @@ final class AcceptHeader {
         return 0;
     }
 
-    private static List<Entry> parse(String header) {
+    private static List<Entry> parse(@Nullable String header) {
         if (header == null || header.isBlank()) {
             return List.of();
         }

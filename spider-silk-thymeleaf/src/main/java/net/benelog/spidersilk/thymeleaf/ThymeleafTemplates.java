@@ -5,6 +5,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.templatemode.TemplateMode;
@@ -85,7 +86,7 @@ public final class ThymeleafTemplates implements TemplateRenderer {
     }
 
     @Override
-    public void render(String template, Map<String, Object> model, Writer out) {
+    public void render(String template, Map<String, @Nullable Object> model, Writer out) {
         engine.process(template + suffix, new Context(locale, model), out);
     }
 

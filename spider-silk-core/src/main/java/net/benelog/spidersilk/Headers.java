@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The headers of a {@link WebResponse}: one value per field, compared the way
  * HTTP compares field names, and read back in the order they were set.
@@ -124,13 +126,13 @@ final class Headers extends AbstractMap<String, String> {
     }
 
     @Override
-    public String get(Object name) {
+    public @Nullable String get(@Nullable Object name) {
         Entry<String, String> field = field(name);
         return field == null ? null : field.getValue();
     }
 
     @Override
-    public boolean containsKey(Object name) {
+    public boolean containsKey(@Nullable Object name) {
         return field(name) != null;
     }
 
@@ -161,7 +163,7 @@ final class Headers extends AbstractMap<String, String> {
         target.put(key, new SimpleImmutableEntry<>(spelling, value));
     }
 
-    private Entry<String, String> field(Object name) {
+    private @Nullable Entry<String, String> field(@Nullable Object name) {
         return name instanceof String field ? fields.get(key(field)) : null;
     }
 

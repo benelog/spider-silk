@@ -69,8 +69,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 51 | Registration closes when a servlet is initialized, and settings are copied when registered | ✅ shipped |
 | 52 | `responseFilter(filter)`: one filter that sees every response, before CORS, security headers, and gzip | ✅ shipped |
 | 53 | Explicit filter scope, parameter absence, response mutation, and transmission results | ✅ shipped |
+| 54 | Nullness in the signatures: JSpecify `@NullMarked` packages, checked by NullAway | ✅ shipped |
 
-Fifty-five of the fifty-six shipped.
+Fifty-six of the fifty-seven shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -1279,6 +1280,40 @@ Completion does not confirm that the remote client received the entire body.
 These changes are made before 1.0 without deprecated aliases.
 Old filter and logger call sites fail to compile, while optional parameter reads require explicit migration because the required string signatures remain valid.
 The examples, agent references, and manual use the new contracts.
+
+## 54 · Nullness in the signatures
+
+### 54. Every published package is `@NullMarked`, and NullAway checks it at compile time
+
+Every published package carries JSpecify's `@NullMarked`, so a type without `@Nullable` excludes null.
+A member that returns or accepts null says so with `@Nullable` in its signature, where it used to say so only in Javadoc.
+`org.jspecify:jspecify` is an `api` dependency of every published module, because the annotations are part of the public signatures.
+The artifact holds annotations only, so the no-reflection rule stands.
+
+NullAway runs through the Error Prone setup every module already had, in JSpecify mode and at error severity, over the main sources of the published modules.
+An annotation that disagrees with the code therefore fails the build instead of drifting from it.
+Test sources are not checked, because tests pass null on purpose to exercise the guards.
+`example-flashcard` is not checked either, because it is an application built on the API rather than part of it.
+
+The annotations record contracts the earlier decisions already made:
+
+- `BeforeFilter.handle` returns `@Nullable WebResponse`, while `Handler`, `AfterFilter`, and `ResponseFilter` return a non-null one, as decision 53 set.
+- On `WebRequest`, the `OrNull` reads, `header`, `contentType`, `queryString`, `cookie`, `sessionAttr`, `flashed`, and `errorMessage` return `@Nullable`.
+- `WebResponse.header`, `Json.optObject`, `Json.optArray`, `RequestCompletion.failure`, `UploadedFile.contentType`, and `WebSocketFactory.create` return `@Nullable`.
+- `setSessionAttr` and `flash` take a `@Nullable` value, because null removes the key.
+- `Json.put` and `Json.add` take a `@Nullable` value, because null writes JSON `null`.
+- A template model is `Map<String, @Nullable Object>`, because decision 50 keeps null values in the copy.
+- The server settings `host` and `multipart` take `@Nullable`, and `jetty()`, `tomcat()`, and `undertow()` return `@Nullable` before `start()`.
+
+A default is never null.
+`param(name, default)`, the parser forms with a default, and `Json.optString(key, default)` take a non-null default and return a non-null value.
+`paramOrNull`, `queryParamOrNull`, and `formParamOrNull` are the optional strings, so a nullable default would only duplicate them.
+
+The Servlet API carries no nullness annotations, so NullAway reads its return values as non-null.
+Each value `WebRequest`, `UploadedFile`, and the test stubs pass on from a servlet type was therefore checked against the Servlet specification by hand.
+`getHeader`, `getContentType`, `getQueryString`, and `Part.getContentType` are the ones that answer null.
+`Part.getSubmittedFileName` can answer null too, but `UploadedFile` is built only for a part whose file name is present, so `fileName()` stays non-null.
+The settings that store into a nullable field without a documented null, such as `threadPool`, `executor`, `baseDir`, and `SseStream.id`, now reject null the way `contextPath` and `stopTimeout` already did.
 
 ## Rejected — decisions, with the reason
 

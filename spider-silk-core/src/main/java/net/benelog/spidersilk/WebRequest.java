@@ -25,6 +25,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.Part;
 
+import org.jspecify.annotations.Nullable;
+
 import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.json.JsonReader;
 
@@ -66,9 +68,9 @@ public final class WebRequest {
     private final HttpServletRequest req;
     private final Map<String, String> pathParams;
 
-    private Map<String, List<String>> parsedQuery;
-    private String path;
-    private String errorMessage;
+    private @Nullable Map<String, List<String>> parsedQuery;
+    private @Nullable String path;
+    private @Nullable String errorMessage;
 
     /**
      * Wraps a servlet request, with the path variables the router resolved.
@@ -110,7 +112,7 @@ public final class WebRequest {
         return path;
     }
 
-    public String header(String name) {
+    public @Nullable String header(String name) {
         return req.getHeader(name);
     }
 
@@ -147,7 +149,7 @@ public final class WebRequest {
     }
 
     /** The declared media type of the body, or null when the request sent none. */
-    public String contentType() {
+    public @Nullable String contentType() {
         return req.getContentType();
     }
 
@@ -156,7 +158,7 @@ public final class WebRequest {
      * null when the URL carried none. {@link #queryParam(String)} reads a single
      * value out of it; this is the whole of it, for a signature or a log line.
      */
-    public String queryString() {
+    public @Nullable String queryString() {
         return req.getQueryString();
     }
 
@@ -372,7 +374,7 @@ public final class WebRequest {
      * <p>It reads the same merged view as {@link #param(String)}, and a query
      * string that will not decode still answers 400.
      */
-    public String paramOrNull(String name) {
+    public @Nullable String paramOrNull(String name) {
         return parameter(name);
     }
 
@@ -467,7 +469,7 @@ public final class WebRequest {
      * of its own and differently on each server. Only the query string is read
      * first: the body is still read by the container, when and as it was.
      */
-    private String parameter(String name) {
+    private @Nullable String parameter(String name) {
         parsedQuery();
         return req.getParameter(name);
     }
@@ -525,7 +527,7 @@ public final class WebRequest {
     }
 
     /** A query-string parameter, or null when absent. */
-    public String queryParamOrNull(String name) {
+    public @Nullable String queryParamOrNull(String name) {
         List<String> values = queryParams(name);
         return values.isEmpty() ? null : values.get(0);
     }
@@ -581,7 +583,7 @@ public final class WebRequest {
     }
 
     /** A form field, or null when absent. */
-    public String formParamOrNull(String name) {
+    public @Nullable String formParamOrNull(String name) {
         List<String> values = formParams(name);
         return values.isEmpty() ? null : values.get(0);
     }
@@ -630,7 +632,7 @@ public final class WebRequest {
     }
 
     /** The value a source-specific required read found, or the 400 that names the source. */
-    private static String required(String name, String value, String source) {
+    private static String required(String name, @Nullable String value, String source) {
         if (value == null) {
             throw new HttpException(HttpStatus.BAD_REQUEST, "Missing required " + source + ": " + name);
         }
@@ -644,7 +646,7 @@ public final class WebRequest {
         return parsedQuery;
     }
 
-    private static Map<String, List<String>> parseQueryString(String query) {
+    private static Map<String, List<String>> parseQueryString(@Nullable String query) {
         if (query == null || query.isEmpty()) {
             return Map.of();
         }
@@ -920,7 +922,7 @@ public final class WebRequest {
      * optional has already said what to do about all three, which is why none
      * of them is the 400 {@link #file(String)} answers.
      */
-    public UploadedFile fileOrNull(String name) {
+    public @Nullable UploadedFile fileOrNull(String name) {
         Part part;
         try {
             part = req.getPart(name);
@@ -970,7 +972,7 @@ public final class WebRequest {
      * name is a text field of the same form, or a file input the browser sent
      * empty because nothing was chosen; neither is a file a handler can read.
      */
-    private static boolean isFile(Part part) {
+    private static boolean isFile(@Nullable Part part) {
         return part != null && part.getSubmittedFileName() != null
                 && !part.getSubmittedFileName().isEmpty();
     }
@@ -978,7 +980,7 @@ public final class WebRequest {
     // ---- Cookies the client sent ----
 
     /** A cookie the client sent, or null. Setting one is {@link WebResponse#cookie}. */
-    public String cookie(String name) {
+    public @Nullable String cookie(String name) {
         Cookie[] cookies = req.getCookies();
         if (cookies == null) {
             return null;
@@ -1018,7 +1020,7 @@ public final class WebRequest {
      * the read rather than at the assignment.
      */
     @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
-    public <T> T sessionAttr(String key) {
+    public <T> @Nullable T sessionAttr(String key) {
         HttpSession session = req.getSession(false);
         return session == null ? null : (T) session.getAttribute(key);
     }
@@ -1049,7 +1051,7 @@ public final class WebRequest {
      * {@code null} as the type is not a removal either: it throws, naming
      * {@link #removeSessionAttr(String)}.
      */
-    public <T> T sessionAttr(String key, Class<T> type) {
+    public <T> @Nullable T sessionAttr(String key, Class<T> type) {
         Objects.requireNonNull(type,
                 "type: sessionAttr(key, type) reads; removing an attribute is removeSessionAttr(key)");
         HttpSession session = req.getSession(false);
@@ -1077,7 +1079,7 @@ public final class WebRequest {
      * follows the same rule. {@link #removeSessionAttr(String)} says the same
      * thing by name, and does not create a session to remove from.
      */
-    public void setSessionAttr(String key, Object value) {
+    public void setSessionAttr(String key, @Nullable Object value) {
         req.getSession(true).setAttribute(key, value);
     }
 
@@ -1124,7 +1126,7 @@ public final class WebRequest {
      * {@code AppServlet} takes for the other half of the pair, and the map is
      * concurrent so that two writers do not corrupt it once they both hold it.
      */
-    public void flash(String key, String value) {
+    public void flash(String key, @Nullable String value) {
         if (value == null) {
             Map<String, String> pending = pendingFlash(false);
             if (pending != null) {
@@ -1132,7 +1134,7 @@ public final class WebRequest {
             }
             return;
         }
-        pendingFlash(true).put(key, value);
+        Objects.requireNonNull(pendingFlash(true)).put(key, value);
     }
 
     /**
@@ -1140,7 +1142,7 @@ public final class WebRequest {
      * {@code create} false, null when there is no session or nothing waiting,
      * so that withdrawing a flash never starts a session.
      */
-    private Map<String, String> pendingFlash(boolean create) {
+    private @Nullable Map<String, String> pendingFlash(boolean create) {
         HttpSession session = req.getSession(create);
         if (session == null) {
             return null;
@@ -1159,7 +1161,7 @@ public final class WebRequest {
     }
 
     /** A flash value left by the previous request, or null. */
-    public String flashed(String key) {
+    public @Nullable String flashed(String key) {
         Object attribute = req.getAttribute(FLASH_ATTRIBUTE);
         if (attribute instanceof Map<?, ?> flash) {
             Object value = flash.get(key);
@@ -1175,11 +1177,11 @@ public final class WebRequest {
      * the framework would have answered with. Null when the status came from a
      * handler rather than from the router or an {@link HttpException}.
      */
-    public String errorMessage() {
+    public @Nullable String errorMessage() {
         return errorMessage;
     }
 
-    void errorMessage(String errorMessage) {
+    void errorMessage(@Nullable String errorMessage) {
         this.errorMessage = errorMessage;
     }
 

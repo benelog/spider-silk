@@ -13,6 +13,8 @@ import freemarker.template.Template;
 import freemarker.template.TemplateException;
 import freemarker.template.TemplateExceptionHandler;
 
+import org.jspecify.annotations.Nullable;
+
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.TemplateRenderer;
 
@@ -84,7 +86,7 @@ public final class FreeMarkerTemplates implements TemplateRenderer {
     }
 
     @Override
-    public void render(String template, Map<String, Object> model, Writer out) {
+    public void render(String template, Map<String, @Nullable Object> model, Writer out) {
         String name = template + suffix;
         try {
             Template compiled = configuration.getTemplate(name);

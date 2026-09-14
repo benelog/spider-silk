@@ -7,6 +7,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A JSON builder and parser without reflection.
  * Instead of mapping objects automatically, you state in code what goes out.
@@ -160,13 +162,13 @@ public final class Json {
         static final JsonPrimitive TRUE = new JsonPrimitive(true);
         static final JsonPrimitive FALSE = new JsonPrimitive(false);
 
-        private final Object value;   // String | Long | Double | Boolean | null
+        private final @Nullable Object value;   // String | Long | Double | Boolean | null
 
-        JsonPrimitive(Object value) {
+        JsonPrimitive(@Nullable Object value) {
             this.value = value;
         }
 
-        Object value() {
+        @Nullable Object value() {
             return value;
         }
 
@@ -192,7 +194,7 @@ public final class Json {
 
         private final Map<String, JsonValue> members = new LinkedHashMap<>();
 
-        public JsonObject put(String key, String value) {
+        public JsonObject put(String key, @Nullable String value) {
             return put(key, value == null ? JsonPrimitive.NULL : new JsonPrimitive(value));
         }
 
@@ -209,7 +211,7 @@ public final class Json {
             return put(key, value ? JsonPrimitive.TRUE : JsonPrimitive.FALSE);
         }
 
-        public JsonObject put(String key, JsonValue value) {
+        public JsonObject put(String key, @Nullable JsonValue value) {
             members.put(key, value == null ? JsonPrimitive.NULL : value);
             return this;
         }
@@ -293,7 +295,7 @@ public final class Json {
          * Returns null when the key is missing or the value is JSON null, and
          * throws {@link JsonException} when it is present and not an object.
          */
-        public JsonObject optObject(String key) {
+        public @Nullable JsonObject optObject(String key) {
             JsonValue value = members.get(key);
             return (value == null || value.isNull()) ? null : value.asObject();
         }
@@ -302,7 +304,7 @@ public final class Json {
          * Returns null when the key is missing or the value is JSON null, and
          * throws {@link JsonException} when it is present and not an array.
          */
-        public JsonArray optArray(String key) {
+        public @Nullable JsonArray optArray(String key) {
             JsonValue value = members.get(key);
             return (value == null || value.isNull()) ? null : value.asArray();
         }
@@ -335,7 +337,7 @@ public final class Json {
 
         private final List<JsonValue> values = new ArrayList<>();
 
-        public JsonArray add(String value) {
+        public JsonArray add(@Nullable String value) {
             return add(value == null ? JsonPrimitive.NULL : new JsonPrimitive(value));
         }
 
@@ -352,7 +354,7 @@ public final class Json {
             return add(value ? JsonPrimitive.TRUE : JsonPrimitive.FALSE);
         }
 
-        public JsonArray add(JsonValue value) {
+        public JsonArray add(@Nullable JsonValue value) {
             values.add(value == null ? JsonPrimitive.NULL : value);
             return this;
         }

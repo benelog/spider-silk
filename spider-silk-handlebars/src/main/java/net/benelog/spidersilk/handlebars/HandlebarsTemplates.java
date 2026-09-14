@@ -12,6 +12,8 @@ import com.github.jknack.handlebars.Template;
 import com.github.jknack.handlebars.cache.ConcurrentMapTemplateCache;
 import com.github.jknack.handlebars.io.ClassPathTemplateLoader;
 
+import org.jspecify.annotations.Nullable;
+
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.TemplateRenderer;
 
@@ -71,7 +73,7 @@ public final class HandlebarsTemplates implements TemplateRenderer {
     }
 
     @Override
-    public void render(String template, Map<String, Object> model, Writer out) {
+    public void render(String template, Map<String, @Nullable Object> model, Writer out) {
         try {
             Template compiled = handlebars.compile(template + suffix);
             compiled.apply(Context.newContext(model), out);

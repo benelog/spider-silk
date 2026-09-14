@@ -3,6 +3,8 @@ package net.benelog.spidersilk;
 import java.io.Writer;
 import java.util.Map;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Template engine integration point. The default is {@link JteTemplates}, over
  * {@code classpath:/jte}.
@@ -12,5 +14,5 @@ import java.util.Map;
  */
 public interface TemplateRenderer {
 
-    void render(String template, Map<String, Object> model, Writer out);
+    void render(String template, Map<String, @Nullable Object> model, Writer out);
 }

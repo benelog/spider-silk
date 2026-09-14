@@ -18,6 +18,8 @@ import java.util.TreeMap;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.Part;
 
+import org.jspecify.annotations.Nullable;
+
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
 import net.benelog.spidersilk.json.Json;
@@ -69,7 +71,7 @@ public final class TestRequest {
     private final List<Part> parts = new ArrayList<>();
 
     private String body = "";
-    private StubServletRequest.StubSession session;
+    private StubServletRequest.@Nullable StubSession session;
     private boolean secure;
     private String remoteAddress = "127.0.0.1";
 
@@ -343,7 +345,7 @@ public final class TestRequest {
         }
 
         @Override
-        public String getHeader(String headerName) {
+        public @Nullable String getHeader(String headerName) {
             return "Content-Type".equalsIgnoreCase(headerName) ? contentType : null;
         }
 

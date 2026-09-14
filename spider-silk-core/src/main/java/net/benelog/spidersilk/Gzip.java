@@ -10,6 +10,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.zip.GZIPOutputStream;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Compresses the response when the client says it can read it.
  *
@@ -160,7 +162,7 @@ public final class Gzip {
         return isCompressibleType(response.header("Content-Type"));
     }
 
-    private boolean isCompressibleType(String contentType) {
+    private boolean isCompressibleType(@Nullable String contentType) {
         if (contentType == null) {
             return false;
         }

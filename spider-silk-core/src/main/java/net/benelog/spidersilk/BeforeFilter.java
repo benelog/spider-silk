@@ -1,5 +1,7 @@
 package net.benelog.spidersilk;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Runs before routing or a matched route handler, and may answer immediately.
  * Register with {@link App#beforeRequest} for every request in scope, or
@@ -27,5 +29,5 @@ public interface BeforeFilter {
      * @return the response to answer with, or null to continue
      * @throws Exception anything the filter cannot handle, routed to {@link App#exception}
      */
-    WebResponse handle(WebRequest request) throws Exception;
+    @Nullable WebResponse handle(WebRequest request) throws Exception;
 }

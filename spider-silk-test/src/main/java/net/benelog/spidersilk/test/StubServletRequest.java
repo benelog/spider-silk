@@ -20,6 +20,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import jakarta.servlet.AsyncContext;
@@ -38,6 +39,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
 import jakarta.servlet.http.HttpUpgradeHandler;
 import jakarta.servlet.http.Part;
+
+import org.jspecify.annotations.Nullable;
 
 /**
  * The request a {@link TestRequest} hands to {@link net.benelog.spidersilk.WebRequest}.
@@ -71,13 +74,13 @@ final class StubServletRequest implements HttpServletRequest {
     private final byte[] body;
 
     private final Map<String, Object> attributes = new LinkedHashMap<>();
-    private HttpSession session;
+    private @Nullable HttpSession session;
     private boolean secure;
     private String remoteAddress = "127.0.0.1";
 
     /** The one reader or stream the body was handed out through; null until it was. */
-    private BufferedReader reader;
-    private ServletInputStream inputStream;
+    private @Nullable BufferedReader reader;
+    private @Nullable ServletInputStream inputStream;
 
     /** Whether a parameter read has parsed the form body, which leaves none of it to read. */
     private boolean formParsed;
@@ -85,7 +88,7 @@ final class StubServletRequest implements HttpServletRequest {
     StubServletRequest(String method, String path, Map<String, List<String>> headers,
             Map<String, List<String>> queryParams, Map<String, List<String>> formParams,
             List<Cookie> cookies, List<Part> parts, boolean multipart, String body,
-            HttpSession session) {
+            @Nullable HttpSession session) {
         this.method = method;
         this.path = path;
         this.headers = headers;
@@ -138,7 +141,7 @@ final class StubServletRequest implements HttpServletRequest {
     // ---- Headers ----
 
     @Override
-    public String getHeader(String name) {
+    public @Nullable String getHeader(String name) {
         List<String> values = headers.get(name);
         return values == null || values.isEmpty() ? null : values.get(0);
     }
@@ -174,7 +177,7 @@ final class StubServletRequest implements HttpServletRequest {
     }
 
     @Override
-    public String getContentType() {
+    public @Nullable String getContentType() {
         return getHeader("Content-Type");
     }
 
@@ -198,14 +201,14 @@ final class StubServletRequest implements HttpServletRequest {
      * other.
      */
     @Override
-    public String[] getParameterValues(String name) {
+    public String @Nullable [] getParameterValues(String name) {
         List<String> merged = new ArrayList<>(queryParams.getOrDefault(name, List.of()));
         merged.addAll(form().getOrDefault(name, List.of()));
         return merged.isEmpty() ? null : merged.toArray(new String[0]);
     }
 
     @Override
-    public String getParameter(String name) {
+    public @Nullable String getParameter(String name) {
         String[] values = getParameterValues(name);
         return values == null ? null : values[0];
     }
@@ -252,7 +255,7 @@ final class StubServletRequest implements HttpServletRequest {
     }
 
     @Override
-    public String getQueryString() {
+    public @Nullable String getQueryString() {
         return queryParams.isEmpty() ? null : TestRequest.urlEncoded(queryParams);
     }
 
@@ -359,7 +362,7 @@ final class StubServletRequest implements HttpServletRequest {
      * container does; the rest are reached through {@link #getParts()}.
      */
     @Override
-    public Part getPart(String name) throws ServletException {
+    public @Nullable Part getPart(String name) throws ServletException {
         requireMultipart();
         for (Part part : parts) {
             if (part.getName().equals(name)) {
@@ -385,7 +388,7 @@ final class StubServletRequest implements HttpServletRequest {
 
     /** Null rather than an empty array when none were sent, as a container does. */
     @Override
-    public Cookie[] getCookies() {
+    public Cookie @Nullable [] getCookies() {
         return cookies.isEmpty() ? null : cookies.toArray(new Cookie[0]);
     }
 
@@ -396,7 +399,7 @@ final class StubServletRequest implements HttpServletRequest {
      * that ended it reads null afterwards, and asking to create makes a new one.
      */
     @Override
-    public HttpSession getSession(boolean create) {
+    public @Nullable HttpSession getSession(boolean create) {
         if (session instanceof StubSession stub && !stub.valid()) {
             session = null;
         }
@@ -408,13 +411,13 @@ final class StubServletRequest implements HttpServletRequest {
 
     @Override
     public HttpSession getSession() {
-        return getSession(true);
+        return Objects.requireNonNull(getSession(true));
     }
 
     // ---- Attributes ----
 
     @Override
-    public Object getAttribute(String name) {
+    public @Nullable Object getAttribute(String name) {
         return attributes.get(name);
     }
 
@@ -424,7 +427,7 @@ final class StubServletRequest implements HttpServletRequest {
     }
 
     @Override
-    public void setAttribute(String name, Object value) {
+    public void setAttribute(String name, @Nullable Object value) {
         if (value == null) {
             attributes.remove(name);
         } else {
@@ -468,7 +471,7 @@ final class StubServletRequest implements HttpServletRequest {
     public int getServerPort() {
         String host = getHeader("Host");
         int colon = host == null ? -1 : portSeparator(host);
-        if (colon < 0) {
+        if (host == null || colon < 0) {
             return secure ? 443 : 80;
         }
         return Integer.parseInt(host.substring(colon + 1));
@@ -593,17 +596,17 @@ final class StubServletRequest implements HttpServletRequest {
     }
 
     @Override
-    public String getAuthType() {
+    public @Nullable String getAuthType() {
         return null;
     }
 
     @Override
-    public String getRemoteUser() {
+    public @Nullable String getRemoteUser() {
         return null;
     }
 
     @Override
-    public Principal getUserPrincipal() {
+    public @Nullable Principal getUserPrincipal() {
         return null;
     }
 
@@ -628,7 +631,7 @@ final class StubServletRequest implements HttpServletRequest {
     }
 
     @Override
-    public String getRequestedSessionId() {
+    public @Nullable String getRequestedSessionId() {
         return null;
     }
 
@@ -653,7 +656,7 @@ final class StubServletRequest implements HttpServletRequest {
     }
 
     @Override
-    public String getPathTranslated() {
+    public @Nullable String getPathTranslated() {
         return null;
     }
 
@@ -675,7 +678,7 @@ final class StubServletRequest implements HttpServletRequest {
         private boolean valid = true;
 
         @Override
-        public Object getAttribute(String name) {
+        public @Nullable Object getAttribute(String name) {
             requireValid();
             return attributes.get(name);
         }
@@ -687,7 +690,7 @@ final class StubServletRequest implements HttpServletRequest {
         }
 
         @Override
-        public void setAttribute(String name, Object value) {
+        public void setAttribute(String name, @Nullable Object value) {
             requireValid();
             if (value == null) {
                 attributes.remove(name);

@@ -20,6 +20,8 @@ import java.util.Objects;
 
 import jakarta.servlet.http.Cookie;
 
+import org.jspecify.annotations.Nullable;
+
 import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.json.JsonSink;
 import net.benelog.spidersilk.json.JsonStreamWriter;
@@ -108,7 +110,7 @@ public final class WebResponse {
      * {@link Map#copyOf} would refuse. It copies the entries and not the values
      * they point to.
      */
-    public record Template(String name, Map<String, Object> model) implements Body {
+    public record Template(String name, Map<String, @Nullable Object> model) implements Body {
 
         public Template {
             Objects.requireNonNull(name, "name");
@@ -131,12 +133,12 @@ public final class WebResponse {
     private static final Empty EMPTY_BODY = new Empty();
 
     /** Null means "not set", which answers 200 and lets {@link App#error} fill in a status. */
-    private final HttpStatus status;
+    private final @Nullable HttpStatus status;
     private final Headers headers;
     private final List<Cookie> cookies;
     private final Body body;
 
-    private WebResponse(HttpStatus status, Headers headers, List<Cookie> cookies, Body body) {
+    private WebResponse(@Nullable HttpStatus status, Headers headers, List<Cookie> cookies, Body body) {
         this.status = status;
         this.headers = headers;
         this.cookies = cookies;
@@ -268,7 +270,7 @@ public final class WebResponse {
      * engine appends its own, so a switch of engine does not rewrite every
      * handler.
      */
-    public static WebResponse template(String template, Map<String, Object> model) {
+    public static WebResponse template(String template, Map<String, @Nullable Object> model) {
         return of(new Template(Objects.requireNonNull(template, "template"), model))
                 .contentType("text/html; charset=UTF-8");
     }
@@ -460,7 +462,7 @@ public final class WebResponse {
      * case-insensitive in HTTP, so {@code header("content-type")} answers what
      * {@link #contentType(String)} set. Null when nothing set it.
      */
-    public String header(String name) {
+    public @Nullable String header(String name) {
         return headers.get(name);
     }
 
@@ -575,7 +577,7 @@ public final class WebResponse {
      * setting several headers at once can put {@code Vary} among them rather
      * than spend a copy of the response on it.
      */
-    static String varyValue(String existing, String field) {
+    static @Nullable String varyValue(@Nullable String existing, String field) {
         if (existing == null || existing.isBlank()) {
             return field;
         }

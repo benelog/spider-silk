@@ -8,6 +8,8 @@ import java.nio.file.Path;
 
 import jakarta.servlet.http.Part;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * A single file uploaded via multipart.
  *
@@ -19,6 +21,7 @@ public final class UploadedFile {
 
     private final Part part;
 
+    /** Built only for a part {@code WebRequest} checked has a non-empty submitted file name. */
     UploadedFile(Part part) {
         this.part = part;
     }
@@ -27,7 +30,8 @@ public final class UploadedFile {
         return part.getSubmittedFileName();
     }
 
-    public String contentType() {
+    /** The media type the part declared, or null when it declared none. */
+    public @Nullable String contentType() {
         return part.getContentType();
     }
 

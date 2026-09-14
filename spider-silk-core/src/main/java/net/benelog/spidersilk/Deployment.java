@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * What one {@link AppServlet} serves: the routes and the settings of an
  * {@link App}, copied when the servlet is initialized.
@@ -25,10 +27,10 @@ record Deployment(
         Map<Class<? extends Exception>, ExceptionHandler<? extends Exception>> exceptionHandlers,
         Map<HttpStatus, Handler> errorHandlers,
         List<StaticFiles> staticFiles,
-        RequestLogger requestLogger,
-        Cors cors,
-        Gzip gzip,
-        SecurityHeaders securityHeaders) {
+        @Nullable RequestLogger requestLogger,
+        @Nullable Cors cors,
+        @Nullable Gzip gzip,
+        @Nullable SecurityHeaders securityHeaders) {
 
     Deployment {
         requestFilters = List.copyOf(requestFilters);

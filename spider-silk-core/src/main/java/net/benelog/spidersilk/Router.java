@@ -9,6 +9,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The routing table, indexed by method and by the first path segment.
  *
@@ -83,7 +85,7 @@ final class Router {
     }
 
     /** The path arrives already split, because one request asks this more than once. */
-    Match find(String method, String[] segments) {
+    @Nullable Match find(String method, String[] segments) {
         MethodRoutes routes = byMethod.get(method);
         if (routes == null) {
             return null;

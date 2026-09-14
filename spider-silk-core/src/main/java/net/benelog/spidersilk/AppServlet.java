@@ -25,6 +25,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpServletResponseWrapper;
 import jakarta.servlet.http.HttpSession;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The entry point that deploys an {@link App} to a servlet container.
  * Mapped to "/*", it takes care of routing, static files, and exception handling.
@@ -69,6 +71,7 @@ public class AppServlet extends HttpServlet {
      * running when a container gives up waiting and destroys the servlet reads a
      * table rather than null.
      */
+    @SuppressWarnings("NullAway.Init")
     private volatile Deployment deployment;
 
     /** Whether this servlet holds registration on {@link #app} closed. */
@@ -168,7 +171,7 @@ public class AppServlet extends HttpServlet {
 
     /** Reports the finished request, with the response it was finally answered with. */
     private void logRequest(WebRequest request, WebResponse response, int statusCode,
-            long startedAt, Exception failure) {
+            long startedAt, @Nullable Exception failure) {
         if (deployment.requestLogger() == null) {
             return;
         }
@@ -251,7 +254,7 @@ public class AppServlet extends HttpServlet {
     }
 
     /** The first configured root that holds the file answers; null when none does. */
-    private WebResponse staticFile(String path, HttpServletRequest req) throws IOException {
+    private @Nullable WebResponse staticFile(String path, HttpServletRequest req) throws IOException {
         for (StaticFiles files : deployment.staticFiles()) {
             WebResponse file = files.resolve(path, req);
             if (file != null) {
@@ -262,7 +265,7 @@ public class AppServlet extends HttpServlet {
     }
 
     /** A HEAD with no route of its own is answered by the GET route, minus the body. */
-    private Router.Match routeFor(String method, String[] segments) {
+    private Router.@Nullable Match routeFor(String method, String[] segments) {
         Router.Match match = deployment.router().find(method, segments);
         if (match == null && "HEAD".equals(method)) {
             return deployment.router().find("GET", segments);
@@ -324,7 +327,7 @@ public class AppServlet extends HttpServlet {
      * turned the caller away. To reject with the framework's own body, throw an
      * {@link HttpException}.
      */
-    private WebResponse runBefore(List<BeforeEntry> filters, String[] segments,
+    private @Nullable WebResponse runBefore(List<BeforeEntry> filters, String[] segments,
             WebRequest request) throws Exception {
         for (BeforeEntry entry : filters) {
             if (entry.matches(segments)) {
@@ -484,7 +487,7 @@ public class AppServlet extends HttpServlet {
      * supertype's.
      */
     @SuppressWarnings("unchecked")
-    private ExceptionHandler<Exception> exceptionHandlerFor(Exception e) {
+    private @Nullable ExceptionHandler<Exception> exceptionHandlerFor(Exception e) {
         Class<?> bestType = null;
         ExceptionHandler<? extends Exception> best = null;
         for (var entry : deployment.exceptionHandlers().entrySet()) {
@@ -503,12 +506,12 @@ public class AppServlet extends HttpServlet {
     }
 
     /** Records the body the framework would answer with by default, and the status. */
-    private WebResponse fail(WebRequest request, HttpStatus status, String message) {
+    private WebResponse fail(WebRequest request, HttpStatus status, @Nullable String message) {
         request.errorMessage(message);
         return WebResponse.empty(status);
     }
 
-    private WebResponse required(WebResponse response, String what, String method, String path) {
+    private WebResponse required(@Nullable WebResponse response, String what, String method, String path) {
         if (response == null) {
             throw new NullPointerException(
                     "%s returned no response for %s %s".formatted(what, method, path));
@@ -677,7 +680,7 @@ public class AppServlet extends HttpServlet {
     private static final class HeadResponse extends HttpServletResponseWrapper {
 
         private final CountingStream body = new CountingStream();
-        private PrintWriter writer;
+        private @Nullable PrintWriter writer;
 
         HeadResponse(HttpServletResponse res) {
             super(res);

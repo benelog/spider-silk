@@ -138,6 +138,7 @@ Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus
 
 ## Contracts that hold everywhere
 
+- Nullness is in the signatures: every published package is JSpecify `@NullMarked`, so only a `@Nullable` parameter or return takes or answers null (`paramOrNull`, `header`, `cookie`, `sessionAttr`, `optObject`, a `BeforeFilter` result). Everything else is non-null, and a default passed to `param(name, default)` or `optString(key, default)` is never null.
 - Typed extraction fails as a 400, not a null: `pathParamLong`, `paramLong`, `paramEnum`, `bodyJson(reader)`, `file(name)` all answer the request with 400 on bad or missing input, so handlers have no null branches to write.
 - A type with no named form takes a parser: `req.param("since", LocalDate::parse)`, `req.param("page", Integer::parseInt, 1)`, `req.pathParam("deckId", UUID::fromString)`. A parser that throws `IllegalArgumentException` or `DateTimeException` answers 400 naming the parameter. Do not write `Long.parseLong(req.param(...))` by hand: that is a 500 on bad input.
 - One source only, with a parser: `req.queryParam("page", Integer::parseInt, 1)`, `req.formParam("due", LocalDate::parse)`. Same contract as `param(name, parser)`; a value in the other source does not count. The one-argument `queryParam(name)` / `formParam(name)` require a value; `queryParamOrNull(name)` / `formParamOrNull(name)` answer null when absent.

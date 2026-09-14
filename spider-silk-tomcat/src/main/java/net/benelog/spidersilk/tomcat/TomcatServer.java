@@ -26,6 +26,7 @@ import org.apache.catalina.connector.Connector;
 import org.apache.catalina.startup.Tomcat;
 import org.apache.coyote.AbstractProtocol;
 import org.apache.coyote.ProtocolHandler;
+import org.jspecify.annotations.Nullable;
 
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.AppServlet;
@@ -74,19 +75,19 @@ public final class TomcatServer implements WebServer {
     private final List<Consumer<Connector>> connectorCustomizers = new ArrayList<>();
 
     private int port = DEFAULT_PORT;
-    private String host;
+    private @Nullable String host;
     private String contextPath = "/";
-    private Path baseDir;
-    private Executor executor;
-    private MultipartConfigElement multipart = defaultMultipartConfig();
+    private @Nullable Path baseDir;
+    private @Nullable Executor executor;
+    private @Nullable MultipartConfigElement multipart = defaultMultipartConfig();
     private Duration stopTimeout = DEFAULT_STOP_TIMEOUT;
     private boolean shutdownHook = true;
 
-    private Tomcat tomcat;
-    private Connector connector;
-    private Thread awaitThread;
-    private Thread hook;
-    private Path temporaryBaseDir;
+    private @Nullable Tomcat tomcat;
+    private @Nullable Connector connector;
+    private @Nullable Thread awaitThread;
+    private @Nullable Thread hook;
+    private @Nullable Path temporaryBaseDir;
 
     /** A server for the app, on the defaults above until the setters say otherwise. */
     public TomcatServer(App app) {
@@ -100,7 +101,7 @@ public final class TomcatServer implements WebServer {
     }
 
     /** The interface to bind. The default, null, binds all of them. */
-    public TomcatServer host(String host) {
+    public TomcatServer host(@Nullable String host) {
         this.host = host;
         return this;
     }
@@ -118,7 +119,7 @@ public final class TomcatServer implements WebServer {
      * — leave it at the default and nothing lands in the working directory.
      */
     public TomcatServer baseDir(Path baseDir) {
-        this.baseDir = baseDir;
+        this.baseDir = Objects.requireNonNull(baseDir, "baseDir");
         return this;
     }
 
@@ -143,7 +144,7 @@ public final class TomcatServer implements WebServer {
      * becomes a no-op.
      */
     public TomcatServer executor(Executor executor) {
-        this.executor = executor;
+        this.executor = Objects.requireNonNull(executor, "executor");
         return this;
     }
 
@@ -152,7 +153,7 @@ public final class TomcatServer implements WebServer {
      * The default caches to the system temp directory with no size cap and a
      * 1MB in-memory threshold. Pass null to turn multipart handling off.
      */
-    public TomcatServer multipart(MultipartConfigElement multipart) {
+    public TomcatServer multipart(@Nullable MultipartConfigElement multipart) {
         this.multipart = multipart;
         return this;
     }
@@ -206,7 +207,7 @@ public final class TomcatServer implements WebServer {
     }
 
     /** The underlying Tomcat, available once {@link #start()} has run. */
-    public Tomcat tomcat() {
+    public @Nullable Tomcat tomcat() {
         return tomcat;
     }
 
@@ -215,7 +216,7 @@ public final class TomcatServer implements WebServer {
      * test that asserts {@link #stop()} takes it back out again — reading it
      * off the JVM would mean reflecting into {@code java.lang}.
      */
-    Thread shutdownHookThread() {
+    @Nullable Thread shutdownHookThread() {
         return hook;
     }
 
@@ -352,7 +353,7 @@ public final class TomcatServer implements WebServer {
      * the thread is also what {@link #join()} joins.
      */
     private void startAwaitThread() {
-        Tomcat running = tomcat;
+        Tomcat running = Objects.requireNonNull(tomcat);
         Thread thread = new Thread(() -> running.getServer().await(), "spider-silk-tomcat");
         thread.setDaemon(false);
         thread.setContextClassLoader(getClass().getClassLoader());
@@ -367,7 +368,7 @@ public final class TomcatServer implements WebServer {
      * exactly those to finish. Idle keep-alive connections hold no thread, so
      * they do not delay this.
      */
-    private void drain(Connector connector) {
+    private void drain(@Nullable Connector connector) {
         if (connector == null || stopTimeout.isZero() || stopTimeout.isNegative()) {
             return;
         }
@@ -445,7 +446,7 @@ public final class TomcatServer implements WebServer {
         temporaryBaseDir = null;
     }
 
-    private static void joinQuietly(Thread thread) {
+    private static void joinQuietly(@Nullable Thread thread) {
         if (thread == null) {
             return;
         }

@@ -17,6 +17,7 @@ import org.eclipse.jetty.websocket.core.server.WebSocketMappings;
 import org.eclipse.jetty.websocket.server.ServerWebSocketContainer;
 import org.eclipse.jetty.websocket.server.WebSocketCreator;
 import org.eclipse.jetty.websocket.server.WebSocketUpgradeHandler;
+import org.jspecify.annotations.Nullable;
 
 import net.benelog.spidersilk.server.JettyServer;
 
@@ -62,9 +63,9 @@ public final class WebSockets implements Consumer<Server> {
     private final Map<String, Mapping> mappings = new LinkedHashMap<>();
     private final List<Consumer<ServerWebSocketContainer>> containerCustomizers = new ArrayList<>();
 
-    private Duration idleTimeout;
-    private Long maxTextMessageSize;
-    private Long maxBinaryMessageSize;
+    private @Nullable Duration idleTimeout;
+    private @Nullable Long maxTextMessageSize;
+    private @Nullable Long maxBinaryMessageSize;
 
     /** An empty set of mappings, which {@link #at} fills in. */
     public WebSockets() {

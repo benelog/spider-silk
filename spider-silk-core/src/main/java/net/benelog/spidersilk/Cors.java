@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * Which other origins may call this application, and what they may send.
  *
@@ -44,10 +46,10 @@ public final class Cors {
 
     private PathPattern pattern = new PathPattern("/*");
     private List<String> methods = List.of();
-    private List<String> headers;
+    private @Nullable List<String> headers;
     private List<String> exposed = List.of();
     private boolean credentials;
-    private Duration maxAge;
+    private @Nullable Duration maxAge;
 
     private Cors(Set<String> origins) {
         this.origins = origins;
@@ -240,7 +242,7 @@ public final class Cors {
     }
 
     /** What to echo back, or null when this origin is not one of ours. */
-    private String allowedOrigin(String origin) {
+    private @Nullable String allowedOrigin(String origin) {
         if (origins.isEmpty()) {
             return "*";
         }

@@ -9,6 +9,8 @@ import java.util.regex.Pattern;
 
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * An open Server-Sent Events stream, handed to the lambda of
  * {@link WebResponse#sse(SseWriter)}.
@@ -48,7 +50,7 @@ public final class SseStream {
     private final OutputStream out;
 
     private boolean open = true;
-    private String nextId;
+    private @Nullable String nextId;
 
     SseStream(HttpServletResponse res) throws IOException {
         this.out = res.getOutputStream();
@@ -60,7 +62,7 @@ public final class SseStream {
      * only, the way the protocol defines it.
      */
     public synchronized SseStream id(String id) {
-        this.nextId = id;
+        this.nextId = Objects.requireNonNull(id, "id");
         return this;
     }
 
@@ -101,7 +103,7 @@ public final class SseStream {
      * name. Data spanning several lines is sent as one {@code data:} line each,
      * which the client joins back together with newlines.
      */
-    public synchronized SseStream send(String event, String data) {
+    public synchronized SseStream send(@Nullable String event, String data) {
         StringBuilder frame = new StringBuilder();
         if (nextId != null) {
             frame.append("id: ").append(nextId).append('\n');

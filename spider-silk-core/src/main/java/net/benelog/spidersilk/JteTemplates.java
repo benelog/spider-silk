@@ -13,6 +13,8 @@ import gg.jte.TemplateEngine;
 import gg.jte.output.WriterOutput;
 import gg.jte.resolve.ResourceCodeResolver;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * jte (https://jte.gg) integration.
  * With ContentType.Html, ${} output is HTML-escaped automatically.
@@ -71,7 +73,7 @@ public final class JteTemplates implements TemplateRenderer {
     }
 
     @Override
-    public void render(String template, Map<String, Object> model, Writer out) {
+    public void render(String template, Map<String, @Nullable Object> model, Writer out) {
         engine.render(template + suffix, model, new WriterOutput(out));
     }
 }

@@ -15,6 +15,7 @@ import org.eclipse.jetty.server.HttpConnectionFactory;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.util.thread.ThreadPool;
+import org.jspecify.annotations.Nullable;
 
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.AppServlet;
@@ -64,16 +65,16 @@ public final class JettyServer implements WebServer {
     private static final Duration SHUTDOWN_IDLE_TIMEOUT = Duration.ofMillis(100);
 
     private int port = DEFAULT_PORT;
-    private String host;
+    private @Nullable String host;
     private String contextPath = "/";
     private boolean sessions = true;
-    private ThreadPool threadPool;
-    private MultipartConfigElement multipart = defaultMultipartConfig();
+    private @Nullable ThreadPool threadPool;
+    private @Nullable MultipartConfigElement multipart = defaultMultipartConfig();
     private Duration stopTimeout = DEFAULT_STOP_TIMEOUT;
     private boolean shutdownHook = true;
 
-    private Server server;
-    private ServerConnector connector;
+    private @Nullable Server server;
+    private @Nullable ServerConnector connector;
 
     /** A server for the app, on the defaults above until the setters say otherwise. */
     public JettyServer(App app) {
@@ -89,7 +90,7 @@ public final class JettyServer implements WebServer {
     }
 
     /** The interface to bind. The default, null, binds all of them. */
-    public JettyServer host(String host) {
+    public JettyServer host(@Nullable String host) {
         this.host = host;
         return this;
     }
@@ -128,7 +129,7 @@ public final class JettyServer implements WebServer {
      * call pins the carrier thread and undoes the benefit.
      */
     public JettyServer threadPool(ThreadPool threadPool) {
-        this.threadPool = threadPool;
+        this.threadPool = Objects.requireNonNull(threadPool, "threadPool");
         return this;
     }
 
@@ -137,7 +138,7 @@ public final class JettyServer implements WebServer {
      * The default caches to the system temp directory with no size cap and a
      * 1MB in-memory threshold. Pass null to turn multipart handling off.
      */
-    public JettyServer multipart(MultipartConfigElement multipart) {
+    public JettyServer multipart(@Nullable MultipartConfigElement multipart) {
         this.multipart = multipart;
         return this;
     }
@@ -186,7 +187,7 @@ public final class JettyServer implements WebServer {
     }
 
     /** The underlying Jetty server, available once {@link #start()} has run. */
-    public Server jetty() {
+    public @Nullable Server jetty() {
         return server;
     }
 

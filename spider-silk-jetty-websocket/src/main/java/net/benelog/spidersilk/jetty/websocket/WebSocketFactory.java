@@ -2,6 +2,7 @@ package net.benelog.spidersilk.jetty.websocket;
 
 import org.eclipse.jetty.websocket.server.ServerUpgradeRequest;
 import org.eclipse.jetty.websocket.server.ServerUpgradeResponse;
+import org.jspecify.annotations.Nullable;
 
 /**
  * Builds the {@link WebSocketHandler} for one upgrade request.
@@ -35,5 +36,5 @@ public interface WebSocketFactory {
      * @param response the handshake response, where a sub-protocol is accepted
      * @return the handler that takes the connection, or null to refuse it
      */
-    WebSocketHandler create(ServerUpgradeRequest request, ServerUpgradeResponse response);
+    @Nullable WebSocketHandler create(ServerUpgradeRequest request, ServerUpgradeResponse response);
 }

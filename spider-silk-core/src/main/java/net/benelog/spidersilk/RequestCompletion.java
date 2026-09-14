@@ -3,6 +3,8 @@ package net.benelog.spidersilk;
 import java.time.Duration;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The outcome reported after the framework finishes writing a response.
  *
@@ -18,7 +20,7 @@ import java.util.Objects;
  *                an application exception handled during dispatch is represented
  *                by its response, not by a transmission failure
  */
-public record RequestCompletion(WebResponse response, int statusCode, Duration took, Exception failure) {
+public record RequestCompletion(WebResponse response, int statusCode, Duration took, @Nullable Exception failure) {
 
     public RequestCompletion {
         Objects.requireNonNull(response, "response");

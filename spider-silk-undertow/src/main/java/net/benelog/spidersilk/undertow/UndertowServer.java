@@ -24,6 +24,8 @@ import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.util.ImmediateInstanceFactory;
 
+import org.jspecify.annotations.Nullable;
+
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.AppServlet;
 import net.benelog.spidersilk.server.WebServer;
@@ -65,19 +67,19 @@ public final class UndertowServer implements WebServer {
     private final List<Consumer<Undertow.Builder>> builderCustomizers = new ArrayList<>();
 
     private int port = DEFAULT_PORT;
-    private String host;
+    private @Nullable String host;
     private String contextPath = "/";
-    private Executor executor;
-    private MultipartConfigElement multipart = defaultMultipartConfig();
+    private @Nullable Executor executor;
+    private @Nullable MultipartConfigElement multipart = defaultMultipartConfig();
     private Duration stopTimeout = DEFAULT_STOP_TIMEOUT;
     private boolean shutdownHook = true;
 
-    private Undertow server;
-    private DeploymentManager deployment;
-    private GracefulShutdownHandler graceful;
-    private CountDownLatch stopped;
-    private Thread awaitThread;
-    private Thread hook;
+    private @Nullable Undertow server;
+    private @Nullable DeploymentManager deployment;
+    private @Nullable GracefulShutdownHandler graceful;
+    private @Nullable CountDownLatch stopped;
+    private @Nullable Thread awaitThread;
+    private @Nullable Thread hook;
 
     /** A server for the app, on the defaults above until the setters say otherwise. */
     public UndertowServer(App app) {
@@ -91,7 +93,7 @@ public final class UndertowServer implements WebServer {
     }
 
     /** The interface to bind. The default, null, binds all of them. */
-    public UndertowServer host(String host) {
+    public UndertowServer host(@Nullable String host) {
         this.host = host;
         return this;
     }
@@ -119,7 +121,7 @@ public final class UndertowServer implements WebServer {
      * thread pool being shut down, so it still works whatever runs the handlers.
      */
     public UndertowServer executor(Executor executor) {
-        this.executor = executor;
+        this.executor = Objects.requireNonNull(executor, "executor");
         return this;
     }
 
@@ -128,7 +130,7 @@ public final class UndertowServer implements WebServer {
      * The default caches to the system temp directory with no size cap and a
      * 1MB in-memory threshold. Pass null to turn multipart handling off.
      */
-    public UndertowServer multipart(MultipartConfigElement multipart) {
+    public UndertowServer multipart(@Nullable MultipartConfigElement multipart) {
         this.multipart = multipart;
         return this;
     }
@@ -167,7 +169,7 @@ public final class UndertowServer implements WebServer {
     }
 
     /** The underlying Undertow, available once {@link #start()} has run. */
-    public Undertow undertow() {
+    public @Nullable Undertow undertow() {
         return server;
     }
 
@@ -176,7 +178,7 @@ public final class UndertowServer implements WebServer {
      * test that asserts {@link #stop()} takes it back out again — reading it
      * off the JVM would mean reflecting into {@code java.lang}.
      */
-    Thread shutdownHookThread() {
+    @Nullable Thread shutdownHookThread() {
         return hook;
     }
 
@@ -309,7 +311,7 @@ public final class UndertowServer implements WebServer {
      * No thread pool is involved, which is why {@link #executor(Executor)} does
      * not affect it.
      */
-    private void drain(GracefulShutdownHandler graceful) {
+    private void drain(@Nullable GracefulShutdownHandler graceful) {
         if (graceful == null || stopTimeout.isZero() || stopTimeout.isNegative()) {
             return;
         }
@@ -374,7 +376,7 @@ public final class UndertowServer implements WebServer {
         }
     }
 
-    private static void undeployQuietly(DeploymentManager manager) {
+    private static void undeployQuietly(@Nullable DeploymentManager manager) {
         if (manager == null) {
             return;
         }
@@ -386,7 +388,7 @@ public final class UndertowServer implements WebServer {
         manager.undeploy();
     }
 
-    private static void joinQuietly(Thread thread) {
+    private static void joinQuietly(@Nullable Thread thread) {
         if (thread == null) {
             return;
         }

@@ -3,6 +3,9 @@
 
 This chapter lists the whole API surface, each entry pointing at the chapter that describes it.
 
+Every published package is `@NullMarked` with https://jspecify.dev[JSpecify], so a parameter or return value excludes null unless its signature says `@Nullable`.
+Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that reaches a non-null parameter.
+
 == What `App` provides
 
 * Routes: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, each also as `(path, description, handler)`, and `path(prefix, group -> ...)`; patterns and matching order in xref:routing.adoc[Routing]

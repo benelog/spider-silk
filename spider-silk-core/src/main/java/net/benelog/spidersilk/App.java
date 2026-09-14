@@ -10,6 +10,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
+import org.jspecify.annotations.Nullable;
+
 import net.benelog.spidersilk.server.JettyServer;
 import net.benelog.spidersilk.server.WebServer;
 import net.benelog.spidersilk.server.WebServerFactory;
@@ -55,12 +57,12 @@ public final class App {
     final Map<HttpStatus, Handler> errorHandlers = new LinkedHashMap<>();
     final Set<SseStream> openStreams = ConcurrentHashMap.newKeySet();
 
-    volatile TemplateRenderer templates;
+    volatile @Nullable TemplateRenderer templates;
     List<StaticFiles> staticFiles = List.of(new StaticFiles(StaticFiles.DEFAULT_ROOT));
-    RequestLogger requestLogger;
-    Cors cors;
-    Gzip gzip;
-    SecurityHeaders securityHeaders;
+    @Nullable RequestLogger requestLogger;
+    @Nullable Cors cors;
+    @Nullable Gzip gzip;
+    @Nullable SecurityHeaders securityHeaders;
 
     /** Guards the one lazy assignment in {@link #templateRenderer()}. */
     private final Object templatesLock = new Object();
@@ -78,7 +80,7 @@ public final class App {
     private int deployments;
 
     private WebServerFactory serverFactory = (app, port) -> new JettyServer(app).port(port);
-    private WebServer server;
+    private @Nullable WebServer server;
 
     public App get(String path, Handler handler) {
         register(() -> router.add("GET", path, handler));

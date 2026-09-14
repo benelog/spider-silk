@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The response headers a browser reads as instructions about how careful to be.
  *
@@ -54,7 +56,7 @@ public final class SecurityHeaders {
     /** In the order they go out, which is the order they were configured in. */
     private final Map<String, String> headers = new LinkedHashMap<>();
 
-    private String hsts;
+    private @Nullable String hsts;
 
     private SecurityHeaders() {
         headers.put(CONTENT_TYPE_OPTIONS, "nosniff");
