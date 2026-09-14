@@ -93,6 +93,19 @@ String name = req.formParam("name");      // form body only
 List<String> tags = req.formParams("tag");
 ----
 
+A parser reads a named source into a type, with the contract `param(name, parser)` has:
+
+[source,java]
+----
+LocalDate due = req.formParam("due", LocalDate::parse);       // 400 when the form carries none
+int page = req.queryParam("page", Integer::parseInt, 1);      // default covers absence only
+----
+
+The one-argument forms answer null for an absent value, and the parser forms answer 400 for one.
+A default makes the parser form optional, and a value the parser rejects is a 400 either way.
+A name the other source carries does not count, so `formParam("page", parser)` answers 400 on a request whose only `page` is in the URL.
+There is no `(name, defaultString)` form, since `queryParam(name)` already covers the optional string.
+
 A query string that will not decode, such as `?q=%zz`, answers 400 through `param`, `queryParam`, and `formParam` in every form, whichever name is read.
 
 == Content negotiation

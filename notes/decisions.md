@@ -63,8 +63,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 45 | `SseStream.retry(Duration)`, written where it is called | ✅ shipped |
 | 46 | Response header names compare case-insensitively, and stay single-valued | ✅ shipped |
 | 47 | `setSessionAttr` for the write, and `paramOrNull` for the optional string | ✅ shipped |
+| 48 | `queryParam(name, parser)` and `formParam(name, parser)`: a parser on a named source | ✅ shipped |
 
-Forty-nine of the fifty shipped.
+Fifty of the fifty-one shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -1067,6 +1068,28 @@ That ambiguity is a compile error rather than a wrong answer, so both overloads 
 
 Rejected on the way: removing `param(name, defaultValue)` so that `null` resolves to the parser form.
 That turns a compile error into a `NullPointerException` at runtime, which is the trade this decision exists to undo.
+
+## 48 · A parser on a named source
+
+### 48. `queryParam(name, parser)` and `formParam(name, parser)`, with the contract `param(name, parser)` has
+
+`queryParam(name, parser)`, `formParam(name, parser)`, and their `(name, parser, default)` forms read one source into a type.
+Decision 10b gave a handler the choice of source, and decision 38 gave it a parser, but no method offered both.
+A handler that needed a date from the form body specifically wrote the null check, the 400, and the `DateTimeException` catch that decision 38 exists to spare it.
+
+The contract is decision 38's, restated per source.
+An absent value answers 400 naming the source, a value the parser rejects answers 400 naming the parameter, and anything else the parser throws stays a 500.
+A value the other source carries under the same name is absent for this purpose, which is the whole point of naming the source.
+
+**The one-argument forms stay optional, and the parser forms are required.**
+That reads as an asymmetry beside `queryParam(name)` answering null.
+The one-argument forms were settled by decision 10b as the null-answering lookups, and changing them now would break every caller that checks for null.
+The parser forms follow `param(name, parser)` because they are that method with a source added, and a reader who knows one knows the other.
+The optional typed read takes a default, as `param(name, parser, default)` does.
+
+Rejected on the way: `queryParam(name, defaultString)` and `formParam(name, defaultString)`.
+Each would sit beside a `(name, Function)` overload, and a literal `null` would match both, which is the ambiguity decision 47 names.
+`queryParam(name)` and `formParam(name)` already answer null, so the string default would add a spelling and no capability.
 
 ## Rejected — decisions, with the reason
 

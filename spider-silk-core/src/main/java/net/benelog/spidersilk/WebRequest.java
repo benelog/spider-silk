@@ -520,6 +520,42 @@ public final class WebRequest {
     }
 
     /**
+     * A required query-string parameter read through a parser of your own —
+     * {@link #param(String, Function)}, with the source named.
+     *
+     * <pre>{@code
+     * LocalDate since = req.queryParam("since", LocalDate::parse);
+     * }</pre>
+     *
+     * <p>The contract is the one {@code param(name, parser)} has. A parameter the
+     * query string does not carry answers 400, even when the form body carries
+     * one of that name, and so does a parser that throws
+     * {@link IllegalArgumentException} or {@link DateTimeException}. Anything
+     * else the parser throws stays a 500.
+     *
+     * <p>{@link #queryParam(String)} is the optional string, and answers null.
+     * The optional typed form takes a default:
+     * {@link #queryParam(String, Function, Object)}.
+     */
+    public <T> T queryParam(String name, Function<String, T> parser) {
+        return parse(name, required(name, queryParam(name), "query parameter"), parser);
+    }
+
+    /**
+     * An optional query-string parameter read through a parser: the default when
+     * the query string does not carry it, still a 400 when the parser rejects
+     * what it does carry.
+     *
+     * <pre>{@code
+     * int page = req.queryParam("page", Integer::parseInt, 1);
+     * }</pre>
+     */
+    public <T> T queryParam(String name, Function<String, T> parser, T defaultValue) {
+        String value = queryParam(name);
+        return value == null ? defaultValue : parse(name, value, parser);
+    }
+
+    /**
      * A parameter from the form body only, or null — the counterpart to
      * {@link #queryParam(String)}. Only present for a form-encoded body the
      * container parsed; a JSON body is read with {@link #body()}.
@@ -543,6 +579,41 @@ public final class WebRequest {
             remaining.remove(value);
         }
         return List.copyOf(remaining);
+    }
+
+    /**
+     * A required form field read through a parser of your own — the counterpart
+     * to {@link #queryParam(String, Function)}.
+     *
+     * <pre>{@code
+     * LocalDate due = req.formParam("due", LocalDate::parse);
+     * }</pre>
+     *
+     * <p>A field the form body does not carry answers 400, even when the query
+     * string carries a parameter of that name, and so does a parser that rejects
+     * the text. {@link #formParam(String)} is the optional string, and answers
+     * null.
+     */
+    public <T> T formParam(String name, Function<String, T> parser) {
+        return parse(name, required(name, formParam(name), "form field"), parser);
+    }
+
+    /**
+     * An optional form field read through a parser: the default when the form
+     * body does not carry it, still a 400 when the parser rejects what it does
+     * carry.
+     */
+    public <T> T formParam(String name, Function<String, T> parser, T defaultValue) {
+        String value = formParam(name);
+        return value == null ? defaultValue : parse(name, value, parser);
+    }
+
+    /** The value a source-specific required read found, or the 400 that names the source. */
+    private static String required(String name, String value, String source) {
+        if (value == null) {
+            throw new HttpException(HttpStatus.BAD_REQUEST, "Missing required " + source + ": " + name);
+        }
+        return value;
     }
 
     private Map<String, List<String>> parsedQuery() {

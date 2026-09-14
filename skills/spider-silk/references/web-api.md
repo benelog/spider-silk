@@ -88,6 +88,8 @@ List<String> tags = req.params("tag");                      // repeated values; 
 String p = req.queryParam("page");                          // query string only, null when absent
 String n = req.formParam("name");                           // form body only
 List<String> t = req.formParams("tag");
+LocalDate due = req.formParam("due", LocalDate::parse);     // one source, a parser: absent -> 400
+int pg = req.queryParam("page", Integer::parseInt, 1);      // ...or the default; the other source never counts
 
 String theme = req.cookie("theme");                         // null when absent
 Map<String, String> all = req.cookies();
