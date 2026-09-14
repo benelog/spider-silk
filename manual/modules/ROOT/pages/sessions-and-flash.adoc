@@ -29,6 +29,10 @@ Neither is reflection in the sense this framework avoids, since the type is writ
 `sessionAttr(key, User.class)` reads, which is the one place the two-argument forms overlap.
 Storing a `Class` as a session value therefore says `sessionAttr(key, (Object) User.class)`.
 
+Writing a null value removes the attribute, which is the container's rule for `HttpSession.setAttribute`.
+The value has to arrive typed, as a variable that holds null.
+A literal `null` in that position resolves to the `Class` overload and reads, so removing by name says `removeSessionAttr(key)`.
+
 == Ending a session
 
 `invalidateSession()` ends the session, which is what logging out is:
@@ -71,3 +75,18 @@ Before the next request is dispatched, everything flashed moves out of the sessi
 Any request after that finds nothing.
 `flashed` answers null for a key nobody flashed, so a template can render the message conditionally.
 Flash rides on the session, so it needs sessions on, which they are by default.
+
+`flash(key, null)` removes the key, the same rule a null session attribute follows.
+A handler withdraws a flash it set earlier in the same request this way:
+
+[source,java]
+----
+req.flash("message", "Imported " + imported + " cards.");
+if (imported == 0) {
+    req.flash("message", null);   // the next request reads null
+}
+----
+
+The removal applies only to what waits for the next request.
+A value this request received stays readable through `flashed(key)`.
+Withdrawing a flash with no session in place does not start one.

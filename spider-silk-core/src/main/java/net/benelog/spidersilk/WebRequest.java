@@ -861,6 +861,15 @@ public final class WebRequest {
         return type.cast(value);
     }
 
+    /**
+     * Stores a session attribute, creating the session if there is none yet.
+     *
+     * <p>A null value removes the attribute, which is what
+     * {@link HttpSession#setAttribute} does with one; {@link #flash(String, String)}
+     * follows the same rule. A literal {@code null} in this position resolves to
+     * {@link #sessionAttr(String, Class)} and reads instead, so removing by name
+     * says {@link #removeSessionAttr(String)}.
+     */
     public void sessionAttr(String key, Object value) {
         req.getSession(true).setAttribute(key, value);
     }
@@ -894,6 +903,13 @@ public final class WebRequest {
      * Leaves a message for the request after the redirect, which reads it with
      * {@link #flashed(String)} and is the only request that can.
      *
+     * <p>A null value removes the key, as it does for
+     * {@link #sessionAttr(String, Object)}: a handler withdraws a flash it set
+     * earlier in the same request by flashing null under that key. It withdraws
+     * only what waits for the next request; a value this request received is
+     * still what {@link #flashed(String)} answers. Withdrawing never creates a
+     * session.
+     *
      * <p>Two requests in one session can be on two container threads at once —
      * a form posted in one tab while another is still loading. Finding the map
      * and creating it are therefore done under the session's own monitor, which
@@ -901,20 +917,37 @@ public final class WebRequest {
      * concurrent so that two writers do not corrupt it once they both hold it.
      */
     public void flash(String key, String value) {
-        HttpSession session = req.getSession(true);
-        Map<String, String> flash;
+        if (value == null) {
+            Map<String, String> pending = pendingFlash(false);
+            if (pending != null) {
+                pending.remove(key);
+            }
+            return;
+        }
+        pendingFlash(true).put(key, value);
+    }
+
+    /**
+     * The map of flash waiting in the session for the next request. With
+     * {@code create} false, null when there is no session or nothing waiting,
+     * so that withdrawing a flash never starts a session.
+     */
+    private Map<String, String> pendingFlash(boolean create) {
+        HttpSession session = req.getSession(create);
+        if (session == null) {
+            return null;
+        }
         // The container answers one HttpSession object per session id, so this
         // is the lock the promoting side takes too.
         synchronized (session) {
             @SuppressWarnings("unchecked")
             Map<String, String> existing = (Map<String, String>) session.getAttribute(FLASH_ATTRIBUTE);
-            if (existing == null) {
+            if (existing == null && create) {
                 existing = new ConcurrentHashMap<>();
                 session.setAttribute(FLASH_ATTRIBUTE, existing);
             }
-            flash = existing;
+            return existing;
         }
-        flash.put(key, value);
     }
 
     /** A flash value left by the previous request, or null. */

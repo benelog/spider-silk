@@ -113,6 +113,84 @@ class SessionAttributesTest {
     }
 
     /**
+     * A null value removes the attribute, which is the container's rule for
+     * setAttribute. The value is a typed variable, because a literal null in
+     * that position resolves to the {@code Class} overload, which reads.
+     */
+    @Test
+    void writingNullRemovesASessionAttribute() {
+        App app = new App()
+                .post("/login", req -> {
+                    req.sessionAttr("user", new User("Ada"));
+                    return WebResponse.noContent();
+                })
+                .post("/forget", req -> {
+                    User nobody = null;
+                    req.sessionAttr("user", nobody);
+                    return WebResponse.noContent();
+                })
+                .get("/me", req -> WebResponse.text(String.valueOf(req.sessionAttr("user", User.class))));
+
+        WebTest.test(app, client -> {
+            client.post("/login");
+            client.post("/forget");
+
+            assertThat(client.get("/me").body()).isEqualTo("null");
+        });
+    }
+
+    /** Flashing null follows sessionAttr: it withdraws a flash set earlier in the same request. */
+    @Test
+    void flashingNullWithdrawsAFlashSetEarlier() {
+        App app = new App()
+                .post("/save", req -> {
+                    req.flash("message", "saved");
+                    req.flash("other", "kept");
+                    req.flash("message", null);
+                    return WebResponse.noContent();
+                })
+                .get("/home", req -> WebResponse.text(req.flashed("message") + " " + req.flashed("other")));
+
+        WebTest.test(app, client -> {
+            client.post("/save");
+
+            assertThat(client.get("/home").body()).isEqualTo("null kept");
+        });
+    }
+
+    /** Withdrawing touches only what waits for the next request, not what this one received. */
+    @Test
+    void flashingNullLeavesWhatThisRequestReceived() {
+        App app = new App()
+                .post("/save", req -> {
+                    req.flash("message", "saved");
+                    return WebResponse.noContent();
+                })
+                .get("/home", req -> {
+                    req.flash("message", null);
+                    return WebResponse.text(String.valueOf(req.flashed("message")));
+                });
+
+        WebTest.test(app, client -> {
+            client.post("/save");
+
+            assertThat(client.get("/home").body()).isEqualTo("saved");
+            assertThat(client.get("/home").body()).isEqualTo("null");
+        });
+    }
+
+    /** There is nothing to withdraw without a session, so flashing null does not start one. */
+    @Test
+    void flashingNullWithoutASessionStartsNone() {
+        App app = new App().post("/clear", req -> {
+            req.flash("message", null);
+            return WebResponse.noContent();
+        });
+
+        WebTest.test(app, client -> assertThat(client.post("/clear").headers().firstValue("Set-Cookie")).isEmpty());
+    }
+
+    /**
      * Flash is delivered exactly once, and a session read by two requests at the
      * same time is where "once" is hard to keep. A browser makes that case by
      * prefetching the redirect target, or by having a second tab open on the
