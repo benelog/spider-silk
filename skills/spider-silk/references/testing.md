@@ -3,7 +3,7 @@
 Both live in `spider-silk-test` (`net.benelog.spidersilk.test`), a module of its own so the production jar carries no test code:
 
 ```groovy
-testImplementation 'net.benelog.spidersilk:spider-silk-test:0.1.0-SNAPSHOT'
+testImplementation 'net.benelog.spidersilk:spider-silk-test:1.0.0'
 ```
 
 ## End to end: WebTest

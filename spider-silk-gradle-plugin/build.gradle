@@ -1,11 +1,17 @@
 plugins {
     id 'java-gradle-plugin'
     id 'maven-publish'
+    id 'signing'
     id 'net.ltgt.errorprone' version '5.1.1'
 }
 
 group = 'net.benelog.spidersilk'
-version = '0.1.0-SNAPSHOT'
+// An included build reads no gradle.properties but its own, so the release
+// version is taken from the root's, the one place it is written.
+version = new Properties().with { props ->
+    file('../gradle.properties').withInputStream { props.load(it) }
+    props.getProperty('version')
+}
 
 repositories {
     mavenCentral()
@@ -41,6 +47,11 @@ tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }
 
+java {
+    withSourcesJar()
+    withJavadocJar()
+}
+
 gradlePlugin {
     plugins {
         spiderSilk {
@@ -51,8 +62,8 @@ gradlePlugin {
 }
 
 // java-gradle-plugin generates the publications (the jar and the plugin
-// marker); what is added here is the POM detail and the same GitHub Packages
-// repository the framework jars publish to.
+// marker); what is added here is the POM detail Central requires, the same
+// staging directory the framework jars publish to, and the signature.
 publishing {
     publications.withType(MavenPublication).configureEach {
         pom {
@@ -81,12 +92,17 @@ publishing {
     }
     repositories {
         maven {
-            name = 'GitHubPackages'
-            url = uri('https://maven.pkg.github.com/benelog/spider-silk')
-            credentials {
-                username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
-                password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
-            }
+            name = 'Staging'
+            url = layout.projectDirectory.dir('../build/staging-deploy')
         }
     }
+}
+
+signing {
+    def signingKey = System.getenv('SIGNING_KEY')
+    required = { signingKey != null }
+    if (signingKey != null) {
+        useInMemoryPgpKeys(signingKey, System.getenv('SIGNING_PASSWORD'))
+    }
+    sign publishing.publications
 }

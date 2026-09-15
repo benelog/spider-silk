@@ -1,7 +1,7 @@
 // spider-silk-gradle-plugin is an included build (see settings.gradle), not a
 // subproject, so the root's lifecycle tasks would pass it by; these delegates
-// keep `gradlew build`, `publishToMavenLocal`, and the publish the workflow
-// runs covering it too.
+// keep `gradlew build`, `publishToMavenLocal`, and the staging publish the
+// release workflow runs covering it too.
 import net.ltgt.gradle.errorprone.CheckSeverity
 
 plugins {
@@ -14,13 +14,81 @@ tasks.named('build') {
 tasks.register('publishToMavenLocal') {
     dependsOn gradle.includedBuild('spider-silk-gradle-plugin').task(':publishToMavenLocal')
 }
-tasks.register('publishAllPublicationsToGitHubPackagesRepository') {
-    dependsOn gradle.includedBuild('spider-silk-gradle-plugin').task(':publishAllPublicationsToGitHubPackagesRepository')
+tasks.register('publishAllPublicationsToStagingRepository') {
+    dependsOn gradle.includedBuild('spider-silk-gradle-plugin').task(':publishAllPublicationsToStagingRepository')
+}
+
+// A release reaches Maven Central as one bundle: every module, the plugin, and
+// the parent publish signed into this directory, and the zip of it is uploaded
+// to the Central Portal as a single deployment (see RELEASING.md).
+def stagingRepository = layout.buildDirectory.dir('staging-deploy')
+
+// Run on its own, before centralBundle: nothing orders a task in this build
+// against the included plugin build's publish, so one invocation could delete
+// what the other has just written.
+tasks.register('cleanStagingRepository', Delete) {
+    delete stagingRepository
+}
+
+tasks.register('centralBundle', Zip) {
+    // Resolved when the task graph is built, after the subprojects have applied maven-publish.
+    dependsOn { subprojects.collectMany { it.tasks.matching { t -> t.name == 'publishAllPublicationsToStagingRepository' } } }
+    dependsOn tasks.named('publishAllPublicationsToStagingRepository')
+    from stagingRepository
+    // Gradle writes maven-metadata.xml into a file repository, and Central
+    // builds its own. A signature needs no checksums of its own either.
+    exclude '**/maven-metadata.xml*', '**/*.asc.md5', '**/*.asc.sha*'
+    archiveFileName = "central-bundle-${version}.zip"
+    destinationDirectory = layout.buildDirectory
+}
+
+// The version is written in gradle.properties alone. The files below repeat it
+// where a reader copies it from, so the build checks that each one agrees.
+tasks.register('verifyVersionReferences') {
+    def expected = version.toString()
+    def checked = [
+            'README.md',
+            'manual/antora.yml',
+            'spider-silk-maven-parent/pom.xml',
+            'skills/spider-silk/SKILL.md',
+            'skills/spider-silk/references/setup.md',
+            'skills/spider-silk/references/testing.md',
+            '.claude-plugin/plugin.json',
+            '.claude-plugin/marketplace.json',
+    ].collectEntries { [(it): file(it)] }
+    def patterns = [
+            ~/net\.benelog\.spidersilk:spider-silk-[a-z-]+:([^'"\s]+)['"]/,
+            ~/id 'net\.benelog\.spidersilk' version '([^']+)'/,
+            ~/<artifactId>spider-silk-[a-z-]+<\/artifactId>\s*<version>([^<]+)<\/version>/,
+            ~/project-version: (\S+)/,
+            ~/"version": "([^"]+)"/,
+            ~/(?m)^  version: "([^"]+)"/,
+            ~/The current version is `([^`]+)`/,
+    ]
+    inputs.files(checked.values())
+    inputs.property('version', expected)
+    doLast {
+        def problems = []
+        checked.each { name, f ->
+            def found = patterns.collectMany { p -> (f.text =~ p).collect { it[1] } }
+            if (found.isEmpty()) {
+                problems << "${name}: no version reference found"
+            }
+            found.findAll { it != expected }.unique().each {
+                problems << "${name}: ${it}"
+            }
+        }
+        if (problems) {
+            throw new GradleException("Version references disagree with gradle.properties (${expected}):\n  " + problems.join('\n  '))
+        }
+    }
+}
+tasks.named('check') {
+    dependsOn tasks.named('verifyVersionReferences')
 }
 
 subprojects {
     group = 'net.benelog.spidersilk'
-    version = '0.1.0-SNAPSHOT'
 
     repositories {
         mavenCentral()
@@ -51,7 +119,7 @@ configure(subprojects.findAll { it.name != 'spider-silk-maven-parent' }) {
     }
 }
 
-// Published to GitHub Packages: the framework and its test harness, not the example.
+// Published to Maven Central: the framework and its test harness, not the example.
 configure(subprojects.findAll {
     it.name in ['spider-silk-core', 'spider-silk-test', 'spider-silk-tomcat',
             'spider-silk-undertow', 'spider-silk-freemarker', 'spider-silk-handlebars',
@@ -59,6 +127,7 @@ configure(subprojects.findAll {
 }) {
     apply plugin: 'java-library'
     apply plugin: 'maven-publish'
+    apply plugin: 'signing'
 
     // Nullness is part of the public signatures, so the annotations travel with
     // the API. NullAway checks them against the code at compile time.
@@ -143,13 +212,21 @@ configure(subprojects.findAll {
 
         repositories {
             maven {
-                name = 'GitHubPackages'
-                url = uri('https://maven.pkg.github.com/benelog/spider-silk')
-                credentials {
-                    username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
-                    password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
-                }
+                name = 'Staging'
+                url = rootProject.layout.buildDirectory.dir('staging-deploy')
             }
         }
+    }
+
+    // Central rejects an unsigned artifact. The key arrives ASCII-armored in
+    // the environment, so nothing touches a keyring; without it (a local build,
+    // publishToMavenLocal) the signing tasks are skipped rather than failed.
+    signing {
+        def signingKey = System.getenv('SIGNING_KEY')
+        required = { signingKey != null }
+        if (signingKey != null) {
+            useInMemoryPgpKeys(signingKey, System.getenv('SIGNING_PASSWORD'))
+        }
+        sign publishing.publications.maven
     }
 }

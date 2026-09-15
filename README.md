@@ -31,79 +31,37 @@ Three core principles:
 ## Quick Start
 
 Spider Silk requires Java 21 or later.
-The current version is `0.1.0-SNAPSHOT`, published to GitHub Packages.
-
-> GitHub Packages requires authentication even for a public repository.
-> Create a [personal access token (classic)](https://github.com/settings/tokens) with the `read:packages` scope and use it as the password.
+The current version is `1.0.0`, published to Maven Central.
 
 ### build.gradle
 
 ```groovy
 repositories {
     mavenCentral()
-    maven {
-        url = uri('https://maven.pkg.github.com/benelog/spider-silk')
-        credentials {
-            username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
-            password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
-        }
-    }
 }
 
 dependencies {
-    implementation 'net.benelog.spidersilk:spider-silk-core:0.1.0-SNAPSHOT'
-    testImplementation 'net.benelog.spidersilk:spider-silk-test:0.1.0-SNAPSHOT'
+    implementation 'net.benelog.spidersilk:spider-silk-core:1.0.0'
+    testImplementation 'net.benelog.spidersilk:spider-silk-test:1.0.0'
 }
-```
-
-Keep the token out of the build file.
-Put it in `~/.gradle/gradle.properties`:
-
-```properties
-gpr.user=your-github-username
-gpr.token=ghp_yourPersonalAccessToken
 ```
 
 ### pom.xml
 
 ```xml
-<repositories>
-  <repository>
-    <id>github</id>
-    <url>https://maven.pkg.github.com/benelog/spider-silk</url>
-    <snapshots>
-      <enabled>true</enabled>
-    </snapshots>
-  </repository>
-</repositories>
-
 <dependencies>
   <dependency>
     <groupId>net.benelog.spidersilk</groupId>
     <artifactId>spider-silk-core</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
   </dependency>
   <dependency>
     <groupId>net.benelog.spidersilk</groupId>
     <artifactId>spider-silk-test</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <scope>test</scope>
   </dependency>
 </dependencies>
-```
-
-The matching credentials go in `~/.m2/settings.xml`, under the same `id`:
-
-```xml
-<settings>
-  <servers>
-    <server>
-      <id>github</id>
-      <username>your-github-username</username>
-      <password>ghp_yourPersonalAccessToken</password>
-    </server>
-  </servers>
-</settings>
 ```
 
 ### Hello, world
@@ -163,4 +121,5 @@ Codex, Cursor, and GitHub Copilot read the same directory once it is copied into
 
 [notes/positioning.md](notes/positioning.md) places Spider Silk next to Javalin, Spark, Helidon SE, and Spring Boot, and states what it trades away to get there.
 [notes/decisions.md](notes/decisions.md) gives the reasoning behind each piece, item by item, together with the list of what was rejected.
+[CHANGELOG.md](CHANGELOG.md) lists what changed in each release.
 [The issue tracker](https://github.com/benelog/spider-silk/issues) records what was deliberately deferred, one issue per item, with the condition that would make it worth doing.

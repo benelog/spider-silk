@@ -44,7 +44,7 @@
 
 ```bash
 ./gradlew build              # compiles every module + runs all tests
-./gradlew publishToMavenLocal # verifies the GitHub Packages publication config
+./gradlew publishToMavenLocal # verifies the Maven Central publication config (RELEASING.md has the release)
 npm install && npm run docs   # builds the Antora site into build/site
 ```
 

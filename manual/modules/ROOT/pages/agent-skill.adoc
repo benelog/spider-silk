@@ -3,7 +3,7 @@
 
 The repository carries an agent skill at `skills/spider-silk/`, in the https://agentskills.io[Agent Skills] format: a `SKILL.md` the agent loads once a task touches the framework, and reference files it reads only as the task needs them.
 An AI coding agent that has never seen Spider Silk guesses, and a framework this deliberate is a bad place to guess.
-The artifacts live on GitHub Packages rather than Maven Central, JSON mapping is written rather than reflected, and the `Controller` interface an agent invents out of habit is exactly what xref:handlers.adoc[Handlers] says not to build.
+The Gradle plugin resolves from Maven Central rather than the Plugin Portal, JSON mapping is written rather than reflected, and the `Controller` interface an agent invents out of habit is exactly what xref:handlers.adoc[Handlers] says not to build.
 The skill is distilled from this manual, and the manual stays the source of truth: a question the skill cannot settle is answered here, and a release that changes an API changes the skill alongside it.
 
 == Claude Code
@@ -52,7 +52,7 @@ https://agentskills.io keeps the list of them.
 
 == What is in it
 
-`SKILL.md` carries what every task needs: the framework's principles stated as rules an agent must not code against, the GitHub Packages authentication that is the most common first-run failure, and the core API at a glance.
+`SKILL.md` carries what every task needs: the framework's principles stated as rules an agent must not code against, the dependency and plugin repositories a first build needs, and the core API at a glance.
 Five reference files carry the rest, one per territory: setup, the web API, content, servers and deployment, and testing.
 An agent then reads only the territory its task touches.
 Nothing in the skill is new information: every statement is this manual, compressed for an agent's context window instead of a reader's screen.

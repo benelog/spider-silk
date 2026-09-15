@@ -2,14 +2,9 @@
 :navtitle: Installation
 
 Spider Silk requires Java 21 or later.
-Releases are published to https://github.com/benelog/spider-silk/packages[GitHub Packages], not to Maven Central.
+Releases are published to https://central.sonatype.com/namespace/net.benelog[Maven Central], so a build needs no repository beyond the default one.
 The current version is `{project-version}`.
-
-[IMPORTANT]
-====
-GitHub Packages requires authentication even for public repositories.
-Create a https://github.com/settings/tokens[personal access token (classic)] with the `read:packages` scope and use it as the password.
-====
+https://github.com/{project-repo}/blob/main/CHANGELOG.md[CHANGELOG.md] lists what changed in each release.
 
 == Gradle
 
@@ -17,13 +12,6 @@ Create a https://github.com/settings/tokens[personal access token (classic)] wit
 ----
 repositories {
     mavenCentral()
-    maven {
-        url = uri('https://maven.pkg.github.com/{project-repo}')
-        credentials {
-            username = System.getenv('GITHUB_ACTOR')
-            password = System.getenv('GITHUB_TOKEN')   // a PAT with read:packages
-        }
-    }
 }
 
 dependencies {
@@ -32,39 +20,12 @@ dependencies {
 }
 ----
 
-Keep the credentials out of the build file.
-Put them in `~/.gradle/gradle.properties` and read them with `findProperty`:
-
-[source,properties]
-----
-gpr.user=your-github-username
-gpr.token=ghp_yourPersonalAccessToken
-----
-
-[source,groovy]
-----
-credentials {
-    username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
-    password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
-}
-----
-
 == Maven
 
-Declare the repository in `pom.xml`:
+Maven resolves from Central by default, so `pom.xml` declares the dependencies and nothing else:
 
 [source,xml,subs="attributes+"]
 ----
-<repositories>
-  <repository>
-    <id>github</id>
-    <url>https://maven.pkg.github.com/{project-repo}</url>
-    <snapshots>
-      <enabled>true</enabled>
-    </snapshots>
-  </repository>
-</repositories>
-
 <dependencies>
   <dependency>
     <groupId>{project-group}</groupId>
@@ -78,23 +39,6 @@ Declare the repository in `pom.xml`:
     <scope>test</scope>
   </dependency>
 </dependencies>
-----
-
-A build that also inherits the packaging conventions from xref:maven-parent.adoc[the Maven parent] must declare this repository in `~/.m2/settings.xml` instead.
-Maven resolves a `<parent>` before it reads the pom's `<repositories>`.
-The credentials go in `~/.m2/settings.xml` either way, under the same `id`:
-
-[source,xml]
-----
-<settings>
-  <servers>
-    <server>
-      <id>github</id>
-      <username>your-github-username</username>
-      <password>ghp_yourPersonalAccessToken</password>
-    </server>
-  </servers>
-</settings>
 ----
 
 == Hello, world

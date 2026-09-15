@@ -25,20 +25,14 @@ jib {
 }
 ----
 
-The plugin resolves from the same GitHub Packages repository as the jars, which for a plugin is declared in `settings.gradle`.
-The credentials are the ones xref:install.adoc[Installation] sets up.
+The plugin is published to Maven Central with the jars, not to the Gradle Plugin Portal.
+Gradle looks up a plugin id in the Plugin Portal alone by default, so `settings.gradle` adds Central to the plugin repositories:
 
-[source,groovy,subs="attributes+"]
+[source,groovy]
 ----
 pluginManagement {
     repositories {
-        maven {
-            url = uri('https://maven.pkg.github.com/{project-repo}')
-            credentials {
-                username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
-                password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
-            }
-        }
+        mavenCentral()
         gradlePluginPortal()
     }
 }

@@ -5,12 +5,12 @@ description: >-
   (group net.benelog.spidersilk, embedded Jetty by default).
   Use this skill whenever the user mentions Spider Silk or spider-silk-core, whenever a build file depends on
   net.benelog.spidersilk, and for any task in such a project even when the framework is not named:
-  setting up the dependency (GitHub Packages), adding routes, handlers, filters, error handling, JSON endpoints,
+  setting up the dependency (Maven Central), adding routes, handlers, filters, error handling, JSON endpoints,
   templates (jte, FreeMarker, Handlebars, Thymeleaf), static files, SSE, WebSocket, sessions, CORS, compression,
   tests (WebTest, TestRequest), server tuning (Jetty, Tomcat, Undertow), or deployment (Jib, Docker, GraalVM native image).
 license: Apache-2.0
 metadata:
-  version: "0.1.0"
+  version: "1.0.0"
   homepage: https://spider-silk.benelog.net
 ---
 
@@ -18,12 +18,14 @@ metadata:
 
 A thin Java web framework on top of the Jakarta Servlet API.
 Requires Java 21 or later.
-Releases are published to GitHub Packages, which needs authentication even for public repositories — see [First-run setup](#first-run-setup) before touching the build file.
+Releases are published to Maven Central, so `mavenCentral()` is the only repository a build needs.
+The Gradle plugin is on Central too, not on the Gradle Plugin Portal — see [First-run setup](#first-run-setup) before touching the build file.
 The full manual is at <https://spider-silk.benelog.net>; the reference files beside this one are distilled from it.
 
-**Version.** This skill writes `0.1.0-SNAPSHOT` throughout, which is the release it was written against and the only version string in it.
+**Version.** This skill writes `1.0.0` throughout, which is the release it was written against and the only version string in it.
 Before putting it in a build file, prefer whatever the project already declares.
-For a project starting fresh, check <https://github.com/benelog/spider-silk/packages> for the current version, since this skill's copy ages with each release.
+For a project starting fresh, check <https://central.sonatype.com/artifact/net.benelog.spidersilk/spider-silk-core> for the current version, since this skill's copy ages with each release.
+<https://github.com/benelog/spider-silk/blob/main/CHANGELOG.md> lists what changed between releases.
 
 ## Principles the code you write must respect
 
@@ -50,28 +52,20 @@ Spider Silk is built around explicitness, and code that fights this reads as wro
 
 ## First-run setup
 
-The most common first-run failure is a `401`/`Could not resolve net.benelog.spidersilk:...` from Gradle or Maven: GitHub Packages rejects anonymous downloads.
-The user needs a personal access token (classic) with the `read:packages` scope, used as the password.
+The artifacts resolve from Maven Central with no credentials.
 
 ```groovy
 repositories {
     mavenCentral()
-    maven {
-        url = uri('https://maven.pkg.github.com/benelog/spider-silk')
-        credentials {
-            username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
-            password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
-        }
-    }
 }
 
 dependencies {
-    implementation 'net.benelog.spidersilk:spider-silk-core:0.1.0-SNAPSHOT'
-    testImplementation 'net.benelog.spidersilk:spider-silk-test:0.1.0-SNAPSHOT'
+    implementation 'net.benelog.spidersilk:spider-silk-core:1.0.0'
+    testImplementation 'net.benelog.spidersilk:spider-silk-test:1.0.0'
 }
 ```
 
-Credentials belong in `~/.gradle/gradle.properties` (`gpr.user`, `gpr.token`), never in the build file.
+The most common first-run failure is `Plugin [id: 'net.benelog.spidersilk'] was not found`: Gradle searches the Plugin Portal alone for a plugin id unless `settings.gradle` adds `mavenCentral()` to `pluginManagement.repositories`.
 For Maven, the module list, optional modules, the Gradle plugin, and the Maven parent, read [references/setup.md](references/setup.md).
 
 ## Hello, world
@@ -199,7 +193,8 @@ To watch it serve a real request, `app.start(8080)` and `curl` it.
 
 | Symptom | Cause |
 |---|---|
-| `401`, or `Could not resolve net.benelog.spidersilk:...` | GitHub Packages rejects anonymous downloads — see [First-run setup](#first-run-setup) |
+| `Plugin [id: 'net.benelog.spidersilk'] was not found` | The plugin is on Maven Central, not the Plugin Portal. Add `mavenCentral()` to `pluginManagement.repositories` in `settings.gradle` — see [First-run setup](#first-run-setup) |
+| `Could not resolve net.benelog.spidersilk:...` | `mavenCentral()` is missing from `repositories`, or the version was never released. Check the version on Central |
 | `IllegalStateException` at startup, naming a path | Two routes match exactly the same requests (the same path, or the same shape with a variable renamed). Registration is the check, because one of them could never run |
 | A template is not found | The name carried an extension. `template("deck")`, never `template("deck.jte")` — the engine appends its own suffix |
 | A 400 where you expected a null | Typed extraction rejects rather than returning null. Use `paramOrNull(name)`, `queryParamOrNull(name)`, `formParamOrNull(name)`, or a `(name, default)` form for a parameter that may be absent; a present-but-unparseable value is still a 400 |

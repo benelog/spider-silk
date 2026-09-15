@@ -1,6 +1,20 @@
 name: Build
 
 on:
+  push:
+    branches: [ main ]
+    # Listed the other way round on purpose: an ignore list fails towards
+    # building, so a file type nobody thought of still gets compiled and
+    # tested. Everything here is prose or the doc site's own toolchain, none
+    # of which the Gradle build reads. The README, the manual's antora.yml,
+    # and the agent skill stay in: verifyVersionReferences reads them.
+    paths-ignore:
+      - 'notes/**'
+      - 'antora-playbook.yml'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/docs.yml'
+      - '.github/workflows/release.yml'
   pull_request:
   workflow_dispatch:
 

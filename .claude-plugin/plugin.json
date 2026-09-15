@@ -1,7 +1,7 @@
 {
   "name": "spider-silk",
-  "version": "0.1.0",
-  "description": "Build web applications with Spider Silk, the no-reflection Java web framework: dependency setup (GitHub Packages), routing, JSON, templates, testing, servers, and deployment.",
+  "version": "1.0.0",
+  "description": "Build web applications with Spider Silk, the no-reflection Java web framework: dependency setup (Maven Central), routing, JSON, templates, testing, servers, and deployment.",
   "author": {
     "name": "Sanghyuk Jung",
     "url": "https://github.com/benelog"

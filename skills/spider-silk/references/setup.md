@@ -1,8 +1,9 @@
 # Setup: dependencies, modules, build integration
 
 Spider Silk requires Java 21 or later.
-Releases are published to GitHub Packages, not Maven Central, and GitHub Packages requires authentication even for public repositories: a personal access token (classic) with the `read:packages` scope, used as the password.
-The snippets below write `0.1.0-SNAPSHOT`, the release this skill was written against — SKILL.md has the rule for checking it before it reaches a build file.
+Releases are published to Maven Central, so neither Gradle nor Maven needs a repository beyond the default or any credentials.
+The snippets below write `1.0.0`, the release this skill was written against.
+SKILL.md has the rule for checking it before it reaches a build file.
 The group id, the package root, and the `Automatic-Module-Name` are all `net.benelog.spidersilk`.
 
 ## Gradle
@@ -10,66 +11,30 @@ The group id, the package root, and the `Automatic-Module-Name` are all `net.ben
 ```groovy
 repositories {
     mavenCentral()
-    maven {
-        url = uri('https://maven.pkg.github.com/benelog/spider-silk')
-        credentials {
-            username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
-            password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
-        }
-    }
 }
 
 dependencies {
-    implementation 'net.benelog.spidersilk:spider-silk-core:0.1.0-SNAPSHOT'
-    testImplementation 'net.benelog.spidersilk:spider-silk-test:0.1.0-SNAPSHOT'
+    implementation 'net.benelog.spidersilk:spider-silk-core:1.0.0'
+    testImplementation 'net.benelog.spidersilk:spider-silk-test:1.0.0'
 }
-```
-
-Keep credentials in `~/.gradle/gradle.properties`, never in the build file:
-
-```properties
-gpr.user=your-github-username
-gpr.token=ghp_yourPersonalAccessToken
 ```
 
 ## Maven
 
 ```xml
-<repositories>
-  <repository>
-    <id>github</id>
-    <url>https://maven.pkg.github.com/benelog/spider-silk</url>
-    <snapshots><enabled>true</enabled></snapshots>
-  </repository>
-</repositories>
-
 <dependencies>
   <dependency>
     <groupId>net.benelog.spidersilk</groupId>
     <artifactId>spider-silk-core</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
   </dependency>
   <dependency>
     <groupId>net.benelog.spidersilk</groupId>
     <artifactId>spider-silk-test</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <scope>test</scope>
   </dependency>
 </dependencies>
-```
-
-Credentials go in `~/.m2/settings.xml` under the same `id`:
-
-```xml
-<settings>
-  <servers>
-    <server>
-      <id>github</id>
-      <username>your-github-username</username>
-      <password>ghp_yourPersonalAccessToken</password>
-    </server>
-  </servers>
-</settings>
 ```
 
 ## Modules
@@ -95,7 +60,7 @@ The `net.benelog.spidersilk` plugin carries the packaging block an application w
 
 ```groovy
 plugins {
-    id 'net.benelog.spidersilk' version '0.1.0-SNAPSHOT'
+    id 'net.benelog.spidersilk' version '1.0.0'
 }
 
 spiderSilk {
@@ -111,18 +76,12 @@ jib {
 }
 ```
 
-The plugin resolves from the same GitHub Packages repository, declared for plugins in `settings.gradle`:
+The plugin is published to Maven Central, not the Gradle Plugin Portal, so `settings.gradle` adds Central to the plugin repositories:
 
 ```groovy
 pluginManagement {
     repositories {
-        maven {
-            url = uri('https://maven.pkg.github.com/benelog/spider-silk')
-            credentials {
-                username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
-                password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
-            }
-        }
+        mavenCentral()
         gradlePluginPortal()
     }
 }
@@ -137,11 +96,11 @@ pluginManagement {
 <parent>
   <groupId>net.benelog.spidersilk</groupId>
   <artifactId>spider-silk-maven-parent</artifactId>
-  <version>0.1.0-SNAPSHOT</version>
+  <version>1.0.0</version>
 </parent>
 ```
 
-Maven resolves a `<parent>` before it reads the pom's `<repositories>`, so the GitHub repository must be declared in `~/.m2/settings.xml` (as a profile with a `<repositories>` block, activated in `<activeProfiles>`) — a pom cannot fetch its own parent.
+The parent resolves from Maven Central like the jars, so it needs no repository declaration.
 Everything sits in the parent's `pluginManagement` and is inert until the child declares the plugin: declaring `jib-maven-plugin`, `jte-maven-plugin`, or `native-maven-plugin` is the opt-in.
 The main class is declared once, in the `maven-jar-plugin` manifest; Jib and the native plugin read it from there.
 `mvn -Pnative package jib:buildTar` ships the GraalVM binary instead of the jar.

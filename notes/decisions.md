@@ -70,8 +70,9 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 52 | `responseFilter(filter)`: one filter that sees every response, before CORS, security headers, and gzip | ✅ shipped |
 | 53 | Explicit filter scope, parameter absence, response mutation, and transmission results | ✅ shipped |
 | 54 | Nullness in the signatures: JSpecify `@NullMarked` packages, checked by NullAway | ✅ shipped |
+| 55 | Releases go to Maven Central from a tag, as one signed bundle | ✅ shipped |
 
-Fifty-six of the fifty-seven shipped.
+Fifty-seven of the fifty-eight shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -1314,6 +1315,33 @@ Each value `WebRequest`, `UploadedFile`, and the test stubs pass on from a servl
 `getHeader`, `getContentType`, `getQueryString`, and `Part.getContentType` are the ones that answer null.
 `Part.getSubmittedFileName` can answer null too, but `UploadedFile` is built only for a part whose file name is present, so `fileName()` stays non-null.
 The settings that store into a nullable field without a documented null, such as `threadPool`, `executor`, `baseDir`, and `SseStream.id`, now reject null the way `contextPath` and `stopTimeout` already did.
+
+## 55 · Where a release goes
+
+### 55. Releases go to Maven Central from a tag, as one signed bundle
+
+Every artifact is published to Maven Central, and GitHub Packages is no longer used.
+GitHub Packages required a personal access token even for a public repository, so trying the framework cost a token and a credentials block before the first request.
+Central needs no repository declaration in Maven and one `mavenCentral()` line in Gradle.
+
+A release starts from a `v*` tag, not from a push to `main`.
+A version on Central is permanent, so the thing that publishes it is the one act that says "this is the release".
+The version is written once, in `gradle.properties`.
+The README, the manual's `project-version`, the Maven parent, and the agent skill repeat it where a reader copies it from, and `verifyVersionReferences` fails the build when one of them disagrees.
+`CHANGELOG.md` is written before the tag, and the workflow copies the version's section into the GitHub Release.
+
+Every publication, including the Gradle plugin and the Maven parent, is signed into one directory under `build/`, and its zip is uploaded to the Central Portal's publisher API as a single deployment.
+The deployment is `USER_MANAGED`: the portal validates it, and a person presses Publish.
+The upload is two `curl` calls in the workflow, so the build gains the `signing` plugin and nothing else.
+
+The Gradle plugin is on Central with the jars, so its users add `mavenCentral()` to `pluginManagement.repositories`.
+The Gradle Plugin Portal would make that line unnecessary, and it is left to an issue of its own.
+
+Rejected: `com.vanniktech.maven.publish`, `com.gradleup.nmcp`, and JReleaser.
+Each would replace the two `curl` calls with a plugin, which is the trade this build has declined elsewhere.
+Also rejected: the portal's OSSRH-compatible staging endpoint.
+It uploads every module separately into an implicit staging repository, where the bundle is one file that can be built and inspected locally before anything leaves the machine.
+Also rejected: snapshots on Central's snapshot repository, until someone asks to depend on an unreleased version.
 
 ## Rejected — decisions, with the reason
 

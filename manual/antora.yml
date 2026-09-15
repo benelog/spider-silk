@@ -5,7 +5,7 @@ start_page: index.adoc
 asciidoc:
   attributes:
     project-group: net.benelog.spidersilk
-    project-version: 0.1.0-SNAPSHOT
+    project-version: 1.0.0
     project-repo: benelog/spider-silk
     # What the Gradle plugin pins; kept in step with spider-silk-gradle-plugin/build.gradle.
     jte-version: 3.2.4

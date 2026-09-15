@@ -13,34 +13,7 @@ Maven shares build conventions by inheritance rather than by plugin: a Maven plu
 </parent>
 ----
 
-[IMPORTANT]
-====
-The GitHub Packages repository from xref:install.adoc[Installation] must be declared in `~/.m2/settings.xml`.
-Maven resolves a `<parent>` before it reads the child's `<repositories>`, so a `<repositories>` block in the pom cannot fetch its own parent.
-
-[source,xml,subs="attributes+"]
-----
-<settings>
-  <profiles>
-    <profile>
-      <id>github</id>
-      <repositories>
-        <repository>
-          <id>github</id>
-          <url>https://maven.pkg.github.com/{project-repo}</url>
-          <snapshots><enabled>true</enabled></snapshots>
-        </repository>
-      </repositories>
-    </profile>
-  </profiles>
-  <activeProfiles>
-    <activeProfile>github</activeProfile>
-  </activeProfiles>
-</settings>
-----
-
-The `<servers>` credentials entry from Installation applies unchanged, under the same `id`.
-====
+The parent is published to Maven Central, which Maven searches by default, so the `<parent>` block needs no repository or `settings.xml` entry beside it.
 
 == Opting in by declaring
 
