@@ -5,3 +5,5 @@ db/
 .idea/
 node_modules/
 .mcp.json
+# The release signing key and its passphrase, kept out of every commit.
+.secrets/

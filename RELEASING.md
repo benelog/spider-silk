@@ -44,5 +44,6 @@ These exist already, and are written down for the day one of them has to be repl
   The namespace belongs to the maintainer's portal account, and the portal treats a different sign-in method as a different account, even for the same email.
 - **The signing key.** An Ed25519 key, published to `keyserver.ubuntu.com` so Central can check the signatures.
   Its ASCII-armored private half (`gpg --armor --export-secret-keys <fingerprint>`) is the `SIGNING_KEY` repository secret, and its passphrase is `SIGNING_PASSWORD`.
+  The maintainer's local copy of both is `.secrets/`, which `.gitignore` keeps out of every commit.
 - **The portal token.** A user token generated under the portal's account menu, **View User Tokens**.
   Its username and password are the `CENTRAL_USERNAME` and `CENTRAL_PASSWORD` repository secrets.
