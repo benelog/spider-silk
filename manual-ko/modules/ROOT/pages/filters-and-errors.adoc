@@ -1,0 +1,130 @@
+= 필터와 에러
+:navtitle: 필터와 에러
+
+요청 필터는 라우팅 전에 실행되고, 라우트 필터는 매칭된 핸들러를 감싸서 실행되며, 응답 필터는 모든 응답에 대해 실행된다.
+예외 핸들러는 핸들러가 던진 예외를 응답으로 바꾼다.
+에러 핸들러는 보여줄 것 없이 어떤 상태로 끝난 응답의 본문을 채운다.
+다이어그램은 `AppServlet`을 거치는 요청 하나에 대해 각각이 어디에서 실행되는지 보여준다.
+
+.AppServlet을 거치는 요청 하나
+image::request-pipeline.svg[요청 필터가 라우팅 전에 실행되고, 라우터가 매칭을 찾고, before 라우트 필터, 핸들러, after 라우트 필터, 템플릿 렌더러가 그 순서로 실행되며, 예외 핸들러가 예외를 던진 모든 것에 답하고 에러 핸들러가 비어 있는 에러 본문을 채운 뒤, 응답 필터가 실행되고 응답이 데코레이션되어 기록되고 로깅된다,link=self]
+
+정적 파일은 매칭된 라우트가 없을 때만, 그리고 `GET`과 `HEAD`에 대해서만 답한다.
+xref:cors-compression-and-security-headers.adoc[CORS, 압축, 보안]의 응답 전반에 걸친 관심사는 정적 파일과 에러 응답을 포함한 모든 답 뒤에 실행되며, 그래서 이들은 after 필터가 아니다.
+
+== 필터
+
+`beforeRequest`는 정적 파일, 404, 405, HEAD, 자동 OPTIONS를 포함하여 매칭되는 모든 요청에 대해 라우팅 전에 실행된다.
+`beforeRoute`는 매칭된 라우트에 대해서만 실행되며, 그 경로 변수와 `req.route()`를 통해 라우트 자체를 노출한다.
+`afterRoute`는 그 핸들러가 정상적으로 반환했을 때만 실행된다.
+셋 모두 선택적인 경로 패턴을 받으며, 패턴이 없으면 자신의 범위 전체를 다룬다.
+라우트 그룹의 `beforeRequest`는 그 라우트 필터와 같은 방식으로 접두어를 해석한다.
+필터 패턴에 변수가 들어 있더라도, 요청 필터에서는 경로 변수를 사용할 수 없다.
+
+인가가 정적 파일과 매칭되지 않은 경로까지 다뤄야 할 때는 `beforeRequest`를 사용한다:
+
+[source,java]
+----
+app.beforeRequest("/admin/*", req -> req.sessionAttr("user") == null
+        ? WebResponse.redirect("/login")
+        : null);
+----
+
+요청 필터의 조기 응답이나 예외는 일반적인 템플릿, 에러, 응답 필터, 데코레이션 파이프라인을 거친다.
+요청 필터는 두 종류가 등록된 순서와 무관하게, 모든 라우트 필터보다 먼저 등록 순서대로 실행된다.
+요청 필터는 CORS 프리플라이트 처리 전에 OPTIONS 요청을 거부할 수 있으므로, 필요한 경우 그 인가 정책이 프리플라이트를 허용해야 한다.
+
+매칭된 라우트의 경로 변수가 필요한 가드에는 `beforeRoute`를 사용한다.
+끝의 `*`는 접두어 _그리고_ 그 아래의 모든 것을 다루므로, `++/admin/*++`는 `/admin/users`뿐 아니라 `/admin`도 가드하며, 이것이 가드가 거의 항상 의미하는 바이다:
+
+[source,java]
+----
+app.beforeRoute("/admin/*", req -> req.sessionAttr("user") == null
+        ? WebResponse.redirect("/login")    // answers here, so the route handler never runs
+        : null);                            // carry on
+----
+
+응답을 반환하는 before 필터는 거기서 요청을 끝낸다.
+`null`을 반환하면 다음 필터로, 그다음 라우팅이나 매칭된 핸들러로 이어진다.
+직접 본문을 만들지 않고 거부하려면 `new HttpException(HttpStatus.UNAUTHORIZED, "...")`를 던지고, `error(HttpStatus.UNAUTHORIZED, ...)`가 렌더링하게 한다.
+
+after 필터는 라우트가 반환한 응답을 받아 대체 응답을 돌려주거나, 바꾸지 않으려면 그 응답을 그대로 돌려준다:
+
+[source,java]
+----
+app.afterRoute("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
+----
+
+after 필터는 라우트 핸들러가 정상적으로 반환했을 때만 실행된다.
+before 필터의 조기 응답, 예외 핸들러의 응답, 라우터의 404나 405, 자동 `OPTIONS` 응답, 정적 파일은 여기에 절대 도달하지 않는다.
+`++beforeRoute("/admin/*", ...)++`는 `/admin` 아래에서 제공되는 정적 파일에 대해서는 실행되지 않는다.
+그 파일들까지 가드하려면 `++beforeRequest("/admin/*", ...)++`를 사용한다.
+
+[#response-filters]
+== 응답 필터
+
+`responseFilter(filter)`는 after 필터가 결코 보지 못하는 응답을 포함하여, 프레임워크가 답하는 모든 응답에 대해 실행된다.
+모든 응답이 실어야 하는 헤더는 여기에 둔다:
+
+[source,java]
+----
+app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));
+----
+
+이 필터는 요청과 전송 직전의 응답을 받아, 대체 응답을 반환하거나 바꾸지 않으려면 전달받은 응답을 그대로 반환한다.
+`afterRoute`나 `responseFilter`에서 null을 반환하는 것은 프로그래밍 오류이며 예외 처리를 따른다.
+여러 필터는 등록 순서대로 실행되며, 각각은 앞 필터가 답한 것에 대해 실행된다.
+매칭된 라우트가 있었다면 요청은 그 라우트의 경로 변수를 담고 있다.
+
+응답 필터는 답이 정해진 뒤, 데코레이션되기 전에 실행된다:
+
+. 요청 필터가 라우팅 전에 실행되며 즉시 답할 수 있다.
+. 라우트 필터와 매칭된 핸들러가 답하거나, 정적 파일과 라우팅이 답을 만든다.
+. 예외 핸들러가 예외를 던진 모든 것에 답하고, 템플릿이 렌더링되며, 에러 핸들러가 비어 있는 에러 본문을 채운다.
+. 응답 필터가 실행되고, 그중 하나가 반환한 템플릿 본문이 렌더링된다.
+. `Vary: Accept`, CORS, 보안 헤더, 압축이 그 순서로 적용된다.
+. 응답이 기록되고 로깅된다.
+
+따라서 응답 필터는 에러 본문과 렌더링된 페이지를 보며, CORS, 보안 헤더, 압축을 되돌릴 수는 없는데, 그것들은 필터가 반환한 것에 적용되기 때문이다.
+그 답은 최종이다: 응답 필터가 반환한 빈 404는 본문을 얻기 위해 `error(HttpStatus.NOT_FOUND, ...)`로 되돌아가지 않는다.
+
+예외를 던지는 필터는 예외를 던지는 핸들러와 같은 방식으로 답을 받는다.
+예외는 `exception(Type, handler)` 핸들러에 도달하고, 그다음 `error(status, ...)`에 도달하며, 그에 대한 답은 응답 필터를 다시 실행하지 않고 데코레이션되어 기록되므로, 항상 실패하는 필터가 루프에 빠져 실패할 수는 없다.
+
+응답 필터는 응답의 모양을 만들 뿐, 요청을 인가하지 않는다.
+응답 필터가 호출될 때는 핸들러가 이미 실행된 뒤이므로, 인가는 범위에 따라 `beforeRequest`나 `beforeRoute`에 둔다.
+`WebResponse.raw(...)` 라이터가 서블릿 응답에 쓰는 것과, 응답이 커밋된 뒤의 실패는 필터 이후에 일어나며 필터의 손이 닿지 않는다.
+
+== 예외 핸들러
+
+`exception(Type, handler)`는 핸들러가 그 타입이나 그 하위 타입의 예외를 던진 요청에 답한다:
+
+[source,java]
+----
+app.exception(IllegalArgumentException.class,
+        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+app.exception(Json.JsonException.class,
+        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
+----
+
+핸들러가 등록된 순서와 무관하게, 예외가 인스턴스인 타입 중 가장 구체적인 타입의 핸들러가 실행된다.
+`Json.JsonException`은 `IllegalArgumentException`이므로, 파싱에 실패한 본문은 위의 첫 번째 핸들러가 아니라 두 번째 핸들러에 도달한다.
+같은 타입을 두 번 등록하면 첫 번째 핸들러가 교체된다.
+`HttpException`은 핸들러가 선택한 상태이지, 실패가 아니다.
+이것은 자신의 상태와 메시지로 답하고 본문을 얻기 위해 `error(status, ...)`로 가며, `RuntimeException` 같은 더 넓은 타입으로 등록된 핸들러는 이를 결코 보지 못한다.
+`HttpException` 자체나 그 하위 타입으로 등록된 핸들러는 본다.
+다뤄지지 않은 다른 모든 예외는 500으로 답하고 로깅된다.
+어느 쪽이 답했든 예외는 xref:request-logging.adoc[요청 로거]에 `completion.exception()`으로 보고되므로, 실패를 기록하는 데 포괄 핸들러가 필요하지 않다.
+렌더링에 실패한 템플릿은 핸들러 자신의 디스패치 안에서 예외를 던지므로, 역시 이 핸들러들에 도달한다.
+
+== 에러 핸들러
+
+`error(status, handler)`는 라우터에서 왔든, `HttpException`에서 왔든, `WebResponse.empty(HttpStatus.FORBIDDEN)`를 반환한 핸들러에서 왔든, 본문 없이 그 상태로 끝난 모든 응답의 본문을 채운다.
+따라서 `error(HttpStatus.NOT_FOUND, handler)`는 한 번의 등록으로 라우터 자신의 404와 핸들러가 만든 모든 404를 똑같이 꾸민다.
+이미 본문을 실은 응답은 건드리지 않는다.
+에러 핸들러가 반환한 것은 405의 `Allow`처럼 프레임워크가 이미 정해 둔 헤더를 유지한다.
+에러 핸들러가 직접 상태를 설정하지 않는 한, 등록된 상태로 답한다.
+에러 핸들러 안에서 `req.errorMessage()`는 프레임워크가 사용했을 평문 메시지이다.
+
+등록 내용은 다시 읽을 수 있다.
+`app.guards()`는 `app.routes()`가 라우트를 보고하는 것과 같은 방식으로 필터, 응답 필터, 에러 핸들러를 보고하며, 이는 xref:route-introspection.adoc#guards[라우트 인트로스펙션]에 있다.

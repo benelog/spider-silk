@@ -1,0 +1,110 @@
+= 라우트 인트로스펙션
+:navtitle: 라우트 인트로스펙션
+
+`app.routes()`는 라우팅 테이블을 데이터로 돌려준다: `record Route(String method, String path, String description)`의 불변 스냅샷이며, 등록 순서를 따르고, 이 순서는 라우터가 동점을 가리는 순서이기도 하다.
+라우트는 명시적인 목록이므로 애너테이션 스캐닝도, 플러그인도, 리플렉션도 관여하지 않는다:
+
+[source,java]
+----
+app.get("/_routes", req -> WebResponse.template("routes", Map.of("routes", app.routes())));
+----
+
+순서가 동점을 가리기 때문에, 정확히 같은 요청에 매칭되는 두 번째 라우트(같은 경로이거나, 변수 이름만 바꾼 같은 형태)는 결코 실행될 수 없으므로, 그런 라우트를 등록하면 테이블에 죽은 항목을 남기는 대신 그 자리에서 `IllegalStateException`을 던진다.
+
+그룹 접두사는 이미 해석되어 있으므로 경로는 `/api/decks/\{deckId}/cards`로 읽히며, 이는 OpenAPI의 경로 템플릿 문법 그대로이므로 내보내기에 아무 변환도 필요 없다:
+
+[source,java]
+----
+for (Route route : app.routes()) {
+    paths.put(route.path(), Json.obj().put(route.method().toLowerCase(Locale.ROOT), ...));
+}
+----
+
+와일드카드 라우트는 작성된 그대로 보고된다.
+`/files/\{path*}`는 경로 템플릿 안의 변수 하나이고, `++/files/*++`는 변수가 없는 패턴이며, 이 차이가 xref:openapi.adoc[OpenAPI 내보내기]가 행동하는 근거다: 전자는 렌더링하고 후자는 거부한다.
+
+핸들러는 제외된다.
+핸들러는 람다이며, 그것이 가진 유일한 이름은 리플렉션이 합성 클래스에서 파낼 수 있는 것뿐이다.
+목록 위에 세워진 것도 제외되는데, 목록이 평범한 데이터이기 때문이다: 예제 앱은 이 목록으로 `/_routes` 개요 페이지를 렌더링하고, xref:openapi.adoc[`spider-silk-openapi`]는 같은 목록을 OpenAPI 3.1 문서로 바꾼다.
+
+자동 HEAD와 OPTIONS 응답은 나열되지 않는다.
+`routes()`는 등록된 것을 보고하며, 등록한 것만 실행된다고 주장하는 프레임워크에게는 그것이 정직한 답이다.
+
+[#matched-route]
+== 매칭된 라우트
+
+`req.route()`는 요청에 대해, 그 요청에 응답한 같은 목록의 항목을 보고한다.
+이는 그룹 접두사가 해석된 패턴이므로, 트레이싱 스팬, 메트릭, 로그 줄은 요청을 모든 id별이 아니라 `/api/decks/\{deckId}`로 묶는다:
+
+[source,java]
+----
+app.beforeRoute(req -> {
+    Span.current().updateName(req.method() + " " + req.route().path());   // "GET /api/decks/{deckId}"
+    return null;
+});
+----
+
+라우팅 전과 매칭된 라우트가 없는 곳에서는 null이다: `beforeRequest` 필터 안에서, 그리고 정적 파일, 404, 405, 자동 OPTIONS 응답에서 그렇다.
+`beforeRoute`부터는 설정되어 핸들러, after 필터, 예외 핸들러와 에러 핸들러, 응답 필터, 요청 로거까지 이어진다.
+GET 라우트가 응답한 HEAD는 그 GET 라우트를 보고한다.
+보고되는 라우트는 라우터가 고른 것이므로, 자체의 선호가 아니라 동점을 가리는 등록 순서를 따른다.
+
+[#descriptions]
+== 설명
+
+설명은 라우트가 _무엇을 위한_ 것인지 말하며, 이는 메서드와 경로가 말하지 않는 유일한 것이고, 등록 외에는 아무것도 알지 못하는 것이다.
+모든 등록 메서드는 `App`에서나 그룹에서나 똑같이 이를 선택적인 두 번째 인자로 받는다:
+
+[source,java]
+----
+app.get("/api/decks", "List every deck", api::listDecks);
+
+app.path("/api/decks", decks -> {
+    decks.post("", "Create a deck", api::createDeck);
+    decks.get("/{deckId}/cards", "List the cards of one deck", api::listCards);
+});
+----
+
+설명은 경로와 핸들러 사이에 놓이므로 핸들러는 람다가 읽히기 좋은 마지막 자리에 남는다.
+설명 없이 등록된 라우트는 null이 아니라 `""`를 보고하므로, 읽는 쪽은 있는지 묻지 않고 `route.description()`을 출력할 수 있다.
+
+이는 등록 지점에 쓰인 문서이며, 리플렉션을 뺀 애너테이션이 바로 그것이다.
+그것은 의도된 것으로, 대안은 첫 번째와 발맞춰야 하는 두 번째 장소이기 때문이다.
+설명은 문자열 인자에 그치며 그 이상은 아니다: 프레임워크는 결코 이를 읽지 않으며, 설명 없는 라우트는 이전과 정확히 같게 등록되고, 매칭되고, 보고된다.
+
+xref:openapi.adoc[`spider-silk-openapi`]는 비어 있지 않은 설명을 오퍼레이션의 `summary`로 쓰고, 설명이 없는 라우트에서는 그 필드를 생략한다.
+
+[#guards]
+== 가드
+
+`routes()`는 경로에 응답하는 것을 나열한다.
+`app.guards()`는 그 주위에서 그 밖에 무엇이 실행되는지 나열한다: `beforeRequest`, `beforeRoute`, `afterRoute` 필터, `error(status, ...)` 핸들러, `responseFilter(...)` 필터를 같은 등록에서 읽어, sealed `Guard`의 불변 스냅샷으로 돌려준다:
+
+[source,java]
+----
+for (Guard guard : app.guards()) {
+    String scope = switch (guard) {
+        case Guard.BeforeRequest before -> "before request " + before.path();
+        case Guard.BeforeRoute before -> "before " + before.path();
+        case Guard.AfterRoute after -> "after " + after.path();
+        case Guard.Error error -> "error " + error.status().code();
+        case Guard.ResponseFilter ignored -> "every response";
+    };
+}
+----
+
+종류 필드를 가진 하나의 레코드가 아니라 다섯 개의 레코드인 이유는, 필터는 경로에, 에러 핸들러는 상태에, 응답 필터는 아무것에도 범위가 정해지지 않으며, 절반의 경우에 null인 컴포넌트는 그것을 정직하지 않게 보고할 것이기 때문이다.
+`Guard.ResponseFilter`는 모든 응답에서 실행되므로 컴포넌트가 없고, 두 번 등록하면 두 항목이다.
+
+목록은 실행 시점별로 묶인다: 요청 필터, 그다음 before 라우트 필터, 그다음 after 라우트 필터, 그다음 에러 핸들러, 그다음 응답 필터다.
+각 묶음 안에서는 등록 순서이며, 이는 실행되는 순서다.
+
+필터의 적용 범위는 경로가 아니라 패턴이며, 패턴으로 보고된다.
+`++/admin/*++`는 `++/admin/*++`로 남고, `/admin`과 그 아래 모든 것을 포괄한다.
+`beforeRoute(filter)`는 자신이 등록하는 `++/*++`를 보고하고, 그룹의 `decks.beforeRoute(filter)`는 해석된 `++/api/decks/*++`를 보고한다.
+요청을 그 패턴에 매칭하는 것은 디스패처의 일이지 이 목록의 일이 아니다: 여기서 노출되는 것은 라우트에서와 같은 평범한 문자열이다.
+가드가 어떤 경로를 열어 두는지에 대한 감사는, xref:openapi.adoc[OpenAPI 내보내기]가 `routes()` 위에 세워지듯이, 이 목록 위에 세워진다.
+
+`exception(Type, handler)` 핸들러는 나열되지 않는다.
+예외 핸들러는 타입에 범위가 정해지므로, 경로도 상태도 그것이 적용되는 곳을 설명하지 못한다.
+CORS, 압축, 보안 헤더도 마찬가지다: 이들은 필터로 등록되는 것이 아니라 xref:cors-compression-and-security-headers.adoc[`App`에서 명시되며], 응답 필터 뒤의 고정된 순서를 가진다.

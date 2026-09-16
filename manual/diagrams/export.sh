@@ -1,5 +1,6 @@
 #!/bin/sh
-# Exports every draw.io source in this directory to an SVG under manual/modules/ROOT/images/.
+# Exports every draw.io source in this directory to an SVG under manual/modules/ROOT/images/,
+# and copies it to manual-ko/modules/ROOT/images/, since the Korean manual embeds the same diagrams.
 # The exporter is the draw.io desktop app (https://www.drawio.com), on the path as `drawio`;
 # a machine without a display runs it under xvfb-run.
 set -e
@@ -12,3 +13,4 @@ fi
 for f in *.drawio; do
   $run drawio -x -f svg -b 10 --embed-svg-fonts false -o "$out/${f%.drawio}.svg" "$f" 2>/dev/null | grep -- '->'
 done
+cp "$out"/*.svg ../../manual-ko/modules/ROOT/images/

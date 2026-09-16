@@ -23,11 +23,17 @@ A version on Central is permanent, so every step before the tag is a check that 
    git push origin vx.y.z
    ```
    The workflow checks that the tag matches `gradle.properties`, builds, signs every publication into `build/staging-deploy`, uploads the zip of it to the Central Portal, waits for validation, and creates the GitHub Release.
-6. Open [Deployments](https://central.sonatype.com/publishing/deployments) on the Central Portal.
+6. Cut the docs branch of the release:
+   ```bash
+   scripts/docs-branch.sh x.y.z
+   ```
+   It creates `docs/x.y.z` from the tag with both manual components versioned as `x.y.z`, pushes it, and the Docs workflow publishes it as the latest version at the site root.
+   `main` goes on being built as `main (unreleased)`.
+7. Open [Deployments](https://central.sonatype.com/publishing/deployments) on the Central Portal.
    The deployment `spider-silk-x.y.z` is `VALIDATED` and waits there, because the workflow uploads it as `USER_MANAGED`.
    Check the component list, then press **Publish**.
    **Drop** discards the deployment instead, and the tag can then be deleted and pushed again.
-7. Publication takes up to half an hour.
+8. Publication takes up to half an hour.
    The release is done once `https://repo1.maven.org/maven2/net/benelog/spidersilk/spider-silk-core/x.y.z/` lists the jars.
 
 ## A dry run without Central

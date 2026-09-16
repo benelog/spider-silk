@@ -1,0 +1,79 @@
+= FreeMarker
+:navtitle: FreeMarker
+
+`spider-silk-freemarker`는 코어에 번들된 jte 대신 https://freemarker.apache.org[FreeMarker]로 렌더링한다.
+xref:tomcat.adoc[Tomcat]이 별도 모듈인 것과 같은 이유로 별도 모듈이다.
+한 엔진에 대한 종속은 아티팩트 이름에 담기고, 코어는 템플릿 의존성이 넷이 아니라 하나인 웹 계층으로 남는다.
+
+== 설치
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation('{project-group}:spider-silk-freemarker:{project-version}') {
+        exclude group: 'gg.jte'    // core's jte, unused here
+    }
+}
+----
+
+jte 제외는 선택 사항이다.
+쓰지 않는 엔진을 클래스패스에서 치울 뿐이다.
+
+== 렌더링
+
+[source,java]
+----
+new App()
+        .templates(new FreeMarkerTemplates("freemarker"))
+        .get("/decks/{deckId}", req ->
+                WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+----
+
+이는 `classpath:/freemarker/deck.ftlh`를 렌더링하며, UTF-8로 읽고 파싱된 템플릿은 캐시한다.
+모델이 곧 데이터 모델이므로, `${deck.title}`은 `Map.of("deck", ...)`에 닿는다.
+
+== 여기서 이스케이프는 결정 사항이다
+
+`new FreeMarkerTemplates(root)`는 `HTMLOutputFormat`을 설정하므로, `${}`는 HTML 이스케이프되고 `${x?no_esc}`가 빠져나가는 길이다.
+FreeMarker 자체는 출력 형식이 지시하기 전까지 아무것도 이스케이프하지 않는데, 이것이 다른 세 엔진과 다른 한 가지 지점이며, 이 모듈이 한 줄짜리 코드가 아니라 모듈로 존재하는 주된 이유다.
+
+기본 접미사는 `.ftlh`로, FreeMarker가 스스로 "이것은 HTML이다"라고 읽는 확장자다.
+따라서 이스케이프는 두 번 명시된다: 한 번은 설정에서, 한 번은 모든 템플릿의 이름에서다.
+직접 정한 접미사는 두 번째 절반을 떨어뜨리지만, 설정은 여전히 유효하다:
+
+[source,java]
+----
+app.templates(new FreeMarkerTemplates("freemarker")     // classpath:/freemarker
+        .suffix(".ftl"));                               // .../deck.ftl, still escaped
+----
+
+접미사는 덧붙일 뿐 검사하지 않으므로, 확장자를 아직 달고 있는 이름은 접미사가 두 번 붙은 채로 조회된다.
+클래스패스 로더는 자체 확장자를 덧붙이지 않으므로, 작동하는 것은 `suffix` 하나뿐이다.
+
+== 직접 정하는 설정
+
+다른 생성자는 `Configuration`을 받으며, 객체 래퍼, 공유 변수, 파일 시스템 로더는 여기에 들어간다.
+통째로 넘겨지므로, 이스케이프, 예외 처리, 인코딩은 다시 설정해야 한다.
+
+[source,java]
+----
+Configuration configuration = new Configuration(Configuration.VERSION_2_3_34);
+configuration.setTemplateLoader(new ClassTemplateLoader(loader, "freemarker"));
+configuration.setDefaultEncoding("UTF-8");
+configuration.setOutputFormat(HTMLOutputFormat.INSTANCE);                        // or nothing is escaped
+configuration.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
+configuration.setSharedVariable("siteName", "Spider Silk");
+
+app.templates(new FreeMarkerTemplates(configuration));
+----
+
+`RETHROW_HANDLER`는 내장 설정이 쓰는 것이며, 서버가 원하는 것이다.
+그러면 실패한 템플릿은 반쯤 렌더링된 페이지에 스택 트레이스를 쓰는 대신 `app.exception(...)`에 도달한다.
+FreeMarker 자체의 기본값인 `DEBUG_HANDLER`는 페이지에 스택 트레이스를 쓴다.
+
+== 리플렉션
+
+FreeMarker는 `${deck.title}`을 객체 래퍼를 통해 읽는데, 레코드나 빈에 대해서는 이것이 리플렉션을 쓴다.
+그것은 코어가 아니라 모듈의 리플렉션이다.
+규칙이 적용되는 범위는 xref:reflection-scope.adoc["리플렉션 없음"의 범위]를 참고한다.
+모델을 템플릿이 이미 가진 값들의 `Map`으로 유지하면 그마저도 배제된다.

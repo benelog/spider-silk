@@ -27,7 +27,7 @@ Three core principles:
 - **Better RESTful API support than raw servlets.**
     * Routing is per method, paths carry variables, parameters are extracted with a declared type, and exceptions map to status codes.
 
-**Full documentation: [spider-silk.benelog.net](https://spider-silk.benelog.net)**
+**Full documentation: [spider-silk.benelog.net](https://spider-silk.benelog.net)**, also [in Korean](https://spider-silk.benelog.net/ko/), with every released version alongside.
 
 ## Quick Start
 

@@ -1,0 +1,172 @@
+= 응답
+:navtitle: 응답
+
+`WebResponse`는 불변 값이다.
+모든 메서드는 새 응답을 반환하며, 이것이 after 필터가 라우트가 답한 것을 다시 쓸 수 있게 하는 이유이다.
+
+불변성은 봉투를 다룬다: 상태, 헤더, 쿠키, 그리고 템플릿 모델의 항목이다.
+쿠키는 추가될 때 복사되고 `cookies()`가 넘겨줄 때 다시 복사되므로, 이후에 `Cookie` 객체를 바꿔도 응답이 보내는 것은 아무것도 바뀌지 않는다.
+템플릿 모델은 템플릿 본문이 만들어질 때 읽기 전용 맵으로 복사되므로, 핸들러가 계속 쓰는 맵은 페이지에 도달하지 않는다.
+복사는 얕은 복사이며, 모델 값으로 저장된 가변 객체는 여전히 핸들러가 넘긴 바로 그 객체이다.
+`bytes` 본문의 배열과 `stream` 본문의 라이터는 복사되지 않고 그대로 넘겨지는데, 큰 본문의 두 번째 복사본이야말로 그 본문들이 피하려고 존재하는 것이기 때문이다.
+
+== 본문
+
+`html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `file(path)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
+콘텐츠 타입을 받는 모든 본문에서 콘텐츠 타입은 첫 번째 인자이다.
+템플릿 이름에는 확장자가 없다.
+xref:templates.adoc[템플릿]에서 설명하듯이, 엔진이 자신의 확장자를 덧붙인다.
+
+`body()`는 봉인된 `WebResponse.Body`를 반환한다: `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, 또는 `Raw`이다.
+이에 대한 `switch`에는 default 케이스가 필요 없으며, 테스트는 답을 읽어낼 서블릿 응답 없이도 답을 검증할 수 있다:
+
+[source,java]
+----
+Json.JsonObject requestBody = Json.obj().put("name", "Spanish");
+WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
+        .jsonBody(requestBody)
+        .build());
+
+assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
+assertThat(response.header("Location")).isEqualTo("/api/decks/1");
+assertThat(((WebResponse.Text) response.body()).content()).isEqualTo("{\"id\":1}");
+----
+
+`body(replacement)`는 모든 헤더를 보존한다.
+`Content-Length`, `ETag`, `Last-Modified`, `Content-Encoding`을 포함하여, 이전 본문을 설명하는 메타데이터는 직접 갱신하거나 제거해야 한다.
+타입이 바뀌면 `Content-Type`을 대체 본문의 타입으로 설정한다.
+예를 들어, 본문을 평문으로 대체하는 필터는 이전 메타데이터를 제거한다:
+
+[source,java]
+----
+return response.body(new WebResponse.Text(replacement))
+        .contentType("text/plain; charset=UTF-8")
+        .withoutHeader("Content-Length")
+        .withoutHeader("ETag")
+        .withoutHeader("Last-Modified")
+        .withoutHeader("Content-Encoding");
+----
+
+길이가 설정되지 않았을 때 라이터는 텍스트와 바이트에 대해 새 길이를 계산한다.
+스트리밍 대체 본문은 길이를 생략해도 된다.
+
+== 디스크의 파일
+
+`file(path)`는 파일 이름이 함의하는 콘텐츠 타입, `Content-Length`로서의 파일 크기, 그리고 `Stream` 본문으로 답한다.
+
+[source,java]
+----
+app.get("/decks/{deckId}/export", req ->
+        WebResponse.file(service.writeExport(req.pathParamLong("deckId")))
+                .attachment("deck.csv"));
+----
+
+타입은 확장자에서 오며, 테이블이 모르는 확장자는 `application/octet-stream`으로 답한다.
+이름이 내용에 대해 유용한 것을 말해 주지 않는 파일은 `.contentType(...)`으로 답하며, 이것은 이름에서 알아낸 것을 덮어쓴다.
+테이블 자체는 공개되지 않는다: 콘텐츠 타입에 이르는 길은 그 타입을 가진 파일이다.
+
+읽을 수 있는 일반 파일이 아닌 경로는 404로 답하는 대신 `UncheckedIOException`을 던진다.
+프레임워크는 정리되어 사라진 내보내기 파일과 핸들러가 잘못 만든 경로를 구별할 수 없지만, 핸들러는 할 수 있다.
+없는 파일에 대해 404를 원하는 핸들러는 그렇게 말하는 줄을 직접 쓴다:
+
+[source,java]
+----
+if (!Files.isRegularFile(export)) {
+    throw new HttpException(HttpStatus.NOT_FOUND, "No export for that deck");
+}
+return WebResponse.file(export);
+----
+
+검사는 본문이 기록되는 동안이 아니라 응답이 만들어질 때 실행되므로, 실패는 여전히 핸들러 안에 있고 `app.exception(...)`이 답할 수 있다.
+
+검증자와 조건부 요청은 여기가 아니라 xref:static-files.adoc[정적 파일]에 속한다.
+핸들러가 선택한 파일은 정적 파일이 아니며, 그것이 바뀔 수 있는지는 핸들러만 안다.
+
+[#headers]
+== 헤더
+
+`header(name, value)`는 헤더를 설정하고 `header(name)`은 이름의 대소문자 표기와 무관하게 헤더를 다시 읽는다.
+HTTP에서 필드 이름은 대소문자를 구별하지 않으며, 그 뒤의 맵도 같은 방식으로 비교한다.
+`withoutHeader(name)`은 이름의 대소문자 표기와 무관하게 헤더를 제거하고, 나머지 헤더, 쿠키, 상태, 본문은 보존한다.
+
+[source,java]
+----
+WebResponse response = WebResponse.text("ok").header("X-Trace-Id", trace);
+
+response.header("x-trace-id");   // the trace id: the spelling asked for does not matter
+response.headers();              // every field, in the order they were set
+----
+
+응답은 필드당 하나의 값을 가진다.
+어떤 표기로든 필드를 다시 설정하면 값은 교체되고 이름과 위치는 그대로 남으므로, `headers()`는 실제로 전송되는 것을 정확히 다시 읽는다.
+`vary(field)`는 교체하지 않고 추가하는 유일한 메서드인데, `Vary`는 목록을 가리키며 압축과 CORS가 각각 거기에 올릴 것이 있기 때문이다.
+
+한 번 이상 보내는 헤더는 범위 밖이며, `headers()`는 그 타입으로 그렇게 말한다: `Map<String, String>`은 이름당 하나의 값을 약속한다.
+쿠키는 자신만의 목록을 가진 예외로, `cookie(...)`로 추가하고 `cookies()`로 다시 읽는다.
+한 답에 두 개의 `Link` 줄을 넣는 것처럼 반복되어야 하는 다른 모든 것은 `raw`를 통해 쓴다:
+
+[source,java]
+----
+return WebResponse.raw((req, res) -> {
+    res.addHeader("Link", "<https://example.com/decks?page=2>; rel=\"next\"");
+    res.addHeader("Link", "<https://example.com/decks?page=9>; rel=\"last\"");
+    res.setStatus(HttpStatus.NO_CONTENT.code());
+});
+----
+
+== 상태
+
+`empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`.
+
+상태는 `HttpStatus` 상수이므로, 존재하지 않는 코드는 쓸 수 없다.
+숫자가 런타임에만 도착할 때는 `HttpStatus.of(int)`로 찾는다.
+
+== 리다이렉트
+
+`redirect(location)`은 **302 Found**로 답하며, `Location` 헤더는 주어진 그대로 나간다.
+`/decks/3` 같은 경로가 애플리케이션이 보통 원하는 것이고, HTTP가 허용하는 것이다.
+
+[source,java]
+----
+WebResponse.redirect("/decks/" + deck.id());                             // 302
+WebResponse.redirect("/decks", HttpStatus.SEE_OTHER);                    // 303, after a POST
+WebResponse.redirect("/new-home", HttpStatus.MOVED_PERMANENTLY);         // 301, moved for good
+WebResponse.redirect("/api/v2/decks", HttpStatus.PERMANENT_REDIRECT);    // 308, keeps the method
+----
+
+302가 기본인 이유는 리다이렉트가 임시인 동안에만 되돌릴 수 있기 때문이다.
+브라우저와 중간 장치는 301을 종종 무기한으로 캐시하므로, 잘못된 301은 코드가 고쳐진 뒤로도 한참 동안 방문자를 잘못된 곳으로 계속 보낸다.
+302는 또한 `HttpServletResponse.sendRedirect`가 보내는 것이며, Javalin, Spark, Spring MVC, Express, Rails, Django가 모두 기본으로 삼는 것이다.
+
+두 번째 인자는 다른 상태를 지정하며, 다른 모든 상태와 같은 이유로 int가 아닌 `HttpStatus`를 받는다.
+3xx가 아닌 것은 거부한다.
+200에 붙은 `Location` 헤더는 리다이렉트가 아니며, 어떤 클라이언트도 따라가지 않을 응답을 내보내는 것보다 호출 시점에 실패하는 편이 낫다.
+
+넷 중 둘은 이름으로 알아 둘 만하다.
+303은 POST 뒤의 리다이렉트가 의미하는 바이다.
+302가 실제로 그 일을 하고, 303은 그것을 정확히 말한다.
+307과 308은 요청 메서드를 유지한다.
+POST 뒤에 301이나 302를 따라가는 브라우저는 보통 GET을 보내는데, 이 둘은 그 변경을 금지한다.
+
+[#cookies]
+== 쿠키
+
+[source,java]
+----
+return WebResponse.html(page)
+        .cookie("theme", "dark")                    // session cookie
+        .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
+        .removeCookie("stale");
+----
+
+두 인자 형태는 `Path=/`, `HttpOnly`, `SameSite=Lax`를 설정하며, 이는 훔칠 가치가 있는 것을 담은 쿠키라면 가져야 할 것들이다.
+`cookie(Cookie)`는 `Secure`, `Domain`, `SameSite=None`을 위해 직접 만든 `jakarta.servlet.http.Cookie`를 받는다.
+응답은 속성을 포함하여 그 복사본을 보관한다.
+클라이언트가 보낸 쿠키를 읽는 것은 xref:request.adoc[요청]에서 다룬다.
+
+== 람다 계열
+
+마지막 세 본문은 각각 자신만의 람다를 받으며, 접미사가 그것이 속한 계열을 이름 짓는다.
+`…Handler`는 `WebResponse`로 요청에 답한다: `Handler`와 `ExceptionHandler`이다.
+`…Writer`는 아무것도 반환하지 않고 이미 정해진 응답의 본문을 채운다: `StreamWriter(OutputStream)`, `SseWriter(SseStream)`, `ServletWriter(HttpServletRequest, HttpServletResponse)`이다.
+따라서 `ServletWriter`는 `StreamWriter`의 형제이지, `Handler`의 친척이 아니다.

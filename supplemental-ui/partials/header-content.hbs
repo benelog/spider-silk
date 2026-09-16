@@ -1,0 +1,32 @@
+<header class="header">
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <a class="navbar-item" href="{{{or site.url siteRootPath}}}">{{site.title}}</a>
+      <button class="navbar-burger" aria-controls="topbar-nav" aria-expanded="false" aria-label="Toggle main menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+    <div id="topbar-nav" class="navbar-menu">
+      <div class="navbar-end">
+        {{#if page.component}}
+        {{#if (eq page.attributes.lang 'ko')}}
+        {{#with (alternateLanguage 'ROOT')}}
+        <a class="navbar-item" href="{{{relativize this}}}" hreflang="en" data-lang="en">English</a>
+        {{/with}}
+        <span class="navbar-item"><strong>한국어</strong></span>
+        {{else}}
+        <span class="navbar-item"><strong>English</strong></span>
+        {{#with (alternateLanguage 'ko')}}
+        <a class="navbar-item" href="{{{relativize this}}}" hreflang="ko" data-lang="ko">한국어</a>
+        {{/with}}
+        {{/if}}
+        {{/if}}
+        {{#with site.keys.repository}}
+        <a class="navbar-item" href="{{{this}}}">GitHub</a>
+        {{/with}}
+      </div>
+    </div>
+  </nav>
+</header>

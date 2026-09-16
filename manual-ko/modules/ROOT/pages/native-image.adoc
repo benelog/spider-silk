@@ -1,0 +1,203 @@
+= GraalVM 네이티브 이미지
+:navtitle: GraalVM 네이티브 이미지
+
+리플렉션이 없는 프레임워크는 `native-image`가 꿰뚫어 볼 수 있는 프레임워크다.
+라우팅은 리스트이고, 핸들러는 닫힌 세계 분석(closed-world analysis)이 따라가는 람다이며, core를 위해 작성할 리플렉션 설정은 없다.
+준비가 필요한 것은 프레임워크가 아닌 부분들이며, 예제 프로젝트가 그 전부를 보여준다.
+`gradle :example-flashcard:nativeCompile`은 같은 앱을 서비스하는 자기 완결적인 바이너리를 빌드한다.
+
+== 예제가 준비하는 것
+
+템플릿::
+네이티브 바이너리는 컴파일러를 싣고 있지 않으므로, 런타임에 템플릿을 컴파일하는 jte의 기본 동작은 선택지가 아니다.
+jte Gradle 플러그인의 `generate()`는 빌드 시점에 각 템플릿을 Java 클래스로 바꾸고(xref:templates.adoc#production[템플릿]), 그 `NativeResourcesExtension`은 jte가 이름으로 로드하는 그 생성된 클래스들의 리플렉션 설정을 써낸다:
++
+[source,groovy]
+----
+plugins {
+    id 'gg.jte.gradle' version '3.2.4'
+}
+
+jte {
+    sourceDirectory = file('src/main/resources/jte').toPath()
+    contentType = gg.jte.ContentType.Html
+    generate()
+    jteExtension 'gg.jte.nativeimage.NativeResourcesExtension'
+}
+
+dependencies {
+    jteGenerate 'gg.jte:jte-native-resources:3.2.4'
+}
+----
++
+그 설정이 jte 리플렉션의 전부다.
+엔진은 생성된 클래스를 이름으로 찾아 그 `render` 메서드를 호출하고, 템플릿 안의 표현식은 모델을 리플렉션으로 들여다보는 일 없이 컴파일된 코드로 실행되며, 자세한 내용은 xref:reflection-scope.adoc["리플렉션 없음"의 범위]에 있다.
+어떤 모델 클래스도, 어떤 프레임워크 클래스도 항목이 필요 없다.
+
+행 매핑::
+리포지토리는 spring-jdbc의 `DataClassRowMapper`로 행을 매핑하고 `SimplePropertySqlParameterSource`를 통해 insert를 넘기는데, 둘 다 도메인 레코드에 리플렉션으로 접근한다.
+그것은 예제 자체의 선택이며, 기존 JDBC 코드의 상당수가 정확히 이런 모양이기 때문에 유지한 것이다.
+그 선택이 네이티브 이미지에서 치르는 비용은 모든 도메인 타입을 나열한 리플렉션 설정이며, 빌드는 그 목록을 손으로 관리하는 대신 패키지에서 도출한다(아래 참고).
+
+리소스와 드라이버::
+나머지는 빌드에 선언한다: 앱이 런타임에 읽는 클래스패스 리소스와, 플러그인이 GraalVM의 공유 저장소에서 가져오는 H2의 도달 가능성 메타데이터다.
++
+[source,groovy]
+----
+graalvmNative {
+    binaries {
+        main {
+            imageName = 'flashcard'
+            resources.includedPatterns.addAll(['schema\\.sql', 'public/.*'])
+        }
+    }
+}
+----
++
+xref:gradle-plugin.adoc[spider-silk 플러그인]이 블록의 나머지를 공급한다: `--no-fallback`, 아래 컨테이너 절이 의존하는 대부분 정적 링크인 `--static-nolibc`, 그리고 메타데이터 저장소다.
+손으로 쓰면 `org.graalvm.buildtools.native` 플러그인 아래의 `buildArgs.add('--no-fallback')`, `buildArgs.add('--static-nolibc')`, `metadataRepository { enabled = true }`다.
+
+== 빌드와 실행
+
+[source,bash]
+----
+# needs a GraalVM JDK, e.g. `sdk install java 25.2.4-graalce`
+gradle :example-flashcard:nativeCompile
+example-flashcard/build/native/nativeCompile/flashcard
+----
+
+GraalVM CE 25로 빌드하면 바이너리는 61MB로 나오고, Jetty는 약 35ms 만에 시작되었다고 보고하는데, 같은 앱을 JVM에서 돌리면 약 350ms다.
+예제가 하는 모든 일이 손으로 쓴 리플렉션 설정 없이 바이너리에서 돌아간다: 라우팅, jte 템플릿, 정적 파일, 세션과 플래시, JSON API, OpenAPI 내보내기, 그리고 트랜잭션을 포함한 spring-jdbc 위의 H2다.
+이미지의 모든 항목은 생성된 것으로, 템플릿 클래스는 jte 플러그인이, 도메인 패키지는 빌드 자체가 생성하며, 그중 어느 것도 프레임워크 클래스를 지목하지 않는다.
+`--no-fallback`이 그것을 정직하게 지키는데, 여전히 JVM이 필요한 바이너리를 조용히 내놓는 대신 빌드를 실패시킨다.
+
+`--dev` 템플릿 모드는 JVM에 남는 유일한 것인데, 템플릿을 핫 리로드한다는 것은 런타임에 컴파일한다는 뜻이기 때문이다.
+
+[#container]
+== 컨테이너 안의 바이너리
+
+`-Pnative`는 xref:deployment.adoc[배포]가 설정하는 것과 같은 Jib 빌드의 목표를 바이너리로 돌리는데, 그 빌드는 빌드 머신에 Docker 데몬 없이 JRE 베이스 위에 앱을 컨테이너화한다.
+이 전환은 xref:gradle-plugin.adoc[spider-silk 플러그인]에 실려 있으므로, 예제의 빌드에는 이를 위한 것이 아무것도 없다.
+펼쳐 보면, buildscript 클래스패스가 필요한 Jib의 native-image 확장을 감싼 조건문이다:
+
+[source,groovy]
+----
+buildscript {
+    dependencies {
+        classpath 'com.google.cloud.tools:jib-native-image-extension-gradle:0.1.0'
+    }
+}
+
+if (providers.gradleProperty('native').present) {
+    jib {
+        from.image = 'gcr.io/distroless/base-debian12'
+        to.image = 'ghcr.io/benelog/spider-silk-flashcard:native'
+        pluginExtensions {
+            pluginExtension {
+                implementation = 'com.google.cloud.tools.jib.gradle.extension.nativeimage.JibNativeImageExtension'
+                properties = [imageName: 'flashcard']
+            }
+        }
+    }
+}
+----
+
+이 확장은 Jib이 조립할 의존성 레이어와 클래스 레이어를 바이너리를 담은 단일 레이어로 대체하고, 그 실행 비트를 설정하며, 엔트리포인트를 `/app/flashcard`로 향하게 한다.
+`imageName`은 `build/native/nativeCompile`에서 어느 파일을 가져올지 알려주며, `graalvmNative` 블록의 것과 일치해야 한다.
+
+베이스 이미지는 프로세스와 함께 줄어든다.
+바이너리는 대부분 정적으로 빌드되어(`--static-nolibc`, 플러그인 기본값) glibc를 뺀 모든 것이 링크되어 들어가고, `distroless/base`는 그 glibc와 CA 인증서, 파일시스템 뼈대에 지나지 않는다.
+셸도, 패키지 관리자도, JVM도 없는데, JVM은 컴파일 시점에 떠났기 때문이다.
+대부분 정적인 링크가 그 베이스를 충분하게 만드는 요인이다: 동적으로 링크하면 바이너리는 `libz`도 원하는데, `distroless/base`에는 그것이 없어 컨테이너가 시작 시 죽는다.
+
+[source,bash]
+----
+gradle :example-flashcard:jibBuildTar -Pnative
+# then, on a machine that runs containers:
+docker load < example-flashcard/build/jib-image.tar
+docker run -p 8080:8080 ghcr.io/benelog/spider-silk-flashcard:native
+----
+
+tar는 JVM 이미지의 124MB에 비해 34MB로 나오며, 그 대가는 이식성이다.
+Java 바이트코드는 JRE 이미지가 있는 어떤 아키텍처에서도 실행되지만, 네이티브 바이너리는 한 플랫폼용으로 컴파일되므로 이 이미지는 빌드한 아키텍처에서 실행된다.
+크로스 컴파일은 없다.
+
+== 라이브러리가 리플렉션을 쓸 때
+
+가로막는 것은 프레임워크가 아니다.
+런타임에 이름으로 클래스를 찾는 라이브러리가 가로막는다.
+미리 컴파일한 템플릿이나 손으로 쓴 매퍼처럼, 의도를 그대로 말하는 코드 경로를 우선한다.
+라이브러리가 리플렉션을 써야만 하는 곳에서는 `native-image`에 그 설정을 건넨다: jte의 확장처럼 라이브러리 자체의 도구에서, H2처럼 GraalVM의 메타데이터 저장소에서, 또는 아래처럼 자신의 타입을 위해 직접 관리해서다.
+
+=== DataClassRowMapper를 유지하기, 측정 결과
+
+예제의 `DataClassRowMapper`와 `SimplePropertySqlParameterSource`에는 파일 하나가 필요하다: 클래스패스의 `META-INF/native-image/<any-directory>/` 아래에 있는, 도메인 타입마다 항목 하나를 둔 `reflect-config.json`이다.
+손으로 쓰거나, 예제의 빌드가 하는 방식대로 생성한다.
+
+[source,json]
+----
+[
+  { "name": "flashcard.domain.Card",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true,
+    "allDeclaredFields": true }
+]
+----
+
+`allDeclaredConstructors`가 `DataClassRowMapper`가 레코드의 정규 생성자를 찾게 하는 것이고, `allDeclaredMethods`가 `SimplePropertySqlParameterSource`가 접근자를 읽게 하는 것이다.
+도메인 타입 자체 외에는 아무것도 필요하지 않았다.
+예제는 한 머신에서 두 방식 모두로 빌드하고, 바이너리의 모든 리포지토리 경로를 거쳐 실행해 보았다:
+
+[cols="1,1,1",options="header"]
+|===
+| | 손으로 쓴 매퍼 | 리플렉션 + 설정
+
+| 이미지 빌드 시간
+| 65s, 82s
+| 73s — 실행 간 편차 이내
+
+| Jetty 시작, 5회 중앙값
+| 38ms
+| 35ms — 측정 가능한 차이 없음
+
+| 바이너리 크기
+| 58.1MiB
+| 60.9MiB (+4.8%)
+|===
+
+리플렉션 메타데이터는 이미지를 빌드할 때 구워 넣어지므로, 부팅은 아무 비용도 치르지 않는다.
+비용은 다른 곳에 있다.
+리플렉션 매핑은 요청 시점에 행마다 더 느리고, 무엇보다 실패 양상이 옮겨간다.
+설정 항목 없이 추가된 레코드는 컴파일 에러가 아니며, `--no-fallback`도 잡지 못한다: 빌드는 성공하고, 그 레코드에 대한 첫 쿼리가 프로덕션에서 500으로 응답한다.
+트레이싱 에이전트(`-agentlib:native-image-agent=config-output-dir=...`)는 앱을 클릭해 다니는 JVM 실행에서 설정을 써낼 수 있지만, 그 대가로 그것이 본 다른 모든 것까지 쓸어 담는다.
+
+=== 패키지에서 설정을 도출하기
+
+항목을 빠뜨리는 실패에는 빌드 시점의 해법이 있고, 예제가 담아 보내는 것이 바로 그것이다: 설정을 손으로 관리하는 대신 패키지에서 도출한다.
+example-flashcard 빌드의 이 태스크는 `flashcard.domain`의 모든 타입을 등록하므로, 패키지에 추가된 레코드는 빠질 수 없다:
+
+[source,groovy]
+----
+def domainReflectConfig = tasks.register('domainReflectConfig') {
+    def domainDir = file('src/main/java/flashcard/domain')
+    def outDir = layout.buildDirectory.dir('generated/reflect-config')
+    inputs.dir(domainDir)
+    outputs.dir(outDir)
+    doLast {
+        def entries = domainDir.listFiles()
+                .findAll { it.name.endsWith('.java') }
+                .collect { 'flashcard.domain.' + it.name.replace('.java', '') }
+                .sort()
+                .collect { ['name': it, 'allDeclaredConstructors': true,
+                            'allDeclaredMethods': true, 'allDeclaredFields': true] }
+        def json = outDir.get().file('META-INF/native-image/flashcard-domain/reflect-config.json').asFile
+        json.parentFile.mkdirs()
+        json.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(entries))
+    }
+}
+sourceSets.main.resources.srcDir(domainReflectConfig)
+----
+
+`srcDir(domainReflectConfig)`는 생성된 디렉터리를 main 리소스에 추가하면서 태스크 의존성도 함께 실어 오므로, `processResources`가 그 파일을 집어 가고, jar든 네이티브 이미지든 거기서 빌드되는 모든 것도 마찬가지다.
+쓸어 담는 것이 핵심이자 동시에 주의점이다: 패키지의 모든 타입이, 최상위 타입 하나당 소스 파일 하나로, 리플렉션에 열리므로, 그것을 위한 타입만 담은 패키지에 적합하다.
+이 페이지의 두 변형은 같은 방식으로 검증했다: GraalVM CE 25로 빌드하고, 실행 중인 바이너리에서 모든 리포지토리 코드 경로를 거쳐 실행했다.

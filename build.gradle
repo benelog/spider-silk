@@ -49,6 +49,7 @@ tasks.register('verifyVersionReferences') {
     def checked = [
             'README.md',
             'manual/antora.yml',
+            'manual-ko/antora.yml',
             'spider-silk-maven-parent/pom.xml',
             'skills/spider-silk/SKILL.md',
             'skills/spider-silk/references/setup.md',
@@ -85,6 +86,33 @@ tasks.register('verifyVersionReferences') {
 }
 tasks.named('check') {
     dependsOn tasks.named('verifyVersionReferences')
+}
+
+// The Korean manual is a second Antora component that mirrors the English one,
+// so its descriptor repeats the version, the prerelease flag, and the
+// attributes of manual/antora.yml. Only the name, the title, and page-lang
+// differ; anything else that drifts fails the build here.
+tasks.register('verifyManualAttributes') {
+    def english = file('manual/antora.yml')
+    def korean = file('manual-ko/antora.yml')
+    inputs.files(english, korean)
+    doLast {
+        def shared = { File f ->
+            f.readLines().findAll { line ->
+                line ==~ /^(version|display_version|prerelease|start_page):.*/ ||
+                        (line ==~ /^    [a-z-]+: .*/ && !(line ==~ /^    page-lang: .*/))
+            }
+        }
+        def a = shared(english)
+        def b = shared(korean)
+        if (a != b) {
+            throw new GradleException("manual-ko/antora.yml disagrees with manual/antora.yml:\n  " +
+                    (a - b + (b - a)).join('\n  '))
+        }
+    }
+}
+tasks.named('check') {
+    dependsOn tasks.named('verifyManualAttributes')
 }
 
 subprojects {

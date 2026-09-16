@@ -1,15 +1,16 @@
-name: ROOT
-title: Spider Silk
-# main is the manual as it is being written, ahead of any release. A released
-# manual is a docs/x.y.z branch, which RELEASING.md cuts from the tag, and the
-# site lists every one of them beside this one.
+# The Korean manual: the component `ko`, mirroring manual/ page for page.
+# version, display_version, and prerelease say what manual/antora.yml says,
+# and the attributes below repeat its attributes; verifyVersionReferences and
+# verifyManualAttributes in build.gradle fail the build when the two drift.
+name: ko
+title: Spider Silk 한국어
 version: main
 display_version: main (unreleased)
 prerelease: true
 start_page: index.adoc
 asciidoc:
   attributes:
-    page-lang: en
+    page-lang: ko
     project-group: net.benelog.spidersilk
     project-version: 1.1.0
     project-repo: benelog/spider-silk

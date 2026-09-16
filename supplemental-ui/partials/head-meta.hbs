@@ -1,0 +1,34 @@
+    {{#if page.component}}
+    {{#with (alternateLanguage 'ROOT')}}
+    <link rel="alternate" hreflang="en" href="{{{@root.site.url}}}{{{this}}}" data-path="{{{relativize this}}}">
+    {{/with}}
+    {{#with (alternateLanguage 'ko')}}
+    <link rel="alternate" hreflang="ko" href="{{{@root.site.url}}}{{{this}}}" data-path="{{{relativize this}}}">
+    {{/with}}
+    {{/if}}
+    <script>
+    // The language follows the browser until the reader picks one. A choice
+    // made with the language switch is kept in this browser and wins from then
+    // on; a page with no counterpart in the wanted language stays as it is.
+    (function () {
+      var here = document.documentElement.lang
+      var want = null
+      try { want = localStorage.getItem('spider-silk-lang') } catch (e) {}
+      if (!want) {
+        var languages = navigator.languages || [navigator.language || '']
+        for (var i = 0; i < languages.length && !want; i++) {
+          var tag = String(languages[i]).toLowerCase()
+          if (tag === 'ko' || tag.indexOf('ko-') === 0) want = 'ko'
+          else if (tag === 'en' || tag.indexOf('en-') === 0) want = 'en'
+        }
+      }
+      document.addEventListener('click', function (event) {
+        var link = event.target.closest && event.target.closest('a[data-lang]')
+        if (!link) return
+        try { localStorage.setItem('spider-silk-lang', link.getAttribute('data-lang')) } catch (e) {}
+      })
+      if (!want || want === here) return
+      var alternate = document.querySelector('link[rel="alternate"][hreflang="' + want + '"]')
+      if (alternate) location.replace(alternate.getAttribute('data-path'))
+    })()
+    </script>

@@ -1,0 +1,84 @@
+= Tomcat
+:navtitle: Tomcat
+
+`spider-silk-tomcat`은 core에 번들된 Jetty 대신 임베디드 Tomcat에서 같은 앱을 실행한다.
+별도의 모듈인 이유는 한 서버에 대한 종속은 core 안이 아니라 아티팩트의 이름에 담겨야 하기 때문이다.
+어느 쪽이든 core는 약속을 지킨다: `AppServlet`은 평범한 서블릿이고, `WebServer`는 네 개의 메서드다.
+
+세 서버가 어떻게 비교되고 무엇을 고를지는 xref:server.adoc#choosing[서버 고르기]를 참고한다.
+
+== 설치
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation('{project-group}:spider-silk-tomcat:{project-version}') {
+        exclude group: 'org.eclipse.jetty.ee10'    // core's Jetty, unused here
+    }
+}
+----
+
+이 모듈은 Servlet 6.1 계열인 `tomcat-embed-core` 11.0.x에 의존한다.
+그것은 core의 서블릿 API인 Jetty의 `ee10`과 Undertow 2.3.x보다 한 단계 위이며, 이들은 모두 Servlet 6.0이다.
+core는 Servlet 6.1이 추가한 것을 아무것도 호출하지 않으므로, 같은 애플리케이션이 세 서버 모두에서 실행된다.
+
+Jetty 제외는 선택 사항이다.
+쓰지 않는 서버를 클래스패스에서 치워 둘 뿐이다.
+
+== 실행
+
+[source,java]
+----
+new App()
+        .get("/hello/{name}", req -> WebResponse.text("Hello " + req.pathParam("name")))
+        .server((app, port) -> new TomcatServer(app).port(port))
+        .start(8080);
+----
+
+`TomcatServer`의 표면은 `JettyServer`를 메서드 하나하나 그대로 반영하므로, 전환은 팩토리의 한 줄이다:
+
+[source,java]
+----
+new TomcatServer(app)
+        .port(8443)
+        .host("127.0.0.1")
+        .contextPath("/app")
+        .baseDir(Path.of("/var/tmp/tomcat"))    // default: a temp dir, deleted on stop
+        .executor(Executors.newVirtualThreadPerTaskExecutor())
+        .multipart(new MultipartConfigElement(tmp, 10_485_760L, 10_485_760L, 1_048_576))
+        .stopTimeout(Duration.ofSeconds(20))
+        .shutdownHook(false)
+        .customizeConnector(connector -> connector.setProperty("maxThreads", "400"))
+        .customizeContext(context -> context.addParameter("mode", "production"))
+        .customizeTomcat(tomcat -> tomcat.getHost().setAutoDeploy(false))
+        .start();
+----
+
+core가 제공하는 모든 것이 그대로 동작한다: 라우팅, 필터, 에러 핸들러, JSON, 템플릿, 정적 파일, SSE, 멀티파트 업로드, 세션, 그리고 `WebTest`다.
+`WebTest`는 서버를 아예 시작하지 않으므로, 테스트 스위트는 어느 서버가 클래스패스에 있는지 알지도 신경 쓰지도 않는다.
+
+== Tomcat 고유의 것
+
+정상 종료(graceful shutdown)는 여기서 직접 구현했는데, Tomcat에는 자체 `stopTimeout`이 없기 때문이다.
+`stop()`은 커넥터를 일시 정지한 뒤 타임아웃 안에 요청 풀을 종료하며, 이는 Spring Boot가 같은 이유로 하는 일이다.
+여기에는 분명히 말해 둘 만한 결과가 하나 있다.
+`stopTimeout(...)`은 커넥터가 `ThreadPoolExecutor`를 돌리는 동안에만 기다릴 대상이 있는데, 그것이 기본값이긴 하지만 `executor(...)`가 건네는 것이 반드시 그렇지는 않다.
+따라서 가상 스레드 실행기는 드레인을 아무 일도 하지 않는 것으로 남긴다.
+Undertow에는 그런 함정이 없는데, 그 드레인은 스레드가 아니라 요청을 세기 때문이다.
+
+종료 훅도 우리 것이다.
+Jetty의 `setStopAtShutdown`은 스스로 등록을 해제한다.
+이것은 시작 시 등록되고 정지 시 다시 제거되므로, 테스트마다 서버를 시작하는 스위트에도 아무것도 쌓이지 않는다.
+
+Tomcat은 디스크에 `catalina.base`를 원한다.
+기본값은 시작 시 만들어지고 정지 시 삭제되는 임시 디렉터리이므로, 빌드 옆에 아무것도 남지 않는다.
+`baseDir(...)`가 그것을 넘겨받는다.
+
+`sessions(boolean)`은 없다: Tomcat의 `StandardContext`는 시작 시 세션 관리자를 설치하고 빠져나갈 길을 주지 않으며, 조용히 아무 일도 하지 않는 메서드는 없는 것보다 나쁘다.
+로깅은 JULI를 거치므로, 이를 애플리케이션 자신의 로깅으로 보내려면 `jul-to-slf4j`와 브리지 핸들러가 필요하다.
+
+== 직접 시작하지 않은 Tomcat에 배포하기
+
+이 중 어느 것도 독립 실행 Tomcat에 떨어뜨린 WAR에는 해당하지 않는다.
+그 경로에는 모듈이 전혀 필요 없다.
+xref:deployment.adoc[배포]가 설명하는 대로 `AppServlet`을 직접 매핑하고 임베디드 서버를 제외한다.

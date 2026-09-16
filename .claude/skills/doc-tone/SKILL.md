@@ -40,6 +40,7 @@ Declarative, present tense, the defined term first, no literary flourish.
    A line ends where a sentence ends, however long it runs (this is also a `CLAUDE.md` rule).
    The diff then shows the sentence that changed instead of every line a rewrap touched.
 8. **English stays English.** The documentation is in English whatever language the request arrives in.
+   The Korean manual under `manual-ko/` is the one exception: it is a translation of `manual/`, page for page and sentence for sentence, written in 해라체 평서문 under the same rules 1 to 7.
 
 ### The one exception to rule 2
 

@@ -1,0 +1,92 @@
+= 세션과 플래시
+:navtitle: 세션과 플래시
+
+세션은 방문자의 여러 요청에 걸쳐 값을 서버에 보관한다.
+플래시 값은 정확히 한 요청만 더 살아남는 세션 값이다.
+
+== 세션 속성
+
+세션 속성은 요청을 통해 읽고 쓴다:
+
+[source,java]
+----
+req.setSessionAttr("user", user);                 // creates the session if there is none yet
+User user = req.sessionAttr("user", User.class);  // null when absent
+User same = req.sessionAttr("user");              // the same read, cast by the caller
+req.removeSessionAttr("user");                    // creates no session to remove from
+----
+
+읽기는 결코 세션을 만들지 않으므로, 로그인하지 않은 방문자는 세션 객체를 하나도 소비하지 않는다.
+쓰기는 필요할 때 세션을 만든다.
+값은 어떤 객체든 될 수 있고 서버에 머무른다: 컨테이너의 세션 쿠키만 오간다.
+
+잘못된 타입이 어디에 있는지 알려면 타입을 지정한다.
+`sessionAttr(key, User.class)`는 `Class.cast`로 캐스팅하며 그 줄에서 실패하고, 키, 발견된 타입, 요청한 타입을 알려준다.
+`sessionAttr(key)`는 대신 호출 지점에서 캐스팅하므로, 같은 실수가 읽기가 아니라 대입에서 `ClassCastException`이 된다.
+둘 다 400이 아니라 `IllegalStateException`의 영역이다: 값을 세션에 넣은 것은 애플리케이션 자신이므로, 예상하지 못한 타입은 애플리케이션 자신의 실수이며 500으로 답한다.
+타입이 호출 지점에 쓰여 있으므로, 어느 쪽도 이 프레임워크가 피하는 의미의 리플렉션이 아니다.
+
+쓰기는 `setSessionAttr`이라는 이름이고, 모든 읽기는 `sessionAttr`이라는 이름이다.
+어떤 인자도 한쪽을 다른 쪽으로 바꾸지 않으므로, `Class`는 다른 값과 똑같이 저장된다.
+`sessionAttr(key, type)`에 타입으로 리터럴 `null`을 넘기면 `NullPointerException`을 던지며, 메시지는 `removeSessionAttr(key)`를 알려준다.
+
+null 값을 쓰면 속성이 제거되는데, 이는 `HttpSession.setAttribute`에 대한 컨테이너의 규칙이다.
+따라서 `setSessionAttr(key, null)`과 `removeSessionAttr(key)`는 같은 일을 하며, 두 번째만이 이름으로 그렇게 말한다.
+
+== 세션 끝내기
+
+`invalidateSession()`은 세션을 끝내며, 이것이 로그아웃이다:
+
+[source,java]
+----
+app.post("/logout", req -> {
+    req.invalidateSession();
+    return WebResponse.redirect("/", HttpStatus.SEE_OTHER);
+});
+----
+
+세션 안의 모든 것이 사라지고 방문자의 다음 요청은 새 세션을 시작한다.
+애초에 세션이 없는 요청은 건드리지 않으므로, 두 번 로그아웃해도 에러가 아니다.
+무효화한 뒤에는 반환한다: 이 뒤에 읽은 세션 속성은 null로 답하고, 이 뒤에 쓴 세션 속성은 세션을 다시 시작한다.
+
+세션 지원은 서블릿 컨테이너의 것이며, 기본으로 켜져 있다.
+`JettyServer`는 `sessions(false)`로 이를 끈다.
+xref:tomcat.adoc[Tomcat]과 xref:undertow.adoc[Undertow]는 각 페이지에서 설명하듯이 항상 세션 매니저를 설치한다.
+
+== 플래시
+
+플래시 값은 그것을 설정한 요청의 다음 요청에서 정확히 한 번 보인다.
+이것이 Post/Redirect/Get 패턴의 빠진 조각이다: POST는 리다이렉트가 도착하는 페이지에서 "Imported 12 cards."라고 말하고 싶어 한다.
+
+[source,java]
+----
+app.post("/decks/{deckId}/import", req -> {
+    int imported = deckService.importCsv(req.pathParamLong("deckId"), req.file("file").asText());
+    req.flash("message", "Imported " + imported + " cards.");
+    return WebResponse.redirect("/decks/" + req.pathParam("deckId"), HttpStatus.SEE_OTHER);
+});
+
+app.get("/decks/{deckId}", req -> WebResponse.template("deck",
+        Map.of("message", req.flashed("message"), "deck", ...)));
+----
+
+`flash(key, value)`는 문자열을 세션에 저장한다.
+다음 요청이 디스패치되기 전에, 플래시된 모든 것이 세션에서 빠져나와 그 요청으로 옮겨지며, 거기서 `flashed(key)`가 그것을 읽는다.
+그 뒤의 어떤 요청도 아무것도 찾지 못한다.
+`flashed`는 아무도 플래시하지 않은 키에 대해 null로 답하므로, 템플릿은 메시지를 조건부로 렌더링할 수 있다.
+플래시는 세션 위에서 동작하므로 세션이 켜져 있어야 하며, 기본으로 켜져 있다.
+
+`flash(key, null)`은 키를 제거하며, null 세션 속성이 따르는 것과 같은 규칙이다.
+핸들러는 같은 요청 안에서 앞서 설정한 플래시를 이렇게 철회한다:
+
+[source,java]
+----
+req.flash("message", "Imported " + imported + " cards.");
+if (imported == 0) {
+    req.flash("message", null);   // the next request reads null
+}
+----
+
+제거는 다음 요청을 기다리는 것에만 적용된다.
+이 요청이 받은 값은 `flashed(key)`를 통해 계속 읽을 수 있다.
+세션이 없는 상태에서 플래시를 철회해도 세션을 시작하지 않는다.

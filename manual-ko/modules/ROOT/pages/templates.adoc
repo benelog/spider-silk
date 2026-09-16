@@ -1,0 +1,101 @@
+= 템플릿
+:navtitle: 템플릿
+
+`WebResponse.template(name, model)`은 렌더링된 페이지로 응답한다.
+이름에는 확장자가 없다: 엔진이 자기 확장자를 덧붙인다.
+
+[source,java]
+----
+app.get("/decks/{deckId}", req ->
+        WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+----
+
+그러기 위해 설정할 것은 없다.
+`App`은 `classpath:/jte` 위에서 https://jte.gg[jte]로 렌더링하며 `.jte`를 덧붙이므로, 위의 핸들러는 `classpath:/jte/deck.jte`를 렌더링한다.
+모델은 `Map`이며 이름으로 jte의 파라미터에 전달되고, `ContentType.Html`이 `${}` 출력을 대신 이스케이프한다.
+응답은 모델의 항목을 null 값과 순회 순서를 유지한 채 읽기 전용 맵으로 복사하므로, 렌더러는 바꿀 수 없는 맵을 받는다.
+
+== 직접 정하는 루트나 접미사
+
+[source,java]
+----
+app.templates(new JteTemplates("templates")     // classpath:/templates
+        .suffix(".html"));                      // .../deck.html
+----
+
+접미사는 덧붙일 뿐 검사하지 않으므로, 확장자를 아직 달고 있는 이름은 접미사가 두 번 붙은 채로 조회된다.
+
+== 다른 엔진
+
+`TemplateRenderer`는 템플릿 이름, 모델, 렌더링 결과를 쓸 라이터를 받는 메서드 하나다.
+jte가 아닌 엔진을 위해 이를 구현하고, `templates(renderer)`에 전달해 기본값을 대체한다.
+
+[source,java]
+----
+app.templates((template, model, out) -> mustache.compile(template + ".mustache").execute(out, model));
+----
+
+세 엔진은 루트, 접미사, 이스케이프가 이미 정해진 별도 모듈로 제공된다: xref:freemarker.adoc[FreeMarker], xref:handlebars.adoc[Handlebars], xref:thymeleaf.adoc[Thymeleaf]다.
+
+[source,java]
+----
+app.templates(new FreeMarkerTemplates("freemarker"));   // classpath:/freemarker/deck.ftlh
+app.templates(new HandlebarsTemplates("hbs"));          // classpath:/hbs/deck.hbs
+app.templates(new ThymeleafTemplates("thymeleaf"));     // classpath:/thymeleaf/deck.html
+----
+
+그 밖의 것은 위의 한 줄이면 된다.
+모듈은 `compile(name).render(model)` 너머로 정할 것이 있을 때만 제 자리를 얻는다.
+
+렌더링은 핸들러의 예외 처리가 아직 적용되는 동안 일어난다.
+따라서 예외를 던지는 템플릿은 다른 실패와 마찬가지로 `app.exception(...)`에 도달하고, 렌더링된 페이지에 대한 `HEAD`는 `GET`이 보냈을 길이를 보고한다.
+핸들러는 템플릿의 이름과 모델을 반환하고, `AppServlet`이 응답을 쓰기 전에 이를 렌더링한다:
+
+.템플릿 렌더링
+image::template-rendering.svg[핸들러가 WebResponse.template을 반환한다; AppServlet이 TemplateRenderer를 호출하고, 렌더러는 접미사를 덧붙여 이름을 jte에 넘기며, jte는 사전 컴파일된 클래스를 렌더링하거나, 클래스패스에서, 또는 개발 중에는 소스 디렉터리에서 템플릿을 컴파일한다; 렌더링된 텍스트가 본문이 된다,link=self]
+
+[#production]
+== 개발과 프로덕션
+
+jte는 기본적으로 클래스패스에서 템플릿을 읽어 런타임에 컴파일한다.
+설정할 것은 없지만, 배포 머신에 JDK가 필요하고, 편집한 템플릿은 클래스패스 사본을 다시 빌드하기 전까지 보이지 않는다.
+엔진에는 그 트레이드오프의 양쪽에 각각 모드가 있고, `JteTemplates`에는 각각에 맞는 생성자가 있다.
+
+개발 모드는 클래스패스 대신 소스 디렉터리에서 템플릿을 찾는다:
+
+[source,java]
+----
+app.templates(new JteTemplates(
+        new DirectoryCodeResolver(Path.of("src/main/resources/jte"))));
+----
+
+렌더링할 때마다 jte는 템플릿 파일과 그것이 의존하는 모든 것의 수정 타임스탬프를 확인하고, 바뀐 것을 다시 컴파일한다.
+`.jte` 파일을 저장하고 브라우저를 새로 고치는 것이 루프의 전부다.
+
+프로덕션 모드는 https://jte.gg/pre-compiling/[jte Gradle 플러그인]으로 빌드 시점에 모든 템플릿을 사전 컴파일한다:
+
+[source,groovy]
+----
+plugins {
+    id 'gg.jte.gradle' version '3.2.4'
+}
+
+jte {
+    sourceDirectory = file('src/main/resources/jte').toPath()
+    contentType = gg.jte.ContentType.Html
+    generate()
+}
+----
+
+xref:gradle-plugin.adoc[spider-silk 플러그인]의 `spiderSilk { jte() }`가 정확히 이 블록을 대신 작성하며, jte의 네이티브 이미지 리소스 확장도 함께 붙인다.
+`generate()`는 각 템플릿을 애플리케이션과 함께 컴파일되는 Java 클래스로 바꾸고, 그에 맞는 생성자가 엔진에 그 클래스들을 건넨다:
+
+[source,java]
+----
+app.templates(new JteTemplates(TemplateEngine.createPrecompiled(ContentType.Html)));
+----
+
+그러면 jar는 컴파일된 클래스로 렌더링한다: 런타임 컴파일러도, 머신의 JDK도 필요 없고, 컴파일되지 않는 템플릿은 요청 대신 빌드를 실패시킨다.
+접미사는 어느 쪽이든 적용되므로, 핸들러는 바뀌지 않는다.
+예제 프로젝트는 `--dev` 플래그 뒤에 두 모드를 모두 배선(wiring)한다.
+xref:native-image.adoc[네이티브 이미지]에는 런타임 컴파일러가 아예 없으므로, 거기서는 사전 컴파일이 유일한 모드다.

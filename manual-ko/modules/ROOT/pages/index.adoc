@@ -1,0 +1,105 @@
+= Spider Silk
+:navtitle: 소개
+
+image::logo.svg[Spider Silk,160]
+
+설계는 얇게, 타입은 강하게.
+
+Spider Silk는 Jakarta Servlet API 위에 만들어진 웹 프레임워크다.
+
+== 세 가지 핵심 원칙
+
+리플렉션 없음.::
+애너테이션 스캔도, 프록시도, 자동 바인딩도 없다.
+실행되는 것은 코드가 말하는 것이고, 스택 트레이스는 짧게 유지되며, 시작은 빠르게 유지된다.
+
+API는 직관적으로 단순하다.::
+핸들러는 요청에서 응답으로 가는 함수다: `WebResponse handle(WebRequest request)`.
+그 시그니처가 모델의 전부다.
+
+순수 서블릿보다 나은 RESTful API 지원.::
+라우팅은 메서드별이고, 경로는 변수를 담으며, 파라미터는 선언된 타입으로 추출되고, 예외는 상태 코드에 매핑된다.
+
+기본 템플릿 엔진은 https://jte.gg[jte]다.
+jte는 템플릿을 Java 소스로 컴파일하는데, 이는 프레임워크의 나머지가 동작하는 방식과 맞는다.
+
+== 모듈
+
+모든 모듈은 `spider-silk-core`에 의존하고, 코어는 어느 모듈에도 의존하지 않는다.
+모듈은 묶여 있는 대상의 이름을 따른다: 서버, 템플릿 엔진, 또는 Jetty의 WebSocket.
+
+.모듈과 각 모듈의 의존 대상
+image::modules.svg[모든 모듈은 spider-silk-core에 의존한다; 예제 애플리케이션은 core와 openapi에 의존하고, 테스트 범위에서 테스트 하네스와 서버 모듈에 의존한다,link=self]
+
+[cols="1,2,2",options="header"]
+|===
+| 모듈 | 내용 | 의존성
+
+| `spider-silk-core`
+| 프레임워크 자체
+| `gg.jte:jte`, 내장 Jetty (`jetty-ee10-servlet`)
+
+| `spider-silk-test`
+| 테스트 범위용 `WebTest` 하네스와 `TestRequest`
+| core, 그 밖에는 JDK만 (서블릿 API는 코어와 마찬가지로 컴파일 시점에만)
+
+| `example-flashcard`
+| 예제: 플래시카드 학습 앱
+| core, spring-jdbc, H2
+|===
+
+== 한눈에 보기
+
+[source,java]
+----
+App app = new App();    // jte over classpath:/jte, and classpath:/public served at /
+
+app.get("/decks/{deckId}", req -> {
+    long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
+    return WebResponse.template("deck", model); // classpath:/jte/deck.jte
+});
+
+app.get("/api/decks", req -> {
+    Json.JsonArray resBody = Json.arr().add(
+        Json.obj()
+            .put("id", 1L)
+            .put("name", "English")
+    );
+    return WebResponse.json(resBody);
+});
+
+app.post("/api/decks", req -> {
+    String name = req.bodyJson().asObject().getString("name");
+    Json.JsonObject resBody = Json.obj().put("name", name);
+    return WebResponse.json(resBody).status(HttpStatus.CREATED);
+});
+
+app.path("/api/decks", group -> {
+    group.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
+    group.get("", api::listDecks);                   // GET  /api/decks
+    group.get("/{deckId}", api::showDeck);           // GET  /api/decks/{deckId}
+});
+
+app.exception(IllegalArgumentException.class,
+        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
+app.exception(Json.JsonException.class,        // the more specific type wins, whatever the order
+        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
+
+app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
+
+app.start(8080);                                // embedded Jetty, sessions on
+----
+
+`start`는 포트가 바인딩되는 즉시 반환한다.
+모든 것은 그 전에 등록된다: 애플리케이션이 서비스되는 동안 추가한 라우트, 필터, 설정은 `IllegalStateException`을 던지며, `stop()`이 등록을 다시 연다.
+그때부터는 서버의 스레드가 JVM을 살아 있게 하므로, `join()`은 메인 스레드까지 블록하고 싶을 때만 필요하다.
+`stop()`은 서버를 내린다.
+`port()`는 바인딩된 포트를 보고하며, 테스트가 `start(0)`에서 OS가 고른 포트를 읽어 오는 방법이 이것이다.
+
+== 포지셔닝과 로드맵
+
+https://github.com/benelog/spider-silk/blob/main/notes/positioning.md[notes/positioning.md]는 Spider Silk를 Javalin, Spark, Helidon SE, Spring Boot 옆에 놓고, 그 자리에 가기 위해 무엇을 포기했는지 밝힌다.
+
+https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[notes/decisions.md]는 각 부분의 근거를 항목별로 제시하며, 기각된 것의 목록도 함께 담는다.
+
+https://github.com/benelog/spider-silk/issues[이슈 트래커]는 의도적으로 미룬 것을 항목당 하나의 이슈로 기록하며, 그것을 할 만하게 만들 조건도 함께 적는다.

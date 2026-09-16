@@ -1,0 +1,188 @@
+= 요청
+:navtitle: 요청
+
+`WebRequest`는 클라이언트가 보낸 것을 핸들러가 바라보는 시각이다.
+단순한 읽기를 먼저 나열하고, getter 이상이 필요한 부분인 쿠키, 반복 파라미터, 쿼리 문자열과 폼 본문의 분리, 콘텐츠 협상, 파일 업로드가 뒤따른다.
+
+== 요청이 무엇인가
+
+요청에 관한 모든 평범한 질문에는 메서드가 있으므로, 어느 것도 `raw()`가 필요하지 않다.
+
+[source,java]
+----
+req.method();               // "GET"
+req.path();                 // "/decks/3", with no query string on the end
+req.header("Accept");       // the first value; the lookup ignores case
+req.headers("X-Tag");       // every value of a repeated header, empty when absent
+req.headers();              // every header, by name, each with all of its values
+req.contentType();          // the body's declared type, null when the request sent none
+req.queryString();          // "q=a+b&page=2", undecoded, null when the URL carried none
+req.isSecure();             // whether the request arrived over TLS
+req.scheme();               // "http" or "https"
+req.host();                 // "shop.example.com", with the port when it is not the default
+req.remoteAddress();        // "203.0.113.7", the proxy's address when one is in front
+----
+
+`req.scheme() + "://" + req.host() + req.path()`는 요청의 절대 URL이다.
+따라서 `host()`는 스킴의 기본값이 아닌 포트라면 항상 포트를 포함하는데, 8080에서 도는 개발 서버가 바로 URL을 손으로 조립하다 틀리는 경우이기 때문이다.
+
+`isSecure()`, `scheme()`, `host()`는 컨테이너가 믿는 것을 보고한다.
+TLS를 종료하는 프록시 뒤에서는 컨테이너에 `X-Forwarded-Proto`를 신뢰하라고 알려 주어야 하며, 그렇지 않으면 브라우저에는 HTTPS로 도달한 요청이 여기서는 여전히 평범한 HTTP로 읽힌다.
+
+`raw()`는 이들이 다루지 않는 것을 위해 남아 있다: 비동기 컨텍스트, 클라이언트 인증서, 컨테이너 고유의 속성.
+지름길이 아니라 비상구이며, 이를 통해 읽은 것은 프레임워크 몰래 읽은 것이다.
+
+== 쿠키
+
+요청은 클라이언트가 보낸 쿠키를 읽고, 응답은 서버가 보내는 쿠키를 설정한다.
+쿠키는 API의 나머지와 같은 선을 따라 나뉜다.
+
+[source,java]
+----
+String theme = req.cookie("theme");         // null when absent
+Map<String, String> all = req.cookies();    // a repeated name keeps the first value
+----
+
+`WebResponse.cookie(...)`가 쿠키 하나를 설정하며, 기본값은 xref:response.adoc#cookies[응답]에서 설명한다.
+
+== 반복 파라미터
+
+`params(name)`은 반복 파라미터가 담은 모든 값을 읽는다.
+
+[source,java]
+----
+List<String> tags = req.params("tag");      // ?tag=java&tag=web, or a checkbox group
+----
+
+값은 요청 순서대로 돌아오고, 없는 파라미터는 빈 리스트를 준다: "체크된 상자 없음"은 답이지 400이 아니다.
+`param(name)`은 여전히 첫 값을 반환하고 값이 없으면 여전히 400으로 답한다.
+`paramOrNull(name)`은 첫 값을 반환하거나, 없으면 null을 반환한다.
+`param(name, default)`는 대신 기본값을 반환하며, null 기본값은 `paramOrNull(name)`으로 쓴다: `param(name, null)`은 파서 형태에도 일치하므로 컴파일되지 않는다.
+`paramLong("page", 1)`과 `paramEnum("direction", Direction.class, Direction.FRONT)`는 선택적인 타입 파라미터에 기본값을 준다.
+기본값은 부재만 다룬다.
+존재하지만 파싱할 수 없는 파라미터는 여전히 400이다.
+`paramBoolean(name)`과 `paramBoolean(name, default)`는 대소문자를 가리지 않고 `true` 또는 `false`를 읽으며 그 밖의 값에는 400으로 답하므로, `?archived=yes`는 false로 읽히는 대신 거부된다.
+따라서 체크박스는 `value="true"`를 담거나, 존재 자체가 답인 `params(name)`으로 읽는다.
+
+== 그 밖의 타입: 파서
+
+`param(name, parser)`는 이름 붙은 형태가 없는 타입을 읽으며, 파서는 호출 지점에서 작성한 `Function<String, T>`이다.
+
+[source,java]
+----
+LocalDate since = req.param("since", LocalDate::parse);
+UUID owner = req.param("owner", UUID::fromString);
+int page = req.param("page", Integer::parseInt, 1);        // default covers absence only
+int deckId = req.pathParam("deckId", Integer::parseInt);   // path variables too
+----
+
+텍스트를 거부하는 파서는 파라미터 이름을 밝히며 400으로 답하는데, 이름 붙은 형태가 가진 것과 같은 계약이다.
+거부한다는 것은 `IllegalArgumentException`이나 `DateTimeException`을 던진다는 뜻이며, `UUID::fromString`, `Integer::parseInt`, `LocalDate::parse`가 이미 그렇게 한다.
+파서가 던지는 그 밖의 것은 요청이 아니라 파서의 결함이며, 500으로 남는다.
+리플렉션은 개입하지 않는다: 매핑은 직접 작성한 람다다.
+
+== 쿼리 문자열 대 폼 본문
+
+서블릿 API는 둘을 합치므로, `param("id")`는 URL의 `id`와 폼의 `id`에 똑같이 답한다.
+차이가 중요할 때는 출처를 지정한다:
+
+[source,java]
+----
+String page = req.queryParamOrNull("page");     // query string only, null when absent
+String name = req.formParam("name");            // form body only, 400 when absent
+List<String> tags = req.formParams("tag");
+----
+
+파서는 지정된 출처를 타입으로 읽으며, `param(name, parser)`와 같은 계약을 따른다:
+
+[source,java]
+----
+LocalDate due = req.formParam("due", LocalDate::parse);       // 400 when the form carries none
+int page = req.queryParam("page", Integer::parseInt, 1);      // default covers absence only
+----
+
+`queryParam(name)`과 `formParam(name)`은 파서가 있든 없든 값을 요구하며, 값이 없으면 400으로 답한다.
+`queryParamOrNull(name)`과 `formParamOrNull(name)`은 값이 없으면 null을 반환한다.
+빈 문자열은 제공된 값이며 파서에 그대로 전달된다.
+기본값은 파서 형태를 선택적으로 만들며, 파서가 거부하는 값은 어느 쪽이든 400이다.
+다른 출처가 담은 이름은 인정되지 않으므로, `formParam("page", parser)`는 유일한 `page`가 URL에 있는 요청에 400으로 답한다.
+`(name, defaultString)` 형태는 없는데, `queryParamOrNull(name)`이 이미 파서 오버로드와 겹치지 않고 선택적 문자열을 다루기 때문이다.
+
+`?q=%zz`처럼 디코딩되지 않는 쿼리 문자열은 어떤 이름을 읽든 `param`, `queryParam`, `formParam`의 모든 형태에서 400으로 답한다.
+
+== 콘텐츠 협상
+
+`accepts`는 `Accept` 헤더를 읽어 핸들러가 제공하는 미디어 타입 중 호출자가 원하는 것을 보고한다:
+
+[source,java]
+----
+app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
+    case "application/json" -> WebResponse.json(deckService.decks(), Codecs::writeDecks);
+    default -> WebResponse.template("decks", Map.of("decks", deckService.decks()));
+});
+----
+
+답은 전달한 문자열 중 하나이므로, `case` 레이블로 그대로 읽히며 어떤 미디어 타입도 두 번 쓰이지 않는다.
+품질 값과 구체성은 명세가 요구하는 대로 적용된다: `text/html`이 `text/*`보다 먼저 매칭되고, 그것이 다시 순수 와일드카드보다 먼저 매칭되며, 호출자가 `q=0`으로 가중치를 준 타입은 와일드카드가 달리 포함했을 경우에도 거부한 타입이다.
+
+두 가지 경계 사례는 짚어 둘 만한데, 손으로 쓴 파서마다 틀리는 것들이기 때문이다:
+
+* `Accept`가 전혀 없는 요청은 아무것도 말하지 않은 호출자이지, 아무것도 받지 않겠다는 호출자가 아니다.
+  첫 후보가 이기므로, 목록은 핸들러가 선호하는 순서로 쓴다.
+* 어느 것도 받지 않겠다는 호출자에게는 `406 Not Acceptable`로 답하며, 이는 `param(name)`이 null을 반환하는 대신 400으로 답하는 것과 같은 방식이다.
+
+따라서 핸들러는 null 분기를 쓸 일이 없다.
+
+이 질문을 하면 답이 요청 헤더에 의존하게 되므로, 핸들러가 말하지 않아도 응답은 `Vary: Accept`를 실어 보낸다.
+이는 406과, 제공되는 유일한 타입으로 판명된 답도 포함한다.
+`app.gzip()`이 `Accept-Encoding`에 대해 하는 것과 같은 관리이며, 이유도 같다: 공유 캐시가 다음 브라우저에 JSON을 건네서는 안 된다.
+
+`req.acceptedTypes()`는 `accepts` 뒤에 있는 파싱된 시각으로, `accepts`가 표현할 수 없는 드문 결정을 위한 것이다.
+요청된 미디어 타입을 가장 좋은 것부터 보고하고, 거부된 것은 뺀 채이며, 요청이 `Accept`를 보내지 않았으면 비어 있다.
+
+`Accept-Language`와 `Accept-Encoding`은 대신 협상해 주지 않는다.
+인코딩은 압축 계층의 몫이고, 언어는 코어에 없는 로케일 이야기가 된다.
+
+== 파일 업로드
+
+`req.file(name)`은 멀티파트 폼에서 파일을 읽으며, 파트가 없으면 400으로, 요청이 아예 멀티파트가 아니면 400으로 답한다:
+
+[source,java]
+----
+app.post("/decks/{deckId}/import", req -> {
+    UploadedFile file = req.file("file");
+    int imported = deckService.importCsv(req.pathParamLong("deckId"), file.asText());
+    req.flash("message", "Imported " + imported + " cards.");
+    return WebResponse.redirect("/decks/" + req.pathParam("deckId"), HttpStatus.SEE_OTHER);
+});
+----
+
+`UploadedFile`은 `fileName()`, `contentType()`, `size()`에 답하고, 내용을 네 가지 방식으로 건넨다.
+`bytes()`와 `asText()`는 내용을 메모리에 담는데, 하나의 바이트 배열로 또는 UTF-8 텍스트로 담는다.
+`inputStream()`과 `writeTo(path)`는 그렇지 않으므로, 어떤 크기의 업로드든 중간에 바이트 배열 없이 파서나 파일에 도달한다:
+
+[source,java]
+----
+app.post("/scans", req -> {
+    Path saved = uploads.resolve(UUID.randomUUID() + ".pdf");
+    req.file("scan").writeTo(saved);
+    return WebResponse.text("saved");
+});
+----
+
+스트림은 호출자가 닫으며, 어느 쪽이든 같은 내용이다: 읽은 것은 읽은 것이므로, 바이트도 함께 원하는 핸들러는 두 번 요청하는 대신 직접 버퍼링한다.
+`writeTo`는 절대 경로를 받거나, 작업 디렉터리를 기준으로 해석되는 상대 경로를 받는다.
+내용을 한 번만 쓰는데, 업로드를 이미 디스크에 버퍼링한 컨테이너는 그 파일을 복사하는 대신 이동할 수 있기 때문이다.
+
+`req.fileOrNull(name)`은 폼이 담지 않아도 되는 업로드에 null로 답하며, 이는 부재가 곧 답인 값에 대해 `req.cookie(name)`과 `req.queryParamOrNull(name)`이 이미 가진 형태다.
+null은 파일이 없을 수 있는 모든 경우를 다룬다: 그 이름의 파트가 없는 경우, 아무것도 선택되지 않아 브라우저가 비워서 보낸 파일 입력, 그리고 아예 멀티파트가 아닌 요청.
+`req.file(name)`은 이 셋 모두에 400으로 답하는데, 파일을 명시적으로 요청한 핸들러는 그것이 필요하기 때문이다.
+
+`req.files(name)`은 하나의 필드 이름으로 보낸 모든 파일을 요청이 보낸 순서대로 답하며, 이는 `<input type="file" multiple>`이 만들어 내는 것이다.
+필드가 아무것도 담지 않았으면 리스트는 비어 있으며, 보내지 않은 반복 파라미터에 대해 `req.params(name)`이 비어 있는 것과 같다.
+파일을 담은 파트만 세므로, 같은 멀티파트 폼의 텍스트 필드는 여전히 `req.param(name)`으로 읽는다.
+
+한계는 서버에 설정하는 서블릿 컨테이너의 멀티파트 구성이다: 최대 크기와, 큰 업로드를 버퍼링할 위치.
+`multipart(new MultipartConfigElement(...))`가 `JettyServer`, xref:tomcat.adoc[TomcatServer], xref:undertow.adoc[UndertowServer]에 똑같이 이를 설정한다.
+기본값은 크기 상한 없이 시스템 임시 디렉터리에 버퍼링하며, 메모리 내 임계값은 1MB다.
+`multipart(null)`은 멀티파트 처리를 끈다.

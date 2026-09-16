@@ -2,9 +2,13 @@ name: Docs
 
 on:
   push:
-    branches: [ main ]
+    # main is the unreleased manual and every docs/x.y.z branch is a released one;
+    # a push to either rebuilds the whole site, since the site lists them all.
+    branches: [ main, 'docs/**' ]
     paths:
       - 'manual/**'
+      - 'manual-ko/**'
+      - 'supplemental-ui/**'
       - 'antora-playbook.yml'
       - 'package.json'
       - 'package-lock.json'
@@ -25,6 +29,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The playbook reads the docs/* branches out of this clone.
+          fetch-depth: 0
       - uses: actions/setup-node@v7
         with:
           node-version: 22

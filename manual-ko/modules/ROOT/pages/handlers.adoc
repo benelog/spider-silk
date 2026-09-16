@@ -1,0 +1,75 @@
+= 핸들러
+:navtitle: 핸들러
+
+`Handler`에는 메서드가 하나뿐이므로, 핸들러가 어떤 형태를 띨지는 애플리케이션이 정한다.
+예제 앱은 세 가지 모두를 쓴다.
+
+== 람다
+
+클래스로 만들 만한 상태가 없을 때는 람다를 쓴다:
+
+[source,java]
+----
+app.get("/openapi.json", req -> {
+    Json.JsonValue resBody = OpenApi.document("Flashcard API", "1.0.0", app.routes());
+    return WebResponse.json(resBody);
+});
+----
+
+== `Action` 클래스
+
+정확히 하나의 라우트에 답할 때는 클래스를 쓴다.
+클래스가 `Handler`를 구현하므로, 클래스 자체로 등록된다:
+
+[source,java]
+----
+public class StatsAction implements Handler {
+
+    private final StatsService statsService;
+
+    public StatsAction(StatsService statsService) {
+        this.statsService = statsService;
+    }
+
+    @Override
+    public WebResponse handle(WebRequest req) {
+        return WebResponse.template("stats", Map.of("stats", statsService.overview()));
+    }
+}
+----
+
+[source,java]
+----
+app.get("/stats", context.statsAction());
+----
+
+`Action`은 ADR(Action-Domain-Responder) 패턴의 A다: 정확히 하나의 요청에 답하는 웹 계층 클래스.
+Laravel의 단일 액션 컨트롤러가 같은 관례를 따른다.
+프레임워크는 이 이름을 알지 못한다.
+`Handler`가 인터페이스이고, `…Action`은 이를 직접 구현하는 클래스의 이름 관례다.
+
+== 참조로 등록하는 public 메서드
+
+한 클래스가 관련된 여러 라우트에 답할 때는 메서드를 참조로 등록한다:
+
+[source,java]
+----
+public class DeckController {
+
+    public WebResponse showDeck(WebRequest req) { ... }
+
+    public WebResponse renameDeck(WebRequest req) { ... }
+}
+----
+
+[source,java]
+----
+DeckController decks = context.deckController();
+app.get("/decks/{deckId}", decks::showDeck);
+app.post("/decks/{deckId}/rename", decks::renameDeck);
+----
+
+메서드가 `public`인 이유는 등록이 클래스 바깥에서 일어나기 때문이며, 그것이 요점이다.
+`Controller` 인터페이스도 없고 구현해야 할 `register(App)` 메서드도 없다.
+따라서 애플리케이션이 답하는 모든 라우트는 하나의 목록 안의 한 문장이며, `app.routes()`는 거기 쓰인 것을 정확히 보고한다.
+자기 라우트를 스스로 등록하는 클래스는 라우팅 테이블의 절반을 자기 안에 숨기는데, 이는 애너테이션 스캔이 하는 일을 손으로 풀어 쓴 것이다.

@@ -1,0 +1,72 @@
+= Handlebars
+:navtitle: Handlebars
+
+`spider-silk-handlebars`는 코어에 번들된 jte 대신 https://github.com/jknack/handlebars.java[Handlebars.java]로 렌더링한다.
+xref:tomcat.adoc[Tomcat]이 별도 모듈인 것과 같은 이유로 별도 모듈이다.
+한 엔진에 대한 종속은 아티팩트 이름에 담기고, 코어는 템플릿 의존성이 셋이 아니라 하나인 웹 계층으로 남는다.
+
+== 설치
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation('{project-group}:spider-silk-handlebars:{project-version}') {
+        exclude group: 'gg.jte'    // core's jte, unused here
+    }
+}
+----
+
+jte 제외는 선택 사항이다.
+쓰지 않는 엔진을 클래스패스에서 치울 뿐이며, 그대로 두면 `templates(renderer)`가 건네는 것을 무엇이든 받으므로 둘이 나란히 동작한다.
+
+== 렌더링
+
+[source,java]
+----
+new App()
+        .templates(new HandlebarsTemplates("hbs"))
+        .get("/decks/{deckId}", req ->
+                WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+----
+
+이는 `classpath:/hbs/deck.hbs`를 렌더링한다.
+모델의 키가 템플릿이 읽는 이름이므로, `+{{deck.title}}+`은 `Map.of("deck", ...)`에 닿는다.
+
+`+{{name}}+`은 HTML 이스케이프되고 `+{{{name}}}+`은 되지 않는데, 이는 Handlebars 자체의 기본값이며 여기서 그것을 위해 설정할 것이 없는 이유다.
+
+== 직접 정하는 루트나 접미사
+
+[source,java]
+----
+app.templates(new HandlebarsTemplates("hbs")    // classpath:/hbs
+        .suffix(".html"));                      // .../deck.html
+----
+
+접미사는 덧붙일 뿐 검사하지 않으므로, 확장자를 아직 달고 있는 이름은 접미사가 두 번 붙은 채로 조회된다.
+클래스패스 로더는 자체 확장자를 덧붙이지 않으므로, 작동하는 것은 `suffix` 하나뿐이다.
+
+== 헬퍼와 캐시
+
+다른 생성자는 설정된 `Handlebars`를 받으며, 헬퍼, 다른 이스케이프 전략, 파셜 로더는 여기에 들어간다:
+
+[source,java]
+----
+Handlebars handlebars = new Handlebars(new ClassPathTemplateLoader("/hbs", ""))
+        .with(new ConcurrentMapTemplateCache())
+        .registerHelper("upper", (value, options) -> value.toString().toUpperCase());
+
+app.templates(new HandlebarsTemplates(handlebars));
+----
+
+위처럼 로더에 빈 접미사를 전달하지 않으면, `HandlebarsTemplates`가 이미 덧붙인 접미사 위에 `.hbs`를 또 덧붙인다.
+
+`new HandlebarsTemplates("hbs")`는 컴파일된 템플릿을 `ConcurrentMapTemplateCache`에 캐시한다.
+Handlebars 자체의 기본값은 렌더링할 때마다 컴파일하는 것으로, 프로덕션에서는 요청마다 파싱하는 셈이다.
+다르게 선택하려면 직접 만든 `Handlebars`를 건넨다.
+
+== 리플렉션
+
+Handlebars는 `+{{deck.title}}+`을 먼저 `Map`에서 찾지만, 레코드나 빈에 대해서는 리플렉션으로 돌아간다.
+그것은 코어가 아니라 모듈의 리플렉션이다.
+규칙이 적용되는 범위는 xref:reflection-scope.adoc["리플렉션 없음"의 범위]를 참고한다.
+모델을 템플릿이 이미 가진 값들의 `Map`으로 유지하면 그마저도 배제된다.

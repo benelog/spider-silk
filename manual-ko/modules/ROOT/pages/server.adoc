@@ -1,0 +1,160 @@
+= 서버
+:navtitle: 서버
+
+`JettyServer`에는 보통 조정할 가치가 있는 모든 것에 대한 메서드가 있다.
+그 밖의 것에는 커스터마이저가 닿으며, 시작 직전에 실제 Jetty 객체를 대상으로 실행된다:
+
+[source,java]
+----
+new JettyServer(app)
+        .port(8443)
+        .host("127.0.0.1")
+        .contextPath("/app")
+        .sessions(false)
+        .threadPool(new QueuedThreadPool(200, 8))
+        .multipart(new MultipartConfigElement(tmp, 10_485_760L, 10_485_760L, 1_048_576))
+        .stopTimeout(Duration.ofSeconds(20))    // longer drain for slow requests
+        .shutdownHook(false)                    // something else owns the lifecycle
+        .customizeHttpConfiguration(http -> http.setSendServerVersion(false))
+        .customizeContext(context -> context.addFilter(MyFilter.class, "/*", null))
+        .customizeServer(server -> server.setDumpBeforeStop(true))
+        .start();
+----
+
+[#virtual-threads]
+== 가상 스레드
+
+핸들러는 가상 스레드에서 실행될 수 있다.
+그것은 프레임워크 기능이 아니라 스레드 풀 설정이므로, Jetty 자체 API 두 줄로 남는다.
+플랫폼 스레드는 계속 셀렉터를 실행하고, 핸들러는 가상 스레드를 얻는다:
+
+[source,java]
+----
+QueuedThreadPool pool = new QueuedThreadPool();
+pool.setVirtualThreadsExecutor(VirtualThreads.getDefaultVirtualThreadsExecutor());
+
+app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool))
+   .start(8080);
+----
+
+핸들러가 I/O나 데이터베이스에서 블로킹할 때만 할 가치가 있다.
+그 블로킹 호출을 감싼 `synchronized` 블록은 캐리어 스레드를 고정(pin)시켜 이점을 도로 가져간다.
+
+== 종료
+
+종료는 기본으로 정상 종료(graceful shutdown)다.
+JVM 셧다운 훅이 Ctrl-C나 SIGTERM에서 서버를 멈추고, `stop()`은 진행 중인 요청에 5초를 주어 마치게 한 뒤 끊는다.
+유휴 keep-alive 연결은 이를 지연시키지 않는다.
+드레인이 시작되는 즉시 닫히므로, 실행 중인 것이 없을 때의 중지는 즉시 반환된다.
+`stopTimeout(Duration.ZERO)`는 드레인을 완전히 끈다.
+
+[#replacing-the-server]
+== 서버 교체하기
+
+`app.start(port)`를 진입점으로 유지하면서 서버를 설정하거나, 완전히 다른 서버를 실행하려면 팩토리를 교체한다:
+
+[source,java]
+----
+app.server((a, port) -> new JettyServer(a).port(port).sessions(false))
+   .start(9000);
+
+app.server((a, port) -> new TomcatServer(a).port(port))     // spider-silk-tomcat
+   .start(9000);
+
+app.server((a, port) -> new UndertowServer(a).port(port))   // spider-silk-undertow
+   .start(9000);
+
+app.server((a, port) -> new MyOwnServer(a, port))           // implements WebServer
+   .start(9000);
+----
+
+`WebServer`는 메서드 네 개(`start`, `stop`, `join`, `port`)이므로, 다른 구현체를 만드는 것은 작은 일이다.
+둘은 이미 작성되어 있다: xref:tomcat.adoc[Tomcat]과 xref:undertow.adoc[Undertow]이며, 각각 묶인 서버의 이름을 딴 모듈에 있다.
+
+[#choosing]
+== 서버 고르기
+
+core가 제공하는 모든 것은 셋 모두에서 같게 동작한다: 라우팅, 필터, 에러 핸들러, JSON, 템플릿, 정적 파일, SSE, 멀티파트 업로드, 세션.
+core가 필요로 한 것은 서블릿 컨테이너뿐이었다.
+`WebTest`는 서버를 전혀 시작하지 않으므로 테스트도 바뀌지 않는다.
+다른 것은 임베딩이다: 서버가 주변 환경에서 무엇을 필요로 하는지, 그리고 이 프로젝트가 라이프사이클 중 얼마나 많은 부분을 손으로 조립해야 했는지.
+
+[cols="1,2,2,2"]
+|===
+| | Jetty (기본) | Tomcat | Undertow
+
+| 모듈
+| `spider-silk-core`에 포함
+| `spider-silk-tomcat`
+| `spider-silk-undertow`
+
+| 세션 처리
+| `sessions(false)`로 끈다
+| 항상 켜짐
+| 항상 켜짐
+
+| 정상 종료(graceful shutdown)
+| Jetty 자체의 `stopTimeout`
+| 직접 구현: 커넥터를 멈추고 요청 스레드를 드레인
+| 요청을 세는 Undertow의 `GracefulShutdownHandler`
+
+| 드레인 대 가상 스레드
+| 영향 없음
+| 동작하지 않음 — `executor(...)`가 기다리는 대상인 풀을 교체하므로
+| 영향 없음
+
+| 셧다운 훅
+| Jetty의 `setStopAtShutdown`
+| 자체 구현: 시작 시 등록, 중지 시 제거
+| 자체 구현: 시작 시 등록, 중지 시 제거
+
+| JVM 유지
+| Jetty의 스레드가 non-daemon
+| `Server.await()`에 대기하는 non-daemon 스레드
+| 래치에 대기하는 non-daemon 스레드
+
+| 작업 디렉터리
+| 없음
+| 디스크 위의 `catalina.base`, `baseDir(...)`가 없으면 임시
+| 없음
+
+| 가상 스레드
+| `QueuedThreadPool`을 넘기는 `threadPool(...)`
+| `executor(...)`
+| `executor(...)`
+
+| 로깅
+| slf4j 직접
+| JULI, 따라서 `jul-to-slf4j`와 브리지 핸들러
+| JBoss Logging, 클래스패스의 slf4j를 찾는다
+
+| 커스터마이저
+| server, context, HTTP configuration
+| Tomcat, context, connector
+| deployment, builder
+
+| 어댑터 크기
+| 286줄
+| 430줄
+| 381줄
+|===
+
+셋 중 어느 것도 더 나은 서버는 아니다.
+서로 다른 것을 비용으로 치를 뿐이다.
+
+**Jetty가 기본으로 남는** 이유는 유지하는 데 비용이 들지 않기 때문이다.
+디스크가 필요 없고, 종료와 라이프사이클은 여기서 조립한 것이 아니라 Jetty 자체의 것이며, 애플리케이션의 나머지처럼 slf4j로 로깅한다.
+jar로 배포되어 운영자가 손대지 않는 서비스라면 그것이 전부다.
+
+**Tomcat은 주변 환경이 이미 Tomcat을 전제하는 곳에서 자리를 얻는다.**
+대부분의 조직에서 운영 지식은 Tomcat 지식이다: 커넥터 속성, 액세스 로그 밸브, 스레드 풀 숫자, 대시보드가 이미 긁어 가고 있는 JMX 빈.
+또한 Spring Boot가 기본으로 택하는 서버이므로, Spring Boot에서 옮겨 가는 서비스는 웹 계층만 바꾸면서 같은 런타임 동작과 같은 튜닝을 유지한다.
+그리고 대부분의 엔터프라이즈 프로세스가 이미 추적하는 보안 권고 파이프라인을 가진 서버다.
+
+**Undertow는 기술적 장점으로 택할 서버다.**
+셋 중 임베딩이 가장 가볍고, 작업 디렉터리도 로깅 브리지도 없다.
+정상 종료(graceful shutdown)가 스레드 풀에서 조립한 것이 아니라 일급 핸들러이며, 그래서 가상 스레드로 전환해도 드레인이 살아남는 유일한 서버이기도 하다.
+단점은 저변이다: 독립 제품이 아니라 WildFly 컴포넌트이므로, 운영상의 친숙함과 주변 도구가 Tomcat보다 얇다.
+
+이 중 어느 것도 결정적이지 않다.
+마음을 바꾸는 것은 어느 방향이든 팩토리의 같은 한 줄이다.

@@ -1,0 +1,155 @@
+= WebSocket
+:navtitle: WebSocket
+
+`spider-silk-jetty-websocket`은 앱의 HTTP 라우트 곁에 WebSocket 엔드포인트를 매핑한다.
+구조상 Jetty 전용이며, 그래서 `App`의 메서드가 아니라 이름을 가진 모듈이다.
+WebSocket은 프로토콜 업그레이드이고 업그레이드는 서블릿 디스패치를 벗어나는데, 그 이유는 xref:sse.adoc#why-websocket-is-not-in-core[SSE는 코어에 있고 WebSocket은 없는 이유]에서 설명한다.
+이를 위해 코어는 아무것도 바뀌지 않으며, 모듈은 `JettyServer`에 이미 있는 `customizeServer` 훅에 올라탄다.
+
+== 설치
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation '{project-group}:spider-silk-jetty-websocket:{project-version}'
+}
+----
+
+이 모듈은 `Handler` 수준의 Jetty 서버 측 WebSocket인 `jetty-websocket-jetty-server`를 가져오며, 코어가 쓰는 것과 같은 Jetty 버전에 고정되어 있다.
+이는 의도한 것이며, 같은 이름의 `ee10` 아티팩트가 아니다.
+`ee10` 쪽은 서블릿 컨테이너 통합이고, 애너테이션 스캐닝, ASM, CDI, JNDI를 함께 끌고 오는데, 이 프레임워크는 그중 어느 것도 가까이 두고 싶어 하지 않는다.
+
+== 경로 매핑
+
+[source,java]
+----
+new App()
+        .get("/", req -> WebResponse.text("hi"))
+        .server((app, port) -> new JettyServer(app).port(port)
+                .customizeServer(new WebSockets()
+                        .at("/echo", (request, response) -> new EchoSocket())))
+        .start(8080);
+----
+
+업그레이드 핸들러는 서블릿 앞에 삽입되므로, 경로가 매핑과 일치하는 요청은 업그레이드되고 나머지는 모두 그대로 앱으로 넘어간다.
+경로는 라우트와 마찬가지로 서버의 컨텍스트 경로에 상대적이다.
+
+`WebSockets`는 `Consumer<Server>`이며, 이는 정확히 xref:server.adoc[`customizeServer`]가 받는 타입이다.
+`customizeContext`가 아니라 그 훅인 이유는 Jetty의 WebSocket 컨테이너가 `Server`로부터, 즉 그 버퍼 풀과 실행기로부터 만들어지는데, 컨텍스트는 컨텍스트 커스터마이저가 모두 실행된 뒤에야 서버에 연결되기 때문이다.
+다음 다이어그램은 업그레이드 핸들러가 Jetty의 핸들러 체인 어디에 놓이는지, 그리고 어떤 요청이 그 뒤의 서블릿에 도달하는지 보여준다:
+
+.업그레이드 핸들러의 위치
+image::websocket-wiring.svg[JettyServer.start가 Server, ServletContextHandler, AppServlet을 만든 뒤 customizeServer를 실행한다; WebSockets.accept가 서블릿 앞에 WebSocketUpgradeHandler를 삽입한다; Upgrade 헤더가 있는 GET /echo는 거기서 응답되고, GET /는 AppServlet으로 넘어간다,link=self]
+
+== 엔드포인트
+
+`WebSocketHandler`는 업그레이드부터 종료까지의 연결 하나다.
+팩토리가 연결마다 하나씩 만들므로 구현체는 연결별 상태를 필드에 보관해도 된다: 같은 연결에 대해 콜백이 동시에 호출되는 일은 없다.
+
+[source,java]
+----
+final class EchoSocket implements WebSocketHandler {
+
+    @Override
+    public void onOpen(Session session) {
+        session.sendText("welcome", Callback.NOOP);
+    }
+
+    @Override
+    public void onText(Session session, String message) {
+        session.sendText(message, Callback.NOOP);
+    }
+}
+----
+
+모든 메서드(`onOpen`, `onText`, `onBinary`, `onClose`, `onError`)에 아무 일도 하지 않는 기본 구현이 있으므로, 구현체는 응답할 것만 오버라이드한다.
+`Session`은 한 번만 건네지는 것이 아니라 각 메서드에 매번 전달되므로, 응답하기 위해 필드에 기억해 둘 것이 없다.
+
+`Session`은 Jetty 자체의 것이며 감싸지 않는다.
+모듈은 이름부터 Jetty에 묶여 있으므로, Jetty를 파사드 뒤에 숨겨 봐야 이름이 이미 배제한 이식성을 사는 셈이다.
+`sendText`와 `sendBinary`는 비동기이며 `Callback`을 받는다.
+`Callback.NOOP`은 보내고 잊는 형태이고, 전송 실패를 알아채는 방법은 실제 콜백이다.
+핸들러는 `session.demand()`를 호출하지 않는데, 모듈의 엔드포인트가 자동 요구(auto-demanding) 방식이기 때문이다: 콜백이 반환되는 즉시 다음 메시지를 요청한다.
+
+`onBinary`에 전달되는 버퍼는 Jetty의 것이며, 메서드가 반환되는 즉시 풀로 돌아간다.
+호출보다 오래 살아야 하는 것은 복사한다.
+
+업그레이드 요청부터 종료까지, 연결 하나는 다음과 같이 진행된다:
+
+.WebSocket 연결 하나
+image::websocket-connection.svg[업그레이드가 아직 HTTP 요청인 동안 업그레이드 핸들러가 팩토리를 호출한다; 반환된 핸들러는 SessionListener로 감싸지고 핸드셰이크는 101로 응답되며, null은 403으로 응답된다; 각 텍스트 또는 바이너리 프레임은 onText 또는 onBinary에 도달하고, 연결은 onClose, onError, 또는 app.stop을 통해 끝난다,link=self]
+
+== 업그레이드 거부
+
+팩토리는 핸드셰이크가 응답되기 전에 실행되며, 그 시점에 업그레이드는 아직 평범한 HTTP 요청이다: 헤더, 쿠키, 쿼리 문자열을 모두 읽을 수 있다.
+
+[source,java]
+----
+new WebSockets().at("/chat", (request, response) -> {
+    if (!authorized(request)) {
+        return null;                  // 403, and the handshake is answered
+    }
+    if (request.hasSubProtocol("chat")) {
+        response.setAcceptedSubProtocol("chat");
+    }
+    return new ChatSocket(rooms);
+});
+----
+
+null을 반환하면 업그레이드를 403으로 거부하며, 팩토리가 응답에 설정한 상태가 에러 상태라면 그 상태로 거부한다.
+Jetty 자체의 계약은 거부된 업그레이드를 응답하지 않은 채로 둔다.
+생성자(creator)가 직접 응답을 쓰고 콜백을 완료해야 하며, 이를 잊은 생성자는 클라이언트를 결코 오지 않을 핸드셰이크를 기다리게 만든다.
+모듈이 이를 응답하며, 이는 경로 매핑 외에 모듈이 하는 몇 안 되는 일 중 하나다.
+
+== 경로
+
+경로는 코어의 라우터 문법이 아니라 Jetty의 스펙 문법이다: 정확한 경로, 접두사는 `/rooms/*`, 접미사는 `*.ws`다.
+`\{name}` 세그먼트는 없다.
+가변 경로는 접두사 매핑에 팩토리에서 `Request.getPathInContext(request)`를 읽는 것으로 만든다:
+
+[source,java]
+----
+new WebSockets().at("/rooms/*", (request, response) ->
+        new ChatSocket(Request.getPathInContext(request).substring("/rooms/".length())));
+----
+
+Jetty가 인식하지 못하는 스펙은 시작 시점이 아니라, 그것이 쓰인 `at(...)`에서 실패한다.
+
+== 튜닝
+
+[source,java]
+----
+new WebSockets()
+        .at("/echo", (request, response) -> new EchoSocket())
+        .idleTimeout(Duration.ofMinutes(5))
+        .maxTextMessageSize(64 * 1024)
+        .maxBinaryMessageSize(1024 * 1024)
+        .customizeContainer(container -> container.setAutoFragment(false));
+----
+
+Jetty는 기본적으로 30초 동안 유휴 상태인 연결을 닫는다.
+조용한 구간에 걸쳐 열어 두는 소켓은 양쪽 끝이 서로 핑을 보낼 때만 그것을 견딘다.
+`customizeContainer`는 시작할 때마다 Jetty의 `ServerWebSocketContainer`를 상대로 실행되며, 전용 메서드가 없는 설정에 닿는다: 프레임 크기, 버퍼 크기, 세션 리스너다.
+
+== 소켓에 닿지 않는 것
+
+업그레이드는 서블릿 디스패치를 영구히 벗어나므로, 프레임워크의 어떤 것도 뒤따르지 않는다:
+
+* 라우터가 따르지 않으며, `app.routes()`는 소켓을 나열하지 않는다,
+* `beforeRequest`, `beforeRoute`, `afterRoute`, `responseFilter` 필터가 실행되지 않는다,
+* `error(status, ...)`가 이를 다루지 않는다,
+* 요청 로거는 업그레이드를 포함해 그 연결을 전혀 보지 못하는데, 업그레이드 핸들러가 `AppServlet`보다 앞서 응답하고 서블릿은 실행되지 않기 때문이다,
+* `WebTest`는 서버를 시작하지 않으므로 전혀 닿을 수 없다.
+
+그 목록이 WebSocket이 코어에 없는 이유의 전부다: 코어가 자기 기능이 소리 없이 다루지 못하는 API를 공개하는 셈이 되기 때문이다.
+모듈의 테스트는 반대편에서 같은 말을 한다.
+대신할 하네스가 없으므로, 테스트는 빈 포트에 실제 Jetty를 띄우고 JDK 자체의 `java.net.http.WebSocket` 클라이언트로 통신한다.
+
+`app.stop()`은 아직 열려 있는 소켓을 닫는다.
+진행 중인 SSE 스트림을 기다려 주는 방식과 달리, 소켓을 기다리느라 우아한 드레인(graceful drain)을 붙들어 두지는 않는다.
+
+== 리플렉션
+
+Jetty는 엔드포인트의 메서드를 찾아 각각에 `MethodHandle`을 얻는 방식으로 콜백을 바인딩하며, 엔드포인트 클래스별로 캐시한다.
+이 모듈이 여는 모든 연결은 모듈 자체의 어댑터인 같은 클래스 `SessionListener`이므로, Jetty가 찾아보는 클래스는 그 하나뿐이다.
+애플리케이션이 작성하는 `WebSocketHandler`는 인터페이스 호출로 도달하며 그 형태가 어떻든 리플렉션 대상이 되지 않는데, 이는 xref:reflection-scope.adoc[jte가 생성한 클래스]가 받는 것과 같은 격리다.

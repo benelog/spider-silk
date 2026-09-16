@@ -1,0 +1,103 @@
+= OpenAPI 내보내기
+:navtitle: OpenAPI 내보내기
+
+`spider-silk-openapi`는 xref:route-introspection.adoc[`app.routes()`]를 OpenAPI 3.1 문서로 바꾼다.
+이 모듈은 그 목록을 읽는 리더이며 그 이상은 아니다.
+core는 라우트를 평범한 데이터로 넘겨주며 이를 위해 바뀌지 않는다: `PathPattern`의 `\{deckId}`는 이미 OpenAPI의 경로 템플릿 _그 자체_ 이므로, 변환할 것도 리플렉션할 것도 없다.
+
+이것이 `App`의 메서드가 아니라 모듈인 이유이기도 하다.
+스펙 포맷은 웹 계층이 아니며, 이 프레임워크가 소유하지 않는 버전을 모든 애플리케이션이 의존하는 단 하나의 아티팩트 안에 고정해서는 안 된다.
+`WebTest` 하니스를 xref:testing.adoc[`spider-silk-test`]에 두는 것과 같은 논리다.
+
+== 설치
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation '{project-group}:spider-silk-openapi:{project-version}'
+}
+----
+
+아무것도 딸려 오지 않는다: 이 모듈은 core의 라우트 목록과 core의 `Json` 위에 놓인 클래스 하나다.
+
+== 문서 서비스하기
+
+[source,java]
+----
+app.get("/openapi.json", req -> {
+    Json.JsonValue resBody = OpenApi.document("Flashcard API", "1.0.0", app.routes());
+    return WebResponse.json(resBody);
+});
+----
+
+제목과 버전이 인자인 이유는 OpenAPI가 `info` 아래에 둘 다를 요구하기 때문이며, 어느 쪽이든 기본값을 두면 이 모듈이 남의 API 이름을 짓는 셈이 된다.
+`document`는 `Json.JsonValue`를 반환하므로 xref:json.adoc[JSON API]의 다른 모든 것과 결합된다.
+빌드 시점에 파일로 쓰는 것도 같은 호출이다.
+
+핸들러는 요청마다 `app.routes()`를 읽으므로, 이 줄 뒤에 추가된 라우트를 포함해 등록된 것은 무엇이든 나열한다.
+
+== 어떤 라우트가 들어가는가
+
+좁히지 않는 한 목록 전체다.
+API와 함께 HTML을 서비스하는 애플리케이션은 전부가 아니라 API의 라우트를 넘긴다:
+
+[source,java]
+----
+List<Route> documented = app.routes().stream()
+        .filter(route -> route.path().startsWith("/api"))
+        .toList();
+----
+
+그 선택은 애플리케이션의 몫으로 남으며, 그것이 애초에 `routes()`가 목록을 돌려주는 이유다.
+이 모듈은 HTML 페이지와 엔드포인트를 구별할 방법이 없으며, 기본값으로 포장된 추측은 어떤 애플리케이션에서는 매번 틀릴 것이다.
+
+패턴에 맨 `*`가 들어 있는 라우트는 `IllegalArgumentException`을 던진다.
+그 와일드카드에는 OpenAPI 경로 템플릿이 없고 거기에 넣을 이름도 없으며, 조용히 빼 버리면 애플리케이션이 실제보다 적게 응답한다고 주장하는 문서를 발행하게 된다.
+대신 거부되며, 그것을 제외하는 것은 위의 필터 옆에 눈에 보이게 직접 쓰는 필터다.
+
+xref:routing.adoc[이름 있는 꼬리]는 거부되지 않고 써진다.
+`/files/\{path*}`는 경로 `/files/\{path}`가 되고, 그 파라미터는 `The rest of the path, slashes included.`라는 설명을 가진다.
+OpenAPI의 경로 템플릿에는 와일드카드가 없으므로, 별표는 core의 문법이고 변수가 건너가는 것이다.
+그것이 이 모듈이 하는 유일한 변환이다.
+
+== 문서에 담기는 것
+
+모든 라우트는 등록 순서대로 그 경로 아래에서 소문자 메서드를 키로 하는 오퍼레이션이 된다.
+경로의 모든 `\{name}`은 `string` 타입의 필수 경로 파라미터가 되며, OpenAPI는 이를 선언하도록 요구한다.
+각 오퍼레이션은 `OK`로 설명된 `200` 응답을 가진다.
+
+xref:route-introspection.adoc#descriptions[설명]과 함께 등록된 라우트는 이를 오퍼레이션의 `summary`로 가지며, 스펙 UI가 라우트 옆에 보여주는 필드가 바로 이것이다:
+
+[source,java]
+----
+app.get("/api/decks", "List every deck", api::listDecks);
+----
+
+[source,json]
+----
+{"paths": {"/api/decks": {"get": {"summary": "List every deck", "responses": {"200": {"description": "OK"}}}}}}
+----
+
+설명 없이 등록된 라우트는 빈 줄로 렌더링될 빈 문자열 대신 `summary`를 아예 갖지 않는다.
+
+이것이 전부이며, 유효한 문서다.
+빠진 것은 의도적으로 빠진 것이다: 요청이나 응답 스키마, 서버 목록, 보안 스킴.
+그중 어느 것도 라우트에서 도출할 수 없으므로 각각은 어딘가에 선언되어야 하는데, 어디에 선언할지는 이 모듈이 묻지 않음으로써 답하는 질문이다.
+자동 HEAD와 OPTIONS 응답도 나열되지 않는데, `routes()`가 그것을 나열하지 않는 것과 같은 이유다.
+
+== 테스트하기
+
+`document`는 목록의 순수 함수이므로, 테스트에는 서버도 앱도 필요 없다:
+
+[source,java]
+----
+Json.JsonObject paths = OpenApi.document("Flashcard API", "1.0.0",
+        List.of(new Route("GET", "/api/decks/{deckId}/cards"))).asObject().getObject("paths");
+
+assertThat(paths.getObject("/api/decks/{deckId}/cards").getObject("get").getArray("parameters"))
+        .hasSize(1);
+----
+
+`Route`는 레코드이므로 픽스처는 생성자 호출이다.
+예제 앱의 문서는 `/openapi.json`에서 접근할 수 있다.
+CORS 범위를 어떻게 정했는지는 xref:example-flashcard.adoc[예제]를 참고한다, 스펙 문서는 그곳에서 애플리케이션이 아닌 무언가가 읽도록 만들어진 유일한 것이기 때문이다.

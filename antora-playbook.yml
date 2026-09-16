@@ -2,17 +2,31 @@ site:
   title: Spider Silk
   url: https://spider-silk.benelog.net
   start_page: ROOT::index.adoc
+  keys:
+    repository: https://github.com/benelog/spider-silk
 
 content:
   sources:
+    # HEAD is the worktree, which the main branch's antora.yml versions as
+    # main (unreleased). Every docs/x.y.z branch is a released manual, cut by
+    # RELEASING.md. The English manual is the component ROOT, served at the
+    # site root, and the Korean one is the component ko, served under /ko/.
     - url: ./
-      start_path: manual
-      branches: HEAD
+      branches: [HEAD, docs/*]
+      start_paths: [manual, manual-ko]
 
 ui:
   bundle:
     url: https://gitlab.com/antora/antora-ui-default/-/jobs/artifacts/master/raw/build/ui-bundle.zip?job=bundle-stable
     snapshot: true
+  # The language switch, the hreflang links, and the locale redirect, over the default UI.
+  supplemental_files: ./supplemental-ui
+
+urls:
+  # The latest release answers at the root, as the site always has, so a link
+  # into it never carries a version; older releases and main do.
+  latest_version_segment: ''
+  latest_version_segment_strategy: redirect:to
 
 output:
   dir: ./build/site
