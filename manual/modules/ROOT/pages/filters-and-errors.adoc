@@ -15,7 +15,7 @@ The response-wide concerns from xref:cors-compression-and-security-headers.adoc[
 == Filters
 
 `beforeRequest` runs before routing for every matching request, including static files, 404s, 405s, HEAD, and automatic OPTIONS.
-`beforeRoute` runs only for a matched route and exposes its path variables.
+`beforeRoute` runs only for a matched route and exposes its path variables, and the route itself through `req.route()`.
 `afterRoute` runs only when that handler returns normally.
 All three take an optional path pattern and cover their whole scope when given none.
 A route group's `beforeRequest` resolves its prefix in the same way as its route filters.
@@ -110,7 +110,11 @@ app.exception(Json.JsonException.class,
 The handler for the most specific type the exception is an instance of runs, whatever order the handlers were registered in.
 `Json.JsonException` is an `IllegalArgumentException`, and a body that failed to parse reaches the second handler above rather than the first.
 Registering a type twice replaces the first handler.
-An `HttpException` no handler covers answers with its status and message, and any other uncovered exception answers 500 and is logged.
+An `HttpException` is a status the handler chose, not a failure.
+It answers with its status and message and goes to `error(status, ...)` for its body, and a handler registered for a broader type such as `RuntimeException` never sees it.
+A handler registered for `HttpException` itself, or for a subtype of it, does.
+Any other uncovered exception answers 500 and is logged.
+Whichever answered it, the exception is reported to the xref:request-logging.adoc[request logger] as `completion.exception()`, so recording failures does not take a catch-all handler.
 A template that fails to render throws inside the handler's own dispatch, so it reaches these handlers too.
 
 == Error handlers

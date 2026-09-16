@@ -23,5 +23,24 @@ Inspect the failure independently of the status code.
 An application exception handled during dispatch is represented by its response status, not by a transmission failure.
 Normal SSE closure is not a transmission failure.
 Completion does not confirm receipt of the entire body by the remote client.
+
+`exception()` is what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did.
+`threw()` reports whether that exception is present.
+It is null when nothing threw, and for an `HttpException`, which is a status the handler chose rather than a failure.
+Read it together with `statusCode()`: an exception mapped to a 400 is the caller's mistake, and one answered with a 500 is the application's.
+A logger that records failures on a tracing span or in an error list reads it here, instead of registering a catch-all `exception(...)` handler that would also have to answer the request:
+
+[source,java]
+----
+app.requestLogger((req, completion) -> {
+    if (completion.threw() && completion.statusCode() >= 500) {
+        Span.current().recordException(completion.exception());
+    }
+});
+----
+
+`req.route()` is the route that answered, when one did, so a log line or a metric groups requests by `/decks/\{deckId}` rather than by every id.
+It is null for a static file, a 404, a 405, and the automatic OPTIONS answer.
+xref:route-introspection.adoc#matched-route[Route Introspection] has the rules.
 `req.body()` reads the text a filter or handler already read, since the text is kept for the whole request.
 A logger that throws is reported to the servlet log and leaves the response alone.

@@ -13,8 +13,8 @@ Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that
   `guards()` reports the filters and error handlers beside them as `Guard.BeforeRequest(path)`, `Guard.BeforeRoute(path)`, `Guard.AfterRoute(path)`, `Guard.Error(status)`, and `Guard.ResponseFilter()`.
   xref:openapi.adoc[`spider-silk-openapi`] turns the route list into an OpenAPI 3.1 document
 * Filters: `beforeRequest(filter)` / `beforeRequest(path, filter)` before routing, `beforeRoute(filter)` / `beforeRoute(path, filter)`, same for `afterRoute`, and `responseFilter(filter)` for every response, the ones no after-filter sees included
-* Logging: `requestLogger((request, completion) -> ...)`, with the servlet status, elapsed time, response definition, and transmission failure in `RequestCompletion`; see xref:request-logging.adoc[Request Logging]
-* Errors: `exception(Type, handler)`, where the most specific registered type wins, `error(HttpStatus, handler)`
+* Logging: `requestLogger((request, completion) -> ...)`, with the servlet status, elapsed time, response definition, transmission failure, and the exception the request was answered for in `RequestCompletion`; see xref:request-logging.adoc[Request Logging]
+* Errors: `exception(Type, handler)`, where the most specific registered type wins and an `HttpException` reaches only a handler for its own type or a subtype, `error(HttpStatus, handler)`
 * Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
   Each is off until named, and applies to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
 * Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)`.
@@ -29,6 +29,7 @@ Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that
 
 * Request info: `method()`, `path()`, `header(name)`, `headers(name)` for a repeated header, `headers()` for all of them, `contentType()`, `queryString()`, `isSecure()`, `scheme()`, `host()`, `remoteAddress()`, and `raw()` for the servlet request itself.
   `host()` carries the port when it is not the scheme's default, so `scheme()`, `host()`, and `path()` rebuild the absolute URL
+* The matched route: `route()`, the `Route` that answered, with its pattern and description; null before routing and where no route matched, see xref:route-introspection.adoc#matched-route[Route Introspection]
 * Path variables: `pathParam`, `pathParamLong`, `pathParamEnum`, and `pathParam(name, parser)` for any other type.
   A name the pattern never declared throws `IllegalStateException`, not a 400.
   A `\{name*}` tail binds the rest of the path with its slashes, and `""` when it matched nothing

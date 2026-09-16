@@ -25,11 +25,19 @@ final class Router {
      * patterns that both match, and it is carried by the order of the lists the
      * index holds rather than by a number on the route.
      */
-    record Entry(String method, String path, String description, PathPattern pattern,
-            Handler handler) {
+    record Entry(Route route, PathPattern pattern, Handler handler) {
+
+        String method() {
+            return route.method();
+        }
+
+        String path() {
+            return route.path();
+        }
     }
 
-    record Match(Handler handler, Map<String, String> pathParams) {
+    /** A route that answers a request: the route as registered, its handler, and what its variables matched. */
+    record Match(Route route, Handler handler, Map<String, String> pathParams) {
     }
 
     private final Map<String, MethodRoutes> byMethod = new LinkedHashMap<>();
@@ -49,7 +57,7 @@ final class Router {
         // At the registration site rather than in routes(), where the stack trace
         // would name the reader instead of the line that left the argument out.
         Objects.requireNonNull(description, "description");
-        Entry entry = new Entry(method, path, description, new PathPattern(path), handler);
+        Entry entry = new Entry(new Route(method, path, description), new PathPattern(path), handler);
         Entry existing = byShape.putIfAbsent(method + " " + entry.pattern().canonicalForm(), entry);
         if (existing != null) {
             throw new IllegalStateException(duplicateMessage(entry, existing));
@@ -79,7 +87,7 @@ final class Router {
     Router copy() {
         Router copy = new Router();
         for (Entry entry : registrations) {
-            copy.add(entry.method(), entry.path(), entry.description(), entry.handler());
+            copy.add(entry.method(), entry.path(), entry.route().description(), entry.handler());
         }
         return copy;
     }
@@ -93,7 +101,7 @@ final class Router {
         for (Entry entry : routes.candidates(segments)) {
             Map<String, String> params = entry.pattern().match(segments);
             if (params != null) {
-                return new Match(entry.handler(), params);
+                return new Match(entry.route(), entry.handler(), params);
             }
         }
         return null;
@@ -115,9 +123,7 @@ final class Router {
 
     /** An immutable snapshot of what was registered, in registration order. */
     List<Route> routes() {
-        return registrations.stream()
-                .map(entry -> new Route(entry.method(), entry.path(), entry.description()))
-                .toList();
+        return registrations.stream().map(Entry::route).toList();
     }
 
     /**

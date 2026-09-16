@@ -1343,6 +1343,56 @@ Also rejected: the portal's OSSRH-compatible staging endpoint.
 It uploads every module separately into an implicit staging repository, where the bundle is one file that can be built and inspected locally before anything leaves the machine.
 Also rejected: snapshots on Central's snapshot repository, until someone asks to depend on an unreleased version.
 
+## 56 · The route a request matched
+
+### 56. `req.route()` reports the route that answered
+
+`WebRequest.route()` returns the `Route` the router chose, the same record `app.routes()` lists, with the group prefix resolved.
+It is null before routing and where nothing matched, and set from `beforeRoute` on through the handler, the after-filters, the exception and error handlers, the response filters, and the request logger.
+
+The case that showed the gap was a tracing filter.
+The OpenTelemetry agent instruments the servlet layer, where one `AppServlet` is mapped at `/*`, so every server span was named `GET /*` and an APM had one endpoint to show.
+The application could rename the span from a `beforeRoute` filter, but the request carried the path and its variables and not the pattern they came from, so it re-matched the path against `app.routes()` with a matcher of its own.
+That matcher preferred a literal segment over a variable, and the router follows registration order, so the two could disagree on which route a request took, and the span would then be named after a route that did not run.
+The router knows the answer at the moment it matches, and decision 13's list already exists as data, so the fix is to hand the entry over rather than to have it found again.
+
+The route is on the request rather than passed as an argument, because every interface that takes a request is functional and settled at 1.0 (decision 36), and because the request logger and the response filters want it as much as the handler does.
+A HEAD answered by a GET route reports that GET route, which is the route that ran.
+
+## 57 · What an exception handler catches
+
+### 57. An `HttpException` passes a broader exception handler by
+
+An `HttpException` is matched only by a handler registered for `HttpException` or a subtype of it.
+A handler for `RuntimeException` or `Exception` never sees one, and the exception answers with its status and message and goes to `error(status, ...)` for its body, as it does when no handler is registered at all.
+
+Decision 34 made the most specific handler run, and under that rule a catch-all for `RuntimeException` caught every `HttpException` too.
+An application that registered the catch-all to record failures then had to write the framework's own mapping back into it, `if (e instanceof HttpException http) return ...status(http.status())`, or every deliberate 404 became its 500.
+The trap is silent: the catch-all reads as being about what went wrong, and a status a handler threw on purpose is not that.
+`HttpException` is the one exception whose meaning the framework defines, a status rather than a failure, so it is the one exception the framework may keep out of a handler that did not name it.
+A handler that names it, or a subtype, asked for it and gets it.
+
+Rejected: leaving decision 34's rule alone and documenting the trap.
+The line the application had to write was the framework's own `fail` in different words, and a rule that has to be restated in every catch-all is a rule in the wrong place.
+
+## 58 · What the request logger is told
+
+### 58. `RequestCompletion` carries the exception the request was answered for
+
+`RequestCompletion.exception()` is what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did.
+It is null when nothing threw, and for an `HttpException`, which decision 57 makes a status rather than a failure.
+`failure()` stays what it was, decision 53's transmission failure, and the two are different things: one interrupted working out the answer, the other interrupted sending it.
+
+Before this, an uncaught exception went to the servlet log and became a 500, and the request logger saw the 500 alone.
+An application that wanted the exception on a tracing span or in an error list had to register a catch-all `exception(...)` handler, which is the shape decision 57 records as a trap, and which also made it answer the request it only wanted to observe.
+The logger is already the one lambda that sees every outcome, so it is where the exception belongs.
+
+Every exception is reported, the mapped ones included, with the status they were mapped to.
+A logger that records failures reads the two together, since an exception answered with a 400 is the caller's mistake and one answered with a 500 is the application's, and that line is the application's to draw.
+
+Rejected: a separate `app.onException(...)` observer.
+It would be a second lambda called once per request that threw, with the request, the exception, and no answer, and the logger already has all three.
+
 ## Rejected — decisions, with the reason
 
 These are closed.

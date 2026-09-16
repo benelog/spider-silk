@@ -121,11 +121,13 @@ public class AppServlet extends HttpServlet {
         promoteFlash(req);
 
         long startedAt = System.nanoTime();
-        WebRequest request = new WebRequest(req, Map.of());
+        WebRequest arrived = new WebRequest(req, Map.of());
         // Split here and nowhere else: the router, the filters, and the CORS
         // path all read the same segments, and the path cannot change under them.
-        String[] segments = PathPattern.split(request.path());
-        WebResponse response = dispatch(request, segments);
+        String[] segments = PathPattern.split(arrived.path());
+        Answer answer = dispatch(arrived, segments);
+        WebRequest request = answer.request();
+        WebResponse response = answer.response();
         Exception failure = null;
         try {
             response = decorate(response, request, segments);
@@ -136,6 +138,14 @@ public class AppServlet extends HttpServlet {
         } finally {
             logRequest(request, response, res.getStatus(), startedAt, failure);
         }
+    }
+
+    /**
+     * What {@link #dispatch} worked out: the answer, and the request as it was
+     * answered, which from routing on carries the matched route and its
+     * variables, and after an exception carries what was thrown.
+     */
+    private record Answer(WebRequest request, WebResponse response) {
     }
 
     /**
@@ -177,7 +187,7 @@ public class AppServlet extends HttpServlet {
         }
         try {
             deployment.requestLogger().log(request, new RequestCompletion(response, statusCode,
-                    Duration.ofNanos(System.nanoTime() - startedAt), failure));
+                    Duration.ofNanos(System.nanoTime() - startedAt), failure, request.thrown()));
         } catch (Exception e) {
             log("Request logger failed", e);
         }
@@ -189,7 +199,7 @@ public class AppServlet extends HttpServlet {
      * Never throws and never returns null: every path here ends in a response,
      * and every response goes through the response filters on the way out.
      */
-    private WebResponse dispatch(WebRequest request, String[] segments) {
+    private Answer dispatch(WebRequest request, String[] segments) {
         HttpServletRequest req = request.raw();
         String method = req.getMethod();
         String path = request.path();
@@ -198,11 +208,12 @@ public class AppServlet extends HttpServlet {
         try {
             WebResponse early = runBefore(deployment.requestFilters(), segments, current);
             if (early != null) {
-                return filterResponse(completeErrorResponse(renderTemplate(early), current), current);
+                return new Answer(current,
+                        filterResponse(completeErrorResponse(renderTemplate(early), current), current));
             }
             Router.Match match = routeFor(method, segments);
             if (match != null) {
-                current = request.withPathParams(match.pathParams());
+                current = request.withRoute(match.route(), match.pathParams());
                 WebResponse answered = runBefore(deployment.beforeFilters(), segments, current);
                 if (answered != null) {
                     response = answered;
@@ -213,7 +224,7 @@ public class AppServlet extends HttpServlet {
             } else if (isReadMethod(method)) {
                 WebResponse file = staticFile(path, req);
                 if (file != null) {
-                    return filterResponse(file, current);
+                    return new Answer(current, filterResponse(file, current));
                 }
                 response = noRoute(current, method, path, segments);
             } else {
@@ -223,7 +234,7 @@ public class AppServlet extends HttpServlet {
         } catch (Exception e) {
             response = handleException(e, current);
         }
-        return filterResponse(completeErrorResponse(response, current), current);
+        return new Answer(current, filterResponse(completeErrorResponse(response, current), current));
     }
 
     /**
@@ -462,7 +473,19 @@ public class AppServlet extends HttpServlet {
         req.setAttribute(WebRequest.FLASH_ATTRIBUTE, flash);
     }
 
+    /**
+     * Answers for what a handler, a filter, or a template threw.
+     *
+     * <p>An {@link HttpException} is a status the handler chose, not a failure:
+     * it answers with that status and goes to {@link App#error} for its body, and
+     * a handler registered for a broader type never sees it. Any other exception
+     * goes to the most specific handler registered for it, or to a 500, and is
+     * kept on the request for the request logger to report either way.
+     */
     private WebResponse handleException(Exception e, WebRequest request) {
+        if (!(e instanceof HttpException)) {
+            request.thrown(e);
+        }
         ExceptionHandler<Exception> handler = exceptionHandlerFor(e);
         if (handler != null) {
             try {
@@ -485,6 +508,11 @@ public class AppServlet extends HttpServlet {
      * one assignable to the other is the more specific, and a handler for a
      * subtype is reached whether it was registered before or after its
      * supertype's.
+     *
+     * <p>An {@link HttpException} is matched only by a handler for
+     * {@code HttpException} or a subtype of it. A handler for
+     * {@code RuntimeException} or {@code Exception} is there for what went
+     * wrong, and a status a handler threw on purpose is not that.
      */
     @SuppressWarnings("unchecked")
     private @Nullable ExceptionHandler<Exception> exceptionHandlerFor(Exception e) {
@@ -492,6 +520,9 @@ public class AppServlet extends HttpServlet {
         ExceptionHandler<? extends Exception> best = null;
         for (var entry : deployment.exceptionHandlers().entrySet()) {
             Class<?> type = entry.getKey();
+            if (e instanceof HttpException && !HttpException.class.isAssignableFrom(type)) {
+                continue;
+            }
             if (type.isInstance(e) && (bestType == null || bestType.isAssignableFrom(type))) {
                 bestType = type;
                 best = entry.getValue();

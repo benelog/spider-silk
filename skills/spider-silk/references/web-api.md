@@ -188,7 +188,7 @@ app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of(
 - `Json.JsonException` is an `IllegalArgumentException`, so map it separately when `IllegalArgumentException` means 404.
 - Register everything before `app.start(...)`: a route, filter, or setting added while an `AppServlet` serves the app (embedded, a server started directly, or an external container) throws `IllegalStateException`; `stop()` reopens it.
 - `app.cors(...)`, `app.gzip(...)`, `app.securityHeaders(...)`, and `app.staticFiles(...)` copy the value they are given, so changing it afterwards does nothing.
-- `throw new HttpException(HttpStatus.UNAUTHORIZED, "...")` rejects from anywhere and lets `error(status, ...)` render the body.
+- `throw new HttpException(HttpStatus.UNAUTHORIZED, "...")` rejects from anywhere and lets `error(status, ...)` render the body. It passes a handler for a broader type (`RuntimeException`, `Exception`) by; only `exception(HttpException.class, ...)` or a handler for a subtype catches it.
 - `error(status, handler)` fills the body for any response that ended on that status with no body (router 404s, `HttpException`, `WebResponse.empty(status)`); a response that already carries a body is left alone.
 - Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.
 
@@ -252,7 +252,9 @@ app.requestLogger((req, completion) -> logger.info("{} {} -> {} ({}ms)",
 `response()` is the response definition and may differ from a raw writer's output.
 `took()` is the elapsed Duration, and `failure()` / `failed()` record an exception during decoration or writing independently of status.
 A write failure can leave a 200 after commitment or cause a 500 before commitment.
-Handled application exceptions are represented by their response status.
+`exception()` / `threw()` report what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did; null for an `HttpException`, which is a status rather than a failure.
+Read it with `statusCode()`: a 400 is the caller's mistake, a 500 the application's.
+`req.route()` there is the route that answered (null for a static file, 404, 405, OPTIONS), so a metric or a span groups by `req.route().path()`.
 `req.body()` there answers the text a filter or handler already read.
 Core carries no logging framework — which logger and format is the application's call.
 
@@ -262,4 +264,5 @@ Core carries no logging framework — which logger and format is the application
 `app.guards()` lists filters, error handlers, and response filters the same way, as a sealed `Guard` (`BeforeRequest(path)`, `BeforeRoute(path)`, `AfterRoute(path)`, `Error(status)`, `ResponseFilter()`); an exhaustive `switch` needs all five cases.
 A route registered without a description reports `""`, not null.
 The automatic HEAD/OPTIONS answers and `exception(...)` handlers are not listed.
+`req.route()` reports the entry that answered the current request, set from `beforeRoute` through the request logger and null before routing or where nothing matched; a HEAD answered by a GET route reports the GET route.
 Build on the list directly (a `/_routes` page, audits) or hand it to `spider-silk-openapi` — see content.md.

@@ -114,6 +114,95 @@ class RequestLoggerTest {
         assertThat(statuses).isEqualTo(List.of(500));
     }
 
+    /**
+     * The exception itself is reported, not only the 500 it became: a logger or
+     * a tracing span that records failures needs the stack trace, and the
+     * servlet log is not where an application looks for it.
+     */
+    @Test
+    void theExceptionThatBecameA500IsReported() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        IllegalStateException thrown = new IllegalStateException("kaboom");
+        App app = new App()
+                .requestLogger((req, completion) -> logged.add(completion))
+                .get("/boom", req -> {
+                    throw thrown;
+                });
+
+        WebTest.test(app, client -> client.get("/boom"));
+
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(500);
+            assertThat(completion.threw()).isTrue();
+            assertThat(completion.exception()).isSameAs(thrown);
+            assertThat(completion.failed()).isFalse();
+        });
+    }
+
+    /** An exception a handler mapped is reported too, with the status it was mapped to: the logger decides what counts. */
+    @Test
+    void anExceptionAnExceptionHandlerAnsweredIsReportedWithItsStatus() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        IllegalArgumentException thrown = new IllegalArgumentException("rating must be between 1 and 5");
+        App app = new App()
+                .requestLogger((req, completion) -> logged.add(completion))
+                .exception(IllegalArgumentException.class,
+                        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST))
+                .post("/reviews", req -> {
+                    throw thrown;
+                });
+
+        WebTest.test(app, client -> client.post("/reviews"));
+
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(400);
+            assertThat(completion.exception()).isSameAs(thrown);
+        });
+    }
+
+    /** A status a handler chose by throwing HttpException is a status, and nothing went wrong. */
+    @Test
+    void anHttpExceptionIsNotReportedAsAnException() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        App app = new App()
+                .requestLogger((req, completion) -> logged.add(completion))
+                .get("/decks/{id}", req -> {
+                    throw new HttpException(HttpStatus.NOT_FOUND, "No deck 7");
+                })
+                .get("/ok", req -> WebResponse.text("ok"));
+
+        WebTest.test(app, client -> {
+            client.get("/decks/7");
+            client.get("/ok");
+        });
+
+        assertThat(logged).hasSize(2).allSatisfy(completion -> {
+            assertThat(completion.threw()).isFalse();
+            assertThat(completion.exception()).isNull();
+        });
+        assertThat(logged.get(0).statusCode()).isEqualTo(404);
+    }
+
+    /** A response filter that throws is answered like a handler that throws, and reported the same way. */
+    @Test
+    void anExceptionFromAResponseFilterIsReported() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        IllegalStateException thrown = new IllegalStateException("filter broke");
+        App app = new App()
+                .requestLogger((req, completion) -> logged.add(completion))
+                .responseFilter((req, res) -> {
+                    throw thrown;
+                })
+                .get("/", req -> WebResponse.text("ok"));
+
+        WebTest.test(app, client -> client.get("/"));
+
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(500);
+            assertThat(completion.exception()).isSameAs(thrown);
+        });
+    }
+
     @Test
     void theElapsedTimeIsReported() {
         List<Duration> times = new ArrayList<>();

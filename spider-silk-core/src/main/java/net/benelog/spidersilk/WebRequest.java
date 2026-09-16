@@ -67,10 +67,12 @@ public final class WebRequest {
 
     private final HttpServletRequest req;
     private final Map<String, String> pathParams;
+    private final @Nullable Route route;
 
     private @Nullable Map<String, List<String>> parsedQuery;
     private @Nullable String path;
     private @Nullable String errorMessage;
+    private @Nullable Exception thrown;
 
     /**
      * Wraps a servlet request, with the path variables the router resolved.
@@ -85,8 +87,13 @@ public final class WebRequest {
      * @param pathParams the resolved path variables, empty when there are none
      */
     public WebRequest(HttpServletRequest req, Map<String, String> pathParams) {
+        this(req, pathParams, null);
+    }
+
+    private WebRequest(HttpServletRequest req, Map<String, String> pathParams, @Nullable Route route) {
         this.req = req;
         this.pathParams = pathParams;
+        this.route = route;
     }
 
     // ---- Request info ----
@@ -269,6 +276,26 @@ public final class WebRequest {
      */
     public HttpServletRequest raw() {
         return req;
+    }
+
+    // ---- The matched route ----
+
+    /**
+     * The route that answered this request, as {@link App#routes()} reports it:
+     * the method, the path pattern with group prefixes resolved, and the
+     * description. {@code "/api/decks/{deckId}"} is the pattern, where
+     * {@link #path()} is the {@code "/api/decks/7"} the caller asked for, so
+     * this is the name a request log, a metric, or a tracing span groups by.
+     *
+     * <p>Null before routing and where no route matched: in a
+     * {@link App#beforeRequest} filter, and for a static file, a 404, a 405, and
+     * the automatic OPTIONS answer. It is set from {@link App#beforeRoute} on,
+     * through the handler, the after-filters, the exception and error handlers,
+     * the response filters, and the request logger. A HEAD answered by a GET
+     * route reports that GET route.
+     */
+    public @Nullable Route route() {
+        return route;
     }
 
     // ---- Path variables ----
@@ -1185,14 +1212,29 @@ public final class WebRequest {
         this.errorMessage = errorMessage;
     }
 
-    /** The same request, with the path variables a matched route resolved. */
-    WebRequest withPathParams(Map<String, String> resolved) {
-        WebRequest copy = new WebRequest(req, resolved);
+    /**
+     * Inside the request logger, the exception the request was answered for:
+     * what a handler, a filter, or a template threw, whether an exception
+     * handler answered it or the framework's 500 did. Null when nothing threw,
+     * and for an {@link HttpException}, which is a status rather than a failure.
+     */
+    @Nullable Exception thrown() {
+        return thrown;
+    }
+
+    void thrown(@Nullable Exception thrown) {
+        this.thrown = thrown;
+    }
+
+    /** The same request, with the route that matched and the path variables it resolved. */
+    WebRequest withRoute(Route matched, Map<String, String> resolved) {
+        WebRequest copy = new WebRequest(req, resolved, matched);
         // The same servlet request, so the same path: the copy is made after
         // routing has already asked for it.
         copy.path = path;
         copy.parsedQuery = parsedQuery;
         copy.errorMessage = errorMessage;
+        copy.thrown = thrown;
         return copy;
     }
 }

@@ -7,6 +7,19 @@ The release workflow copies a version's section into its GitHub Release, so a se
 
 ## [Unreleased]
 
+### Added
+
+- `spider-silk-core`: `WebRequest.route()` reports the route that answered the request, as `app.routes()` lists it, from `beforeRoute` through the request logger.
+  A tracing span or a metric groups by the pattern `/api/decks/{deckId}` without re-matching the path against the routing table.
+- `spider-silk-core`: `RequestCompletion.exception()` and `threw()` report what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did.
+  A logger records failures from there instead of registering a catch-all `exception(...)` handler.
+
+### Changed
+
+- `spider-silk-core`: an `HttpException` is answered by its status and `error(status, ...)` without passing through an exception handler registered for a broader type.
+  Only a handler for `HttpException` itself or a subtype of it catches one.
+  A catch-all for `RuntimeException` or `Exception` therefore no longer turns a deliberate 404 into its own answer.
+
 ## [1.0.0] - 2026-09-16
 
 The first release, and the first published to Maven Central.
