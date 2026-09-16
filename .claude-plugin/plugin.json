@@ -1,6 +1,6 @@
 {
   "name": "spider-silk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Build web applications with Spider Silk, the no-reflection Java web framework: dependency setup (Maven Central), routing, JSON, templates, testing, servers, and deployment.",
   "author": {
     "name": "Sanghyuk Jung",

@@ -2,7 +2,7 @@
 
 Spider Silk requires Java 21 or later.
 Releases are published to Maven Central, so neither Gradle nor Maven needs a repository beyond the default or any credentials.
-The snippets below write `1.0.0`, the release this skill was written against.
+The snippets below write `1.1.0`, the release this skill was written against.
 SKILL.md has the rule for checking it before it reaches a build file.
 The group id, the package root, and the `Automatic-Module-Name` are all `net.benelog.spidersilk`.
 
@@ -14,8 +14,8 @@ repositories {
 }
 
 dependencies {
-    implementation 'net.benelog.spidersilk:spider-silk-core:1.0.0'
-    testImplementation 'net.benelog.spidersilk:spider-silk-test:1.0.0'
+    implementation 'net.benelog.spidersilk:spider-silk-core:1.1.0'
+    testImplementation 'net.benelog.spidersilk:spider-silk-test:1.1.0'
 }
 ```
 
@@ -26,12 +26,12 @@ dependencies {
   <dependency>
     <groupId>net.benelog.spidersilk</groupId>
     <artifactId>spider-silk-core</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
   </dependency>
   <dependency>
     <groupId>net.benelog.spidersilk</groupId>
     <artifactId>spider-silk-test</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
     <scope>test</scope>
   </dependency>
 </dependencies>
@@ -60,7 +60,7 @@ The `net.benelog.spidersilk` plugin carries the packaging block an application w
 
 ```groovy
 plugins {
-    id 'net.benelog.spidersilk' version '1.0.0'
+    id 'net.benelog.spidersilk' version '1.1.0'
 }
 
 spiderSilk {
@@ -96,7 +96,7 @@ pluginManagement {
 <parent>
   <groupId>net.benelog.spidersilk</groupId>
   <artifactId>spider-silk-maven-parent</artifactId>
-  <version>1.0.0</version>
+  <version>1.1.0</version>
 </parent>
 ```
 

@@ -32,7 +32,7 @@ Three core principles:
 ## Quick Start
 
 Spider Silk requires Java 21 or later.
-The current version is `1.0.0`, published to Maven Central.
+The current version is `1.1.0`, published to Maven Central.
 
 ### build.gradle
 
@@ -42,8 +42,8 @@ repositories {
 }
 
 dependencies {
-    implementation 'net.benelog.spidersilk:spider-silk-core:1.0.0'
-    testImplementation 'net.benelog.spidersilk:spider-silk-test:1.0.0'
+    implementation 'net.benelog.spidersilk:spider-silk-core:1.1.0'
+    testImplementation 'net.benelog.spidersilk:spider-silk-test:1.1.0'
 }
 ```
 
@@ -54,12 +54,12 @@ dependencies {
   <dependency>
     <groupId>net.benelog.spidersilk</groupId>
     <artifactId>spider-silk-core</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
   </dependency>
   <dependency>
     <groupId>net.benelog.spidersilk</groupId>
     <artifactId>spider-silk-test</artifactId>
-    <version>1.0.0</version>
+    <version>1.1.0</version>
     <scope>test</scope>
   </dependency>
 </dependencies>

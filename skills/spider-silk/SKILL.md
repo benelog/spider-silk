@@ -10,7 +10,7 @@ description: >-
   tests (WebTest, TestRequest), server tuning (Jetty, Tomcat, Undertow), or deployment (Jib, Docker, GraalVM native image).
 license: Apache-2.0
 metadata:
-  version: "1.0.0"
+  version: "1.1.0"
   homepage: https://spider-silk.benelog.net
 ---
 
@@ -22,7 +22,7 @@ Releases are published to Maven Central, so `mavenCentral()` is the only reposit
 The Gradle plugin is on Central too, not on the Gradle Plugin Portal — see [First-run setup](#first-run-setup) before touching the build file.
 The full manual is at <https://spider-silk.benelog.net>; the reference files beside this one are distilled from it.
 
-**Version.** This skill writes `1.0.0` throughout, which is the release it was written against and the only version string in it.
+**Version.** This skill writes `1.1.0` throughout, which is the release it was written against and the only version string in it.
 Before putting it in a build file, prefer whatever the project already declares.
 For a project starting fresh, check <https://central.sonatype.com/artifact/net.benelog.spidersilk/spider-silk-core> for the current version, since this skill's copy ages with each release.
 <https://github.com/benelog/spider-silk/blob/main/CHANGELOG.md> lists what changed between releases.
@@ -60,8 +60,8 @@ repositories {
 }
 
 dependencies {
-    implementation 'net.benelog.spidersilk:spider-silk-core:1.0.0'
-    testImplementation 'net.benelog.spidersilk:spider-silk-test:1.0.0'
+    implementation 'net.benelog.spidersilk:spider-silk-core:1.1.0'
+    testImplementation 'net.benelog.spidersilk:spider-silk-test:1.1.0'
 }
 ```
 

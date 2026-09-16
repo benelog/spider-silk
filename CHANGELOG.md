@@ -7,6 +7,8 @@ The release workflow copies a version's section into its GitHub Release, so a se
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-17
+
 ### Added
 
 - `spider-silk-core`: `WebRequest.route()` reports the route that answered the request, as `app.routes()` lists it, from `beforeRoute` through the request logger.
@@ -41,5 +43,6 @@ From this version on, a change to a public signature follows Semantic Versioning
 - `spider-silk-gradle-plugin` (plugin id `net.benelog.spidersilk`) and `spider-silk-maven-parent`: packaging conventions for precompiled jte, Jib on a JRE base, and GraalVM native images.
 - JSpecify `@NullMarked` on every published package, checked by NullAway at compile time.
 
-[Unreleased]: https://github.com/benelog/spider-silk/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/benelog/spider-silk/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/benelog/spider-silk/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/benelog/spider-silk/releases/tag/v1.0.0
