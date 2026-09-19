@@ -8,7 +8,7 @@ dependencies {
     // api, not implementation: the Handlebars-taking constructor hands out
     // Handlebars' own types, so a consumer configuring helpers or a cache needs
     // them on its compile classpath.
-    api 'com.github.jknack:handlebars:4.5.4'
+    api 'com.github.jknack:handlebars:4.5.5'
 
     testImplementation project(':spider-silk-test')
     testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
