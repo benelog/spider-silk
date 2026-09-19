@@ -8,7 +8,7 @@ dependencies {
     // api, not implementation: the customizers hand out Tomcat's own types.
     // 11.0.x is the Servlet 6.1 line, one level above core's servlet API, Jetty's
     // ee10, and Undertow 2.3.x. Core calls nothing 6.1 added, so the skew is harmless.
-    api 'org.apache.tomcat.embed:tomcat-embed-core:11.0.25'
+    api 'org.apache.tomcat.embed:tomcat-embed-core:11.0.26'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
     testImplementation 'org.assertj:assertj-core:3.27.7'
