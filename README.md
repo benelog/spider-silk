@@ -25,23 +25,23 @@ java.lang.Throwable: where a handler stands
     at net.benelog.spidersilk.AppServlet.dispatch(AppServlet.java:221)  // Spider Silk
     at net.benelog.spidersilk.AppServlet.service(AppServlet.java:128)  // Spider Silk
     at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:614)  // the Servlet API
-    at org.eclipse.jetty.ee10.servlet.ServletHolder.handle(ServletHolder.java:754)  // Jetty, from here down
-    at org.eclipse.jetty.ee10.servlet.ServletHandler$ChainEnd.doFilter(ServletHandler.java:1642)
-    at org.eclipse.jetty.ee10.servlet.ServletHandler$MappedServlet.handle(ServletHandler.java:1556)
-    at org.eclipse.jetty.ee10.servlet.ServletChannel.dispatch(ServletChannel.java:871)
-    at org.eclipse.jetty.ee10.servlet.ServletChannel.handle(ServletChannel.java:449)
-    at org.eclipse.jetty.ee10.servlet.ServletHandler.handle(ServletHandler.java:469)
-    at org.eclipse.jetty.ee10.servlet.SessionHandler.handle(SessionHandler.java:719)
-    at org.eclipse.jetty.server.handler.ContextHandler.handle(ContextHandler.java:1253)
-    at org.eclipse.jetty.server.Server.handle(Server.java:197)
-    at org.eclipse.jetty.server.internal.HttpChannelState$HandlerInvoker.run(HttpChannelState.java:804)
-    at org.eclipse.jetty.server.internal.HttpConnection.onFillable(HttpConnection.java:420)
-    at org.eclipse.jetty.server.internal.HttpConnection$FillableCallback.succeeded(HttpConnection.java:1790)
-    at org.eclipse.jetty.io.FillInterest.fillable(FillInterest.java:105)
-    at org.eclipse.jetty.io.SelectableChannelEndPoint$1.run(SelectableChannelEndPoint.java:54)
-    at org.eclipse.jetty.util.thread.QueuedThreadPool.runJob(QueuedThreadPool.java:1009)
-    at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.doRunJob(QueuedThreadPool.java:1240)
-    at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.run(QueuedThreadPool.java:1194)
+    at org.eclipse.jetty.ee10.servlet.ServletHolder.handle(ServletHolder.java)  // Jetty, from here down
+    at org.eclipse.jetty.ee10.servlet.ServletHandler$ChainEnd.doFilter(ServletHandler.java)
+    at org.eclipse.jetty.ee10.servlet.ServletHandler$MappedServlet.handle(ServletHandler.java)
+    at org.eclipse.jetty.ee10.servlet.ServletChannel.dispatch(ServletChannel.java)
+    at org.eclipse.jetty.ee10.servlet.ServletChannel.handle(ServletChannel.java)
+    at org.eclipse.jetty.ee10.servlet.ServletHandler.handle(ServletHandler.java)
+    at org.eclipse.jetty.ee10.servlet.SessionHandler.handle(SessionHandler.java)
+    at org.eclipse.jetty.server.handler.ContextHandler.handle(ContextHandler.java)
+    at org.eclipse.jetty.server.Server.handle(Server.java)
+    at org.eclipse.jetty.server.internal.HttpChannelState$HandlerInvoker.run(HttpChannelState.java)
+    at org.eclipse.jetty.server.internal.HttpConnection.onFillable(HttpConnection.java)
+    at org.eclipse.jetty.server.internal.HttpConnection$FillableCallback.succeeded(HttpConnection.java)
+    at org.eclipse.jetty.io.FillInterest.fillable(FillInterest.java)
+    at org.eclipse.jetty.io.SelectableChannelEndPoint$1.run(SelectableChannelEndPoint.java)
+    at org.eclipse.jetty.util.thread.QueuedThreadPool.runJob(QueuedThreadPool.java)
+    at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.doRunJob(QueuedThreadPool.java)
+    at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.run(QueuedThreadPool.java)
     at java.base/java.lang.Thread.run(Thread.java:1474)
 ```
 
