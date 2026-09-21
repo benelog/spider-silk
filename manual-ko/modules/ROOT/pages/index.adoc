@@ -16,28 +16,18 @@ java.lang.Throwable: where a handler stands
     at com.example.decks.DeckRoutes.one(DeckRoutes.java:15)  // the handler
     at net.benelog.spidersilk.AppServlet.dispatch(AppServlet.java:221)  // Spider Silk
     at net.benelog.spidersilk.AppServlet.service(AppServlet.java:128)  // Spider Silk
-    at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:614)  // the Servlet API
+    at jakarta.servlet.http.HttpServlet.service(HttpServlet.java)  // the Servlet API
     at org.eclipse.jetty.ee10.servlet.ServletHolder.handle(ServletHolder.java)  // Jetty, from here down
     at org.eclipse.jetty.ee10.servlet.ServletHandler$ChainEnd.doFilter(ServletHandler.java)
     at org.eclipse.jetty.ee10.servlet.ServletHandler$MappedServlet.handle(ServletHandler.java)
     at org.eclipse.jetty.ee10.servlet.ServletChannel.dispatch(ServletChannel.java)
     at org.eclipse.jetty.ee10.servlet.ServletChannel.handle(ServletChannel.java)
-    at org.eclipse.jetty.ee10.servlet.ServletHandler.handle(ServletHandler.java)
-    at org.eclipse.jetty.ee10.servlet.SessionHandler.handle(SessionHandler.java)
-    at org.eclipse.jetty.server.handler.ContextHandler.handle(ContextHandler.java)
-    at org.eclipse.jetty.server.Server.handle(Server.java)
-    at org.eclipse.jetty.server.internal.HttpChannelState$HandlerInvoker.run(HttpChannelState.java)
-    at org.eclipse.jetty.server.internal.HttpConnection.onFillable(HttpConnection.java)
-    at org.eclipse.jetty.server.internal.HttpConnection$FillableCallback.succeeded(HttpConnection.java)
-    at org.eclipse.jetty.io.FillInterest.fillable(FillInterest.java)
-    at org.eclipse.jetty.io.SelectableChannelEndPoint$1.run(SelectableChannelEndPoint.java)
-    at org.eclipse.jetty.util.thread.QueuedThreadPool.runJob(QueuedThreadPool.java)
-    at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.doRunJob(QueuedThreadPool.java)
-    at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.run(QueuedThreadPool.java)
-    at java.base/java.lang.Thread.run(Thread.java:1474)
+    ... 12 more Jetty frames
+    at java.base/java.lang.Thread.run(Thread.java)
 ----
 
-`HttpServlet.service` 아래는 전부 Jetty이고, Tomcat이나 Undertow로 바꾸면 그 부분이 달라질 뿐 위의 두 프레임은 그대로다.
+`HttpServlet.service` 아래로 Jetty 프레임이 열일곱 개 이어지고, 트레이스는 그중 다섯 개를 보여준다.
+Tomcat이나 Undertow로 바꾸면 스택의 그 부분이 달라질 뿐 위의 두 프레임은 그대로다.
 애플리케이션이 등록하는 필터도 여기에 더해지지 않는데, 필터는 핸들러가 불리기 전에 이미 반환하기 때문이다.
 필터와 예외 핸들러는 한 프레임, 스트리밍 본문은 두 프레임 더 깊고, 프레임워크가 불러들이는 어떤 지점도 네 프레임보다 깊지 않다.
 시그니처가 나머지 절반이다: 핸들러는 `WebResponse`를 반환해서 답하므로, 답하기를 잊은 분기는 빈 응답이 아니라 컴파일 오류가 된다.
