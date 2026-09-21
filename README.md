@@ -12,9 +12,44 @@
 
 # Spider Silk
 
-Thin by design, strong by types.
+Thin method call, strong signature.
 
 Spider Silk is a web framework built on the Jakarta Servlet API.
+
+Thin here is a measurement rather than a metaphor.
+Two stack frames stand between `HttpServlet.service` and a handler, and a stack trace taken inside the handler shows both.
+
+```
+java.lang.Throwable: where a handler stands
+    at com.example.decks.DeckRoutes.one(DeckRoutes.java:15)  // the handler
+    at net.benelog.spidersilk.AppServlet.dispatch(AppServlet.java:221)  // Spider Silk
+    at net.benelog.spidersilk.AppServlet.service(AppServlet.java:128)  // Spider Silk
+    at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:614)  // the Servlet API
+    at org.eclipse.jetty.ee10.servlet.ServletHolder.handle(ServletHolder.java:754)  // Jetty, from here down
+    at org.eclipse.jetty.ee10.servlet.ServletHandler$ChainEnd.doFilter(ServletHandler.java:1642)
+    at org.eclipse.jetty.ee10.servlet.ServletHandler$MappedServlet.handle(ServletHandler.java:1556)
+    at org.eclipse.jetty.ee10.servlet.ServletChannel.dispatch(ServletChannel.java:871)
+    at org.eclipse.jetty.ee10.servlet.ServletChannel.handle(ServletChannel.java:449)
+    at org.eclipse.jetty.ee10.servlet.ServletHandler.handle(ServletHandler.java:469)
+    at org.eclipse.jetty.ee10.servlet.SessionHandler.handle(SessionHandler.java:719)
+    at org.eclipse.jetty.server.handler.ContextHandler.handle(ContextHandler.java:1253)
+    at org.eclipse.jetty.server.Server.handle(Server.java:197)
+    at org.eclipse.jetty.server.internal.HttpChannelState$HandlerInvoker.run(HttpChannelState.java:804)
+    at org.eclipse.jetty.server.internal.HttpConnection.onFillable(HttpConnection.java:420)
+    at org.eclipse.jetty.server.internal.HttpConnection$FillableCallback.succeeded(HttpConnection.java:1790)
+    at org.eclipse.jetty.io.FillInterest.fillable(FillInterest.java:105)
+    at org.eclipse.jetty.io.SelectableChannelEndPoint$1.run(SelectableChannelEndPoint.java:54)
+    at org.eclipse.jetty.util.thread.QueuedThreadPool.runJob(QueuedThreadPool.java:1009)
+    at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.doRunJob(QueuedThreadPool.java:1240)
+    at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.run(QueuedThreadPool.java:1194)
+    at java.base/java.lang.Thread.run(Thread.java:1474)
+```
+
+Everything below `HttpServlet.service` is Jetty, and swapping in Tomcat or Undertow changes that part and not the two frames above it.
+No filter an application registers adds to them either, because each has answered, or declined to, before the handler is called.
+A filter or an exception handler stands one frame deeper, a streamed body two, and nothing the framework calls into goes deeper than four.
+The signature is the other half: a handler answers by returning a `WebResponse`, so a branch that forgets to answer is a compile error rather than a blank response.
+Spider silk is thin and holds, which is what the name is for.
 
 Three core principles:
 

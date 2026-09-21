@@ -3,9 +3,45 @@
 
 image::logo.svg[Spider Silk,160]
 
-설계는 얇게, 타입은 강하게.
+메서드 호출은 얇게, 시그니처는 탄탄하게.
 
 Spider Silk는 Jakarta Servlet API 위에 만들어진 웹 프레임워크다.
+
+여기서 얇다는 것은 비유가 아니라 측정값이다.
+`HttpServlet.service`와 핸들러 사이에 놓이는 스택 프레임은 둘이고, 핸들러 안에서 찍은 스택 트레이스가 그 둘을 그대로 보여준다.
+
+[source,text]
+----
+java.lang.Throwable: where a handler stands
+    at com.example.decks.DeckRoutes.one(DeckRoutes.java:15)  // the handler
+    at net.benelog.spidersilk.AppServlet.dispatch(AppServlet.java:221)  // Spider Silk
+    at net.benelog.spidersilk.AppServlet.service(AppServlet.java:128)  // Spider Silk
+    at jakarta.servlet.http.HttpServlet.service(HttpServlet.java:614)  // the Servlet API
+    at org.eclipse.jetty.ee10.servlet.ServletHolder.handle(ServletHolder.java:754)  // Jetty, from here down
+    at org.eclipse.jetty.ee10.servlet.ServletHandler$ChainEnd.doFilter(ServletHandler.java:1642)
+    at org.eclipse.jetty.ee10.servlet.ServletHandler$MappedServlet.handle(ServletHandler.java:1556)
+    at org.eclipse.jetty.ee10.servlet.ServletChannel.dispatch(ServletChannel.java:871)
+    at org.eclipse.jetty.ee10.servlet.ServletChannel.handle(ServletChannel.java:449)
+    at org.eclipse.jetty.ee10.servlet.ServletHandler.handle(ServletHandler.java:469)
+    at org.eclipse.jetty.ee10.servlet.SessionHandler.handle(SessionHandler.java:719)
+    at org.eclipse.jetty.server.handler.ContextHandler.handle(ContextHandler.java:1253)
+    at org.eclipse.jetty.server.Server.handle(Server.java:197)
+    at org.eclipse.jetty.server.internal.HttpChannelState$HandlerInvoker.run(HttpChannelState.java:804)
+    at org.eclipse.jetty.server.internal.HttpConnection.onFillable(HttpConnection.java:420)
+    at org.eclipse.jetty.server.internal.HttpConnection$FillableCallback.succeeded(HttpConnection.java:1790)
+    at org.eclipse.jetty.io.FillInterest.fillable(FillInterest.java:105)
+    at org.eclipse.jetty.io.SelectableChannelEndPoint$1.run(SelectableChannelEndPoint.java:54)
+    at org.eclipse.jetty.util.thread.QueuedThreadPool.runJob(QueuedThreadPool.java:1009)
+    at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.doRunJob(QueuedThreadPool.java:1240)
+    at org.eclipse.jetty.util.thread.QueuedThreadPool$Runner.run(QueuedThreadPool.java:1194)
+    at java.base/java.lang.Thread.run(Thread.java:1474)
+----
+
+`HttpServlet.service` 아래는 전부 Jetty이고, Tomcat이나 Undertow로 바꾸면 그 부분이 달라질 뿐 위의 두 프레임은 그대로다.
+애플리케이션이 등록하는 필터도 여기에 더해지지 않는데, 필터는 핸들러가 불리기 전에 이미 반환하기 때문이다.
+필터와 예외 핸들러는 한 프레임, 스트리밍 본문은 두 프레임 더 깊고, 프레임워크가 불러들이는 어떤 지점도 네 프레임보다 깊지 않다.
+시그니처가 나머지 절반이다: 핸들러는 `WebResponse`를 반환해서 답하므로, 답하기를 잊은 분기는 빈 응답이 아니라 컴파일 오류가 된다.
+거미줄은 얇으면서도 버티고, 이름은 바로 그것을 말한다.
 
 == 세 가지 핵심 원칙
 

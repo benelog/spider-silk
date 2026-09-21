@@ -4,13 +4,15 @@ Where Spider Silk sits among lightweight JVM web frameworks, and what it trades 
 
 ## The one-line position
 
-> **Thin by design, strong by types.**
+> **Thin method call, strong signature.**
 
 That is the line the README and the manual lead with.
 It stands for a servlet-native web layer with no reflection anywhere, small enough to read in one sitting.
 "Thin" is the half that has to be argued, because the distinguishing claim is not "lightweight": half a dozen frameworks are lightweight.
 It is that *nothing* between the socket and your handler is resolved at runtime by name, not routing, not parameter conversion, and not JSON.
 Every dispatch is a lambda you registered on a line you can point at.
+"Thin" is also a number the build asserts: two stack frames, `AppServlet.service` and `AppServlet.dispatch`, stand between `HttpServlet.service` and a handler.
+`CallStackDepthTest` in core names the two, and `TomcatServerTest` and `UndertowServerTest` check that the container does not change the count.
 "Strong" is the other half, argued [below](#strengths-stated-precisely).
 A handler answers by returning, so a branch that forgets to answer is a compile error rather than a blank response, and a path variable arrives as a `long` or not at all.
 
