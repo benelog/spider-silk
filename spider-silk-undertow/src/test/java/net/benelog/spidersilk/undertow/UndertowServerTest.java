@@ -581,4 +581,30 @@ class UndertowServerTest {
                 .build();
         return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
+
+    /**
+     * Two frames of the framework stand between {@code HttpServlet.service} and a
+     * handler, on this container as on Jetty. {@code CallStackDepthTest} in core
+     * names them; here the point is that the container does not change the count.
+     */
+    @Test
+    void aHandlerStandsOnTwoFramesOfTheFramework() throws Exception {
+        AtomicReference<List<StackWalker.StackFrame>> captured = new AtomicReference<>();
+        startOnUndertow(new App().get("/stack", req -> {
+            captured.set(StackWalker.getInstance(StackWalker.Option.RETAIN_CLASS_REFERENCE)
+                    .walk(frames -> frames.toList()));
+            return WebResponse.text("ok");
+        }));
+
+        get("/stack");
+
+        assertThat(captured.get().stream()
+                .takeWhile(frame -> !frame.getClassName().equals("jakarta.servlet.http.HttpServlet"))
+                .filter(frame -> frame.getClassName().startsWith("net.benelog.spidersilk."))
+                .filter(frame -> !frame.getClassName().startsWith(UndertowServerTest.class.getName()))
+                .map(frame -> frame.getClassName() + "." + frame.getMethodName()))
+                .containsExactly("net.benelog.spidersilk.AppServlet.dispatch",
+                        "net.benelog.spidersilk.AppServlet.service");
+    }
+
 }
