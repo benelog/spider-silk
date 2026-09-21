@@ -89,7 +89,7 @@ Description-then-link, in a list of further reading:
 - In `notes/decisions.md`, the decision numbers and the cross-references between them ("decision 27's rule",
   "item 16's argument", "15b"). They are load-bearing, and splitting a compound sentence is the easiest way
   to orphan one.
-- A deliberate tagline, such as `Thin method call, strong signature.`
+- A deliberate tagline, such as `Thin call stack, strong signature.`
 
 ## How to apply it
 

@@ -12,7 +12,7 @@
 
 # Spider Silk
 
-Thin method call, strong signature.
+Thin call stack, strong signature.
 
 Spider Silk is a web framework built on the Jakarta Servlet API.
 

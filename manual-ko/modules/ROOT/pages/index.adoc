@@ -3,7 +3,7 @@
 
 image::logo.svg[Spider Silk,160]
 
-메서드 호출은 얇게, 시그니처는 탄탄하게.
+호출 스택은 얇게, 시그니처는 탄탄하게.
 
 Spider Silk는 Jakarta Servlet API 위에 만들어진 웹 프레임워크다.
 

@@ -4,7 +4,7 @@ Where Spider Silk sits among lightweight JVM web frameworks, and what it trades 
 
 ## The one-line position
 
-> **Thin method call, strong signature.**
+> **Thin call stack, strong signature.**
 
 That is the line the README and the manual lead with.
 It stands for a servlet-native web layer with no reflection anywhere, small enough to read in one sitting.
