@@ -7,9 +7,9 @@ DB::
 리포지토리는 `NamedParameterJdbcTemplate`을 직접 사용한다.
 실행되는 SQL이 코드에 그대로 보인다.
 insert는 예외다: `SimpleJdbcInsert`가 테이블 메타데이터를 읽고 생성된 키를 반환하며, `SimplePropertySqlParameterSource`가 도메인 레코드에서 값을 바로 가져온다.
-`SmartDeckRepository`는 여전히 파라미터를 하나하나 적는데, 그 `SmartCondition` enum이 enum이 아니라 `name()`으로 드라이버에 도달해야 하기 때문이다.
+`SmartDeckRepository`는 여전히 파라미터를 하나하나 적는데, 이 리포지토리의 `SmartCondition` enum이 enum이 아니라 `name()`으로 드라이버에 도달해야 하기 때문이다.
 행 매핑은 `DataClassRowMapper`를 거친다.
-이 한 쌍이 xref:native-image.adoc[네이티브 이미지]에서 필요로 하는 리플렉션은 빌드가 도메인 패키지에서 생성하는 설정이다.
+`DataClassRowMapper`와 `SimplePropertySqlParameterSource`가 xref:native-image.adoc[네이티브 이미지]에서 필요로 하는 리플렉션 설정은 빌드가 도메인 패키지에서 생성한다.
 
 DI::
 컨테이너는 없다.
@@ -20,22 +20,22 @@ AOP 대신 서비스가 `TransactionTemplate`을 얇게 감싼 `Transactions.wri
 감싼 블록이 정확히 트랜잭션 범위다.
 
 JSON API::
-덤으로, 프레임워크의 REST 지원을 보여 주기 위해 JSON API(`/api/decks`, `/api/decks/\{id}/cards`)가 같은 서비스 계층 위에 얹혀 있다.
+ch07-jdbc-plus의 기능에 더해, 프레임워크의 REST 지원을 보여 주기 위해 JSON API(`/api/decks`, `/api/decks/\{id}/cards`)가 같은 서비스 계층 위에 얹혀 있다.
 그 와이어 포맷은 `flashcard.web.Codecs`에 손으로 작성한 `JsonWriter`/`JsonReader` 람다로 들어 있다.
 
 인트로스펙션::
 `/_routes`는 모든 라우트를 나열하고, `/openapi.json`은 같은 목록을 OpenAPI 3.1 문서로 낸다.
-둘 다 `app.routes()`로 만드는데, 이것이 데이터로 노출된 라우팅 테이블이 주는 것이다.
+둘 다 라우팅 테이블을 데이터로 노출하는 `app.routes()`로 만든다.
 문서는 xref:openapi.adoc[`spider-silk-openapi`]를 거치고, 무엇을 다룰지는 앱이 정한다: 여기서는 `/api` 라우트인데, 나머지는 모두 HTML로 응답하기 때문이다.
-그 라우트들은 설명을 붙여 등록한 유일한 라우트이기도 하며, 페이지는 설명을 별도 열에 보여 주고 문서는 각 오퍼레이션의 `summary`로 보여 준다.
+그 라우트들은 설명을 붙여 등록한 유일한 라우트이기도 하며, `/_routes`는 설명을 별도 열에 보여 주고 `/openapi.json`은 각 오퍼레이션의 `summary`에 담는다.
 
 모든 응답::
-`FlashcardApp.createApp`은 xref:cors-compression-and-security-headers.adoc[응답 전반의 관심사] 세 가지를 모두 명시하는데, 이것이 실제 애플리케이션에서 그 관심사들이 갖는 모습이다.
+`FlashcardApp.createApp`은 실제 애플리케이션처럼 xref:cors-compression-and-security-headers.adoc[응답 전반의 관심사] 세 가지를 모두 설정한다.
 `securityHeaders(...)`는 기본값에 이 앱이 돌아갈 수 있는 정책을 더해 받는다: `default-src 'self'`가 앱이 로드하는 모든 것을 포괄하고, `style-src`는 인라인도 허용하는데 `stats.jte`가 차트 막대의 크기를 style 속성으로 정하기 때문이며, 이는 스타일시트로는 할 수 없는 일이다.
-HSTS는 의도적으로 없는데, `main`이 `http://localhost`로 이를 제공하기 때문이다.
+HSTS는 의도적으로 뺐는데, `main`이 앱을 `http://localhost`로 제공하기 때문이다.
 `gzip()`은 페이지, 스타일시트, JSON, CSV 익스포트를 똑같이 포괄한다.
 `cors(...)`는 `/openapi.json`에만 한정되고, 덱을 생성하는 `/api/decks`에는 적용되지 않는다.
-그 문서는 여기서 이 애플리케이션이 아닌 무언가, 예를 들어 다른 곳에서 제공되는 Swagger UI가 읽도록 의도된 유일한 것이다.
+그 문서는 다른 곳에서 제공되는 Swagger UI처럼 이 애플리케이션이 아닌 클라이언트가 읽도록 만든 유일한 리소스다.
 
 라우팅::
 `Controller` 인터페이스는 없다.

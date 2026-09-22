@@ -2,7 +2,7 @@
 :navtitle: Gradle 플러그인
 
 `net.benelog.spidersilk` 플러그인은 패키징 컨벤션을 담고 있으므로, 빌드는 애플리케이션 자신의 것만 명시한다: 메인 클래스, 이미지 이름, 네이티브 바이너리의 리소스다.
-Jib으로 컨테이너화하고, 템플릿을 미리 컴파일하고, 어쩌면 네이티브 바이너리로 컴파일하는 애플리케이션은 그러지 않으면 모든 빌드 파일에 같은 블록을 되풀이해 적어야 한다.
+플러그인이 없으면 Jib으로 컨테이너화하고, 템플릿을 미리 컴파일하고, 경우에 따라 네이티브 바이너리로 컴파일하는 애플리케이션은 모든 빌드 파일에 같은 블록을 되풀이해 적어야 한다.
 
 [source,groovy,subs="attributes+"]
 ----
@@ -40,17 +40,18 @@ pluginManagement {
 
 == 적용하면 일어나는 일
 
-플러그인을 적용하면 `application`, https://github.com/GoogleContainerTools/jib[Jib], https://graalvm.github.io/native-build-tools/[GraalVM 네이티브 플러그인]이 적용되고, 주변 장들이 훑어보는 컨벤션이 설정된다:
+플러그인을 적용하면 `application`, https://github.com/GoogleContainerTools/jib[Jib], https://graalvm.github.io/native-build-tools/[GraalVM 네이티브 플러그인]이 적용되고, 배포 장과 네이티브 이미지 장이 다루는 컨벤션이 설정된다:
 
 * Jib은 `eclipse-temurin:21-jre` 위에 빌드하고 포트 8080을 노출하며, xref:deployment.adoc[배포]가 설명하는 방식으로 레이어를 나눈다.
-* `targetCompatibility`는 `options.release`에서 도출되어, 그러지 않으면 Jib이 툴체인의 버전을 읽고 JRE 베이스를 거부하는 틈을 메운다.
-* 네이티브 바이너리는 `--no-fallback`으로 빌드하는데, 폴백 이미지란 프레임워크가 피하려고 존재하는 리플렉션을 실은 JVM이기 때문이며, 대부분 정적으로(`--static-nolibc`) 빌드하여 아래의 `distroless/base` 컨테이너가 glibc 외에는 아무것도 빚지지 않게 한다.
+* `targetCompatibility`가 `options.release`에서 도출되므로, Jib은 툴체인의 버전 대신 release를 읽고 JRE 베이스를 받아들인다.
+* 네이티브 바이너리는 `--no-fallback`으로 빌드하는데, 폴백 이미지란 프레임워크가 피하려는 리플렉션을 그대로 실은 JVM이기 때문이다.
+  또한 대부분 정적으로(`--static-nolibc`) 빌드하므로, 아래의 `distroless/base` 컨테이너는 glibc 외에는 아무것도 제공할 필요가 없다.
   H2 같은 라이브러리를 위해 GraalVM의 도달 가능성 메타데이터 저장소가 활성화된다.
 * `resolveDependencies` 태스크는 xref:deployment.adoc#dockerfile[Dockerfile]의 의존성 캐시 레이어를 위해 외부 런타임 jar만을 내려받는다.
 * `-Pnative`는 `jib`, `jibBuildTar`, `jibDockerBuild`의 목표를 GraalVM 바이너리로 돌린다: JRE 대신 `distroless/base` 이미지, JVM 이미지를 덮어쓰지 않도록 설정된 이미지 이름에 덧붙는 `:native`, 그리고 `nativeCompile`에 대한 태스크 의존성 연결이다.
   xref:native-image.adoc#container[네이티브 이미지 장]이 그 전환이 실제로 동작하는 모습을 보여준다.
 
-이 모두는 빌드 스크립트 자신의 블록이 실행되기 전에 자리 잡으므로, 컨벤션을 재정의하는 것은 평소처럼 `jib`, `graalvmNative`, `java`를 설정하는 일이다.
+이 모두는 빌드 스크립트 자신의 블록이 실행되기 전에 자리 잡으므로, 컨벤션은 평소처럼 `jib`, `graalvmNative`, `java`를 설정해 재정의한다.
 다이어그램은 소스와 빌드가 만들 수 있는 두 이미지 사이에 플러그인이 무엇을 연결하는지 보여준다:
 
 .소스에서 컨테이너 이미지까지
@@ -59,12 +60,12 @@ image::build-pipeline.svg[템플릿은 generateJte를 통해 Java 클래스가 �
 == spiderSilk.jte()
 
 `jte()`는 유일한 옵트인인데, 모든 애플리케이션이 jte로 렌더링하지는 않기 때문이다.
-이것은 xref:templates.adoc#production[템플릿]이 설명하는 그대로 미리 컴파일을 설정한다: `src/main/resources/jte` 아래의 모든 템플릿이 빌드 시점에 Java 클래스가 되므로, jar는 런타임 컴파일러 없이 렌더링하고, 컴파일되지 않는 템플릿은 요청이 아니라 빌드를 실패시킨다.
-또한 jte의 native-resources 확장을 붙이는데, 이것은 xref:native-image.adoc[네이티브 이미지]가 생성된 템플릿 클래스를 위해 필요로 하는 리플렉션 설정을 내놓는다.
+`jte()`는 xref:templates.adoc#production[템플릿]이 설명하는 그대로 미리 컴파일을 설정한다: `src/main/resources/jte` 아래의 모든 템플릿이 빌드 시점에 Java 클래스가 되므로, jar는 런타임 컴파일러 없이 렌더링하고, 컴파일되지 않는 템플릿은 요청이 아니라 빌드를 실패시킨다.
+또한 jte의 native-resources 확장을 붙이며, 이 확장은 xref:native-image.adoc[네이티브 이미지]가 생성된 템플릿 클래스에 필요로 하는 리플렉션 설정을 만들어 낸다.
 
 == 플러그인이 고정하는 것
 
-플러그인의 버전은 자신이 적용하는 것들의 버전을 고정한다: jte {jte-version}, Jib {jib-version}, GraalVM 빌드 도구 {graalvm-buildtools-version}이다.
-툴체인 버전 올림은 플러그인 릴리스로 도착한다.
-플러그인이 하는 일 중 순수한 Gradle을 넘어서는 것은 없다: 각 컨벤션은 공개된 몇 줄이며, 위에 링크된 장들은 컨벤션을 직접 소유하려는 빌드를 위해 펼친 형태를 보여준다.
-Maven 빌드는 같은 컨벤션을 대신 상속으로 얻는데, xref:maven-parent.adoc[Maven 부모 POM]을 참고한다.
+플러그인의 버전은 플러그인이 적용하는 도구의 버전을 고정한다: jte {jte-version}, Jib {jib-version}, GraalVM 빌드 도구 {graalvm-buildtools-version}이다.
+이 도구들의 버전 올림은 플러그인 릴리스로 이루어진다.
+플러그인이 설정하는 각 컨벤션은 순수한 Gradle 몇 줄이며, 위에 링크된 장들은 컨벤션을 직접 소유하려는 빌드를 위해 펼친 형태를 보여준다.
+Maven 빌드는 같은 컨벤션을 대신 부모 POM에서 상속받는다: xref:maven-parent.adoc[Maven 부모 POM]을 참고한다.

@@ -16,7 +16,7 @@ The repository doubles as a plugin marketplace, so installation is two commands 
 /plugin install spider-silk@spider-silk
 ----
 
-The skill then loads on demand in every project, and `/plugin` is also where updating and removing it live.
+The skill then loads on demand in every project, and you update or remove it through `/plugin`.
 
 Copy the skill directory into the project's `.claude/skills/` for a single project instead, so that collaborators get the skill by cloning and install nothing of their own:
 
@@ -52,10 +52,10 @@ https://agentskills.io keeps the list of them.
 
 == What is in it
 
-`SKILL.md` carries what every task needs: the framework's principles stated as rules an agent must not code against, the dependency and plugin repositories a first build needs, and the core API at a glance.
+`SKILL.md` carries what every task needs: the framework's principles stated as rules the agent's code must respect, the dependency and plugin repositories a first build needs, and the core API at a glance.
 Five reference files carry the rest, one per territory: setup, the web API, content, servers and deployment, and testing.
-An agent then reads only the territory its task touches.
-Nothing in the skill is new information: every statement is this manual, compressed for an agent's context window instead of a reader's screen.
+An agent then reads only the file for the territory its task touches.
+Nothing in the skill is new information: every statement comes from this manual, compressed for an agent's context window instead of a reader's screen.
 
 == The measured effect
 
@@ -66,14 +66,14 @@ The tasks were a notes API built from an empty directory, a content-negotiation-
 Every assertion passed in every run, with the skill and without, on all three models.
 An agent without the skill is not helpless: given the published jars, every model reconstructed the API by unpacking the sources jar or running `javap` over `~/.m2`, and found its way to `accepts`, the before-filter's null contract, and `WebResponse.sse` on its own.
 
-What the skill changes is what that reconstruction costs.
+The skill changes the cost of that reconstruction.
 With the skill the same tasks completed with 12% fewer tokens on Fable 5, 16% fewer on Opus 5, and 22% fewer on Sonnet 5.
-The saving grows as the model tier goes down, because the reconstruction is what gets more expensive: the skill-less baseline cost 80k tokens per task on Fable, 100k on Opus, and 130k on Sonnet.
+The saving grows as the model tier goes down, because the reconstruction costs more on a lower tier: the skill-less baseline cost 80k tokens per task on Fable, 100k on Opus, and 130k on Sonnet.
 Wall-clock time moved only three to six percent, because Gradle dominates it.
-Even on the top model tier, where correctness converges, the skill's advantage is token savings: the excavation an agent would otherwise repeat in every project is done once, in the skill.
+Even on the top model tier, where correctness converges, the skill's advantage is token savings: the API reconstruction an agent would otherwise repeat in every project is done once, in the skill.
 
 Two effects never reached the pass rate but are worth recording.
-The skill-less agents, told the benchmark machine held the artifacts in mavenLocal, shipped builds that resolve nowhere else, where the skill's agents declared the GitHub Packages repository and its credential pattern alongside.
-The one run that stumbled into the registration-order trap fixed it by matching the failure to the skill's own warning, where the skill-less runs had to derive the rule from scratch before writing code.
+The skill-less agents, told the benchmark machine held the artifacts in mavenLocal, shipped builds that resolve nowhere else, while the skill's agents declared the GitHub Packages repository and its credential pattern alongside.
+The one run that stumbled into the registration-order trap fixed it by matching the failure to the skill's own warning, while the skill-less runs had to derive the rule from scratch before writing code.
 
 The numbers are single runs of each task on one machine, so read them as a shape, not a measurement.

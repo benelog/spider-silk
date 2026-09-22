@@ -17,7 +17,7 @@ Maven은 빌드 컨벤션을 플러그인이 아니라 상속으로 공유한다
 
 == 선언으로 옵트인하기
 
-모든 것이 부모의 `pluginManagement`에 들어 있으므로, 자식이 플러그인을 선언하기 전까지는 비활성 상태로 머문다.
+모든 플러그인 설정이 부모의 `pluginManagement`에 들어 있으므로, 각 플러그인은 자식이 선언하기 전까지 비활성 상태로 머문다.
 Gradle 쪽의 `spiderSilk { jte() }`가 그렇듯, 그 선언이 옵트인이다.
 컨테이너화하고 jte를 미리 컴파일하는 자식은 둘 다 선언하고, 애플리케이션 자신의 것만 설정한다:
 
@@ -57,19 +57,19 @@ Gradle 쪽의 `spiderSilk { jte() }`가 그렇듯, 그 선언이 옵트인이다
 </build>
 ----
 
-메인 클래스는 실행 가능한 jar가 어차피 원하는 자리인 jar 매니페스트에 한 번만 선언한다.
+메인 클래스는 jar 매니페스트에 한 번만 선언하는데, 실행 가능한 jar라면 어차피 그 자리에 필요하다.
 Jib은 거기서 엔트리포인트를 추론하고, `native-maven-plugin`은 바이너리를 위해 같은 항목을 읽는다.
-대신 어느 한 플러그인에 설정해도 동작은 하겠지만, 둘이 어긋나기 전까지다.
+Jib과 `native-maven-plugin`에 따로 설정해도 동작은 하지만, 두 사본이 어긋나기 전까지만이다.
 
-선언이 상속하는 것은 Gradle 플러그인의 컨벤션을 그대로 반영한다:
+선언한 플러그인은 Gradle 플러그인이 설정하는 컨벤션을 상속한다:
 
 * Jib은 `eclipse-temurin:21-jre` 위에 빌드하고 포트 8080을 노출한다.
   `mvn package jib:buildTar`는 Docker 데몬 없이 `target/jib-image.tar`를 써내며, xref:deployment.adoc[배포]가 설명하는 대로 레이어를 나눈다.
 * `maven.compiler.release`는 21로 설정되며, 이는 Jib이 베이스 이미지와 대조할 Java 버전을 읽는 자리를 겸한다.
-  Gradle 플러그인이 흡수하는 `targetCompatibility` 문제는 흡수할 Maven 대응물이 없다.
+  따라서 Gradle 플러그인이 우회하는 `targetCompatibility` 불일치는 Maven에서는 생기지 않는다.
 * jte는 `src/main/resources/jte` 아래의 모든 템플릿을 빌드 시점에 미리 컴파일하며, 네이티브 이미지 리소스도 포함해 xref:templates.adoc#production[템플릿]이 설명하는 그대로다.
 * 네이티브 바이너리는 `<fallback>false</fallback>`으로, 대부분 정적으로(`--static-nolibc`, 그래서 `distroless/base` 컨테이너는 glibc 외에는 아무것도 빚지지 않는다), 그리고 도달 가능성 메타데이터 저장소를 활성화한 채로 빌드한다.
-  그 이름은 `${spider-silk.native.image-name}`으로, 프로퍼티가 달리 말하지 않는 한 artifactId다.
+  바이너리 이름은 `${spider-silk.native.image-name}`이며, 기본값은 artifactId다.
 
 == native 프로파일
 
@@ -77,15 +77,15 @@ Jib은 거기서 엔트리포인트를 추론하고, `native-maven-plugin`은 �
 이 프로파일은 `native:compile-no-fork`를 `package`에 바인딩하고, Jib의 베이스를 `distroless/base`로 바꾸며, 같은 바이너리 이름을 가리키는 Jib의 native-image 확장을 붙인다.
 xref:native-image.adoc#container[네이티브 이미지 장]이 그 전환을 훑어본다.
 
-위 자식의 이미지 이름에 있는 `${spider-silk.image.tag}` 자리 표시자가 두 이미지를 구분해 주는 것이다: 부모는 이를 `latest`로 기본 설정하고, 프로파일은 `native`로 바꾸며, 대신 태그를 하드코딩한 자식은 그 구분에서 빠진다.
+위 자식의 이미지 이름에 있는 `${spider-silk.image.tag}` 자리 표시자가 두 이미지를 구분한다: 부모는 기본값을 `latest`로 두고, 프로파일은 이를 `native`로 설정하며, 대신 태그를 하드코딩한 자식은 그 구분에서 빠진다.
 
 == Dockerfile 워밍업
 
-`mvn dependency:go-offline`은 플랫폼이 xref:deployment.adoc#dockerfile[Dockerfile]을 요구하는 곳에서 Gradle 플러그인의 `resolveDependencies`에 대응하는 Maven 쪽 대응물이다.
-이것은 워밍업 레이어를 위해 의존성과 플러그인을 내려받으며, Gradle Dockerfile이 빌드 스크립트를 복사하는 것과 같은 방식으로 pom만 복사한 뒤에 실행된다.
+플랫폼이 xref:deployment.adoc#dockerfile[Dockerfile]을 요구하는 곳에서는 `mvn dependency:go-offline`이 Gradle 플러그인의 `resolveDependencies`를 대신한다.
+이 명령은 워밍업 레이어를 위해 의존성과 플러그인을 내려받으며, Gradle Dockerfile이 빌드 스크립트를 복사하는 것과 같은 방식으로 pom만 복사한 뒤에 실행된다.
 
 == 부모 POM이 고정하는 것
 
-부모 POM의 버전은 자신이 관리하는 것들의 버전을 고정한다: jte {jte-version}, Jib {jib-maven-version}(Maven 플러그인은 업스트림에서 Gradle 플러그인의 {jib-version}보다 뒤처진다), GraalVM 빌드 도구 {graalvm-buildtools-version}이다.
-툴체인 버전 올림은 부모 POM 릴리스로 도착한다.
-Gradle 쪽과 마찬가지로 여기서 순수한 Maven을 넘어서는 것은 없다: 모든 컨벤션은 부모 POM 자체에서 읽을 수 있으며, 블록을 직접 소유하려는 빌드는 그것을 복사해 내고 상속을 버린다.
+부모 POM의 버전은 부모 POM이 관리하는 도구의 버전을 고정한다: jte {jte-version}, Jib {jib-maven-version}(Maven 플러그인은 업스트림에서 Gradle 플러그인의 {jib-version}보다 뒤처진다), GraalVM 빌드 도구 {graalvm-buildtools-version}이다.
+이 도구들의 버전 올림은 부모 POM 릴리스로 이루어진다.
+Gradle 쪽과 마찬가지로 여기서 순수한 Maven을 넘어서는 것은 없다: 모든 컨벤션은 부모 POM 자체에서 읽을 수 있으며, 블록을 직접 소유하려는 빌드는 그 블록을 복사해 가고 상속을 끊는다.
