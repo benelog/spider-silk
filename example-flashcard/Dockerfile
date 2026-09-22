@@ -22,7 +22,7 @@ WORKDIR /build
 # an included build that settings.gradle references at configuration time, so
 # it comes along whole — an edit to the plugin invalidates the dependency
 # layer, which is rare and accepted.
-COPY gradlew settings.gradle build.gradle ./
+COPY gradlew settings.gradle build.gradle gradle.properties ./
 COPY gradle/ gradle/
 COPY spider-silk-gradle-plugin/ spider-silk-gradle-plugin/
 COPY spider-silk-maven-parent/ spider-silk-maven-parent/
@@ -33,17 +33,20 @@ COPY spider-silk-undertow/build.gradle spider-silk-undertow/
 COPY spider-silk-freemarker/build.gradle spider-silk-freemarker/
 COPY spider-silk-handlebars/build.gradle spider-silk-handlebars/
 COPY spider-silk-thymeleaf/build.gradle spider-silk-thymeleaf/
+COPY spider-silk-jetty-websocket/build.gradle spider-silk-jetty-websocket/
+COPY spider-silk-openapi/build.gradle spider-silk-openapi/
 COPY example-flashcard/build.gradle example-flashcard/
 RUN ./gradlew --no-daemon :example-flashcard:resolveDependencies
 
 # Sources last; an edit here invalidates the cache only from this point on.
 COPY spider-silk-core/src spider-silk-core/src
+COPY spider-silk-openapi/src spider-silk-openapi/src
 COPY example-flashcard/src example-flashcard/src
 RUN ./gradlew --no-daemon :example-flashcard:installDist
 
 # Sort the runtime classpath into Jib's tiers: external jars apart from the
-# spider-silk-core jar (the project dependency — its own tier, so a framework
-# edit leaves the larger external layer untouched). The application's own jar
+# spider-silk jars (the project dependencies, core and openapi — their own
+# tier, so a framework edit leaves the larger external layer untouched). The application's own jar
 # is discarded: it ships as the loose classes and resources copied below.
 # An application pulling spider-silk from a repository has no core tier —
 # the framework jars are external there, changing only on a version bump.
