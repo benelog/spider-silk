@@ -3,11 +3,11 @@
 
 `spider-silk-openapi` turns xref:route-introspection.adoc[`app.routes()`] into an OpenAPI 3.1 document.
 It is a reader over that list and nothing else.
-Core hands the routes out as plain data and does not change to allow this: `PathPattern`'s `\{deckId}` already _is_ OpenAPI's path template, so there is nothing to translate and nothing to reflect over.
+Core hands the routes out as plain data and needs no change for this module: `PathPattern`'s `\{deckId}` already _is_ OpenAPI's path template, so there is nothing to translate and nothing to reflect over.
 
-That is also why it is a module rather than a method on `App`.
+The export is a module rather than a method on `App` for a second reason.
 A spec format is not the web tier, and a version this framework does not own should not be pinned inside the one artifact every application depends on.
-That is the same reasoning that keeps the `WebTest` harness in xref:testing.adoc[`spider-silk-test`].
+The same reasoning keeps the `WebTest` harness in xref:testing.adoc[`spider-silk-test`].
 
 == Installation
 
@@ -18,7 +18,7 @@ dependencies {
 }
 ----
 
-It brings nothing along: the module is one class over core's route list and core's `Json`.
+The module adds no dependency beyond core: it is one class over core's route list and core's `Json`.
 
 == Serving the document
 
@@ -38,7 +38,7 @@ The handler reads `app.routes()` per request, so it lists whatever was registere
 
 == Which routes go in
 
-The whole list, unless you narrow it.
+Every route in the list goes in, unless you narrow the list first.
 An application that serves HTML alongside its API passes the API's routes and not everything:
 
 [source,java]
@@ -49,16 +49,17 @@ List<Route> documented = app.routes().stream()
 ----
 
 That selection stays the application's, which is the reason `routes()` hands back a list in the first place.
-This module has no way to tell an HTML page from an endpoint, and a guess dressed up as a default would be wrong in some application every time.
+This module has no way to tell an HTML page from an endpoint, and a default built on a guess would always be wrong for some application.
 
 A route whose pattern contains a bare `*` throws `IllegalArgumentException`.
-That wildcard has no OpenAPI path template and no name to put in one, and dropping it quietly would publish a document claiming the application answers less than it does.
-It is refused instead, and leaving it out is a filter you write, visibly, next to the one above.
+That wildcard has no OpenAPI path template and no name to put in one.
+Dropping the route quietly would publish a document claiming the application answers less than it does.
+The export refuses it instead, and leaving such a route out is a filter you write, visibly, next to the one above.
 
 A xref:routing.adoc[named tail] is written out rather than refused.
 `/files/\{path*}` becomes the path `/files/\{path}`, and its parameter carries the description `The rest of the path, slashes included.`
-OpenAPI has no wildcard in a path template, so the star is core's syntax and the variable is what crosses over.
-That is the only translation this module does.
+OpenAPI has no wildcard in a path template, so the star stays behind as core's syntax and only the variable crosses over.
+Dropping the star is the only translation this module does.
 
 == What the document contains
 
@@ -80,9 +81,10 @@ app.get("/api/decks", "List every deck", api::listDecks);
 
 A route registered without one gets no `summary` at all, rather than an empty string that would render as a blank line.
 
-That is the whole of it, and it is a valid document.
+The document contains nothing more, and it is still a valid OpenAPI document.
 What is missing is missing on purpose: a request or response schema, a server list, and a security scheme.
-None of those is derivable from a route, so each would have to be declared somewhere, and where to declare it is a question this module answers by not asking it.
+None of those is derivable from a route, so each would have to be declared somewhere.
+This module sidesteps the question of where by declaring none of them.
 The automatic HEAD and OPTIONS answers are not listed either, for the reason `routes()` does not list them.
 
 == Testing it
@@ -100,4 +102,4 @@ assertThat(paths.getObject("/api/decks/{deckId}/cards").getObject("get").getArra
 
 `Route` is a record, so a fixture is a constructor call.
 The example app's document is reachable at `/openapi.json`.
-See xref:example-flashcard.adoc[the example] for how it is scoped for CORS, since a spec document is the one thing there meant to be read by something that is not the application.
+A spec document is the one resource there meant to be read by something other than the application, so xref:example-flashcard.adoc[the example] scopes its CORS to that path alone.

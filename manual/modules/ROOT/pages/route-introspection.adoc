@@ -9,9 +9,11 @@ Routes are an explicit list, so no annotation scanning, no plugin, and no reflec
 app.get("/_routes", req -> WebResponse.template("routes", Map.of("routes", app.routes())));
 ----
 
-Because order breaks ties, a second route matching exactly the same requests (the same path, or the same shape with a variable renamed) could never run, so registering one throws `IllegalStateException` on the spot instead of leaving a dead entry in the table.
+Because order breaks ties, a second route matching exactly the same requests (the same path, or the same shape with a variable renamed) could never run.
+Registering one therefore throws `IllegalStateException` on the spot instead of leaving a dead entry in the table.
 
-Group prefixes are already resolved, so a path reads as `/api/decks/\{deckId}/cards`, which is OpenAPI's path-template syntax verbatim, so an export needs no translation:
+Group prefixes are already resolved, so a path reads as `/api/decks/\{deckId}/cards`.
+That form is OpenAPI's path-template syntax verbatim, so an export needs no translation:
 
 [source,java]
 ----
@@ -25,7 +27,7 @@ A wildcard route is reported as it was written.
 
 The handler is left out.
 It is a lambda, and the only name it has is what reflection would dig out of its synthetic class.
-What is built on top of the list is left out too, because the list is plain data: the example app renders a `/_routes` overview page from it, and xref:openapi.adoc[`spider-silk-openapi`] turns the same list into an OpenAPI 3.1 document.
+Anything built on top of the list stays out of core too, because the list is plain data: the example app renders a `/_routes` overview page from it, and xref:openapi.adoc[`spider-silk-openapi`] turns the same list into an OpenAPI 3.1 document.
 
 The automatic HEAD and OPTIONS answers are not listed.
 `routes()` reports what was registered, which is the honest answer for a framework whose claim is that only what you register runs.
@@ -34,7 +36,7 @@ The automatic HEAD and OPTIONS answers are not listed.
 == The matched route
 
 `req.route()` reports, on the request, the entry of that same list that answered it.
-It is the pattern with group prefixes resolved, so a tracing span, a metric, or a log line groups requests by `/api/decks/\{deckId}` rather than by every id:
+Its path is the pattern with group prefixes resolved, so a tracing span, a metric, or a log line groups requests by `/api/decks/\{deckId}` rather than by every id:
 
 [source,java]
 ----
@@ -44,8 +46,8 @@ app.beforeRoute(req -> {
 });
 ----
 
-It is null before routing and where no route matched: in a `beforeRequest` filter, and for a static file, a 404, a 405, and the automatic OPTIONS answer.
-From `beforeRoute` on it is set, through the handler, the after-filters, the exception and error handlers, the response filters, and the request logger.
+`req.route()` is null before routing and where no route matched: in a `beforeRequest` filter, and for a static file, a 404, a 405, and the automatic OPTIONS answer.
+From `beforeRoute` on, it stays set through the handler, the after-filters, the exception and error handlers, the response filters, and the request logger.
 A HEAD answered by a GET route reports that GET route.
 The route reported is the one the router chose, so it follows the registration order that breaks ties rather than a preference of its own.
 
@@ -65,11 +67,11 @@ app.path("/api/decks", decks -> {
 });
 ----
 
-It sits between the path and the handler so the handler stays last, where a lambda reads.
+The description sits between the path and the handler so the handler stays last, where a lambda reads best.
 A route registered without one reports `""` rather than null, so a reader can print `route.description()` without asking whether it is there.
 
-This is documentation written at the registration site, which is what an annotation is with the reflection taken out.
-That is deliberate, because the alternative is a second place to keep in step with the first.
+A description is documentation written at the registration site, which is what an annotation is with the reflection taken out.
+Keeping it there is deliberate, because documentation kept anywhere else is a second place to keep in step with the registration.
 It stays a string argument and nothing more: the framework never reads it, and a route without one is registered, matched, and reported exactly as before.
 
 xref:openapi.adoc[`spider-silk-openapi`] writes a non-empty description as the operation's `summary`, and omits the field for a route that has none.
@@ -94,17 +96,17 @@ for (Guard guard : app.guards()) {
 ----
 
 There are five records rather than one with a kind field, because a filter is scoped to a path, an error handler to a status, and a response filter to nothing, and a component that is null half the time would report that dishonestly.
-`Guard.ResponseFilter` has no components, since it runs on every response, and two registrations are two entries.
+`Guard.ResponseFilter` has no components, since it runs on every response, and registering two gives two entries.
 
 The list is grouped by when it runs: the request filters, then the before-route filters, then the after-route filters, then the error handlers, then the response filters.
-Within each group it is in registration order, which is the order they run in.
+Within each group, entries follow registration order, which is also the order they run in.
 
 A filter's coverage is a pattern and not a path, and it is reported as one.
 `++/admin/*++` stays `++/admin/*++`, and covers `/admin` along with everything under it.
 `beforeRoute(filter)` reports the `++/*++` it registers, and a group's `decks.beforeRoute(filter)` reports the resolved `++/api/decks/*++`.
 Matching a request against those patterns is the dispatcher's job, not this list's: what is exposed here is plain strings, the same as for routes.
-An audit of which paths a guard leaves open is built on top of the list, the way xref:openapi.adoc[the OpenAPI export] is built on `routes()`.
+An audit of which paths a guard leaves open belongs on top of the list, the way xref:openapi.adoc[the OpenAPI export] is built on `routes()`.
 
 The `exception(Type, handler)` handlers are not listed.
 An exception handler is scoped to a type, so neither a path nor a status describes where it applies.
-Neither are CORS, compression, and the security headers: those are xref:cors-compression-and-security-headers.adoc[named on `App`] rather than registered as filters, with a fixed order after response filters.
+CORS, compression, and the security headers are not listed either: those are xref:cors-compression-and-security-headers.adoc[named on `App`] rather than registered as filters, with a fixed order after response filters.

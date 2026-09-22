@@ -2,9 +2,9 @@
 :navtitle: Undertow
 
 `spider-silk-undertow`는 같은 앱을 임베디드 Undertow에서 실행한다.
-이것이 별도 모듈인 이유는 `spider-silk-tomcat`이 별도 모듈인 이유와 같다: 한 서버에 대한 종속은 core의 플래그 뒤가 아니라 아티팩트의 이름에 있어야 한다.
+이 모듈이 따로 있는 이유는 `spider-silk-tomcat`과 같다: 특정 서버에 대한 종속은 core의 플래그 뒤가 아니라 아티팩트의 이름에 드러나야 한다.
 
-세 서버가 어떻게 비교되고 어느 것을 고를지는 xref:server.adoc#choosing[서버 고르기]을 본다.
+세 서버의 비교와 선택 기준은 xref:server.adoc#choosing[서버 고르기]를 참고한다.
 
 == 설치
 
@@ -18,9 +18,9 @@ dependencies {
 ----
 
 이 모듈은 Jakarta EE 10 계열인 `undertow-servlet` 2.3.x에 의존한다.
-그것은 Servlet 6.0으로, core의 서블릿 API 및 Jetty의 `ee10`과 같은 수준이다.
+`undertow-servlet` 2.3.x는 Servlet 6.0으로, core의 서블릿 API 및 Jetty의 `ee10`과 같은 수준이다.
 Tomcat 11.0.x는 한 단계 위인 Servlet 6.1이다.
-`undertow-core`에는 2.4.x가 있지만, 이 모듈에 필요한 절반인 `undertow-servlet`은 아직 그것을 따라가지 않았다.
+`undertow-core`에는 2.4.x가 있지만, 이 모듈에 필요한 절반인 `undertow-servlet`은 아직 2.4.x를 따라가지 않았다.
 
 == 실행
 
@@ -32,7 +32,7 @@ new App()
         .start(8080);
 ----
 
-`UndertowServer`의 표면은 `JettyServer`와 `TomcatServer`를 그대로 따른다:
+`UndertowServer`의 API는 `JettyServer`와 `TomcatServer`를 그대로 따른다:
 
 [source,java]
 ----
@@ -53,15 +53,16 @@ new UndertowServer(app)
 
 == Undertow만의 것
 
-정상 종료(graceful shutdown)는 셋 중 Undertow가 가장 쉬운 유일한 지점이다.
-`GracefulShutdownHandler`는 자신이 통과시킨 요청을 세므로, `stopTimeout(...)`은 스레드 풀이 비워지기를 기다리는 것이 아니라 그 수가 0에 이르기를 기다리는 것이다.
-이것이 또한 Tomcat에서와 달리 `executor(...)`가 이를 방해하지 않는 이유이다: 가상 스레드 실행기로 교체해도 드레인은 온전히 동작한다.
+셋 중 Undertow가 가장 쉬운 부분은 정상 종료(graceful shutdown) 하나뿐이다.
+`GracefulShutdownHandler`는 자신이 통과시킨 요청을 세므로, `stopTimeout(...)`은 스레드 풀이 비워지기를 기다리지 않고 그 수가 0이 되기를 기다린다.
+드레인이 요청을 세기 때문에, Tomcat에서와 달리 `executor(...)`가 드레인을 방해하지 않는다: 가상 스레드 실행기로 교체해도 드레인은 온전히 동작한다.
 
 Undertow의 워커 스레드는 스스로 JVM을 붙들어 두지 않으므로, `start()`는 `stop()`이 풀어 주는 비데몬 스레드를 하나 대기시킨다.
-그것은 Tomcat 모듈에 필요한 것과 같은 기법이며, `join()`이 합류하는 대상이다.
+Tomcat 모듈에도 같은 비데몬 스레드가 필요하며, `join()`은 이 스레드를 기다린다.
 
-`sessions(boolean)`은 없다: Undertow 배포는 항상 세션 매니저를 얻으며, 조용히 아무것도 하지 않는 메서드는 없는 것보다 나쁘다.
-정적 파일은 클래스패스 루트든 디렉터리든 여전히 core 자신의 `StaticFiles`를 통해 오므로, Undertow의 리소스 매니저는 의도적으로 비워 둔다.
+`sessions(boolean)`은 없다: Undertow 배포는 항상 세션 매니저를 얻는다.
+조용히 아무것도 하지 않는 메서드는 메서드가 없는 것보다 나쁘다.
+정적 파일은 클래스패스 루트든 디렉터리든 여전히 core 자체의 `StaticFiles`가 제공하므로, Undertow의 리소스 매니저는 의도적으로 비워 둔다.
 
-로깅은 JBoss Logging을 거치며, 이것은 클래스패스에서 slf4j를 발견하면 그것을 사용한다.
-따라서 이미 slf4j를 쓰는 애플리케이션은 브리지 없이 Undertow의 로그 줄을 얻는다.
+로깅은 JBoss Logging을 거치며, JBoss Logging은 클래스패스에 slf4j가 있으면 slf4j를 쓴다.
+따라서 이미 slf4j를 쓰는 애플리케이션은 브리지 없이 Undertow의 로그를 받는다.

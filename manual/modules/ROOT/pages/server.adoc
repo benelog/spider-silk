@@ -1,8 +1,8 @@
 = The Server
 :navtitle: The Server
 
-`JettyServer` has a method for everything usually worth tuning.
-Customizers reach anything else, running against the real Jetty objects just before startup:
+`JettyServer` has a method for each setting an application usually tunes.
+Customizers reach every other setting, running against the real Jetty objects just before startup:
 
 [source,java]
 ----
@@ -25,7 +25,7 @@ new JettyServer(app)
 == Virtual threads
 
 Handlers can run on virtual threads.
-That is a thread-pool setting rather than a framework feature, so it stays two lines of Jetty's own API.
+Running handlers on virtual threads is a thread-pool setting rather than a framework feature, so it stays two lines of Jetty's own API.
 Platform threads keep running the selectors, and the handlers get the virtual ones:
 
 [source,java]
@@ -37,15 +37,15 @@ app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool))
    .start(8080);
 ----
 
-It is worth doing only if the handlers block, on I/O or on a database.
+Virtual threads pay off only when the handlers block on I/O or on a database.
 A `synchronized` block around that blocking call pins the carrier thread and takes the benefit back.
 
 == Shutdown
 
 Shutdown is graceful out of the box.
 A JVM shutdown hook stops the server on Ctrl-C or SIGTERM, and `stop()` gives requests in flight five seconds to finish before dropping them.
-Idle keep-alive connections do not hold that up.
-They are closed as soon as the drain starts, so a stop with nothing running returns immediately.
+Idle keep-alive connections do not delay the stop.
+They are closed as soon as the drain starts, so a stop with no request in flight returns immediately.
 `stopTimeout(Duration.ZERO)` turns the drain off entirely.
 
 [#replacing-the-server]
@@ -77,7 +77,7 @@ Two are written already: xref:tomcat.adoc[Tomcat] and xref:undertow.adoc[Underto
 Everything core provides works the same on all three: routing, filters, error handlers, JSON, templates, static files, SSE, multipart uploads, and sessions.
 All core ever needed was a servlet container.
 `WebTest` starts no server at all, so tests do not change either.
-What differs is the embedding: what the server needs from its surroundings, and how much of the lifecycle this project had to assemble by hand.
+The servers differ in the embedding: what each one needs from its surroundings, and how much of its lifecycle this project had to assemble by hand.
 
 [cols="1,2,2,2"]
 |===
@@ -144,17 +144,17 @@ They cost different things.
 
 **Jetty stays the default** because it costs nothing to keep.
 It needs no disk, its shutdown and lifecycle are its own rather than assembled here, and it logs through slf4j like the rest of an application.
-For a service deployed as a jar and never touched by an operator, that is the whole picture.
+For a service deployed as a jar and never touched by an operator, nothing else matters.
 
 **Tomcat earns its place where the surroundings already assume it.**
 The operational knowledge in most organisations is Tomcat knowledge: the connector attributes, the access log valve, the thread-pool numbers, the JMX beans a dashboard is already scraping.
 It is also the server Spring Boot defaults to, so a service moving off Spring Boot keeps the same runtime behaviour and the same tuning while only the web tier changes.
-And it is the one with a security-advisory pipeline most enterprise processes already track.
+Its security advisories also come through a pipeline most enterprise processes already track.
 
 **Undertow is the one to reach for on the technical merits.**
 It is the lightest of the three to embed, with no working directory and no bridge for its logging.
 Its graceful shutdown is a first-class handler rather than something assembled from a thread pool, which is why it is also the only one where the drain survives a switch to virtual threads.
 The catch is reach: it is a WildFly component rather than a standalone product, so the operational familiarity and the tooling around it are thinner than Tomcat's.
 
-None of this is load-bearing.
-Changing your mind is the same one line at the factory, in either direction.
+The choice is easy to reverse.
+Switching servers in either direction is the same one line at the factory.

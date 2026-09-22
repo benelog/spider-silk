@@ -36,12 +36,12 @@ Data spanning several lines becomes one `data:` line each, which the client join
 stream.retry(Duration.ofSeconds(2));
 ----
 
-A browser that is told nothing reconnects on a default of its own, a few seconds.
-Saying it is the application's business: a server that closes every stream on deploy knows how soon it wants the browser back, and nothing else does.
+A stream that sends no `retry:` line leaves the browser on its own default, which is a few seconds.
+The application is the one to set the delay, because only a server that closes every stream on deploy knows how soon it wants the browser back.
 
-The line goes out where it is called rather than with the next event, because the delay belongs to the stream and not to one event.
-It holds for the connections that follow, until another one is sent.
-A negative delay throws, since the protocol gives one no meaning and a browser ignores it in silence.
+The `retry:` line goes out when `retry(...)` is called rather than with the next event, because the delay belongs to the stream and not to one event.
+The delay holds for the rest of the stream and for the connections that follow, until another `retry(...)` replaces it.
+A negative delay throws `IllegalArgumentException`, since the protocol gives a negative value no meaning and a browser silently ignores it.
 
 `id(...)` is the other half of a resumed stream: the browser sends the last id it saw back as `Last-Event-ID`, and the handler reads it with `req.header("Last-Event-ID")`.
 
@@ -50,23 +50,25 @@ A negative delay throws, since the protocol gives one no meaning and a browser i
 
 SSE is an ordinary `get` route answering in a different shape, not a registration of its own.
 `app.routes()` therefore lists it, filters cover it, and the request logger reports it when the stream ends.
-A WebSocket upgrade leaves servlet dispatch, and none of that would still apply, which is the whole reason SSE is in core and WebSocket is not.
+A WebSocket upgrade leaves servlet dispatch, so none of those three would apply to it.
+That difference is the whole reason SSE is in core and WebSocket is not.
 Where a socket is what the application actually needs, xref:websocket.adoc[`spider-silk-jetty-websocket`] maps one, on Jetty and under its own name.
-It also means a deployment on a plain servlet container gets SSE too, since `AppServlet` needs nothing else.
+Because SSE needs nothing beyond `AppServlet`, a deployment on a plain servlet container gets SSE too.
 
 == Threads and lifetime
 
 The request holds its thread for as long as the stream lasts.
-That is the price of staying servlet-native, and the xref:server.adoc#virtual-threads[virtual-thread executor] is what makes many concurrent streams cheap.
+Holding a thread is the price of staying servlet-native.
+The xref:server.adoc#virtual-threads[virtual-thread executor] makes many concurrent streams cheap.
 
-Ending a stream is not an error, and there are three ways it happens:
+A stream ends in one of three ways, and none of them is an error:
 
 * the handler returns,
 * the client goes away: the write that discovers it throws `SseStream.Closed`, which ends the handler where it stands,
 * `app.stop()` closes every stream still open, before Jetty is asked to drain, because a stream is a request in flight that would otherwise never finish.
 
 A stream quieter than Jetty's 30-second connector idle timeout is closed by the server.
-`stream.comment("ping")` on a timer is what keeps it alive, and proxies in front usually want the same.
+Sending `stream.comment("ping")` on a timer keeps the stream alive, and a proxy in front of the server usually needs the same heartbeat.
 
 The whole lifetime is one request, from the handler returning `WebResponse.sse(...)` to the stream closing:
 

@@ -4,7 +4,7 @@
 `spider-silk-jetty-websocket` maps WebSocket endpoints alongside an app's HTTP routes.
 It is Jetty-only by construction, which is why it is a module with a name rather than a method on `App`.
 A WebSocket is a protocol upgrade, and an upgrade leaves servlet dispatch; see xref:sse.adoc#why-websocket-is-not-in-core[why SSE is in core and WebSocket is not].
-Core does not change to make this work, and the module rides `JettyServer`'s existing `customizeServer` hook.
+The module needs no change to core, because it plugs into `JettyServer`'s existing `customizeServer` hook.
 
 == Installation
 
@@ -16,7 +16,7 @@ dependencies {
 ----
 
 It brings `jetty-websocket-jetty-server`, Jetty's server-side WebSocket at the `Handler` level, pinned to the same Jetty version core uses.
-That is deliberate, and not the `ee10` artifact of the same name.
+Choosing it over the `ee10` artifact of the same name is deliberate.
 The `ee10` one is the servlet-container integration, and it arrives with annotation scanning, ASM, CDI, and JNDI in tow, none of which this framework wants near it.
 
 == Mapping a path
@@ -35,7 +35,7 @@ The upgrade handler is inserted ahead of the servlet, so a request whose path ma
 Paths are relative to the server's context path, the same as a route is.
 
 `WebSockets` is a `Consumer<Server>`, which is exactly what xref:server.adoc[`customizeServer`] takes.
-It is that hook and not `customizeContext` because Jetty's WebSocket container is built from the `Server`, from its buffer pool and its executor, and the context is not linked to a server until after the context customizers have run.
+The hook is `customizeServer` rather than `customizeContext` because Jetty's WebSocket container is built from the `Server`'s buffer pool and executor, and the context is not linked to a server until after the context customizers have run.
 The diagram shows where the upgrade handler lands in Jetty's handler chain, and which requests reach the servlet behind it:
 
 .Where the upgrade handler sits
@@ -68,7 +68,7 @@ The `Session` is passed to each one rather than handed out once, so nothing has 
 `Session` is Jetty's own and is not wrapped.
 The module is tied to Jetty by name, so hiding Jetty behind a facade would buy portability the name has already ruled out.
 `sendText` and `sendBinary` are asynchronous and take a `Callback`.
-`Callback.NOOP` is the fire-and-forget form, and a real callback is how a send failure gets noticed.
+`Callback.NOOP` is the fire-and-forget form, and passing a real callback is how a handler notices a send failure.
 A handler never calls `session.demand()`, because the module's endpoint is auto-demanding: the next message is asked for as soon as the callback returns.
 
 The buffer passed to `onBinary` is Jetty's, and it goes back to the pool as soon as the method returns.
@@ -99,7 +99,7 @@ new WebSockets().at("/chat", (request, response) -> {
 Returning null refuses the upgrade with 403, or with the status the factory set on the response if that is an error status.
 Jetty's own contract leaves a refused upgrade unanswered.
 The creator is expected to write the response and complete the callback itself, and a creator that forgets leaves the client waiting on a handshake that never comes.
-The module answers it, which is one of the few things it does beyond mapping a path.
+The module writes that error response itself, which is one of the few things it does beyond mapping a path.
 
 == Paths
 
@@ -128,8 +128,8 @@ new WebSockets()
 ----
 
 Jetty closes a connection idle for 30 seconds by default.
-A socket kept open across quiet stretches survives that only if the two ends ping each other.
-`customizeContainer` runs against Jetty's `ServerWebSocketContainer` on every start, and reaches the settings that have no method of their own: frame size, buffer sizes, and session listeners.
+A socket that stays open through quiet periods survives that timeout only if the two ends ping each other.
+`customizeContainer` runs against Jetty's `ServerWebSocketContainer` on every start, and reaches the settings that `WebSockets` has no method for: frame size, buffer sizes, and session listeners.
 
 == What does not reach a socket
 
@@ -142,7 +142,7 @@ An upgrade leaves servlet dispatch for good, so none of the framework follows it
 * `WebTest` cannot reach it at all, since it never starts a server.
 
 That list is the whole reason WebSocket is not in core: core would be publishing an API its own features silently do not cover.
-The module's tests say the same from the other side.
+The module's tests show the same limit from the other side.
 They start a real Jetty on a free port and talk to it with the JDK's own `java.net.http.WebSocket` client, because there is no harness that could stand in.
 
 `app.stop()` closes the sockets still open.

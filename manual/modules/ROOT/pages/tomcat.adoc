@@ -3,7 +3,7 @@
 
 `spider-silk-tomcat` runs the same app on an embedded Tomcat instead of the Jetty bundled with core.
 It is a separate module because a tie to one server belongs in the artifact's name rather than inside core.
-Core keeps its promise either way: `AppServlet` is a plain servlet, and `WebServer` is four methods.
+Core needs nothing server-specific either way: `AppServlet` is a plain servlet, and `WebServer` is four methods.
 
 For how the three servers compare and which to pick, see xref:server.adoc#choosing[Choosing a server].
 
@@ -19,7 +19,7 @@ dependencies {
 ----
 
 The module depends on `tomcat-embed-core` 11.0.x, the Servlet 6.1 line.
-That is one level above core's servlet API, Jetty's `ee10`, and Undertow 2.3.x, which are all Servlet 6.0.
+Servlet 6.1 is one version above core's servlet API, Jetty's `ee10`, and Undertow 2.3.x, which are all Servlet 6.0.
 Core calls nothing that Servlet 6.1 added, so the same application runs on all three servers.
 
 Excluding Jetty is optional.
@@ -61,24 +61,25 @@ Everything core provides works unchanged: routing, filters, error handlers, JSON
 
 Graceful shutdown is hand-rolled here, because Tomcat has no `stopTimeout` of its own.
 `stop()` pauses the connector and then shuts the request pool down within the timeout, which is what Spring Boot does for the same reason.
-That has one consequence worth stating plainly.
+The drain therefore depends on which executor the connector runs.
 `stopTimeout(...)` only has something to wait on while the connector runs a `ThreadPoolExecutor`, which is the default but not necessarily what `executor(...)` hands it.
-The virtual-thread executor therefore leaves the drain a no-op.
+With the virtual-thread executor, the drain does nothing.
 Undertow has no such catch, since its drain counts requests rather than threads.
 
-The shutdown hook is ours too.
+The shutdown hook is hand-rolled too.
 Jetty's `setStopAtShutdown` deregisters itself.
-This one is registered on start and removed again on stop, so a suite that starts a server per test accumulates none.
+This module's hook is registered on start and removed again on stop, so a suite that starts a server per test accumulates none.
 
-Tomcat wants a `catalina.base` on disk.
+Tomcat requires a `catalina.base` directory on disk.
 The default is a temporary directory created on start and deleted on stop, so nothing lands next to the build.
-`baseDir(...)` takes it over.
+`baseDir(...)` replaces that default with a directory of your own, which is left alone on stop.
 
-There is no `sessions(boolean)`: Tomcat's `StandardContext` installs a session manager on start and offers no way out, and a method that silently did nothing would be worse than its absence.
+There is no `sessions(boolean)`: Tomcat's `StandardContext` installs a session manager on start and offers no way out.
+A method that silently did nothing would be worse than no method.
 Logging goes through JULI, so routing it into an application's own logging means `jul-to-slf4j` and a bridge handler.
 
 == Deploying to a Tomcat you did not start
 
-None of this applies to a WAR dropped into a standalone Tomcat.
-That path needs no module at all.
+Nothing on this page applies to a WAR dropped into a standalone Tomcat.
+A WAR deployment needs no module at all.
 Map `AppServlet` yourself and exclude the embedded server, as xref:deployment.adoc[Deployment] describes.
