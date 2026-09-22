@@ -1,7 +1,7 @@
 = External JSON Binding
 :navtitle: External JSON Binding
 
-An application can bind JSON with a library of its own, through a seam of two methods that were always there.
+An application can bind JSON with a library of its own, through a seam of two methods that core already has.
 Core's JSON is hand-written on purpose, but that decision is the framework's to make for core, not for the application.
 An application with three hundred DTOs, or one whose wire format is generated from a schema it does not own, has a reason to bind objects with a library.
 
@@ -18,7 +18,7 @@ public BufferedReader bodyReader()               // the characters, unparsed
 ----
 
 That is the whole integration.
-Do not route another library's output through `JsonWriter<T>`: it returns a `Json.JsonValue`, which would mean re-parsing a document the library had just finished writing.
+Do not route another library's output through `JsonWriter<T>`: a `JsonWriter` returns a `Json.JsonValue`, which would mean re-parsing a document the library had just finished writing.
 The library serializes, and `json(String)` sends what it produced.
 
 A body is read one way: as the text `body()` keeps, or unread through `bodyStream()`, `bodyReader()`, or `bodyNdjson()`.
@@ -58,7 +58,7 @@ app.post("/api/decks", req -> {
 ----
 
 Read through `bodyStream()` rather than `body()` on the way in.
-Jackson then parses the socket, and the request never exists as one String.
+Jackson then parses straight from the request stream, and the body never exists as one String.
 
 Move the two `try` blocks into an `exception(JsonProcessingException.class, ...)` handler on the `App` once there is more than one handler.
 
@@ -89,7 +89,7 @@ Both are the application's to answer, since core has not been told this body is 
 xref:reflection-scope.adoc[The framework's no-reflection rule] is about core, and a library an application adds answers for itself.
 Jackson and Gson both read and write fields reflectively, which is a real cost under a xref:native-image.adoc[native image]: every bound type needs a reflection entry.
 
-https://avaje.io/jsonb/[avaje-jsonb] is the version of this that keeps the property:
+https://avaje.io/jsonb/[avaje-jsonb] is a binder that keeps the runtime free of reflection:
 
 [source,java]
 ----
@@ -117,14 +117,14 @@ A generated adapter derives its field names from the record's components, so ren
 It does so silently, at compile time, in a build that still succeeds.
 Pinning each name with `@Json.Property("...")` restores the guarantee, and costs about as much typing as the hand-written writer it replaced.
 That is the trade.
-Where it comes out is the application's call, and core is not involved either way.
+The application decides which side of that trade it takes, and core is not involved either way.
 
 DSL-JSON's `@CompiledJson` works the same way, with one difference worth knowing.
 It keeps a runtime reflection fallback for types the processor did not see, so "no reflection" there is a configuration to hold rather than a property of the build.
 
 == What core still does
 
-Routing, parameter extraction, and the request and response envelope are unchanged by any of this.
+Routing, parameter extraction, and the request and response envelope are unchanged by a JSON library.
 An application can bind one endpoint with a library and hand-write the next.
 `WebResponse.json` takes a `String` and does not ask where it came from.
 

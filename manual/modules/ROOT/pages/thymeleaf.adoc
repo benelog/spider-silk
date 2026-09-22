@@ -16,7 +16,7 @@ dependencies {
 }
 ----
 
-The module depends on Thymeleaf 3.1.x, the line that dropped the servlet API from `thymeleaf` core, so nothing here pulls a second servlet level onto the classpath.
+The module depends on Thymeleaf 3.1.x, the line that dropped the servlet API from `thymeleaf` core, so the module pulls no second version of the servlet API onto the classpath.
 
 Excluding jte is optional.
 It only keeps an unused engine off the classpath.
@@ -38,8 +38,8 @@ The model's keys are the variables a template reads, so `${deck.title}` reaches 
 
 == What a model is, and what it is not
 
-This is the servlet-free half of Thymeleaf: a template name, a model, and the writer to render into.
-There is no `WebContext`, so the expressions a Spring MVC page reaches for, such as `#request`, `#session`, and `@bean`, are not available.
+The module uses the servlet-free half of Thymeleaf: a template name, a model, and the writer to render into.
+There is no `WebContext`, so the expressions a Spring MVC page uses, such as `#request`, `#session`, and `@bean`, are not available.
 Whatever the handler puts in the `Map` is what the page can read, and nothing else.
 
 == A root or a suffix of your own

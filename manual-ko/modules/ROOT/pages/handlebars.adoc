@@ -61,12 +61,12 @@ app.templates(new HandlebarsTemplates(handlebars));
 위처럼 로더에 빈 접미사를 전달하지 않으면, `HandlebarsTemplates`가 이미 덧붙인 접미사 위에 `.hbs`를 또 덧붙인다.
 
 `new HandlebarsTemplates("hbs")`는 컴파일된 템플릿을 `ConcurrentMapTemplateCache`에 캐시한다.
-Handlebars 자체의 기본값은 렌더링할 때마다 컴파일하는 것으로, 프로덕션에서는 요청마다 파싱하는 셈이다.
+Handlebars 자체의 기본값은 렌더링할 때마다 컴파일하는 것으로, 프로덕션에서는 요청마다 템플릿을 파싱하게 된다.
 다르게 선택하려면 직접 만든 `Handlebars`를 건넨다.
 
 == 리플렉션
 
 Handlebars는 `+{{deck.title}}+`을 먼저 `Map`에서 찾지만, 레코드나 빈에 대해서는 리플렉션으로 돌아간다.
-그것은 코어가 아니라 모듈의 리플렉션이다.
+이는 코어가 아니라 모듈의 리플렉션이다.
 규칙이 적용되는 범위는 xref:reflection-scope.adoc["리플렉션 없음"의 범위]를 참고한다.
-모델을 템플릿이 이미 가진 값들의 `Map`으로 유지하면 그마저도 배제된다.
+모델을 템플릿이 이미 가진 값들의 `Map`으로 유지하면 그 리플렉션마저 피할 수 있다.

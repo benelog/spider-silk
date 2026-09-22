@@ -61,7 +61,7 @@ app.templates(new HandlebarsTemplates(handlebars));
 Pass the loader an empty suffix, as above, or it appends `.hbs` on top of the one `HandlebarsTemplates` already added.
 
 `new HandlebarsTemplates("hbs")` caches compiled templates in a `ConcurrentMapTemplateCache`.
-Handlebars' own default is to compile on every render, which is a per-request parse in production.
+Handlebars' own default is to compile on every render, which in production means parsing the template on every request.
 Hand in a `Handlebars` of your own to choose differently.
 
 == Reflection
@@ -69,4 +69,4 @@ Hand in a `Handlebars` of your own to choose differently.
 Handlebars resolves `+{{deck.title}}+` against a `Map` first, but falls back to reflection for a record or a bean.
 That is the module's reflection, not core's.
 See xref:reflection-scope.adoc[The Scope of "No Reflection"] for where the rule applies.
-Keeping the model a `Map` of values a template already holds keeps even that out of the picture.
+Keeping the model a `Map` of values a template already holds avoids even that reflection.

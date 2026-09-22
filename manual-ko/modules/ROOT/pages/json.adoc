@@ -6,7 +6,7 @@
 == 라이터와 리더
 
 `JsonWriter<T>`와 `JsonReader<T>`는 매핑에 이름을 붙여 재사용할 수 있게 한다.
-`Json.obj()`는 트리를 인라인으로 만드는데, 같은 레코드를 세 핸들러에서 직렬화하다 보면 반복이 된다.
+`Json.obj()`는 트리를 인라인으로 만드는데, 같은 레코드를 세 핸들러에서 직렬화하다 보면 같은 코드가 반복된다.
 두 인터페이스 모두 메서드가 하나뿐이므로 둘 다 람다다:
 
 [source,java]
@@ -33,18 +33,18 @@ app.post("/api/decks", req -> {
 });
 ----
 
-여전히 리플렉션은 없다.
-매핑은 직접 작성한 코드이므로, 필드 이름을 바꿔도 그 코드를 편집해야만 와이어 포맷이 바뀐다.
+라이터와 리더에는 리플렉션이 없다.
+매핑은 직접 작성한 코드이므로, Java 필드 이름을 바꿔도 매핑을 함께 고쳐야만 와이어 포맷이 바뀐다.
 
 == 값 읽기
 
 `getString`은 키가 없거나 값의 타입이 틀리면 `Json.JsonException`을 던지고, `req.bodyJson(reader)`는 이를 400으로 바꾼다.
 핸들러는 값 전체를 받거나 아무것도 받지 않으며, 이는 `pathParamLong`과 같은 계약이다.
-`Json.JsonException`은 `IllegalArgumentException`이므로, 자체 규칙 때문에 그 일반 타입을 던지는 리더도 같은 방식으로 거부된다.
+`Json.JsonException`은 `IllegalArgumentException`이므로, 자체 검증 규칙 때문에 일반 `IllegalArgumentException`을 던지는 리더도 400이 된다.
 실패한 `LocalDate.parse`처럼 리더에서 나온 `DateTimeException`도 400이 된다.
 그 밖의 리더 예외는 서버 에러로 남는다.
 `bodyJson(reader)`는 입력 거부를 `HttpException`으로 감싸므로, 이 에러를 직접 처리하려면 그 타입이나 400 에러 핸들러를 대상으로 한다.
-핸들러 코드가 직접 던진 `Json.JsonException`은 여전히 자체 예외 핸들러의 대상이 될 수 있다.
+핸들러 코드가 직접 던진 `Json.JsonException`은 감싸지지 않으므로, `Json.JsonException`에 등록한 예외 핸들러가 그대로 받는다.
 `asLong`과 `getLong`은 소수부가 있는 숫자를 잘라내지 않고 거부한다: `1.5`는 long이 아니지만, `2.0`과 `1e3`은 정수이므로 long으로 읽는다.
 없어도 되는 키에는 `optString`, `optLong`, `optDouble`, `optBoolean`이 대신 기본값을 답하며, 키가 없을 때와 명시적인 JSON `null`일 때 모두 그렇다.
 `optObject`와 `optArray`는 같은 조건에서 `null`을 답하고, 키가 다른 타입의 값으로 존재하면 예외를 던진다.
@@ -53,8 +53,8 @@ app.post("/api/decks", req -> {
 
 == 미리 알 수 없는 키
 
-파싱된 객체도 for-each로 읽으며, 멤버마다 `Map.Entry` 하나씩 문서 순서대로다.
-`keys()`는 그 순서대로 키를 나열하고 `size()`는 멤버 수를 세므로, 예를 들어 태그 이름에서 개수로 가는 맵처럼 키가 데이터인 문서는 `Map`으로 읽는다:
+파싱된 객체도 for-each로 읽으며, 문서 순서대로 멤버마다 `Map.Entry`를 하나씩 내놓는다.
+`keys()`는 그 순서대로 키를 나열하고 `size()`는 멤버 수를 세므로, 예를 들어 태그 이름별 개수를 담은 맵처럼 키가 데이터인 문서는 `Map`으로 읽는다:
 
 [source,java]
 ----
@@ -68,9 +68,9 @@ for (var member : req.bodyJson().asObject()) {
 
 == `JsonCodec<T>`
 
-`JsonCodec<T>`는 양방향으로 오가는 타입을 위한, 라이터이면서 동시에 리더다.
+`JsonCodec<T>`는 라이터이자 리더로, 양방향으로 오가는 타입에 쓴다.
 `JsonCodec.of(writer, reader)`가 하나를 만들고, `JsonCodec.list(codec)`가 리스트 형태를 준다.
-두 절반이 별개의 인터페이스인 것은 대부분의 타입이 나가기만 하기 때문이며, 인터페이스가 하나라면 그런 타입에 구현할 수 없는 `read`가 남게 된다.
+라이터와 리더가 별개의 인터페이스인 것은 대부분의 타입이 나가기만 하기 때문이며, 인터페이스가 하나라면 그런 타입에 구현할 수 없는 `read`가 남는다.
 
 == 이것으로 부족해지는 지점
 
@@ -78,4 +78,4 @@ for (var member : req.bodyJson().asObject()) {
 xref:large-json.adoc[대용량 JSON과 NDJSON]은 대신 값을 하나씩 쓰고, 본문도 같은 방식으로 읽는다.
 
 매핑을 손으로 작성하는 것은 코어가 코어를 위해 내린 결정이지, 애플리케이션을 위한 결정이 아니다.
-소유하지 않은 와이어 포맷을 가진 애플리케이션은 다른 모든 페이지가 쓰는 같은 이음새(seam)를 통해 라이브러리로 객체를 바인딩할 수 있다: xref:json-interop.adoc[외부 JSON 바인딩].
+소유하지 않은 와이어 포맷을 가진 애플리케이션은 나가는 쪽의 `WebResponse.json(String)`과 들어오는 쪽의 `req.bodyStream()` 또는 `req.bodyReader()`를 통해 라이브러리로 객체를 바인딩할 수 있다: xref:json-interop.adoc[외부 JSON 바인딩].

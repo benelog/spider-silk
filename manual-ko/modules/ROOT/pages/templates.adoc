@@ -10,8 +10,8 @@ app.get("/decks/{deckId}", req ->
         WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
 ----
 
-그러기 위해 설정할 것은 없다.
-`App`은 `classpath:/jte` 위에서 https://jte.gg[jte]로 렌더링하며 `.jte`를 덧붙이므로, 위의 핸들러는 `classpath:/jte/deck.jte`를 렌더링한다.
+이를 위해 설정할 것은 없다.
+`App`은 https://jte.gg[jte]로 `classpath:/jte`의 템플릿을 렌더링하며 `.jte`를 덧붙이므로, 위의 핸들러는 `classpath:/jte/deck.jte`를 렌더링한다.
 모델은 `Map`이며 이름으로 jte의 파라미터에 전달되고, `ContentType.Html`이 `${}` 출력을 대신 이스케이프한다.
 응답은 모델의 항목을 null 값과 순회 순서를 유지한 채 읽기 전용 맵으로 복사하므로, 렌더러는 바꿀 수 없는 맵을 받는다.
 
@@ -28,7 +28,7 @@ app.templates(new JteTemplates("templates")     // classpath:/templates
 == 다른 엔진
 
 `TemplateRenderer`는 템플릿 이름, 모델, 렌더링 결과를 쓸 라이터를 받는 메서드 하나다.
-jte가 아닌 엔진을 위해 이를 구현하고, `templates(renderer)`에 전달해 기본값을 대체한다.
+jte가 아닌 엔진은 이 인터페이스를 구현하고, `templates(renderer)`에 전달해 기본값을 대체한다.
 
 [source,java]
 ----
@@ -44,8 +44,8 @@ app.templates(new HandlebarsTemplates("hbs"));          // classpath:/hbs/deck.h
 app.templates(new ThymeleafTemplates("thymeleaf"));     // classpath:/thymeleaf/deck.html
 ----
 
-그 밖의 것은 위의 한 줄이면 된다.
-모듈은 `compile(name).render(model)` 너머로 정할 것이 있을 때만 제 자리를 얻는다.
+그 밖의 엔진은 위의 Mustache 예처럼 한 줄로 연결한다.
+모듈은 `compile(name).render(model)` 외에 정해 둘 것이 있을 때만 만들 가치가 있다.
 
 렌더링은 핸들러의 예외 처리가 아직 적용되는 동안 일어난다.
 따라서 예외를 던지는 템플릿은 다른 실패와 마찬가지로 `app.exception(...)`에 도달하고, 렌더링된 페이지에 대한 `HEAD`는 `GET`이 보냈을 길이를 보고한다.
@@ -69,7 +69,7 @@ app.templates(new JteTemplates(
         new DirectoryCodeResolver(Path.of("src/main/resources/jte"))));
 ----
 
-렌더링할 때마다 jte는 템플릿 파일과 그것이 의존하는 모든 것의 수정 타임스탬프를 확인하고, 바뀐 것을 다시 컴파일한다.
+렌더링할 때마다 jte는 템플릿 파일과 템플릿이 의존하는 모든 것의 수정 타임스탬프를 확인하고, 바뀐 것을 다시 컴파일한다.
 `.jte` 파일을 저장하고 브라우저를 새로 고치는 것이 루프의 전부다.
 
 프로덕션 모드는 https://jte.gg/pre-compiling/[jte Gradle 플러그인]으로 빌드 시점에 모든 템플릿을 사전 컴파일한다:
@@ -97,5 +97,5 @@ app.templates(new JteTemplates(TemplateEngine.createPrecompiled(ContentType.Html
 
 그러면 jar는 컴파일된 클래스로 렌더링한다: 런타임 컴파일러도, 머신의 JDK도 필요 없고, 컴파일되지 않는 템플릿은 요청 대신 빌드를 실패시킨다.
 접미사는 어느 쪽이든 적용되므로, 핸들러는 바뀌지 않는다.
-예제 프로젝트는 `--dev` 플래그 뒤에 두 모드를 모두 배선(wiring)한다.
+예제 프로젝트는 `--dev` 플래그로 두 모드를 전환한다.
 xref:native-image.adoc[네이티브 이미지]에는 런타임 컴파일러가 아예 없으므로, 거기서는 사전 컴파일이 유일한 모드다.

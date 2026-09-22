@@ -33,18 +33,18 @@ app.post("/api/decks", req -> {
 });
 ----
 
-There is still no reflection.
-The mapping is code you wrote, so a field rename changes the wire format only if you edit it.
+Writers and readers involve no reflection.
+The mapping is code you wrote, so renaming a Java field changes the wire format only if you also edit the mapping.
 
 == Reading values
 
 `getString` throws `Json.JsonException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400.
 A handler gets a whole value or none, the same contract as `pathParamLong`.
-`Json.JsonException` is an `IllegalArgumentException`, so a reader that throws the plain type for a rule of its own is rejected the same way.
+`Json.JsonException` is an `IllegalArgumentException`, so a reader that throws a plain `IllegalArgumentException` for a validation rule of its own also gets a 400.
 `DateTimeException` from a reader, such as a failed `LocalDate.parse`, also becomes a 400.
 Other reader exceptions remain server errors.
 `bodyJson(reader)` wraps input rejection in `HttpException`, so custom handling of these errors targets that type or the 400 error handler.
-A `Json.JsonException` thrown directly by handler code remains eligible for its own exception handler.
+A `Json.JsonException` that handler code throws directly is not wrapped, so an exception handler registered for `Json.JsonException` still receives it.
 `asLong` and `getLong` reject a number with a fractional part rather than truncating it: `1.5` is not a long, while `2.0` and `1e3` are whole and read as one.
 For a key that is allowed to be absent, `optString`, `optLong`, `optDouble`, and `optBoolean` answer a default instead, for a missing key and for an explicit JSON `null` alike.
 `optObject` and `optArray` answer `null` on the same terms, and throw when the key is present with a value of another type.
@@ -70,7 +70,7 @@ The key list is a copy and the members handed to the loop are read-only, so writ
 
 `JsonCodec<T>` is a writer and a reader at once, for a type that travels both ways.
 `JsonCodec.of(writer, reader)` builds one, and `JsonCodec.list(codec)` gives the list form.
-The two halves are separate interfaces because most types only go out, and one interface would leave them with an unimplementable `read`.
+The writer and the reader are separate interfaces because most types only go out, and a single interface would leave those types with a `read` they cannot implement.
 
 == Where this stops being enough
 
@@ -78,4 +78,4 @@ The two halves are separate interfaces because most types only go out, and one i
 xref:large-json.adoc[Large JSON and NDJSON] writes one value at a time instead, and reads a body the same way.
 
 Writing the mapping by hand is core's decision for core, not for the application.
-An application with a wire format it does not own can bind objects with a library, through the same seam every other page uses: xref:json-interop.adoc[External JSON Binding].
+An application with a wire format it does not own can bind objects with a library instead, through `WebResponse.json(String)` going out and `req.bodyStream()` or `req.bodyReader()` coming in: xref:json-interop.adoc[External JSON Binding].

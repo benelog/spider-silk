@@ -34,12 +34,13 @@ The model is the data model, so `${deck.title}` reaches `Map.of("deck", ...)`.
 
 == Escaping is a decision here
 
-`new FreeMarkerTemplates(root)` sets `HTMLOutputFormat`, so `${}` is HTML-escaped and `${x?no_esc}` is the way out.
-FreeMarker itself escapes nothing until an output format says to, which is the one place it differs from the other three engines, and the main reason this module exists rather than a one-liner.
+`new FreeMarkerTemplates(root)` sets `HTMLOutputFormat`, so `${}` is HTML-escaped and `${x?no_esc}` writes one value unescaped.
+FreeMarker itself escapes nothing until an output format says to.
+That default is the one place it differs from the other three engines, and the main reason this module exists rather than a one-liner.
 
 The default suffix is `.ftlh`, the extension FreeMarker reads as "this one is HTML" on its own.
 The escaping is therefore stated twice over: once in the configuration, and once in every template's name.
-A suffix of your own drops the second half, but the configuration still holds:
+A suffix of your own drops the statement in the name, but the configuration still escapes:
 
 [source,java]
 ----
@@ -76,4 +77,4 @@ FreeMarker's own default, `DEBUG_HANDLER`, writes the stack trace into the page.
 FreeMarker reads `${deck.title}` through its object wrapper, which is reflective for a record or a bean.
 That is the module's reflection, not core's.
 See xref:reflection-scope.adoc[The Scope of "No Reflection"] for where the rule applies.
-Keeping the model a `Map` of values a template already holds keeps even that out of the picture.
+Keeping the model a `Map` of values a template already holds avoids even that reflection.

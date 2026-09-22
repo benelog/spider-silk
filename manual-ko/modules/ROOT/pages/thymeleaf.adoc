@@ -16,7 +16,7 @@ dependencies {
 }
 ----
 
-모듈은 `thymeleaf` 코어에서 서블릿 API를 떼어 낸 계열인 Thymeleaf 3.1.x에 의존하므로, 여기서 두 번째 서블릿 수준을 클래스패스로 끌어오는 것은 없다.
+모듈은 `thymeleaf` 코어에서 서블릿 API를 떼어 낸 계열인 Thymeleaf 3.1.x에 의존하므로, 두 번째 버전의 서블릿 API를 클래스패스로 끌어오지 않는다.
 
 jte 제외는 선택 사항이다.
 쓰지 않는 엔진을 클래스패스에서 치울 뿐이다.
@@ -38,8 +38,8 @@ new App()
 
 == 모델인 것과 모델이 아닌 것
 
-이는 Thymeleaf의 서블릿 없는 절반이다: 템플릿 이름, 모델, 렌더링 결과를 쓸 라이터다.
-`WebContext`가 없으므로, `#request`, `#session`, `@bean`처럼 Spring MVC 페이지가 손을 뻗는 표현식은 쓸 수 없다.
+이 모듈은 Thymeleaf의 서블릿 없는 절반을 쓴다: 템플릿 이름, 모델, 렌더링 결과를 쓸 라이터다.
+`WebContext`가 없으므로, `#request`, `#session`, `@bean`처럼 Spring MVC 페이지가 쓰는 표현식은 쓸 수 없다.
 핸들러가 `Map`에 넣은 것이 페이지가 읽을 수 있는 것이며, 그 밖에는 없다.
 
 == 직접 정하는 루트나 접미사
@@ -79,5 +79,5 @@ app.templates(new ThymeleafTemplates(engine));
 == 리플렉션
 
 Thymeleaf는 `${deck.title}`을 OGNL로 평가하는데, 이는 리플렉션을 쓴다.
-그것은 코어가 아니라 모듈의 리플렉션이다.
+이는 코어가 아니라 모듈의 리플렉션이다.
 규칙이 적용되는 범위는 xref:reflection-scope.adoc["리플렉션 없음"의 범위]를 참고한다.

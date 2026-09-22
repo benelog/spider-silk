@@ -44,7 +44,7 @@ app.templates(new HandlebarsTemplates("hbs"));          // classpath:/hbs/deck.h
 app.templates(new ThymeleafTemplates("thymeleaf"));     // classpath:/thymeleaf/deck.html
 ----
 
-Anything else is the one-liner above.
+Any other engine plugs in with a one-liner like the Mustache one above.
 A module only earns its place when there is something to settle beyond `compile(name).render(model)`.
 
 Rendering happens while the handler's exception handling still applies.
@@ -97,5 +97,5 @@ app.templates(new JteTemplates(TemplateEngine.createPrecompiled(ContentType.Html
 
 The jar then renders from compiled classes: no runtime compiler, no JDK on the machine, and a template that does not compile fails the build instead of the request.
 The suffix applies either way, so no handler changes.
-The example project wires both modes behind a `--dev` flag.
+The example project switches between the two modes with a `--dev` flag.
 A xref:native-image.adoc[native image] has no compiler at runtime at all, so precompiling is the only mode there.
