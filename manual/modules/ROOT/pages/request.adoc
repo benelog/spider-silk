@@ -57,7 +57,8 @@ List<String> tags = req.params("tag");      // ?tag=java&tag=web, or a checkbox 
 The values come back in request order, and an absent parameter gives an empty list: "no boxes checked" is an answer, not a 400.
 `param(name)` still returns the first value and still answers 400 when there is none.
 `paramOrNull(name)` returns the first value, or null when there is none.
-`param(name, default)` returns the default instead, and a null default is spelled `paramOrNull(name)`: `param(name, null)` matches the parser form as well and does not compile.
+`param(name, default)` returns the default instead.
+A null default is spelled `paramOrNull(name)`, because `param(name, null)` matches the parser form as well and does not compile.
 `paramLong("page", 1)` and `paramEnum("direction", Direction.class, Direction.FRONT)` supply a default for an optional typed parameter.
 The default covers absence only.
 A parameter that is present but unparseable is still a 400.
@@ -112,7 +113,7 @@ A query string that will not decode, such as `?q=%zz`, answers 400 through `para
 
 == Content negotiation
 
-`accepts` reads the `Accept` header and reports which of the media types a handler offers the caller wants:
+`accepts` reads the `Accept` header and returns the media type the caller prefers, out of the ones the handler offers:
 
 [source,java]
 ----
@@ -123,17 +124,17 @@ app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
 ----
 
 The answer is one of the strings passed in, so it reads back as a `case` label and no media type is spelled twice.
-Quality values and specificity are applied the way the specification asks: `text/html` is matched before `text/*`, which is matched before a bare wildcard, and a type the caller weighted `q=0` is one it refused even when a wildcard would otherwise have covered it.
+Quality values and specificity are applied the way the specification asks: `text/html` is matched before `text/*`, which is matched before a bare wildcard, and a type the caller weighted `q=0` is refused even when a wildcard would otherwise cover it.
 
 Two edges are worth stating, because they are the ones every hand-written parser gets wrong:
 
-* A request with no `Accept` at all is a caller that never said, not one that will take nothing.
+* A request with no `Accept` at all means the caller has no preference, not that it will take nothing.
   The first candidate wins, so the list is written in the order the handler prefers.
 * A caller that will take none of them is answered `406 Not Acceptable`, the same way `param(name)` answers 400 rather than returning null.
 
 A handler therefore never has a null branch to write.
 
-Asking the question makes the answer depend on a request header, so the response carries `Vary: Accept` without the handler saying so.
+Calling `accepts` or `acceptedTypes()` makes the answer depend on a request header, so the response carries `Vary: Accept` without the handler saying so.
 That covers the 406, and an answer that turned out to be the only type on offer.
 That is the same bookkeeping `app.gzip()` does for `Accept-Encoding`, for the same reason: a shared cache must not hand JSON to the next browser.
 
@@ -141,7 +142,7 @@ That is the same bookkeeping `app.gzip()` does for `Accept-Encoding`, for the sa
 It reports the media types asked for, best first, with the refused ones dropped, and is empty when the request sent no `Accept`.
 
 `Accept-Language` and `Accept-Encoding` are not negotiated for you.
-Encoding is the compression layer's own business, and language would be a locale story core does not have.
+Encoding is the compression layer's own business, and language negotiation would need locale support that core does not have.
 
 == File uploads
 
@@ -170,9 +171,10 @@ app.post("/scans", req -> {
 });
 ----
 
-The caller closes the stream, and it is the same content either way: what has been read is read, so a handler that wants the bytes as well buffers them itself rather than asking twice.
+The caller closes the stream.
+`inputStream()` and `bytes()` read the same content, and what has been read is read, so a handler that wants the bytes as well buffers them itself rather than asking twice.
 `writeTo` takes an absolute path, or a relative one resolved against the working directory.
-It writes the content once, because a container that had already buffered the upload to disk may move that file rather than copy it.
+Call it once, after any other read of the content, because a container that had already buffered the upload to disk may move that file rather than copy it.
 
 `req.fileOrNull(name)` answers null for an upload the form need not carry, which is the shape `req.cookie(name)` and `req.queryParamOrNull(name)` already have for a value whose absence is an answer.
 Null covers every way the file can be absent: no part of that name, a file input the browser sent empty because nothing was chosen, and a request that is not multipart at all.

@@ -16,7 +16,7 @@ Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that
 * Logging: `requestLogger((request, completion) -> ...)`, with the servlet status, elapsed time, response definition, transmission failure, and the exception the request was answered for in `RequestCompletion`; see xref:request-logging.adoc[Request Logging]
 * Errors: `exception(Type, handler)`, where the most specific registered type wins and an `HttpException` reaches only a handler for its own type or a subtype, `error(HttpStatus, handler)`
 * Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
-  Each is off until named, and applies to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
+  Each is off until called, and applies to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
 * Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)`.
   jte over `classpath:/jte` and `classpath:/public` at the root are the defaults, so neither has to be called.
   `StaticFiles.directory(path)` serves a directory on disk instead of the classpath, several roots given at once are read in order, and `precompressed()` answers with a `.br` or `.gz` sibling where a build left one.
@@ -38,12 +38,12 @@ Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that
   A parser that throws `IllegalArgumentException` or `DateTimeException` answers 400 naming the parameter
 * One source only: `queryParam(name)` and `formParam(name)` require a value and answer 400 when absent.
   `queryParamOrNull(name)` and `formParamOrNull(name)` return null when absent.
-  Parser overloads are required unless a `(..., parser, default)` supplies a default
+  The parser overloads require a value too, unless the `(..., parser, default)` form supplies a default
 * Query vs. form: `queryParam`, `queryParams`, `formParam`, `formParams`
 * Content negotiation: `accepts(types...)` answers with the type the caller prefers out of the ones offered, 406 when it will take none of them; `acceptedTypes()` for the parsed `Accept` header
 * Cookies the client sent: `cookie(name)`, `cookies()`
 * Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects).
-  The text is read once and kept, so every call answers the whole body
+  The text is read once and kept, so every call returns the whole body
 * Multipart uploads: `file(name)` (400 when absent), `fileOrNull(name)` (null when absent), `files(name)` for a field that carries several.
   `UploadedFile` answers `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, and `writeTo(path)`
 * Body, unread: `bodyStream()` and `bodyReader()` hand it over for a parser from another library, and neither mixes with the kept text: whichever goes second throws `IllegalStateException`.

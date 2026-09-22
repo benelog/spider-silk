@@ -65,7 +65,8 @@ Hello, silk
 ----
 
 `spider-silk-core` brings embedded Jetty with it, so nothing else is needed to serve a request.
-Add `spider-silk-tomcat` or `spider-silk-undertow` to run the same app on an embedded Tomcat or Undertow; see xref:server.adoc#choosing[Choosing a server].
+Add `spider-silk-tomcat` or `spider-silk-undertow` to run the same app on an embedded Tomcat or Undertow.
+xref:server.adoc#choosing[Choosing a server] covers the choice.
 See xref:deployment.adoc[Deployment] to deploy on an external servlet container instead.
 Templates render with jte out of the box.
 xref:freemarker.adoc[FreeMarker], xref:handlebars.adoc[Handlebars], and xref:thymeleaf.adoc[Thymeleaf] are modules of their own, added the same way.

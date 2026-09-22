@@ -31,13 +31,13 @@ Tomcat이나 Undertow로 바꾸면 스택의 그 부분이 달라질 뿐 위의 
 애플리케이션이 등록하는 필터도 여기에 더해지지 않는데, 필터는 핸들러가 불리기 전에 이미 반환하기 때문이다.
 필터와 예외 핸들러는 한 프레임, 스트리밍 본문은 두 프레임 더 깊고, 프레임워크가 불러들이는 어떤 지점도 네 프레임보다 깊지 않다.
 시그니처가 나머지 절반이다: 핸들러는 `WebResponse`를 반환해서 답하므로, 답하기를 잊은 분기는 빈 응답이 아니라 컴파일 오류가 된다.
-거미줄은 얇으면서도 버티고, 이름은 바로 그것을 말한다.
+거미줄은 얇으면서도 버티고, 이름은 바로 이 점을 가리킨다.
 
 == 세 가지 핵심 원칙
 
 리플렉션 없음.::
 애너테이션 스캔도, 프록시도, 자동 바인딩도 없다.
-실행되는 것은 코드가 말하는 것이고, 스택 트레이스는 짧게 유지되며, 시작은 빠르게 유지된다.
+실행되는 것은 코드에 적힌 그대로이고, 스택 트레이스는 짧게 유지되며, 시작도 빠르게 유지된다.
 
 API는 직관적으로 단순하다.::
 핸들러는 요청에서 응답으로 가는 함수다: `WebResponse handle(WebRequest request)`.
@@ -47,7 +47,7 @@ API는 직관적으로 단순하다.::
 라우팅은 메서드별이고, 경로는 변수를 담으며, 파라미터는 선언된 타입으로 추출되고, 예외는 상태 코드에 매핑된다.
 
 기본 템플릿 엔진은 https://jte.gg[jte]다.
-jte는 템플릿을 Java 소스로 컴파일하는데, 이는 프레임워크의 나머지가 동작하는 방식과 맞는다.
+jte는 템플릿을 Java 소스로 컴파일하며, 이 방식은 프레임워크의 나머지 부분이 동작하는 방식과 맞는다.
 
 == 모듈
 
@@ -117,15 +117,16 @@ app.start(8080);                                // embedded Jetty, sessions on
 ----
 
 `start`는 포트가 바인딩되는 즉시 반환한다.
-모든 것은 그 전에 등록된다: 애플리케이션이 서비스되는 동안 추가한 라우트, 필터, 설정은 `IllegalStateException`을 던지며, `stop()`이 등록을 다시 연다.
+라우트, 필터, 설정은 모두 `start` 전에 등록한다.
+애플리케이션이 서비스되는 동안 이를 추가하면 `IllegalStateException`을 던지며, `stop()`이 등록을 다시 연다.
 그때부터는 서버의 스레드가 JVM을 살아 있게 하므로, `join()`은 메인 스레드까지 블록하고 싶을 때만 필요하다.
 `stop()`은 서버를 내린다.
-`port()`는 바인딩된 포트를 보고하며, 테스트가 `start(0)`에서 OS가 고른 포트를 읽어 오는 방법이 이것이다.
+`port()`는 바인딩된 포트를 보고하므로, `start(0)`을 호출한 테스트는 OS가 고른 포트를 이것으로 읽어 온다.
 
 == 포지셔닝과 로드맵
 
 https://github.com/benelog/spider-silk/blob/main/notes/positioning.md[notes/positioning.md]는 Spider Silk를 Javalin, Spark, Helidon SE, Spring Boot 옆에 놓고, 그 자리에 가기 위해 무엇을 포기했는지 밝힌다.
 
-https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[notes/decisions.md]는 각 부분의 근거를 항목별로 제시하며, 기각된 것의 목록도 함께 담는다.
+https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[notes/decisions.md]는 각 부분의 근거를 항목별로 제시하며, 기각한 항목의 목록도 함께 담는다.
 
-https://github.com/benelog/spider-silk/issues[이슈 트래커]는 의도적으로 미룬 것을 항목당 하나의 이슈로 기록하며, 그것을 할 만하게 만들 조건도 함께 적는다.
+https://github.com/benelog/spider-silk/issues[이슈 트래커]는 의도적으로 미룬 것을 항목당 하나의 이슈로 기록하며, 착수할 가치가 생기는 조건도 함께 적는다.

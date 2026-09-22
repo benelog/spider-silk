@@ -1,7 +1,7 @@
 = API 요약
 :navtitle: API 요약
 
-이 장은 API 표면 전체를 나열하며, 각 항목은 그것을 설명하는 장을 가리킨다.
+이 장은 API 표면 전체를 나열하며, 각 항목은 해당 내용을 설명하는 장을 가리킨다.
 
 공개된 모든 패키지는 https://jspecify.dev[JSpecify]로 `@NullMarked`되어 있으므로, 시그니처에 `@Nullable`이 명시되지 않은 한 파라미터나 반환값은 null을 배제한다.
 NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미터에 도달하는 null을 보고한다.
@@ -16,10 +16,10 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 * 로깅: `requestLogger((request, completion) -> ...)`, `RequestCompletion`에는 서블릿 상태, 경과 시간, 응답 정의, 전송 실패, 그리고 요청에 응답하게 된 예외가 담긴다; xref:request-logging.adoc[요청 로깅]을 참고한다
 * 에러: `exception(Type, handler)`, 등록된 타입 중 가장 구체적인 것이 이기고 `HttpException`은 자신의 타입이나 하위 타입의 핸들러에만 도달한다, `error(HttpStatus, handler)`
 * 응답 전반에 걸친 관심사: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
-  각각은 명시하기 전까지 꺼져 있고, 정적 파일과 에러를 포함한 모든 응답에 적용되므로 필터가 아니다; xref:cors-compression-and-security-headers.adoc[CORS, 압축, 보안]을 참고한다
+  각각은 호출하기 전까지 꺼져 있고, 정적 파일과 에러를 포함한 모든 응답에 적용되므로 필터가 아니다; xref:cors-compression-and-security-headers.adoc[CORS, 압축, 보안]을 참고한다
 * 렌더링과 자산: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)`.
   `classpath:/jte` 위의 jte와 루트의 `classpath:/public`이 기본값이므로 둘 다 호출하지 않아도 된다.
-  `StaticFiles.directory(path)`는 클래스패스 대신 디스크의 디렉터리를 제공하고, 한 번에 주어진 여러 루트는 순서대로 읽히며, `precompressed()`는 빌드가 남겨둔 `.br`이나 `.gz` 형제 파일이 있는 곳에서 그것으로 응답한다.
+  `StaticFiles.directory(path)`는 클래스패스 대신 디스크의 디렉터리를 제공하고, 한 번에 주어진 여러 루트는 순서대로 읽히며, `precompressed()`는 빌드가 남겨둔 `.br`이나 `.gz` 형제 파일이 있으면 그 파일로 응답한다.
   `FreeMarkerTemplates`, `HandlebarsTemplates`, `ThymeleafTemplates`는 각자의 모듈에 있는 `TemplateRenderer` 구현체다
 * 서버: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`.
   어떤 방식으로 시작했든 `AppServlet`이 애플리케이션을 서비스하는 동안 등록은 닫힌다: 그때 추가되는 라우트, 필터, 설정은 `IllegalStateException`을 던지고, `stop()`이 등록을 다시 연다.
@@ -38,14 +38,14 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
   `IllegalArgumentException`이나 `DateTimeException`을 던지는 파서는 파라미터 이름을 밝히며 400으로 응답한다
 * 한 출처만: `queryParam(name)`과 `formParam(name)`은 값을 요구하며 없으면 400으로 응답한다.
   `queryParamOrNull(name)`과 `formParamOrNull(name)`은 없으면 null을 반환한다.
-  파서 오버로드는 `(..., parser, default)`가 기본값을 제공하지 않는 한 값을 요구한다
+  파서 오버로드도 `(..., parser, default)` 형태로 기본값을 주지 않는 한 값을 요구한다
 * 쿼리 대 폼: `queryParam`, `queryParams`, `formParam`, `formParams`
 * 콘텐츠 협상: `accepts(types...)`는 제시된 타입 중 호출자가 선호하는 타입으로 응답하고, 어느 것도 받지 않으면 406이다; 파싱된 `Accept` 헤더를 위한 `acceptedTypes()`
 * 클라이언트가 보낸 쿠키: `cookie(name)`, `cookies()`
 * 본문: `body()`, `bodyJson()`, `bodyJson(reader)`(리더가 거부하는 본문에는 400).
-  텍스트는 한 번 읽어 보관하므로 모든 호출이 본문 전체로 응답한다
+  텍스트는 한 번 읽어 보관하므로 모든 호출이 본문 전체를 반환한다
 * 멀티파트 업로드: `file(name)`(없으면 400), `fileOrNull(name)`(없으면 null), 여러 파일을 담은 필드를 위한 `files(name)`.
-  `UploadedFile`은 `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, `writeTo(path)`로 응답한다
+  `UploadedFile`은 `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, `writeTo(path)`를 제공한다
 * 읽지 않은 본문: `bodyStream()`과 `bodyReader()`는 다른 라이브러리의 파서를 위해 본문을 넘겨주며, 둘 다 보관된 텍스트와 섞이지 않는다: 나중에 호출된 쪽이 `IllegalStateException`을 던진다.
   `bodyNdjson(reader)`는 줄 단위로 구분된 JSON을 지연 읽기하고, 줄 번호를 밝히며 400으로 응답한다; xref:large-json.adoc[대용량 JSON과 NDJSON]과 xref:json-interop.adoc[외부 JSON 바인딩]을 참고한다
 * 세션: `sessionAttr(key, Class<T>)`는 지정한 타입으로 읽고 실패하면 그 줄에서 키와 두 타입을 밝히며, `sessionAttr(key)`는 캐스트를 호출 지점에 맡기고, `setSessionAttr(key, value)`는 쓰고, `removeSessionAttr(key)`는 하나를 제거하고, `invalidateSession()`은 세션을 끝낸다
@@ -56,7 +56,7 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 
 * 본문: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `file(path)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
 * `file(path)`는 콘텐츠 타입을 이름에서, 길이를 파일에서 읽는다.
-  읽을 수 있는 일반 파일이 아닌 경로는 `UncheckedIOException`을 던지므로, 없는 파일에 대한 404는 핸들러가 직접 써야 하는 줄이다
+  읽을 수 있는 일반 파일이 아닌 경로는 `UncheckedIOException`을 던지므로, 없는 파일에 대한 404는 핸들러가 직접 작성한다
 * 값을 하나씩 쓰는 본문: 담아 두기에 너무 큰 배열을 위한 `jsonArray(sink -> ...)`, 한 줄에 값 하나를 쓰는 `ndjson(sink -> ...)`.
   둘 다 내부적으로는 `stream` 본문이며, 라이터는 핸들러 예외 처리 밖에서 실행된다
 * 상태: `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`

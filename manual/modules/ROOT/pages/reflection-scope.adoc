@@ -3,23 +3,23 @@
 
 The principle applies to the *framework core*: routing, parameter extraction, and JSON handling use no reflection anywhere.
 
-The default template engine sits right at the boundary, so its scope is worth stating exactly.
+The default template engine sits right at the boundary, so how far its reflection reaches is worth stating exactly.
 jte compiles every template to a Java class, so `${deck.title}` runs as a compiled method call.
 The model is never reflected over, and a typo in that expression is a compile error rather than a silently empty value.
-What remains is loading: the engine looks the generated class up by name and invokes its `render` method reflectively.
+The engine uses reflection only to load a template: it looks the generated class up by name and invokes its `render` method reflectively.
 That reflection is confined to classes the build generated, and never reaches a class you wrote.
-That confinement is what keeps the xref:native-image.adoc[native image] story mechanical: jte's own build extension writes the reflection config for exactly those generated classes, and neither a model class nor a framework class needs an entry.
+Because of that confinement, the xref:native-image.adoc[native image] setup stays mechanical: jte's own build extension writes the reflection config for exactly those generated classes, and neither a model class nor a framework class needs an entry.
 
-A template engine in a module of its own answers for itself: xref:handlebars.adoc[Handlebars] falls back to reflection for a record or a bean, xref:freemarker.adoc[FreeMarker] reads one through its object wrapper, and xref:thymeleaf.adoc[Thymeleaf] evaluates every expression through OGNL.
+A template engine in a module of its own brings its own reflection: xref:handlebars.adoc[Handlebars] falls back to reflection for a record or a bean, xref:freemarker.adoc[FreeMarker] reads one through its object wrapper, and xref:thymeleaf.adoc[Thymeleaf] evaluates every expression through OGNL.
 That is one more reason each lives outside core.
 Take the module and you have taken its reflection with it, and an application that stays on the default jte keeps its model access reflection-free.
 
-xref:websocket.adoc[`spider-silk-jetty-websocket`] answers for itself the same way, and answers well.
-Jetty binds an endpoint's callbacks by taking a `MethodHandle` to each, cached per endpoint class, and every connection the module opens is one class it declares itself.
+xref:websocket.adoc[`spider-silk-jetty-websocket`] brings its own reflection the same way, and keeps it narrow.
+Jetty binds an endpoint's callbacks by taking a `MethodHandle` to each, cached per endpoint class, and every connection the module opens is served by one class it declares itself.
 That is the one class Jetty looks up.
 A `WebSocketHandler` an application writes is reached through an interface call and is never reflected over.
 
-A JSON binding library an application adds answers for itself on the same terms as a template module: take it and you have taken its reflection with it.
+A JSON binding library an application adds is on the same terms as a template module: take it and you have taken its reflection with it.
 Jackson and Gson read and write fields reflectively, so every bound type needs an entry in a xref:native-image.adoc[native image] config.
 avaje-jsonb generates an adapter per type at compile time and needs none, which is the same trade jte makes for templates.
 Core is not involved either way: xref:json-interop.adoc[the seam] is `WebResponse.json(String)` and `req.bodyStream()`, and an application that stays on the hand-written writers keeps its wire format reflection-free.

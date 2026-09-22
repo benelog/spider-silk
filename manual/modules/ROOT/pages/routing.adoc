@@ -24,9 +24,9 @@ A `\{name}` segment matches exactly one segment and never a slash, so `/decks/\{
 A trailing slash on the request is ignored: `/decks/` and `/decks` are the same path.
 
 A final `*` matches the rest of the path, including nothing at all.
-`/admin/*` therefore covers `/admin`, `/admin/users`, and `/admin/users/7`, which is what a filter path usually means: a prefix, and the prefix itself.
+`/admin/*` therefore covers `/admin`, `/admin/users`, and `/admin/users/7`, which is what a filter path usually means: the prefix itself and everything under it.
 `*` is allowed only as the last segment.
-A route can carry one as well.
+A route can end in `*` as well.
 A bare `*` captures nothing, so a handler that needs the remainder registers a named tail instead.
 
 A final `\{name*}` matches exactly what `*` matches, and binds what it matched.
@@ -48,7 +48,7 @@ Direction direction = req.pathParamEnum("direction", Direction.class);
 ----
 
 The value always exists when the handler runs, because a request without the segment would not have matched the route.
-The 400 therefore covers the type, not the presence.
+The 400 therefore reports a value of the wrong type, not a missing one.
 A `\{name*}` tail is read the same way, and is the one variable that can come back empty.
 
 == Groups
@@ -69,14 +69,14 @@ app.path("/api/decks", decks -> {
 
 An empty path, or `"/"`, registers the prefix itself.
 A group's `beforeRoute` and `afterRoute` filter its matched routes when given no path of their own.
-`beforeRequest` uses the same prefix but also covers static files and unmatched paths, before route variables are available.
+`beforeRequest` uses the same prefix but also covers static files and unmatched paths, and runs before route matching, so route variables are not available yet.
 The prefix is resolved at registration, so `app.routes()` reports full paths.
 A group changes how routes are written, not what is registered.
 
 == Matching order
 
 Registration order breaks ties between overlapping patterns.
-A literal route registered before a variable one therefore keeps winning:
+A literal route registered before a variable one therefore always wins:
 
 [source,java]
 ----
@@ -85,17 +85,18 @@ app.get("/study/{mode}", study::byMode);    // everything else under /study
 ----
 
 Registering a second route that matches exactly the same requests throws `IllegalStateException` on the spot.
-That covers the same path and the same shape with a variable renamed.
+That includes the same path registered twice, and the same shape with a variable renamed.
 Such a route could never run, and the exception reports it at registration instead of leaving a dead entry in the table.
 Registration closes while an `AppServlet` serves the application, whether `start()`, a server started directly, or an external container runs it.
-The servlet serves a copy of the table taken when it was initialized, so a route added then would never answer, and it throws `IllegalStateException` instead.
+The servlet serves a copy of the table taken when it was initialized, so registering a route while it serves throws `IllegalStateException` instead of adding a route that would never answer.
 `stop()` opens registration again, and the next start serves what was registered in between.
 
 == When nothing matches
 
 A path no route knows answers 404.
 A path that only other methods know answers 405, with an `Allow` header listing the methods that would have worked.
-For a GET or HEAD, xref:static-files.adoc[static files] are consulted before the 404: routes come first, so a route can shadow a file.
+For a GET or HEAD, xref:static-files.adoc[static files] are consulted before the 404.
+Routes are matched first, so a route can shadow a file.
 `error(HttpStatus.NOT_FOUND, handler)` registers the body that 404 answers with.
 xref:filters-and-errors.adoc[Filters and Errors] covers how an error handler fills in the body.
 

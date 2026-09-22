@@ -2,7 +2,7 @@
 :navtitle: Handlers
 
 `Handler` has a single method, so the application decides what shape a handler takes.
-The example app uses all three.
+The example app uses all three shapes: a lambda, an `Action` class, and public methods registered by reference.
 
 == A lambda
 
@@ -18,8 +18,8 @@ app.get("/openapi.json", req -> {
 
 == An `Action` class
 
-Use a class when it answers exactly one route.
-The class implements `Handler`, so it registers as itself:
+Use a class for a handler that answers exactly one route.
+The class implements `Handler`, so an instance registers directly:
 
 [source,java]
 ----
@@ -69,7 +69,7 @@ app.get("/decks/{deckId}", decks::showDeck);
 app.post("/decks/{deckId}/rename", decks::renameDeck);
 ----
 
-The methods are `public` because registration happens outside the class, and that is the point.
+The methods are `public` because registration deliberately happens outside the class.
 There is no `Controller` interface and no `register(App)` method to implement.
 Every route the application answers is therefore one statement in one list, and `app.routes()` reports exactly what is written there.
 A class that registers its own routes hides half the routing table inside itself, which is what annotation scanning does, spelled out by hand.
