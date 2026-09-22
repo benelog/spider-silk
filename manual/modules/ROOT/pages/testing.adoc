@@ -1,7 +1,7 @@
 = Testing
 :navtitle: Testing
 
-The harness is its own module, so the production jar carries no test code:
+The test harness, `WebTest` and `TestRequest`, is its own module, `spider-silk-test`, so the production jar carries no test code:
 
 [source,groovy,subs="attributes+"]
 ----
@@ -10,7 +10,7 @@ testImplementation '{project-group}:spider-silk-test:{project-version}'
 
 == End to end, with `WebTest`
 
-`WebTest` starts the app on a free port, hands you a client that keeps cookies, and stops it again, including when the body throws:
+`WebTest` starts the app on a free port, hands you a client that keeps cookies, and stops it again, including when the test body throws:
 
 [source,java]
 ----
@@ -25,12 +25,12 @@ void createsADeck() {
 ----
 
 `get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and `postJson`, all return the raw `HttpResponse<String>`, so assertions stay in whatever library the project already uses.
-`send(builder -> ...)` is the way out for anything else, and `send(builder -> ..., bodyHandler)` reads the body some other way.
-Reading it as bytes is what a xref:cors-compression-and-security-headers.adoc[compressed] answer needs, since decoding it as text would destroy it.
+`send(builder -> ...)` sends any request these methods do not cover, and `send(builder -> ..., bodyHandler)` reads the body some other way.
+Reading it as bytes is what a xref:cors-compression-and-security-headers.adoc[compressed] answer needs, since decoding gzipped bytes as text corrupts them.
 
 == The handler alone, with `TestRequest`
 
-`TestRequest` builds the argument and you call the method, for a test of the handler itself rather than of the routing that reaches it:
+`TestRequest` builds the `WebRequest` for a handler method you call directly, so the test covers the handler itself rather than the routing that reaches it:
 
 [source,java]
 ----
@@ -56,5 +56,6 @@ Everything a handler can tell apart still holds: a query parameter and a form fi
 The body is read the way it is behind a container: a second `req.body()` answers the text the first one kept, and `req.bodyStream()` after it throws `IllegalStateException`.
 The stub hands back one reader, already at its end on the second call, so a handler that reads the body twice through `raw()` fails the unit test rather than only failing in production.
 `formParam` fields are the body as well, URL-encoded under `application/x-www-form-urlencoded`, so a form cannot also take `body`.
-A parameter read spends a form body as a container's form parsing does, so `req.bodyStream()` after it is empty, and a form body read as bytes first leaves no fields.
-`file` called twice with one name builds the field that carries several files, which `req.files(name)` reads back, and an empty file name is the input a browser sent with nothing chosen, which `req.fileOrNull(name)` answers null for.
+Reading a parameter consumes a form body as a container's form parsing does, so `req.bodyStream()` after it is empty, and a form body read as bytes first leaves no fields.
+`file` called twice with one name builds the field that carries several files, which `req.files(name)` reads back.
+An empty file name is the input a browser sends when nothing was chosen, and `req.fileOrNull(name)` answers null for it.

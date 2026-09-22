@@ -32,7 +32,7 @@ app.beforeRequest("/admin/*", req -> req.sessionAttr("user") == null
 
 A request filter's early response or exception uses the normal template, error, response-filter, and decoration pipeline.
 Request filters execute in registration order before all route filters, regardless of the order the two kinds were registered.
-A request filter can reject an OPTIONS request before CORS preflight handling, so its authorization policy must allow preflights when required.
+A request filter runs before a CORS preflight is answered and can reject that OPTIONS request, so an authorization filter must let preflights through when the application uses CORS.
 
 For a guard that needs a matched route's path variables, use `beforeRoute`.
 A trailing `*` covers the prefix _and_ everything under it, so `++/admin/*++` guards `/admin` as well as `/admin/users`, which is what a guard almost always means:
@@ -72,8 +72,8 @@ app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));
 ----
 
 The filter takes the request and the response about to be sent, and returns a replacement or the response passed in to leave it unchanged.
-Returning null from `afterRoute` or `responseFilter` is a programming error and follows exception handling.
-Several filters run in registration order, each on what the one before it answered.
+Returning null from `afterRoute` or `responseFilter` is a programming error, and the framework throws a `NullPointerException` that is handled like any other exception.
+Several filters run in registration order, each on the response the one before it returned.
 The request carries the path variables of the route that matched, when one did.
 
 A response filter runs once the answer has been worked out and before it is decorated:
@@ -113,8 +113,8 @@ Registering a type twice replaces the first handler.
 An `HttpException` is a status the handler chose, not a failure.
 It answers with its status and message and goes to `error(status, ...)` for its body, and a handler registered for a broader type such as `RuntimeException` never sees it.
 A handler registered for `HttpException` itself, or for a subtype of it, does.
-Any other uncovered exception answers 500 and is logged.
-Whichever answered it, the exception is reported to the xref:request-logging.adoc[request logger] as `completion.exception()`, so recording failures does not take a catch-all handler.
+Any other exception that no handler covers answers 500 and is logged.
+Whether an exception handler or the framework's 500 answered it, the exception is reported to the xref:request-logging.adoc[request logger] as `completion.exception()`, so recording failures does not take a catch-all handler.
 A template that fails to render throws inside the handler's own dispatch, so it reaches these handlers too.
 
 == Error handlers

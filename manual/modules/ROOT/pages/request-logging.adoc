@@ -18,11 +18,12 @@ Its status and headers may differ from what a raw writer sent.
 
 `failure()` is the exception from decoration or writing, or null when neither failed.
 `failed()` reports whether that exception is present.
-A failure before commitment can produce a 500; a failure after commitment can leave a 200 with a partial body.
-Inspect the failure independently of the status code.
+A failure before the response is committed can produce a 500.
+A failure after it is committed can leave a 200 with a partial body.
+Check `failed()` rather than inferring a failure from the status code.
 An application exception handled during dispatch is represented by its response status, not by a transmission failure.
 Normal SSE closure is not a transmission failure.
-Completion does not confirm receipt of the entire body by the remote client.
+A completion does not confirm that the remote client received the entire body.
 
 `exception()` is what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did.
 `threw()` reports whether that exception is present.
@@ -43,4 +44,4 @@ app.requestLogger((req, completion) -> {
 It is null for a static file, a 404, a 405, and the automatic OPTIONS answer.
 xref:route-introspection.adoc#matched-route[Route Introspection] has the rules.
 `req.body()` reads the text a filter or handler already read, since the text is kept for the whole request.
-A logger that throws is reported to the servlet log and leaves the response alone.
+An exception the logger throws is written to the servlet log and leaves the response alone.

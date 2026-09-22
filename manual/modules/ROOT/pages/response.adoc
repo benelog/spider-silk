@@ -2,13 +2,13 @@
 :navtitle: The Response
 
 A `WebResponse` is an immutable value.
-Every method returns a new response, which is what lets an after-filter rewrite what a route answered.
+Every method returns a new response, so an after-filter can rewrite the response a route returned.
 
 The immutability covers the envelope: the status, the headers, the cookies, and the entries of a template model.
 A cookie is copied when it is added and again when `cookies()` hands it out, so changing a `Cookie` object afterwards changes nothing the response sends.
 A template model is copied into a read-only map when the template body is built, so a map the handler keeps writing to does not reach the page.
 The copies are shallow, and a mutable object stored as a model value is still the one the handler passed.
-The array of a `bytes` body and the writer of a `stream` body are handed over rather than copied, because a second copy of a large body is what those bodies exist to avoid.
+The array of a `bytes` body and the writer of a `stream` body are handed over rather than copied, because those two bodies exist to avoid a second copy of a large body.
 
 == Bodies
 
@@ -62,12 +62,12 @@ app.get("/decks/{deckId}/export", req ->
 ----
 
 The type comes from the extension, and an extension the table does not know answers `application/octet-stream`.
-A file whose name says nothing useful about its content is answered with `.contentType(...)`, which overrides what was worked out from the name.
-The table itself is not public: the way to a content type is the file that has one.
+When a file's name says nothing useful about its content, `.contentType(...)` states the type and overrides the one worked out from the name.
+The table itself is not public: an application uses it only by answering with a file.
 
 A path that is not a readable regular file throws `UncheckedIOException` rather than answering 404.
 The framework cannot tell an export that was cleaned up from a path the handler built wrong, and the handler can.
-A handler that wants a 404 for a missing file writes the line that says so:
+A handler that wants a 404 for a missing file checks for the file before calling `file`:
 
 [source,java]
 ----
@@ -86,7 +86,7 @@ A file a handler chose is not a static file, and only the handler knows whether 
 == Headers
 
 `header(name, value)` sets a header and `header(name)` reads one back, under any spelling of the name.
-Field names are case-insensitive in HTTP, and the map behind them compares the same way.
+Field names are case-insensitive in HTTP, and the map that holds the headers compares them the same way.
 `withoutHeader(name)` removes a header under any spelling and preserves the other headers, cookies, status, and body.
 
 [source,java]
@@ -99,11 +99,11 @@ response.headers();              // every field, in the order they were set
 
 A response holds one value per field.
 Setting a field again, under whatever spelling, replaces the value and leaves the name and its position alone, so `headers()` reads back exactly what goes on the wire.
-`vary(field)` is the one method that adds rather than replaces, because `Vary` names a list and compression and CORS each have something to put on it.
+`vary(field)` is the one method that adds rather than replaces, because `Vary` holds a list and compression and CORS each add a field to it (`Accept-Encoding` and `Origin`).
 
 A header sent more than once is out of scope, and `headers()` says so by its type: a `Map<String, String>` promises one value per name.
 Cookies are the exception that has a list of its own, added with `cookie(...)` and read back with `cookies()`.
-Anything else that must repeat, such as two `Link` lines in one answer, is written through `raw`:
+Any other header that must repeat, such as two `Link` lines in one answer, is written through `raw`:
 
 [source,java]
 ----
@@ -166,7 +166,7 @@ xref:request.adoc[The Request] covers reading the cookies the client sent.
 
 == The lambda families
 
-The last three bodies each take a lambda of their own, and the suffix names the family it belongs to.
+`stream`, `sse`, and `raw` each take a lambda of their own, and the suffix of the lambda's type names the family it belongs to.
 A `…Handler` answers a request with a `WebResponse`: `Handler` and `ExceptionHandler`.
 A `…Writer` returns nothing and fills the body of a response that has already been decided: `StreamWriter(OutputStream)`, `SseWriter(SseStream)`, and `ServletWriter(HttpServletRequest, HttpServletResponse)`.
 `ServletWriter` is therefore a sibling of `StreamWriter`, not a relative of `Handler`.

@@ -20,10 +20,10 @@ Reading never creates a session, so a visitor who has not signed in costs no ses
 Writing creates one on demand.
 The value is any object and stays on the server: only the container's session cookie travels.
 
-Name the type to be told where a wrong one is.
-`sessionAttr(key, User.class)` casts with `Class.cast` and fails on that line, naming the key, the type found, and the type asked for.
+Passing the type makes a wrong type fail on the line that reads it.
+`sessionAttr(key, User.class)` casts with `Class.cast` and fails on that line with an `IllegalStateException` naming the key, the type found, and the type asked for.
 `sessionAttr(key)` casts at the call site instead, so the same mistake is a `ClassCastException` on the assignment rather than on the read.
-Both are `IllegalStateException` territory rather than a 400: the value was put in the session by the application itself, so a type it does not expect is the application's own mistake and answers 500.
+Either mistake answers 500, not 400: the application put the value in the session itself, so a type it does not expect is its own mistake.
 Neither is reflection in the sense this framework avoids, since the type is written at the call site.
 
 The write is named `setSessionAttr`, and every read is named `sessionAttr`.
@@ -35,7 +35,7 @@ Writing a null value removes the attribute, which is the container's rule for `H
 
 == Ending a session
 
-`invalidateSession()` ends the session, which is what logging out is:
+`invalidateSession()` ends the session, which is how an application logs a visitor out:
 
 [source,java]
 ----
@@ -47,16 +47,16 @@ app.post("/logout", req -> {
 
 Everything in the session is gone and the visitor's next request starts a new one.
 A request with no session to begin with is left alone, so logging out twice is not an error.
-Invalidate and then return: a session attribute read after this answers null, and one written after it starts a session again.
+Return right after invalidating: a session attribute read after the call answers null, and one written after it starts a new session.
 
-Session support is the servlet container's, and is on by default.
+Sessions come from the servlet container and are on by default.
 `JettyServer` turns it off with `sessions(false)`.
 xref:tomcat.adoc[Tomcat] and xref:undertow.adoc[Undertow] always install a session manager, as their pages explain.
 
 == Flash
 
 A flash value is visible exactly once, on the request after the one that set it.
-That is the missing piece of the Post/Redirect/Get pattern: the POST wants to say "Imported 12 cards." on the page its redirect lands on.
+Flash fills the gap in the Post/Redirect/Get pattern: the POST wants to show "Imported 12 cards." on the page its redirect lands on.
 
 [source,java]
 ----
@@ -87,6 +87,6 @@ if (imported == 0) {
 }
 ----
 
-The removal applies only to what waits for the next request.
+The removal applies only to the value waiting for the next request.
 A value this request received stays readable through `flashed(key)`.
 Withdrawing a flash with no session in place does not start one.
