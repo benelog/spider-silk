@@ -48,10 +48,12 @@ pluginManagement {
   또한 대부분 정적으로(`--static-nolibc`) 빌드하므로, 아래의 `distroless/base` 컨테이너는 glibc 외에는 아무것도 제공할 필요가 없다.
   H2 같은 라이브러리를 위해 GraalVM의 도달 가능성 메타데이터 저장소가 활성화된다.
 * `resolveDependencies` 태스크는 xref:deployment.adoc#dockerfile[Dockerfile]의 의존성 캐시 레이어를 위해 외부 런타임 jar만을 내려받는다.
-* `-Pnative`는 `jib`, `jibBuildTar`, `jibDockerBuild`의 목표를 GraalVM 바이너리로 돌린다: JRE 대신 `distroless/base` 이미지, JVM 이미지를 덮어쓰지 않도록 설정된 이미지 이름에 덧붙는 `:native`, 그리고 `nativeCompile`에 대한 태스크 의존성 연결이다.
+* `-Pnative`는 `jib`, `jibBuildTar`, `jibDockerBuild`의 목표를 GraalVM 바이너리로 돌린다: JRE 대신 `distroless/base` 이미지, JVM 이미지를 덮어쓰지 않도록 설정된 이미지 이름에 태그가 없을 때 덧붙는 `:native`, 그리고 `nativeCompile`에 대한 태스크 의존성 연결이다.
   xref:native-image.adoc#container[네이티브 이미지 장]이 그 전환이 실제로 동작하는 모습을 보여준다.
 
-이 모두는 빌드 스크립트 자신의 블록이 실행되기 전에 자리 잡으므로, 컨벤션은 평소처럼 `jib`, `graalvmNative`, `java`를 설정해 재정의한다.
+베이스 이미지, 포트, 네이티브 빌드 인자는 빌드 스크립트 자신의 블록이 실행되기 전에 자리 잡으므로, 평소처럼 `jib`이나 `graalvmNative`를 설정해 재정의한다.
+`targetCompatibility` 맞춤과 `-Pnative` 전환은 반대로 빌드 스크립트가 실행된 뒤에 적용되므로, 빌드 스크립트가 설정한 값보다 우선한다.
+따라서 `-Pnative`에서는 `jib` 블록이 다른 이미지를 지정해도 베이스 이미지가 `distroless/base`가 된다.
 다이어그램은 소스와 빌드가 만들 수 있는 두 이미지 사이에 플러그인이 무엇을 연결하는지 보여준다:
 
 .소스에서 컨테이너 이미지까지

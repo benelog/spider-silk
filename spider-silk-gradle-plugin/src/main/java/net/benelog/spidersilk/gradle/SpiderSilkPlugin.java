@@ -25,8 +25,10 @@ import java.util.Map;
  * metadata repository, {@code --no-fallback} (a fallback image would reintroduce
  * the reflection the framework exists to avoid), and a {@code resolveDependencies}
  * task for a Dockerfile's dependency-cache layer. {@code -Pnative} re-aims the
- * same Jib tasks at the native binary. All of it stays overridable through the
- * plugins' own DSLs, which run after these defaults.
+ * same Jib tasks at the native binary. The defaults stay overridable through
+ * the plugins' own DSLs, which run after them; the {@code targetCompatibility}
+ * alignment and the {@code -Pnative} switch run after the build script instead,
+ * so they win over it.
  */
 public class SpiderSilkPlugin implements Plugin<Project> {
 
