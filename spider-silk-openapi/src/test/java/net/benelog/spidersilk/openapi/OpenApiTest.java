@@ -7,7 +7,8 @@ import org.junit.jupiter.api.Test;
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.Route;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonArray;
+import net.benelog.spidersilk.json.JsonObject;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -22,8 +23,8 @@ class OpenApiTest {
 
     @Test
     void mapsEveryMethodUnderItsPathTemplate() {
-        Json.JsonObject document = OpenApi.document("Flashcard API", "1.0.0", routes).asObject();
-        Json.JsonObject decks = document.getObject("paths").getObject("/api/decks");
+        JsonObject document = OpenApi.document("Flashcard API", "1.0.0", routes).asObject();
+        JsonObject decks = document.getObject("paths").getObject("/api/decks");
 
         assertThat(document.getString("openapi")).isEqualTo("3.1.0");
         assertThat(decks.has("get")).isTrue();
@@ -35,7 +36,7 @@ class OpenApiTest {
     /** Both are required by the spec, so both are arguments rather than defaults. */
     @Test
     void carriesTheTitleAndVersionItWasGiven() {
-        Json.JsonObject info = OpenApi.document("Flashcard API", "1.0.0", routes)
+        JsonObject info = OpenApi.document("Flashcard API", "1.0.0", routes)
                 .asObject().getObject("info");
 
         assertThat(info.getString("title")).isEqualTo("Flashcard API");
@@ -45,10 +46,10 @@ class OpenApiTest {
     /** "{deckId}" is OpenAPI's own syntax, so the parameter falls out of the pattern. */
     @Test
     void declaresEveryPathVariableAsAParameter() {
-        Json.JsonObject operation = OpenApi.document("Flashcard API", "1.0.0", routes).asObject()
+        JsonObject operation = OpenApi.document("Flashcard API", "1.0.0", routes).asObject()
                 .getObject("paths").getObject("/api/decks/{deckId}/cards").getObject("get");
 
-        Json.JsonObject parameter = operation.getArray("parameters").get(0).asObject();
+        JsonObject parameter = operation.getArray("parameters").get(0).asObject();
         assertThat(parameter.getString("name")).isEqualTo("deckId");
         assertThat(parameter.getString("in")).isEqualTo("path");
         assertThat(parameter.getBoolean("required")).isTrue();
@@ -61,7 +62,7 @@ class OpenApiTest {
         List<Route> described = List.of(
                 new Route("GET", "/api/decks", "List every deck"),
                 new Route("POST", "/api/decks"));
-        Json.JsonObject decks = OpenApi.document("Flashcard API", "1.0.0", described)
+        JsonObject decks = OpenApi.document("Flashcard API", "1.0.0", described)
                 .asObject().getObject("paths").getObject("/api/decks");
 
         assertThat(decks.getObject("get").getString("summary")).isEqualTo("List every deck");
@@ -70,7 +71,7 @@ class OpenApiTest {
 
     @Test
     void leavesParametersOutOfAPathThatHasNone() {
-        Json.JsonObject paths = OpenApi.document("Flashcard API", "1.0.0", routes).asObject()
+        JsonObject paths = OpenApi.document("Flashcard API", "1.0.0", routes).asObject()
                 .getObject("paths");
 
         assertThat(paths.getObject("/api/decks").getObject("get").has("parameters")).isFalse();
@@ -90,11 +91,11 @@ class OpenApiTest {
     @Test
     void writesANamedTailAsAPathVariable() {
         List<Route> withTail = List.of(new Route("GET", "/api/files/{path*}"));
-        Json.JsonObject paths = OpenApi.document("Flashcard API", "1.0.0", withTail)
+        JsonObject paths = OpenApi.document("Flashcard API", "1.0.0", withTail)
                 .asObject().getObject("paths");
 
         assertThat(paths.has("/api/files/{path*}")).isFalse();
-        Json.JsonObject parameter = paths.getObject("/api/files/{path}").getObject("get")
+        JsonObject parameter = paths.getObject("/api/files/{path}").getObject("get")
                 .getArray("parameters").get(0).asObject();
         assertThat(parameter.getString("name")).isEqualTo("path");
         assertThat(parameter.getString("in")).isEqualTo("path");
@@ -107,7 +108,7 @@ class OpenApiTest {
     @Test
     void declaresTheVariablesBeforeATailToo() {
         List<Route> withTail = List.of(new Route("GET", "/api/decks/{deckId}/files/{path*}"));
-        Json.JsonArray parameters = OpenApi.document("Flashcard API", "1.0.0", withTail).asObject()
+        JsonArray parameters = OpenApi.document("Flashcard API", "1.0.0", withTail).asObject()
                 .getObject("paths").getObject("/api/decks/{deckId}/files/{path}")
                 .getObject("get").getArray("parameters");
 
@@ -127,7 +128,7 @@ class OpenApiTest {
         List<Route> api = app.routes().stream()
                 .filter(route -> route.path().startsWith("/api"))
                 .toList();
-        Json.JsonObject paths = OpenApi.document("Flashcard API", "1.0.0", api)
+        JsonObject paths = OpenApi.document("Flashcard API", "1.0.0", api)
                 .asObject().getObject("paths");
 
         assertThat(paths.has("/api/decks")).isTrue();

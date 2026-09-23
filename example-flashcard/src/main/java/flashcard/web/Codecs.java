@@ -35,11 +35,11 @@ final class Codecs {
     static final JsonReader<NewDeck> NEW_DECK =
             json -> new NewDeck(json.asObject().getString("name"));
 
-    static final JsonWriter<Deck> DECK = deck -> Json.obj()
+    static final JsonWriter<Deck> DECK = deck -> Json.object()
             .put("id", deck.id())
             .put("name", deck.name());
 
-    static final JsonWriter<DeckSummary> DECK_SUMMARY = summary -> Json.obj()
+    static final JsonWriter<DeckSummary> DECK_SUMMARY = summary -> Json.object()
             .put("id", summary.id())
             .put("name", summary.name())
             .put("cardCount", summary.cardCount())
@@ -47,11 +47,11 @@ final class Codecs {
 
     static final JsonWriter<List<DeckSummary>> DECK_SUMMARIES = JsonWriter.list(DECK_SUMMARY);
 
-    static final JsonWriter<CardWithTags> CARD = cardWithTags -> Json.obj()
+    static final JsonWriter<CardWithTags> CARD = cardWithTags -> Json.object()
             .put("id", cardWithTags.card().id())
             .put("text", cardWithTags.card().text())
             .put("meaning", cardWithTags.card().meaning())
-            .put("tags", Json.arr().addAll(cardWithTags.tags()));
+            .put("tags", Json.array().addAll(cardWithTags.tags()));
 
     static final JsonWriter<List<CardWithTags>> CARDS = JsonWriter.list(CARD);
 
@@ -65,7 +65,7 @@ final class Codecs {
      * decides on — here, explicitly, rather than through whatever a library
      * would have picked.
      */
-    static final JsonWriter<Card> CARD_ROW = card -> Json.obj()
+    static final JsonWriter<Card> CARD_ROW = card -> Json.object()
             .put("id", card.id())
             .put("text", card.text())
             .put("meaning", card.meaning())
@@ -77,6 +77,6 @@ final class Codecs {
      */
     static final JsonReader<CardDraft> CARD_DRAFT = json -> new CardDraft(
             json.asObject().getString("text"),
-            json.asObject().optString("meaning", ""),
-            json.asObject().optString("tags", ""));
+            json.asObject().getString("meaning", ""),
+            json.asObject().getString("tags", ""));
 }

@@ -8,7 +8,7 @@ import org.jspecify.annotations.Nullable;
  * {@link App#beforeRoute} for matched routes with their path variables.
  *
  * <pre>{@code
- * app.beforeRoute("/admin/*", req -> req.sessionAttr("user") == null
+ * app.beforeRoute("/admin/*", req -> req.session().get("user") == null
  *         ? WebResponse.redirect("/login")     // answers here; the route never runs
  *         : null);                             // carry on
  * }</pre>

@@ -103,7 +103,7 @@ public final class JettyServer implements WebServer {
 
     /**
      * Whether to install an HTTP session handler. On by default, because
-     * {@code req.setSessionAttr(...)} and {@code req.flash(...)} need one.
+     * {@code req.session().set(...)} and {@code req.flash(...)} need one.
      */
     public JettyServer sessions(boolean sessions) {
         this.sessions = sessions;

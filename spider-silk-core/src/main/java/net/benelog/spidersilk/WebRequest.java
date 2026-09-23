@@ -29,19 +29,36 @@ import org.jspecify.annotations.Nullable;
 
 import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.json.JsonReader;
+import net.benelog.spidersilk.json.JsonValue;
 
 /**
  * The request side of a handler: what was asked for, and the session it was
  * asked in. The answer is the {@link WebResponse} the handler returns.
  *
  * <p>Reading is the whole of it, with one deliberate exception: the session.
- * {@link #setSessionAttr(String, Object)} and {@link #flash(String, String)} write,
+ * {@link #session()} and {@link #flash(String, String)} write,
  * because a session outlives the response and cannot be a value returned from
  * one. Cookies are the other half of that split — the ones the client sent are
  * read here, the ones the server sets belong to {@link WebResponse}.
  *
- * <p>Type conversion happens only through explicit methods
- * ({@link #pathParamLong} and the like). No reflection.
+ * <p>A name says what an absent value does. A value the handler cannot do
+ * without is read by its plain name — {@link #param(String)},
+ * {@link #pathParam(String)}, {@link #file(String)} — and its absence is a 400.
+ * A value that may be missing is read by the same name with {@code OrNull} —
+ * {@link #paramOrNull(String)}, {@link #fileOrNull(String)} — or with a default
+ * as the last argument. {@link #header(String)}, {@link #cookie(String)}, and
+ * {@link WebSession#get(String)} are the exception, and answer null under the
+ * plain name: a request that sent no such header, carried no such cookie, or
+ * has no such attribute is the usual case for each of them, not a bad request.
+ * {@code JsonObject} follows the same rule.
+ *
+ * <p>Type conversion happens only through explicit methods. The request-wide
+ * {@link #param(String)} and the path variables have named forms for the
+ * common types — {@link #paramLong}, {@link #paramBoolean}, {@link #paramEnum},
+ * {@link #pathParamLong}, {@link #pathParamEnum}. Every source, the query string
+ * and the form body included, reads any other type through a parser such as
+ * {@code Integer::parseInt}: {@link #queryParam(String, java.util.function.Function)}
+ * is the form those two have. No reflection.
  */
 public final class WebRequest {
 
@@ -309,15 +326,21 @@ public final class WebRequest {
      * {@code /files/a/b.txt} and {@code ""} out of {@code /files}.
      *
      * @throws IllegalStateException if the route's pattern has no variable of
-     *         that name. That is a mismatch between the pattern and the handler
-     *         reading it, not bad input, so it is not the
+     *         that name, or if no route has matched yet — in a
+     *         {@link App#beforeRequest} filter, or for a 404. That is a mismatch
+     *         between the code and where it runs, not bad input, so it is not the
      *         {@code IllegalArgumentException} an application maps to a status.
      */
     public String pathParam(String name) {
         String value = pathParams.get(name);
         if (value == null) {
-            throw new IllegalStateException(
-                    "Path pattern has no such variable: {" + name + "}");
+            if (route == null && pathParams.isEmpty()) {
+                throw new IllegalStateException(("No route has matched this request, so there is no path"
+                        + " variable {%s}. A beforeRequest filter runs before routing; beforeRoute"
+                        + " runs after it and reads path variables.").formatted(name));
+            }
+            String pattern = route == null ? "Path pattern" : "Path pattern " + route.path();
+            throw new IllegalStateException(pattern + " has no such variable: {" + name + "}");
         }
         return value;
     }
@@ -792,7 +815,7 @@ public final class WebRequest {
      * <p>It parses the text {@link #body()} keeps, so a filter that read the
      * body first does not leave this with nothing to parse.
      */
-    public Json.JsonValue bodyJson() {
+    public JsonValue bodyJson() {
         try {
             return Json.parse(body());
         } catch (IllegalArgumentException e) {
@@ -809,7 +832,7 @@ public final class WebRequest {
      * matching the parameter parser contract. Other exceptions remain server errors.
      */
     public <T> T bodyJson(JsonReader<T> reader) {
-        Json.JsonValue json = bodyJson();
+        JsonValue json = bodyJson();
         try {
             return reader.read(json);
         } catch (IllegalArgumentException | DateTimeException e) {
@@ -871,7 +894,7 @@ public final class WebRequest {
      * app.post("/api/decks/{deckId}/cards", req -> {
      *     long deckId = req.pathParamLong("deckId");
      *     int imported = cardService.addAll(deckId, req.bodyNdjson(Codecs.NEW_CARD).toList());
-     *     return WebResponse.json(Json.obj().put("imported", imported));
+     *     return WebResponse.json(Json.object().put("imported", imported));
      * });
      * }</pre>
      *
@@ -1038,100 +1061,17 @@ public final class WebRequest {
     // ---- Session ----
 
     /**
-     * A session attribute, or null when there is no session or no such
-     * attribute. The type parameter is the caller's cast, so that
-     * {@code User user = req.sessionAttr("user")} reads as one line; a value of
-     * another type fails at that assignment, as it would with the cast written out.
-     *
-     * <p>{@link #sessionAttr(String, Class)} names the type instead, and fails at
-     * the read rather than at the assignment.
-     */
-    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
-    public <T> @Nullable T sessionAttr(String key) {
-        HttpSession session = req.getSession(false);
-        return session == null ? null : (T) session.getAttribute(key);
-    }
-
-    /**
-     * A session attribute of a named type, or null when there is no session or no
-     * such attribute.
+     * The session's attributes, read and written in one place.
      *
      * <pre>{@code
-     * User user = req.sessionAttr("user", User.class);
+     * req.session().set("user", user);
+     * User user = req.session().get("user", User.class);
      * }</pre>
      *
-     * <p>The cast is {@link Class#cast}, so a value of another type fails on this
-     * line, naming the key and both types, rather than on the assignment several
-     * lines away that {@link #sessionAttr(String)} fails on.
-     * {@code paramEnum(name, type)} takes a class for the same reason, and neither
-     * is reflection in the sense this framework avoids: the type is written at the
-     * call site.
-     *
-     * <p>A value of the wrong type is a mismatch between the line that wrote the
-     * session and the line that reads it, both of them the application's own, so
-     * it is an {@link IllegalStateException} and a 500 — the same answer
-     * {@link #pathParam(String)} gives an undeclared variable, and not the 400
-     * that a caller's bad input earns.
-     *
-     * <p>Writing is {@link #setSessionAttr(String, Object)}, under a name of its
-     * own, so no argument makes this call write instead of read. A literal
-     * {@code null} as the type is not a removal either: it throws, naming
-     * {@link #removeSessionAttr(String)}.
+     * <p>Asking for it starts no session: only {@link WebSession#set} does.
      */
-    public <T> @Nullable T sessionAttr(String key, Class<T> type) {
-        Objects.requireNonNull(type,
-                "type: sessionAttr(key, type) reads; removing an attribute is removeSessionAttr(key)");
-        HttpSession session = req.getSession(false);
-        Object value = session == null ? null : session.getAttribute(key);
-        if (value != null && !type.isInstance(value)) {
-            throw new IllegalStateException("Session attribute %s is a %s, not a %s"
-                    .formatted(key, value.getClass().getName(), type.getName()));
-        }
-        return type.cast(value);
-    }
-
-    /**
-     * Stores a session attribute, creating the session if there is none yet.
-     *
-     * <pre>{@code
-     * req.setSessionAttr("user", user);
-     * }</pre>
-     *
-     * <p>The write has a name of its own rather than sharing
-     * {@code sessionAttr} with the reads, so every value is stored as it is — a
-     * {@code Class} included — and no argument turns the call into a read.
-     *
-     * <p>A null value removes the attribute, which is what
-     * {@link HttpSession#setAttribute} does with one; {@link #flash(String, String)}
-     * follows the same rule. {@link #removeSessionAttr(String)} says the same
-     * thing by name, and does not create a session to remove from.
-     */
-    public void setSessionAttr(String key, @Nullable Object value) {
-        req.getSession(true).setAttribute(key, value);
-    }
-
-    /** Removes a session attribute. Does nothing, and creates no session, when there is none. */
-    public void removeSessionAttr(String key) {
-        HttpSession session = req.getSession(false);
-        if (session != null) {
-            session.removeAttribute(key);
-        }
-    }
-
-    /**
-     * Ends the session, so that everything in it is gone and the next request
-     * starts a new one. What logging out is.
-     *
-     * <p>Does nothing when there is no session, since a visitor who was never
-     * signed in has nothing to end. The request keeps working afterwards, but
-     * reading a session attribute through it answers null and writing one starts
-     * a session again, so a handler invalidates and then returns.
-     */
-    public void invalidateSession() {
-        HttpSession session = req.getSession(false);
-        if (session != null) {
-            session.invalidate();
-        }
+    public WebSession session() {
+        return new WebSession(req);
     }
 
     // ---- Flash (visible exactly once, on the request after a redirect) ----
@@ -1141,7 +1081,7 @@ public final class WebRequest {
      * {@link #flashed(String)} and is the only request that can.
      *
      * <p>A null value removes the key, as it does for
-     * {@link #setSessionAttr(String, Object)}: a handler withdraws a flash it set
+     * {@link WebSession#set(String, Object)}: a handler withdraws a flash it set
      * earlier in the same request by flashing null under that key. It withdraws
      * only what waits for the next request; a value this request received is
      * still what {@link #flashed(String)} answers. Withdrawing never creates a
@@ -1200,7 +1140,7 @@ public final class WebRequest {
     // ---- Errors ----
 
     /**
-     * Inside an {@link App#error(HttpStatus, Handler)} handler, the plain-text message
+     * Inside an {@link App#statusPage(HttpStatus, Handler)} handler, the plain-text message
      * the framework would have answered with. Null when the status came from a
      * handler rather than from the router or an {@link HttpException}.
      */

@@ -12,7 +12,7 @@ package net.benelog.spidersilk;
  *
  * <p>Only a route that completed normally reaches here: a response from a
  * {@link BeforeFilter}, from an {@link ExceptionHandler}, or from
- * {@link App#error(HttpStatus, Handler)} does not. A header every response has
+ * {@link App#statusPage(HttpStatus, Handler)} does not. A header every response has
  * to carry, such as a request id, belongs in a {@link ResponseFilter}, which
  * runs on those as well.
  */

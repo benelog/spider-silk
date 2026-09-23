@@ -46,7 +46,7 @@ import net.benelog.spidersilk.server.JettyServer;
  *
  * <p>An upgrade leaves servlet dispatch for good, so none of the framework
  * follows it: not the router, not {@code before}/{@code after}, not
- * {@code error(status, ...)}, not the request logger, not {@code routes()}, and
+ * {@code statusPage(status, ...)}, not the request logger, not {@code routes()}, and
  * not {@code WebTest}. That is why this is a module rather than a method on
  * {@code App} — a socket is Jetty's, and the module's name says so.
  *

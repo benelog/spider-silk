@@ -28,8 +28,8 @@ class RequestLoggerTest {
         assertThat(logged).singleElement().satisfies(completion -> {
             assertThat(completion.statusCode()).isEqualTo(202);
             assertThat(completion.response().status()).isEqualTo(HttpStatus.OK);
-            assertThat(completion.failed()).isFalse();
-            assertThat(completion.failure()).isNull();
+            assertThat(completion.writeFailed()).isFalse();
+            assertThat(completion.writeFailure()).isNull();
         });
     }
 
@@ -43,8 +43,8 @@ class RequestLoggerTest {
         assertThat(logged).singleElement().satisfies(completion -> {
             assertThat(completion.statusCode()).isEqualTo(500);
             assertThat(completion.response().status()).isEqualTo(HttpStatus.OK);
-            assertThat(completion.failed()).isTrue();
-            assertThat(completion.failure()).isSameAs(failure);
+            assertThat(completion.writeFailed()).isTrue();
+            assertThat(completion.writeFailure()).isSameAs(failure);
         });
     }
 
@@ -65,8 +65,8 @@ class RequestLoggerTest {
         });
         assertThat(logged).singleElement().satisfies(completion -> {
             assertThat(completion.statusCode()).isEqualTo(200);
-            assertThat(completion.failed()).isTrue();
-            assertThat(completion.failure()).isSameAs(failure);
+            assertThat(completion.writeFailed()).isTrue();
+            assertThat(completion.writeFailure()).isSameAs(failure);
         });
     }
 
@@ -92,7 +92,7 @@ class RequestLoggerTest {
         List<Integer> statuses = new ArrayList<>();
         App app = new App()
                 .requestLogger((req, completion) -> statuses.add(completion.statusCode()))
-                .error(HttpStatus.NOT_FOUND, req -> WebResponse.text("gone for good").status(HttpStatus.GONE))
+                .statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.text("gone for good").status(HttpStatus.GONE))
                 .get("/", req -> WebResponse.text("ok"));
 
         WebTest.test(app, client -> client.get("/missing"));
@@ -134,8 +134,8 @@ class RequestLoggerTest {
         assertThat(logged).singleElement().satisfies(completion -> {
             assertThat(completion.statusCode()).isEqualTo(500);
             assertThat(completion.threw()).isTrue();
-            assertThat(completion.exception()).isSameAs(thrown);
-            assertThat(completion.failed()).isFalse();
+            assertThat(completion.thrown()).isSameAs(thrown);
+            assertThat(completion.writeFailed()).isFalse();
         });
     }
 
@@ -156,7 +156,7 @@ class RequestLoggerTest {
 
         assertThat(logged).singleElement().satisfies(completion -> {
             assertThat(completion.statusCode()).isEqualTo(400);
-            assertThat(completion.exception()).isSameAs(thrown);
+            assertThat(completion.thrown()).isSameAs(thrown);
         });
     }
 
@@ -178,7 +178,7 @@ class RequestLoggerTest {
 
         assertThat(logged).hasSize(2).allSatisfy(completion -> {
             assertThat(completion.threw()).isFalse();
-            assertThat(completion.exception()).isNull();
+            assertThat(completion.thrown()).isNull();
         });
         assertThat(logged.get(0).statusCode()).isEqualTo(404);
     }
@@ -199,7 +199,7 @@ class RequestLoggerTest {
 
         assertThat(logged).singleElement().satisfies(completion -> {
             assertThat(completion.statusCode()).isEqualTo(500);
-            assertThat(completion.exception()).isSameAs(thrown);
+            assertThat(completion.thrown()).isSameAs(thrown);
         });
     }
 

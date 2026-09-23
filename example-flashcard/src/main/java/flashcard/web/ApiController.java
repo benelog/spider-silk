@@ -69,6 +69,6 @@ public class ApiController {
         long deckId = req.pathParamLong("deckId");
         deckService.getDeck(deckId);
         int imported = cardService.importCards(deckId, req.bodyNdjson(Codecs.CARD_DRAFT));
-        return WebResponse.json(Json.obj().put("imported", imported));
+        return WebResponse.json(Json.object().put("imported", imported));
     }
 }

@@ -19,7 +19,7 @@ import org.jspecify.annotations.Nullable;
  * app.get("/events", req -> WebResponse.sse(stream -> {
  *     while (stream.isOpen()) {
  *         stream.id(String.valueOf(counter.incrementAndGet()))
- *               .send("tick", Json.obj().put("at", now()).toJson());
+ *               .send("tick", Json.object().put("at", now()).toJson());
  *         Thread.sleep(1000);
  *     }
  * }));

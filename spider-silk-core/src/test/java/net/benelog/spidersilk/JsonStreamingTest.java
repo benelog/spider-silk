@@ -25,7 +25,7 @@ class JsonStreamingTest {
     }
 
     static final JsonWriter<Card> CARD =
-            card -> Json.obj().put("id", card.id()).put("text", card.text());
+            card -> Json.object().put("id", card.id()).put("text", card.text());
 
     static final JsonReader<Card> READ_CARD = json ->
             new Card(json.asObject().getLong("id"), json.asObject().getString("text"));
@@ -101,7 +101,7 @@ class JsonStreamingTest {
     @Test
     void bodyNdjsonReadsAValuePerLineAndSkipsBlankOnes() {
         App app = new App().post("/cards", req ->
-                WebResponse.json(Json.obj().put("imported", req.bodyNdjson(READ_CARD).count())));
+                WebResponse.json(Json.object().put("imported", req.bodyNdjson(READ_CARD).count())));
 
         WebTest.test(app, client -> assertThat(client.post("/cards", """
                 {"id":1,"text":"one"}
@@ -114,7 +114,7 @@ class JsonStreamingTest {
     @Test
     void aRejectedLineIsA400NamingTheLine() {
         App app = new App().post("/cards", req ->
-                WebResponse.json(Json.obj().put("imported", req.bodyNdjson(READ_CARD).count())));
+                WebResponse.json(Json.object().put("imported", req.bodyNdjson(READ_CARD).count())));
 
         WebTest.test(app, client -> {
             var response = client.post("/cards", """

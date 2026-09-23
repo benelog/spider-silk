@@ -4,7 +4,7 @@ package net.benelog.spidersilk;
  * A before-handler and the paths it applies to.
  *
  * <p>{@code path} is the pattern as it was written, which {@link PathPattern}
- * does not keep: it is what {@link App#guards()} reports.
+ * does not keep: it is what {@link App#hooks()} reports.
  */
 record BeforeEntry(String path, PathPattern pattern, BeforeFilter filter) {
 

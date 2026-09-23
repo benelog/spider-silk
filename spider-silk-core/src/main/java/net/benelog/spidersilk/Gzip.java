@@ -28,7 +28,7 @@ import org.jspecify.annotations.Nullable;
  * <p>Compression is a transform over the {@link WebResponse}, not a wrapper
  * around the servlet response. A body already in memory — {@link WebResponse.Text},
  * {@link WebResponse.Bytes} — is compressed there and then, so the length it
- * answers with is the length it sends. A {@link WebResponse.Stream} is
+ * answers with is the length it sends. A {@link WebResponse.Streamed} is
  * compressed as it is written, which is what keeps a large file out of memory;
  * its size is unknown beforehand, so {@link #minBytes(int)} does not apply to
  * one and its {@code Content-Length} is dropped.
@@ -134,7 +134,7 @@ public final class Gzip {
         return switch (response.body()) {
             case WebResponse.Text text -> compressed(varying, text.content());
             case WebResponse.Bytes bytes -> compressed(varying, bytes.data());
-            case WebResponse.Stream stream -> compressed(varying, stream.writer());
+            case WebResponse.Streamed stream -> compressed(varying, stream.writer());
             case WebResponse.Empty ignored -> varying;
             case WebResponse.Template ignored -> varying;
             case WebResponse.Sse ignored -> varying;
@@ -254,7 +254,7 @@ public final class Gzip {
      * uncompressed body announced no longer describes what is sent, so it goes.
      */
     private WebResponse compressed(WebResponse response, StreamWriter writer) {
-        return encoded(response.body(new WebResponse.Stream(out -> {
+        return encoded(response.body(new WebResponse.Streamed(out -> {
             // finish() writes the trailer but leaves the Deflater's native memory
             // to the Cleaner; close() is what ends it. Closing the servlet stream
             // is the container's business, so the shield absorbs that one call.

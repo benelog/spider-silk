@@ -139,7 +139,7 @@ class TestRequestTest {
     @Test
     void jsonBodyTakesATree() {
         WebRequest request = TestRequest.post("/api/decks")
-                .jsonBody(Json.obj().put("name", "Spanish"))
+                .jsonBody(Json.object().put("name", "Spanish"))
                 .build();
 
         assertThat(request.header("Content-Type")).isEqualTo("application/json");
@@ -148,7 +148,7 @@ class TestRequestTest {
 
     @Test
     void jsonBodyTakesTheApplicationsOwnWriter() {
-        JsonWriter<NewDeck> writer = deck -> Json.obj().put("name", deck.name());
+        JsonWriter<NewDeck> writer = deck -> Json.object().put("name", deck.name());
 
         WebRequest request = TestRequest.post("/api/decks")
                 .jsonBody(new NewDeck("Spanish"), writer)
@@ -320,25 +320,25 @@ class TestRequestTest {
 
     @Test
     void readsASessionAttributePutThereInAdvance() {
-        WebRequest request = TestRequest.get("/decks").sessionAttr("userId", 7L).build();
+        WebRequest request = TestRequest.get("/decks").session("userId", 7L).build();
 
-        assertThat((Long) request.sessionAttr("userId")).isEqualTo(7L);
+        assertThat((Long) request.session().get("userId")).isEqualTo(7L);
     }
 
     @Test
     void aRequestWithoutASessionAnswersNullRatherThanCreatingOne() {
         WebRequest request = TestRequest.get("/decks").build();
 
-        assertThat((Object) request.sessionAttr("userId")).isNull();
+        assertThat((Object) request.session().get("userId")).isNull();
     }
 
     @Test
     void whatAHandlerPutsInTheSessionIsReadableAfterwards() {
         WebRequest request = TestRequest.get("/decks").build();
 
-        request.setSessionAttr("userId", 7L);
+        request.session().set("userId", 7L);
 
-        assertThat((Long) request.sessionAttr("userId")).isEqualTo(7L);
+        assertThat((Long) request.session().get("userId")).isEqualTo(7L);
     }
 
     // ---- Uploads ----

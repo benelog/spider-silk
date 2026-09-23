@@ -9,22 +9,22 @@ import java.util.List;
  * <p>One method, so a writer is a lambda:
  *
  * <pre>{@code
- * static final JsonWriter<Deck> DECK = deck -> Json.obj()
+ * static final JsonWriter<Deck> DECK = deck -> Json.object()
  *         .put("id", deck.id())
  *         .put("name", deck.name());
  *
- * ctx.json(deck, DECK);
+ * WebResponse.json(deck, DECK);
  * }</pre>
  */
 @FunctionalInterface
 public interface JsonWriter<T> {
 
-    Json.JsonValue write(T value);
+    JsonValue write(T value);
 
     /** A writer for a list, built from the writer for one element. */
     static <T> JsonWriter<List<T>> list(JsonWriter<T> element) {
         return values -> {
-            Json.JsonArray array = Json.arr();
+            JsonArray array = Json.array();
             for (T value : values) {
                 array.add(element.write(value));
             }

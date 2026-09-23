@@ -1,39 +1,36 @@
 package net.benelog.spidersilk.json;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.jspecify.annotations.Nullable;
-
 /**
  * A JSON builder and parser without reflection.
  * Instead of mapping objects automatically, you state in code what goes out.
  *
  * <pre>{@code
- * String json = Json.obj()
+ * String json = Json.object()
  *         .put("id", deck.id())
  *         .put("name", deck.name())
- *         .put("tags", Json.arr().addAll(tagNames))
+ *         .put("tags", Json.array().addAll(tagNames))
  *         .toJson();
  *
- * Json.JsonValue body = Json.parse(text);
+ * JsonValue body = Json.parse(text);
  * String name = body.asObject().getString("name");
  * }</pre>
+ *
+ * <p>The tree is {@link JsonValue} and its three kinds, {@link JsonObject},
+ * {@link JsonArray}, and {@link JsonPrimitive}; this class is where a tree is
+ * started or parsed.
  */
 public final class Json {
 
     private Json() {
     }
 
-    public static JsonObject obj() {
+    /** An empty object, to be filled with {@link JsonObject#put}. */
+    public static JsonObject object() {
         return new JsonObject();
     }
 
-    public static JsonArray arr() {
+    /** An empty array, to be filled with {@link JsonArray#add}. */
+    public static JsonArray array() {
         return new JsonArray();
     }
 
@@ -51,350 +48,6 @@ public final class Json {
             throw parser.error("Trailing characters after the value");
         }
         return value;
-    }
-
-    /**
-     * What every accessor here throws: a missing key, a value of the wrong
-     * type, or text that is not JSON.
-     *
-     * <p>It is an {@link IllegalArgumentException}, so a {@link JsonReader}
-     * that throws that type for a rule of its own is rejected the same way, and
-     * {@code req.bodyJson(reader)} turns both into a 400. It is also a type of
-     * its own, so an application that maps {@code IllegalArgumentException} to
-     * a status can map this one to another: a body that failed to parse is a
-     * 400 whatever the application says a bad argument is.
-     */
-    public static final class JsonException extends IllegalArgumentException {
-
-        JsonException(String message) {
-            super(message);
-        }
-    }
-
-    public sealed interface JsonValue permits JsonObject, JsonArray, JsonPrimitive {
-
-        void write(StringBuilder sb);
-
-        default String toJson() {
-            StringBuilder sb = new StringBuilder();
-            write(sb);
-            return sb.toString();
-        }
-
-        default JsonObject asObject() {
-            if (this instanceof JsonObject object) {
-                return object;
-            }
-            throw new JsonException("Not a JSON object: " + toJson());
-        }
-
-        default JsonArray asArray() {
-            if (this instanceof JsonArray array) {
-                return array;
-            }
-            throw new JsonException("Not a JSON array: " + toJson());
-        }
-
-        default String asString() {
-            if (this instanceof JsonPrimitive primitive && primitive.value() instanceof String s) {
-                return s;
-            }
-            throw new JsonException("Not a JSON string: " + toJson());
-        }
-
-        /**
-         * The value as a {@code long}. A number with a fractional part is not
-         * one, and is rejected rather than truncated: {@code 1.5} is not 1.
-         * {@code 1e3} and {@code 2.0} are whole and read as 1000 and 2.
-         */
-        default long asLong() {
-            if (this instanceof JsonPrimitive primitive && primitive.value() instanceof Number n) {
-                if (n instanceof Long whole) {
-                    return whole;
-                }
-                double d = n.doubleValue();
-                if (d == Math.rint(d) && d >= -0x1p63 && d < 0x1p63) {
-                    return (long) d;
-                }
-                throw new JsonException("Not a JSON integer: " + toJson());
-            }
-            throw new JsonException("Not a JSON number: " + toJson());
-        }
-
-        default double asDouble() {
-            if (this instanceof JsonPrimitive primitive && primitive.value() instanceof Number n) {
-                return n.doubleValue();
-            }
-            throw new JsonException("Not a JSON number: " + toJson());
-        }
-
-        default boolean asBoolean() {
-            if (this instanceof JsonPrimitive primitive && primitive.value() instanceof Boolean b) {
-                return b;
-            }
-            throw new JsonException("Not a JSON boolean: " + toJson());
-        }
-
-        default boolean isNull() {
-            return this instanceof JsonPrimitive primitive && primitive.value() == null;
-        }
-
-        /** True for a JSON string, so a value of either type is told apart before it is read. */
-        default boolean isString() {
-            return this instanceof JsonPrimitive primitive && primitive.value() instanceof String;
-        }
-
-        /** True for a JSON number, whether it is whole or has a fractional part. */
-        default boolean isNumber() {
-            return this instanceof JsonPrimitive primitive && primitive.value() instanceof Number;
-        }
-
-        /** True for {@code true} and for {@code false}. */
-        default boolean isBoolean() {
-            return this instanceof JsonPrimitive primitive && primitive.value() instanceof Boolean;
-        }
-    }
-
-    /** A string, number, boolean, or null. */
-    public static final class JsonPrimitive implements JsonValue {
-
-        static final JsonPrimitive NULL = new JsonPrimitive(null);
-        static final JsonPrimitive TRUE = new JsonPrimitive(true);
-        static final JsonPrimitive FALSE = new JsonPrimitive(false);
-
-        private final @Nullable Object value;   // String | Long | Double | Boolean | null
-
-        JsonPrimitive(@Nullable Object value) {
-            this.value = value;
-        }
-
-        @Nullable Object value() {
-            return value;
-        }
-
-        @Override
-        public void write(StringBuilder sb) {
-            if (value instanceof String s) {
-                writeString(sb, s);
-            } else {
-                sb.append(value);   // null, true/false, numbers
-            }
-        }
-    }
-
-    /**
-     * Iterable, so an object whose keys are not known in advance reads with
-     * for-each: {@code for (var member : object)}, each member a
-     * {@link Map.Entry} of the key and its value.
-     *
-     * <p>Members keep the order they were put in, and a parsed object keeps
-     * document order.
-     */
-    public static final class JsonObject implements JsonValue, Iterable<Map.Entry<String, JsonValue>> {
-
-        private final Map<String, JsonValue> members = new LinkedHashMap<>();
-
-        public JsonObject put(String key, @Nullable String value) {
-            return put(key, value == null ? JsonPrimitive.NULL : new JsonPrimitive(value));
-        }
-
-        public JsonObject put(String key, long value) {
-            return put(key, new JsonPrimitive(value));
-        }
-
-        /** Throws {@link JsonException} for NaN and for an infinity, which JSON has no syntax for. */
-        public JsonObject put(String key, double value) {
-            return put(key, new JsonPrimitive(finite(value)));
-        }
-
-        public JsonObject put(String key, boolean value) {
-            return put(key, value ? JsonPrimitive.TRUE : JsonPrimitive.FALSE);
-        }
-
-        public JsonObject put(String key, @Nullable JsonValue value) {
-            members.put(key, value == null ? JsonPrimitive.NULL : value);
-            return this;
-        }
-
-        public JsonObject putNull(String key) {
-            return put(key, JsonPrimitive.NULL);
-        }
-
-        public boolean has(String key) {
-            return members.containsKey(key);
-        }
-
-        /** How many members the object has. */
-        public int size() {
-            return members.size();
-        }
-
-        /** The keys, in document order, as a list that cannot be modified. */
-        public List<String> keys() {
-            return List.copyOf(members.keySet());
-        }
-
-        /** Throws {@link JsonException} when the key is missing. */
-        public JsonValue get(String key) {
-            JsonValue value = members.get(key);
-            if (value == null) {
-                throw new JsonException("Missing key in JSON object: " + key);
-            }
-            return value;
-        }
-
-        public String getString(String key) {
-            return get(key).asString();
-        }
-
-        public long getLong(String key) {
-            return get(key).asLong();
-        }
-
-        public double getDouble(String key) {
-            return get(key).asDouble();
-        }
-
-        public boolean getBoolean(String key) {
-            return get(key).asBoolean();
-        }
-
-        public JsonObject getObject(String key) {
-            return get(key).asObject();
-        }
-
-        public JsonArray getArray(String key) {
-            return get(key).asArray();
-        }
-
-        /** Returns defaultValue when the key is missing or the value is null. */
-        public String optString(String key, String defaultValue) {
-            JsonValue value = members.get(key);
-            return value == null || value.isNull() ? defaultValue : value.asString();
-        }
-
-        /** Returns defaultValue when the key is missing or the value is null. */
-        public long optLong(String key, long defaultValue) {
-            JsonValue value = members.get(key);
-            return (value == null || value.isNull()) ? defaultValue : value.asLong();
-        }
-
-        /** Returns defaultValue when the key is missing or the value is null. */
-        public double optDouble(String key, double defaultValue) {
-            JsonValue value = members.get(key);
-            return (value == null || value.isNull()) ? defaultValue : value.asDouble();
-        }
-
-        /** Returns defaultValue when the key is missing or the value is null. */
-        public boolean optBoolean(String key, boolean defaultValue) {
-            JsonValue value = members.get(key);
-            return (value == null || value.isNull()) ? defaultValue : value.asBoolean();
-        }
-
-        /**
-         * Returns null when the key is missing or the value is JSON null, and
-         * throws {@link JsonException} when it is present and not an object.
-         */
-        public @Nullable JsonObject optObject(String key) {
-            JsonValue value = members.get(key);
-            return (value == null || value.isNull()) ? null : value.asObject();
-        }
-
-        /**
-         * Returns null when the key is missing or the value is JSON null, and
-         * throws {@link JsonException} when it is present and not an array.
-         */
-        public @Nullable JsonArray optArray(String key) {
-            JsonValue value = members.get(key);
-            return (value == null || value.isNull()) ? null : value.asArray();
-        }
-
-        /** Members in document order, read-only: setValue throws rather than reaching the object. */
-        @Override
-        public Iterator<Map.Entry<String, JsonValue>> iterator() {
-            return Collections.unmodifiableMap(members).entrySet().iterator();
-        }
-
-        @Override
-        public void write(StringBuilder sb) {
-            sb.append('{');
-            boolean first = true;
-            for (var entry : members.entrySet()) {
-                if (!first) {
-                    sb.append(',');
-                }
-                first = false;
-                writeString(sb, entry.getKey());
-                sb.append(':');
-                entry.getValue().write(sb);
-            }
-            sb.append('}');
-        }
-    }
-
-    /** Iterable, so a parsed array reads with for-each: {@code for (JsonValue v : array)}. */
-    public static final class JsonArray implements JsonValue, Iterable<JsonValue> {
-
-        private final List<JsonValue> values = new ArrayList<>();
-
-        public JsonArray add(@Nullable String value) {
-            return add(value == null ? JsonPrimitive.NULL : new JsonPrimitive(value));
-        }
-
-        public JsonArray add(long value) {
-            return add(new JsonPrimitive(value));
-        }
-
-        /** Throws {@link JsonException} for NaN and for an infinity, which JSON has no syntax for. */
-        public JsonArray add(double value) {
-            return add(new JsonPrimitive(finite(value)));
-        }
-
-        public JsonArray add(boolean value) {
-            return add(value ? JsonPrimitive.TRUE : JsonPrimitive.FALSE);
-        }
-
-        public JsonArray add(@Nullable JsonValue value) {
-            values.add(value == null ? JsonPrimitive.NULL : value);
-            return this;
-        }
-
-        public JsonArray addAll(Iterable<String> strings) {
-            for (String s : strings) {
-                add(s);
-            }
-            return this;
-        }
-
-        public int size() {
-            return values.size();
-        }
-
-        public JsonValue get(int index) {
-            return values.get(index);
-        }
-
-        public List<JsonValue> values() {
-            return List.copyOf(values);
-        }
-
-        /** Elements in order, read-only: remove throws rather than reaching the array. */
-        @Override
-        public Iterator<JsonValue> iterator() {
-            return Collections.unmodifiableList(values).iterator();
-        }
-
-        @Override
-        public void write(StringBuilder sb) {
-            sb.append('[');
-            for (int i = 0; i < values.size(); i++) {
-                if (i > 0) {
-                    sb.append(',');
-                }
-                values.get(i).write(sb);
-            }
-            sb.append(']');
-        }
     }
 
     /**

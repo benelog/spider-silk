@@ -6,6 +6,9 @@ import java.util.Objects;
 
 import net.benelog.spidersilk.Route;
 import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonArray;
+import net.benelog.spidersilk.json.JsonObject;
+import net.benelog.spidersilk.json.JsonValue;
 
 /**
  * {@link net.benelog.spidersilk.App#routes()} as an OpenAPI 3.1 document.
@@ -74,10 +77,10 @@ public final class OpenApi {
      *
      * @throws IllegalArgumentException if a route's path contains a bare wildcard
      */
-    public static Json.JsonValue document(String title, String version, List<Route> routes) {
+    public static JsonValue document(String title, String version, List<Route> routes) {
         Objects.requireNonNull(title, "title");
         Objects.requireNonNull(version, "version");
-        Json.JsonObject paths = Json.obj();
+        JsonObject paths = Json.object();
         for (Route route : Objects.requireNonNull(routes, "routes")) {
             String pattern = route.path();
             String path = template(pattern);
@@ -87,13 +90,13 @@ public final class OpenApi {
                                 + pattern + ". Name the tail as {name*}, or leave the route out of"
                                 + " the list passed here.");
             }
-            Json.JsonObject operations = paths.has(path) ? paths.getObject(path) : Json.obj();
+            JsonObject operations = paths.has(path) ? paths.getObject(path) : Json.object();
             paths.put(path, operations.put(route.method().toLowerCase(Locale.ROOT),
                     operation(pattern, route.description())));
         }
-        return Json.obj()
+        return Json.object()
                 .put("openapi", OPENAPI_VERSION)
-                .put("info", Json.obj().put("title", title).put("version", version))
+                .put("info", Json.object().put("title", title).put("version", version))
                 .put("paths", paths);
     }
 
@@ -118,22 +121,22 @@ public final class OpenApi {
     }
 
     /** One operation: its summary, its path parameters, and the 200 every path answers with. */
-    private static Json.JsonObject operation(String path, String description) {
-        Json.JsonObject operation = Json.obj();
+    private static JsonObject operation(String path, String description) {
+        JsonObject operation = Json.object();
         if (!description.isEmpty()) {
             operation.put("summary", description);
         }
-        Json.JsonArray parameters = pathParameters(path);
+        JsonArray parameters = pathParameters(path);
         if (parameters.size() > 0) {
             operation.put("parameters", parameters);
         }
         return operation.put("responses",
-                Json.obj().put("200", Json.obj().put("description", "OK")));
+                Json.object().put("200", Json.object().put("description", "OK")));
     }
 
     /** Every {@code {name}} in the pattern, which OpenAPI requires to be declared. */
-    private static Json.JsonArray pathParameters(String path) {
-        Json.JsonArray parameters = Json.arr();
+    private static JsonArray pathParameters(String path) {
+        JsonArray parameters = Json.array();
         for (String segment : path.split("/", -1)) {
             if (isTail(segment)) {
                 parameters.add(parameter(segment.substring(1, segment.length() - 2))
@@ -146,11 +149,11 @@ public final class OpenApi {
     }
 
     /** One required path parameter of type string, which is all a pattern says. */
-    private static Json.JsonObject parameter(String name) {
-        return Json.obj()
+    private static JsonObject parameter(String name) {
+        return Json.object()
                 .put("name", name)
                 .put("in", "path")
                 .put("required", true)
-                .put("schema", Json.obj().put("type", "string"));
+                .put("schema", Json.object().put("type", "string"));
     }
 }

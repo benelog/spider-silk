@@ -54,7 +54,7 @@ public final class App {
     final List<ResponseFilter> responseFilters = new ArrayList<>();
     final LinkedHashMap<Class<? extends Exception>, ExceptionHandler<? extends Exception>> exceptionHandlers =
             new LinkedHashMap<>();
-    final Map<HttpStatus, Handler> errorHandlers = new LinkedHashMap<>();
+    final Map<HttpStatus, Handler> statusPages = new LinkedHashMap<>();
     final Set<SseStream> openStreams = ConcurrentHashMap.newKeySet();
 
     volatile @Nullable TemplateRenderer templates;
@@ -289,7 +289,7 @@ public final class App {
      * A per-exception-type handler. The handler for the most specific type the
      * exception is an instance of runs, whatever order the handlers were
      * registered in: with handlers for {@code IllegalArgumentException} and for
-     * {@code Json.JsonException}, a body that failed to parse reaches the second
+     * {@code JsonException}, a body that failed to parse reaches the second
      * one. Registering a type twice replaces the first handler.
      */
     public <E extends Exception> App exception(Class<E> type, ExceptionHandler<E> handler) {
@@ -307,7 +307,7 @@ public final class App {
      * {@code WebResponse.empty(HttpStatus.NOT_FOUND)}.
      *
      * <pre>{@code
-     * app.error(HttpStatus.NOT_FOUND,
+     * app.statusPage(HttpStatus.NOT_FOUND,
      *         req -> WebResponse.template("not-found", Map.of("path", req.path())));
      * }</pre>
      *
@@ -315,9 +315,9 @@ public final class App {
      * returns keeps the headers the framework had already worked out, and answers
      * with the registered status unless it sets one of its own.
      */
-    public App error(HttpStatus status, Handler handler) {
+    public App statusPage(HttpStatus status, Handler handler) {
         register(() -> {
-            errorHandlers.put(Objects.requireNonNull(status, "status"),
+            statusPages.put(Objects.requireNonNull(status, "status"),
                     Objects.requireNonNull(handler, "handler"));
         });
         return this;
@@ -327,11 +327,11 @@ public final class App {
      * Everything registered that runs around a route rather than being one:
      * the {@link #beforeRequest}, {@link #beforeRoute}, and {@link #afterRoute} filters, the
      * {@link #responseFilter} filters, and the
-     * {@link #error(HttpStatus, Handler)} bodies. It answers "which guard
+     * {@link #statusPage(HttpStatus, Handler)} bodies. It answers "which filter
      * covers this path", which {@link #routes()} holds no part of.
      *
      * <p>Grouped by when it runs — request filters, before-route filters, after-route filters,
-     * then the error handlers, then the response filters — and within each group
+     * then the status pages, then the response filters — and within each group
      * in registration order, which is the order they run in.
      *
      * <p>A filter's coverage is a pattern and not a path, and it is reported as
@@ -339,23 +339,23 @@ public final class App {
      * {@code "/admin"} along with everything under it, and the no-path
      * overloads report the {@code "/*"} they register. Matching a request
      * against those patterns is the dispatcher's job, not this list's; an audit
-     * of which paths a guard leaves open is built on top of the list, the way
+     * of which paths a filter leaves open is built on top of the list, the way
      * an OpenAPI export is built on {@link #routes()}.
      *
      * <p>The {@link #exception(Class, ExceptionHandler)} handlers are not here:
      * an exception handler is scoped to a type, so no path or status describes
      * where it applies.
      */
-    public List<Guard> guards() {
-        List<Guard> guards = new ArrayList<>(
+    public List<Hook> hooks() {
+        List<Hook> hooks = new ArrayList<>(
                 requestFilters.size() + beforeFilters.size() + afterFilters.size()
-                        + errorHandlers.size() + responseFilters.size());
-        requestFilters.forEach(entry -> guards.add(new Guard.BeforeRequest(entry.path())));
-        beforeFilters.forEach(entry -> guards.add(new Guard.BeforeRoute(entry.path())));
-        afterFilters.forEach(entry -> guards.add(new Guard.AfterRoute(entry.path())));
-        errorHandlers.keySet().forEach(status -> guards.add(new Guard.Error(status)));
-        responseFilters.forEach(filter -> guards.add(new Guard.ResponseFilter()));
-        return List.copyOf(guards);
+                        + statusPages.size() + responseFilters.size());
+        requestFilters.forEach(entry -> hooks.add(new Hook.BeforeRequest(entry.path())));
+        beforeFilters.forEach(entry -> hooks.add(new Hook.BeforeRoute(entry.path())));
+        afterFilters.forEach(entry -> hooks.add(new Hook.AfterRoute(entry.path())));
+        statusPages.keySet().forEach(status -> hooks.add(new Hook.StatusPage(status)));
+        responseFilters.forEach(filter -> hooks.add(new Hook.EveryResponse()));
+        return List.copyOf(hooks);
     }
 
     /**
@@ -564,7 +564,7 @@ public final class App {
         synchronized (registrationLock) {
             deployments++;
             return new Deployment(router.copy(), requestFilters, beforeFilters, afterFilters, responseFilters, exceptionHandlers,
-                    errorHandlers, staticFiles, requestLogger, cors, gzip, securityHeaders);
+                    statusPages, staticFiles, requestLogger, cors, gzip, securityHeaders);
         }
     }
 
@@ -610,8 +610,12 @@ public final class App {
         return requireStarted().port();
     }
 
-    /** The running server, for implementation-specific access. */
-    public WebServer server() {
+    /**
+     * The running server, for implementation-specific access. Named apart from
+     * {@link #server(WebServerFactory)}, which chooses the server before start,
+     * because this one exists only once {@link #start(int)} has returned.
+     */
+    public WebServer runningServer() {
         return requireStarted();
     }
 

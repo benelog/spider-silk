@@ -7,8 +7,8 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** {@code app.guards()}: the filters and error handlers read back beside the routes. */
-class GuardIntrospectionTest {
+/** {@code app.hooks()}: the filters and status pages read back beside the routes. */
+class HookIntrospectionTest {
 
     private final Handler noop = req -> null;
     private final BeforeFilter passBefore = req -> null;
@@ -19,18 +19,18 @@ class GuardIntrospectionTest {
         App app = new App()
                 .afterRoute("/api/*", passAfter)
                 .beforeRoute("/admin/*", passBefore)
-                .error(HttpStatus.NOT_FOUND, noop)
+                .statusPage(HttpStatus.NOT_FOUND, noop)
                 .responseFilter((req, res) -> null)
                 .beforeRoute("/api/*", passBefore)
-                .error(HttpStatus.INTERNAL_SERVER_ERROR, noop);
+                .statusPage(HttpStatus.INTERNAL_SERVER_ERROR, noop);
 
-        assertThat(app.guards()).isEqualTo(List.of(
-                new Guard.BeforeRoute("/admin/*"),
-                new Guard.BeforeRoute("/api/*"),
-                new Guard.AfterRoute("/api/*"),
-                new Guard.Error(HttpStatus.NOT_FOUND),
-                new Guard.Error(HttpStatus.INTERNAL_SERVER_ERROR),
-                new Guard.ResponseFilter()));
+        assertThat(app.hooks()).isEqualTo(List.of(
+                new Hook.BeforeRoute("/admin/*"),
+                new Hook.BeforeRoute("/api/*"),
+                new Hook.AfterRoute("/api/*"),
+                new Hook.StatusPage(HttpStatus.NOT_FOUND),
+                new Hook.StatusPage(HttpStatus.INTERNAL_SERVER_ERROR),
+                new Hook.EveryResponse()));
     }
 
     /** The coverage is the pattern as written, not the paths it expands to. */
@@ -38,7 +38,7 @@ class GuardIntrospectionTest {
     void thePatternIsReportedAsItWasRegistered() {
         App app = new App().beforeRoute("/decks/{deckId}/*", passBefore);
 
-        assertThat(app.guards()).isEqualTo(List.of(new Guard.BeforeRoute("/decks/{deckId}/*")));
+        assertThat(app.hooks()).isEqualTo(List.of(new Hook.BeforeRoute("/decks/{deckId}/*")));
     }
 
     /** The whole-app overloads register "/*", so that is what they report. */
@@ -46,9 +46,9 @@ class GuardIntrospectionTest {
     void theNoPathOverloadsReportTheStarTheyRegister() {
         App app = new App().beforeRoute(passBefore).afterRoute(passAfter);
 
-        assertThat(app.guards()).isEqualTo(List.of(
-                new Guard.BeforeRoute("/*"),
-                new Guard.AfterRoute("/*")));
+        assertThat(app.hooks()).isEqualTo(List.of(
+                new Hook.BeforeRoute("/*"),
+                new Hook.AfterRoute("/*")));
     }
 
     /** A group's filter reports the resolved path, the way its routes do. */
@@ -58,31 +58,31 @@ class GuardIntrospectionTest {
                 .beforeRoute(passBefore)
                 .beforeRoute("/{deckId}/cards", passBefore));
 
-        assertThat(app.guards()).isEqualTo(List.of(
-                new Guard.BeforeRoute("/api/decks/*"),
-                new Guard.BeforeRoute("/api/decks/{deckId}/cards")));
+        assertThat(app.hooks()).isEqualTo(List.of(
+                new Hook.BeforeRoute("/api/decks/*"),
+                new Hook.BeforeRoute("/api/decks/{deckId}/cards")));
     }
 
     /** One body per status: registering a second replaces the first, and stays in its place. */
     @Test
     void aStatusRegisteredTwiceIsListedOnce() {
         App app = new App()
-                .error(HttpStatus.NOT_FOUND, noop)
-                .error(HttpStatus.FORBIDDEN, noop)
-                .error(HttpStatus.NOT_FOUND, noop);
+                .statusPage(HttpStatus.NOT_FOUND, noop)
+                .statusPage(HttpStatus.FORBIDDEN, noop)
+                .statusPage(HttpStatus.NOT_FOUND, noop);
 
-        assertThat(app.guards()).isEqualTo(List.of(
-                new Guard.Error(HttpStatus.NOT_FOUND),
-                new Guard.Error(HttpStatus.FORBIDDEN)));
+        assertThat(app.hooks()).isEqualTo(List.of(
+                new Hook.StatusPage(HttpStatus.NOT_FOUND),
+                new Hook.StatusPage(HttpStatus.FORBIDDEN)));
     }
 
     /** An exception handler is scoped to a type, so no path or status describes it. */
     @Test
-    void exceptionHandlersAreNotGuards() {
+    void exceptionHandlersAreNotHooks() {
         App app = new App().exception(IllegalStateException.class,
                 (req, e) -> WebResponse.text(e.getMessage()));
 
-        assertThat(app.guards()).isEmpty();
+        assertThat(app.hooks()).isEmpty();
     }
 
     /** CORS, gzip, and the security headers are named on App, not registered as filters. */
@@ -93,23 +93,23 @@ class GuardIntrospectionTest {
                 .gzip()
                 .securityHeaders();
 
-        assertThat(app.guards()).isEmpty();
+        assertThat(app.hooks()).isEmpty();
     }
 
     @Test
     void theSnapshotIsImmutableAndTakenPerCall() {
         App app = new App().beforeRoute("/admin/*", passBefore);
-        List<Guard> before = app.guards();
+        List<Hook> before = app.hooks();
 
         app.afterRoute("/admin/*", passAfter);
 
         assertThat(before).hasSize(1);
-        assertThat(app.guards()).hasSize(2);
-        assertThatThrownBy(() -> before.add(new Guard.BeforeRoute("/nowhere")))
+        assertThat(app.hooks()).hasSize(2);
+        assertThatThrownBy(() -> before.add(new Hook.BeforeRoute("/nowhere")))
                 .isInstanceOf(UnsupportedOperationException.class);
     }
 
-    /** Guards are a list of their own: routes() is left exactly as it was. */
+    /** Hooks are a list of their own: routes() is left exactly as it was. */
     @Test
     void routesAreUnaffected() {
         App app = new App()

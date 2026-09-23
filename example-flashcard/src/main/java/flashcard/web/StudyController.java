@@ -28,20 +28,20 @@ public class StudyController {
 
     public WebResponse startDeckStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
-        req.setSessionAttr(SESSION_KEY,
+        req.session().set(SESSION_KEY,
                 studyService.startDeckSession(req.pathParamLong("deckId"), direction));
         return WebResponse.redirect("/study");
     }
 
     public WebResponse startTodayStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
-        req.setSessionAttr(SESSION_KEY, studyService.startTodaySession(direction));
+        req.session().set(SESSION_KEY, studyService.startTodaySession(direction));
         return WebResponse.redirect("/study");
     }
 
     public WebResponse startSmartStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
-        req.setSessionAttr(SESSION_KEY, studyService.startSmartSession(
+        req.session().set(SESSION_KEY, studyService.startSmartSession(
                 smartDeckService.getSmartDeck(req.pathParamLong("smartDeckId")), direction));
         return WebResponse.redirect("/study");
     }
@@ -49,7 +49,7 @@ public class StudyController {
     public WebResponse startPresetStudy(WebRequest req) {
         StudyDirection direction = req.paramEnum("direction", StudyDirection.class);
         SmartCondition condition = req.pathParamEnum("condition", SmartCondition.class);
-        req.setSessionAttr(SESSION_KEY, studyService.startPresetSession(condition, direction));
+        req.session().set(SESSION_KEY, studyService.startPresetSession(condition, direction));
         return WebResponse.redirect("/study");
     }
 
@@ -92,11 +92,11 @@ public class StudyController {
     }
 
     public WebResponse finish(WebRequest req) {
-        req.removeSessionAttr(SESSION_KEY);
+        req.session().remove(SESSION_KEY);
         return WebResponse.redirect("/");
     }
 
     private StudySession current(WebRequest req) {
-        return req.sessionAttr(SESSION_KEY);
+        return req.session().get(SESSION_KEY);
     }
 }

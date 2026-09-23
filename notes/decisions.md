@@ -71,8 +71,12 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 53 | Explicit filter scope, parameter absence, response mutation, and transmission results | ✅ shipped |
 | 54 | Nullness in the signatures: JSpecify `@NullMarked` packages, checked by NullAway | ✅ shipped |
 | 55 | Releases go to Maven Central from a tag, as one signed bundle | ✅ shipped |
+| 56 | `req.route()` reports the route that answered | ✅ shipped |
+| 57 | An `HttpException` passes a broader exception handler by | ✅ shipped |
+| 58 | `RequestCompletion` carries the exception the request was answered for | ✅ shipped |
+| 59 | A pass over names a first reader guesses wrong, taken as a breaking 1.2.0 | ✅ shipped |
 
-Fifty-seven of the fifty-eight shipped.
+Fifty-eight of the fifty-nine shipped.
 The remaining one is 15b, which is a decision rather than a gap.
 One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
 
@@ -1392,6 +1396,61 @@ A logger that records failures reads the two together, since an exception answer
 
 Rejected: a separate `app.onException(...)` observer.
 It would be a second lambda called once per request that threw, with the request, the exception, and no answer, and the logger already has all three.
+Decision 59 renamed the two components `thrown` and `writeFailure`.
+
+## 59 · Names a first reader guesses wrong
+
+### 59. A pass over the public names, taken as a breaking 1.2.0
+
+A review read the public surface the way a first-time reader does, and listed every name whose meaning that reader would guess wrong.
+Each was renamed outright, with no deprecated alias left behind.
+The framework has one user, so a deprecation cycle would carry every old name for a release without anyone to migrate, and every break is a compile error whose fix is visible in the error.
+
+**Absence has one naming rule.**
+The plain name requires the value, a default as the last argument makes it optional, and `OrNull` answers null.
+`WebRequest` already followed it, and `JsonObject` followed org.json's `opt*` instead, so one framework spoke two dialects.
+`optString(key, default)` is now `getString(key, default)`, and `optObject(key)` is `getObjectOrNull(key)`.
+`header`, `cookie`, and a session read keep null under the plain name, because their absence is the usual case, and the javadoc of `WebRequest` states the exception once.
+
+**`Guard` became `Hook`.**
+`app.guards()` listed a response filter and a status page, and neither guards anything.
+`ResponseFilter`'s own javadoc said so.
+Two of its records also collided with names a reader already holds: `Guard.ResponseFilter` with the `ResponseFilter` type, and `Guard.Error` with `java.lang.Error`, which needed a suppressed warning.
+`Hook` names where they run, around a route, and each record names the scope it carries: `Hook.StatusPage(status)` and `Hook.EveryResponse()`.
+
+**`error(status, handler)` became `statusPage(status, handler)`.**
+Beside `exception(Type, handler)`, `error` did not say that it fills the body of a response that already has its status.
+`statusPage` says what it produces.
+
+**`RequestCompletion` names each exception for its half of the request.**
+`failure` and `exception` were synonyms, and `failed()` and `threw()` were too, so the javadoc had to spend a paragraph telling them apart.
+They are now `writeFailure` and `thrown`, with `writeFailed()` and `threw()`.
+
+**`WebResponse.json(String)` became `rawJson(String)`.**
+`json(message)` compiled and sent `hi` for a message of `hi`, which is not JSON.
+The name now says that the text is JSON already, and `json` takes only a tree or a value with its writer.
+
+**The session is one object.**
+`sessionAttr`, `setSessionAttr`, `removeSessionAttr`, and `invalidateSession` sat among forty request methods under four different shapes of name.
+`req.session()` answers a `WebSession` with `get`, `set`, `remove`, and `invalidate`, and asking for it starts no session.
+Flash stays on the request: it is delivered to a request, and the session is only where it waits.
+`TestRequest.sessionAttr(key, value)` became `session(key, value)` to match.
+
+**The JSON types are top-level.**
+`Json.JsonValue` repeated its own name at every call site, and `Json.obj()` and `Json.arr()` abbreviated what the types spell out.
+`JsonValue`, `JsonObject`, `JsonArray`, `JsonPrimitive`, and `JsonException` are now types of their own in `net.benelog.spidersilk.json`, and the factories are `Json.object()` and `Json.array()`.
+
+**Smaller names.**
+The `Stream` body record became `Streamed`, since `bodyNdjson` hands out a `java.util.stream.Stream` and a file using both had to qualify one.
+`app.server()`, the running server, became `runningServer()`, apart from `server(factory)`, which chooses one before start.
+
+**Two failures now say what went wrong.**
+A path pattern with whitespace is rejected at registration, because `get("List decks", "/decks", handler)` compiled and registered a route nothing could reach.
+`pathParam` in a `beforeRequest` filter used to report that the pattern had no such variable, and now reports that no route has matched yet.
+
+Rejected: filling in `queryParamLong`, `formParamBoolean`, and the rest of the grid.
+The parser overload already covers every type on every source, and the named forms stay where they are used most, on `param` and the path variables.
+The rule is written down instead, in `WebRequest`'s javadoc and on the request page.
 
 ## Rejected — decisions, with the reason
 

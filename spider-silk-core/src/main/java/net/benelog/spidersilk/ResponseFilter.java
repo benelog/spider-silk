@@ -17,7 +17,7 @@ package net.benelog.spidersilk;
  * <p>Return the response passed in to leave it unchanged. Returning null is a
  * programming error. A replacement carrying a
  * template body is rendered like any other. An exception thrown here is routed
- * to {@link App#exception} and {@link App#error(HttpStatus, Handler)}, and the
+ * to {@link App#exception} and {@link App#statusPage(HttpStatus, Handler)}, and the
  * answer to it is not filtered again.
  *
  * <p>It shapes a response and does not guard a request: a response filter runs

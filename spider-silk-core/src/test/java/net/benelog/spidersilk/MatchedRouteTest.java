@@ -71,7 +71,7 @@ class MatchedRouteTest {
                     seen.add("exception:" + req.route().path());
                     return WebResponse.text("mapped").status(HttpStatus.CONFLICT);
                 })
-                .error(HttpStatus.NOT_FOUND, req -> {
+                .statusPage(HttpStatus.NOT_FOUND, req -> {
                     seen.add("error:" + req.route());
                     return WebResponse.text("filled");
                 });

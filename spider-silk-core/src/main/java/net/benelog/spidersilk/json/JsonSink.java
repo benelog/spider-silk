@@ -7,7 +7,7 @@ package net.benelog.spidersilk.json;
  * what the next value is.
  *
  * <p>Each value is serialized and handed to the socket as it arrives, which is
- * the point: a million rows never exist as one {@code Json.JsonArray}. Build one
+ * the point: a million rows never exist as one {@code JsonArray}. Build one
  * element at a time and the memory an answer costs is its largest element, not
  * the whole of it.
  *
@@ -25,7 +25,7 @@ package net.benelog.spidersilk.json;
 public interface JsonSink {
 
     /** Writes one value, already built as a tree. */
-    void write(Json.JsonValue value);
+    void write(JsonValue value);
 
     /** Writes one value through a hand-written writer — the usual form. */
     default <T> void write(T value, JsonWriter<T> writer) {

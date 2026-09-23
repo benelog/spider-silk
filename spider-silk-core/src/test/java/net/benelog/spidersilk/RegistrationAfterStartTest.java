@@ -60,7 +60,7 @@ class RegistrationAfterStartTest {
         assertThatIllegalStateException()
                 .isThrownBy(() -> app.exception(Exception.class, (req, e) -> WebResponse.empty()));
         assertThatIllegalStateException()
-                .isThrownBy(() -> app.error(HttpStatus.NOT_FOUND, req -> WebResponse.text("gone")));
+                .isThrownBy(() -> app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.text("gone")));
         assertThatIllegalStateException()
                 .isThrownBy(() -> app.gzip());
         assertThatIllegalStateException()
@@ -276,7 +276,7 @@ class RegistrationAfterStartTest {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (System.nanoTime() < deadline) {
             try {
-                app.server();
+                app.runningServer();
             } catch (IllegalStateException stopped) {
                 return;
             }

@@ -477,7 +477,7 @@ public class AppServlet extends HttpServlet {
      * Answers for what a handler, a filter, or a template threw.
      *
      * <p>An {@link HttpException} is a status the handler chose, not a failure:
-     * it answers with that status and goes to {@link App#error} for its body, and
+     * it answers with that status and goes to {@link App#statusPage} for its body, and
      * a handler registered for a broader type never sees it. Any other exception
      * goes to the most specific handler registered for it, or to a 500, and is
      * kept on the request for the request logger to report either way.
@@ -552,7 +552,7 @@ public class AppServlet extends HttpServlet {
 
     /**
      * Fills in the body of an error response nobody wrote one for, preferring a
-     * handler registered through {@link App#error(HttpStatus, Handler)}. Whatever the
+     * handler registered through {@link App#statusPage(HttpStatus, Handler)}. Whatever the
      * handler returns keeps the headers already set — the {@code Allow} of a 405,
      * say — and answers with the registered status unless it set one itself.
      */
@@ -561,7 +561,7 @@ public class AppServlet extends HttpServlet {
             return response;
         }
         HttpStatus status = response.status();
-        Handler handler = deployment.errorHandlers().get(status);
+        Handler handler = deployment.statusPages().get(status);
         if (handler != null) {
             try {
                 WebResponse answered = renderTemplate(required(handler.handle(request),
@@ -603,7 +603,7 @@ public class AppServlet extends HttpServlet {
             case WebResponse.Text text ->
                     writeBytes(text.content().getBytes(StandardCharsets.UTF_8), res, head);
             case WebResponse.Bytes bytes -> writeBytes(bytes.data(), res, head);
-            case WebResponse.Stream stream -> writeStream(stream.writer(), res, head);
+            case WebResponse.Streamed stream -> writeStream(stream.writer(), res, head);
             case WebResponse.Sse sse -> writeSse(sse.writer(), res, head);
             case WebResponse.Raw raw -> writeRaw(raw.writer(), req, res, head);
             case WebResponse.Template ignored -> throw new IllegalStateException(

@@ -15,14 +15,15 @@ import org.eclipse.jetty.util.VirtualThreads;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 
 import net.benelog.spidersilk.App;
-import net.benelog.spidersilk.HttpStatus;
 import net.benelog.spidersilk.AppServlet;
+import net.benelog.spidersilk.HttpStatus;
 import net.benelog.spidersilk.Route;
 import net.benelog.spidersilk.StaticFiles;
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
 import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.json.JsonCodec;
+import net.benelog.spidersilk.json.JsonObject;
 import net.benelog.spidersilk.json.JsonReader;
 import net.benelog.spidersilk.json.JsonWriter;
 import net.benelog.spidersilk.openapi.OpenApi;
@@ -125,11 +126,11 @@ class ReadmeSnippets {
 
         // JSON API — you state in code what goes out (no automatic serialization)
         app.get("/api/decks", req -> WebResponse.json(
-                Json.arr().add(Json.obj().put("id", 1L).put("name", "English"))));
+                Json.array().add(Json.object().put("id", 1L).put("name", "English"))));
 
         app.post("/api/decks", req -> {
             String name = req.bodyJson().asObject().getString("name");
-            return WebResponse.json(Json.obj().put("name", name)).status(HttpStatus.CREATED);
+            return WebResponse.json(Json.object().put("name", name)).status(HttpStatus.CREATED);
         });
 
         // Routes sharing a prefix — the group is an argument, not ambient state
@@ -144,7 +145,7 @@ class ReadmeSnippets {
                 (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
         // One place for a styled error page, whatever produced the status
-        app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
+        app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
     }
 
     // ---- blocks 3, 5, 7: the three shapes a handler comes in ----
@@ -163,7 +164,7 @@ class ReadmeSnippets {
     // ---- blocks 8, 9: filters ----
 
     void filters(App app) {
-        app.beforeRoute("/admin/*", req -> req.sessionAttr("user") == null
+        app.beforeRoute("/admin/*", req -> req.session().get("user") == null
                 ? WebResponse.redirect("/login")    // answers here, so the route handler never runs
                 : null);                            // carry on
 
@@ -174,7 +175,7 @@ class ReadmeSnippets {
 
     // ---- blocks 10, 11: JSON writers and readers ----
 
-    static final JsonWriter<Deck> DECK = deck -> Json.obj()
+    static final JsonWriter<Deck> DECK = deck -> Json.object()
             .put("id", deck.id())
             .put("name", deck.name());
 
@@ -218,11 +219,11 @@ class ReadmeSnippets {
     // ---- sessions ----
 
     void sessions(WebRequest req, User user) {
-        req.setSessionAttr("user", user);                 // creates the session if there is none yet
-        User read = req.sessionAttr("user", User.class);  // null when absent
-        User same = req.sessionAttr("user");              // the same read, cast by the caller
-        req.removeSessionAttr("user");                    // creates no session to remove from
-        req.invalidateSession();
+        req.session().set("user", user);                 // creates the session if there is none yet
+        User read = req.session().get("user", User.class);  // null when absent
+        User same = req.session().get("user");              // the same read, cast by the caller
+        req.session().remove("user");                    // creates no session to remove from
+        req.session().invalidate();
     }
 
     // ---- block 14: Server-Sent Events ----
@@ -233,7 +234,7 @@ class ReadmeSnippets {
             return WebResponse.sse(stream -> {
                 while (stream.isOpen()) {
                     stream.id(String.valueOf(revision))
-                          .send("due", Json.obj().put("count", service.due(deckId)).toJson());
+                          .send("due", Json.object().put("count", service.due(deckId)).toJson());
                     Thread.sleep(1000);
                 }
             });
@@ -262,10 +263,10 @@ class ReadmeSnippets {
         app.get("/_routes",
                 req -> WebResponse.template("routes", Map.of("routes", app.routes())));
 
-        Json.JsonObject paths = Json.obj();
+        JsonObject paths = Json.object();
         for (Route route : app.routes()) {
-            paths.put(route.path(), Json.obj().put(route.method().toLowerCase(Locale.ROOT),
-                    Json.obj()));
+            paths.put(route.path(), Json.object().put(route.method().toLowerCase(Locale.ROOT),
+                    Json.object()));
         }
     }
 
@@ -306,7 +307,7 @@ class ReadmeSnippets {
 
     void assertOnTheAnswer() throws Exception {
         WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
-                .jsonBody(Json.obj().put("name", "Spanish"))
+                .jsonBody(Json.object().put("name", "Spanish"))
                 .build());
 
         assertThat(response.status()).isEqualTo(HttpStatus.CREATED);

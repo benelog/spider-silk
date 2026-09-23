@@ -28,26 +28,26 @@ class SessionAttributesTest {
 
     @Test
     void aNamedTypeReadsBackAsThatType() {
-        WebRequest request = TestRequest.get("/me").sessionAttr("user", new User("Ada")).build();
+        WebRequest request = TestRequest.get("/me").session("user", new User("Ada")).build();
 
-        assertThat(request.sessionAttr("user", User.class)).isEqualTo(new User("Ada"));
+        assertThat(request.session().get("user", User.class)).isEqualTo(new User("Ada"));
     }
 
     /** Absence is null, not a failure, whichever form asked. */
     @Test
     void anAbsentAttributeIsNull() {
-        assertThat(TestRequest.get("/me").build().sessionAttr("user", User.class)).isNull();
-        assertThat(TestRequest.get("/me").sessionAttr("other", "x").build()
-                .sessionAttr("user", User.class)).isNull();
+        assertThat(TestRequest.get("/me").build().session().get("user", User.class)).isNull();
+        assertThat(TestRequest.get("/me").session("other", "x").build()
+                .session().get("user", User.class)).isNull();
     }
 
     /** The failure lands on the read, and names the key and both types. */
     @Test
     void aValueOfAnotherTypeFailsWhereItIsRead() {
-        WebRequest request = TestRequest.get("/me").sessionAttr("user", "Ada").build();
+        WebRequest request = TestRequest.get("/me").session("user", "Ada").build();
 
         assertThatIllegalStateException()
-                .isThrownBy(() -> request.sessionAttr("user", User.class))
+                .isThrownBy(() -> request.session().get("user", User.class))
                 .withMessageContaining("user")
                 .withMessageContaining("java.lang.String")
                 .withMessageContaining(User.class.getName());
@@ -58,10 +58,10 @@ class SessionAttributesTest {
     void aWrongTypeIsAServerError() {
         App app = new App()
                 .beforeRoute(req -> {
-                    req.setSessionAttr("user", "Ada");
+                    req.session().set("user", "Ada");
                     return null;
                 })
-                .get("/me", req -> WebResponse.text(req.sessionAttr("user", User.class).name()));
+                .get("/me", req -> WebResponse.text(req.session().get("user", User.class).name()));
 
         WebTest.test(app, client -> assertThat(client.get("/me").statusCode()).isEqualTo(500));
     }
@@ -71,26 +71,41 @@ class SessionAttributesTest {
     void aClassIsStoredWithoutACast() {
         WebRequest request = TestRequest.get("/me").build();
 
-        request.setSessionAttr("kind", User.class);
+        request.session().set("kind", User.class);
 
-        assertThat(request.sessionAttr("kind", Class.class)).isEqualTo(User.class);
+        assertThat(request.session().get("kind", Class.class)).isEqualTo(User.class);
     }
 
     /** A null type is not a removal in disguise: it fails, and leaves the attribute where it was. */
     @Test
     void aNullTypeFailsAndNamesTheRemoval() {
-        WebRequest request = TestRequest.get("/me").sessionAttr("user", new User("Ada")).build();
+        WebRequest request = TestRequest.get("/me").session("user", new User("Ada")).build();
 
         assertThatNullPointerException()
-                .isThrownBy(() -> request.sessionAttr("user", null))
-                .withMessageContaining("removeSessionAttr");
-        assertThat(request.sessionAttr("user", User.class)).isEqualTo(new User("Ada"));
+                .isThrownBy(() -> request.session().get("user", null))
+                .withMessageContaining("remove(key)");
+        assertThat(request.session().get("user", User.class)).isEqualTo(new User("Ada"));
+    }
+
+    /** Asking for the session and reading from it start none: only a write does. */
+    @Test
+    void readingWithoutASessionStartsNone() {
+        App app = new App().get("/me", req -> {
+            Object user = req.session().get("user");
+            return WebResponse.text(String.valueOf(user));
+        });
+
+        WebTest.test(app, client -> {
+            var response = client.get("/me");
+            assertThat(response.body()).isEqualTo("null");
+            assertThat(response.headers().firstValue("Set-Cookie")).isEmpty();
+        });
     }
 
     @Test
     void removingAnAttributeWithoutASessionStartsNone() {
         App app = new App().post("/forget", req -> {
-            req.removeSessionAttr("user");
+            req.session().remove("user");
             return WebResponse.noContent();
         });
 
@@ -99,11 +114,11 @@ class SessionAttributesTest {
 
     @Test
     void invalidatingASessionRemovesWhatWasInIt() {
-        WebRequest request = TestRequest.get("/logout").sessionAttr("user", new User("Ada")).build();
+        WebRequest request = TestRequest.get("/logout").session("user", new User("Ada")).build();
 
-        request.invalidateSession();
+        request.session().invalidate();
 
-        assertThat(request.sessionAttr("user", User.class)).isNull();
+        assertThat(request.session().get("user", User.class)).isNull();
     }
 
     /** Logging out twice is not an error: there is simply no session to end. */
@@ -111,9 +126,9 @@ class SessionAttributesTest {
     void invalidatingWithoutASessionDoesNothing() {
         WebRequest request = TestRequest.get("/logout").build();
 
-        request.invalidateSession();
+        request.session().invalidate();
 
-        assertThat(request.sessionAttr("user", User.class)).isNull();
+        assertThat(request.session().get("user", User.class)).isNull();
     }
 
     /** The visitor's session cookie stops working: the next request signs in again. */
@@ -121,15 +136,15 @@ class SessionAttributesTest {
     void aLoggedOutVisitorStartsANewSession() {
         App app = new App()
                 .post("/login", req -> {
-                    req.setSessionAttr("user", new User("Ada"));
+                    req.session().set("user", new User("Ada"));
                     return WebResponse.noContent();
                 })
                 .get("/me", req -> {
-                    User user = req.sessionAttr("user", User.class);
+                    User user = req.session().get("user", User.class);
                     return WebResponse.text(user == null ? "nobody" : user.name());
                 })
                 .post("/logout", req -> {
-                    req.invalidateSession();
+                    req.session().invalidate();
                     return WebResponse.noContent();
                 });
 
@@ -153,14 +168,14 @@ class SessionAttributesTest {
     void writingNullRemovesASessionAttribute() {
         App app = new App()
                 .post("/login", req -> {
-                    req.setSessionAttr("user", new User("Ada"));
+                    req.session().set("user", new User("Ada"));
                     return WebResponse.noContent();
                 })
                 .post("/forget", req -> {
-                    req.setSessionAttr("user", null);
+                    req.session().set("user", null);
                     return WebResponse.noContent();
                 })
-                .get("/me", req -> WebResponse.text(String.valueOf(req.sessionAttr("user", User.class))));
+                .get("/me", req -> WebResponse.text(String.valueOf(req.session().get("user", User.class))));
 
         WebTest.test(app, client -> {
             client.post("/login");
@@ -170,7 +185,7 @@ class SessionAttributesTest {
         });
     }
 
-    /** Flashing null follows setSessionAttr: it withdraws a flash set earlier in the same request. */
+    /** Flashing null follows session().set: it withdraws a flash set earlier in the same request. */
     @Test
     void flashingNullWithdrawsAFlashSetEarlier() {
         App app = new App()

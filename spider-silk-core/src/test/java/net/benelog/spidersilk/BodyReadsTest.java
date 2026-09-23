@@ -121,7 +121,7 @@ class BodyReadsTest {
         WebTest.test(app, client -> {
             var response = client.send(builder -> builder
                     .uri(URI.create(client.url("/decks")))
-                    .POST(HttpRequest.BodyPublishers.ofString(Json.obj().put("name", "x").toJson())));
+                    .POST(HttpRequest.BodyPublishers.ofString(Json.object().put("name", "x").toJson())));
 
             assertThat(response.statusCode()).isEqualTo(500);
         });

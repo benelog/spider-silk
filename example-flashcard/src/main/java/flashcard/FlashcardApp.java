@@ -21,14 +21,14 @@ import org.springframework.core.io.support.EncodedResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 
 import net.benelog.spidersilk.App;
-import net.benelog.spidersilk.Route;
 import net.benelog.spidersilk.Cors;
 import net.benelog.spidersilk.HttpStatus;
 import net.benelog.spidersilk.JteTemplates;
+import net.benelog.spidersilk.Route;
 import net.benelog.spidersilk.SecurityHeaders;
 import net.benelog.spidersilk.TemplateRenderer;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonException;
 import net.benelog.spidersilk.openapi.OpenApi;
 import net.benelog.spidersilk.server.JettyServer;
 
@@ -121,7 +121,7 @@ public class FlashcardApp {
                 (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
         // A body that failed to parse is a 400, not one of the 404s above. The
         // more specific type wins whatever the order, so this line may sit here.
-        app.exception(Json.JsonException.class,
+        app.exception(JsonException.class,
                 (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
         registerRoutes(app, context);

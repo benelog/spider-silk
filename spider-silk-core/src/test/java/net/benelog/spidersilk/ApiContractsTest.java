@@ -36,6 +36,68 @@ class ApiContractsTest {
         });
     }
 
+    /** A description passed where the path goes fails at registration, instead of registering a route nothing reaches. */
+    @Test
+    void aPathWithWhitespaceIsRejectedAtRegistration() {
+        App app = new App();
+
+        assertThatThrownBy(() -> app.get("List the decks", "/decks", req -> WebResponse.text("decks")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("List the decks")
+                .hasMessageContaining("get(path, description, handler)");
+        assertThatThrownBy(() -> app.beforeRoute("/admin /*", req -> null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** A before-request filter reading a path variable is told that routing has not happened yet. */
+    @Test
+    void aPathVariableReadBeforeRoutingNamesWhy() {
+        App app = new App()
+                .beforeRequest(req -> WebResponse.text(req.pathParam("deckId")))
+                .get("/decks/{deckId}", req -> WebResponse.text(req.pathParam("deckId")));
+        List<Exception> thrown = new ArrayList<>();
+        app.exception(IllegalStateException.class, (req, e) -> {
+            thrown.add(e);
+            return WebResponse.text("failed").status(HttpStatus.INTERNAL_SERVER_ERROR);
+        });
+
+        WebTest.test(app, client -> assertThat(client.get("/decks/7").statusCode()).isEqualTo(500));
+
+        assertThat(thrown).singleElement().satisfies(e -> assertThat(e.getMessage())
+                .contains("{deckId}")
+                .contains("beforeRequest filter runs before routing"));
+    }
+
+    /** A route that reads a variable its own pattern lacks is told which pattern it is. */
+    @Test
+    void anUndeclaredPathVariableNamesThePattern() {
+        App app = new App().get("/decks/{deckId}", req -> WebResponse.text(req.pathParam("id")));
+        List<Exception> thrown = new ArrayList<>();
+        app.exception(IllegalStateException.class, (req, e) -> {
+            thrown.add(e);
+            return WebResponse.text("failed").status(HttpStatus.INTERNAL_SERVER_ERROR);
+        });
+
+        WebTest.test(app, client -> client.get("/decks/7"));
+
+        assertThat(thrown).singleElement().satisfies(e -> assertThat(e.getMessage())
+                .isEqualTo("Path pattern /decks/{deckId} has no such variable: {id}"));
+    }
+
+    /** rawJson sends the text as it is; a Java string meant as a JSON value goes through a tree. */
+    @Test
+    void rawJsonIsSentAsItIsAndJsonBuildsFromATree() {
+        App app = new App()
+                .get("/raw", req -> WebResponse.rawJson("{\"status\":\"up\"}"))
+                .get("/tree", req -> WebResponse.json(net.benelog.spidersilk.json.Json.object().put("message", "hi")));
+
+        WebTest.test(app, client -> {
+            assertThat(client.get("/raw").body()).isEqualTo("{\"status\":\"up\"}");
+            assertThat(client.get("/raw").headers().firstValue("Content-Type")).contains("application/json");
+            assertThat(client.get("/tree").body()).isEqualTo("{\"message\":\"hi\"}");
+        });
+    }
+
     @Test
     void requiredSourceReadsRejectAbsenceAndOptionalReadsPreserveIt() {
         WebRequest queryOnly = TestRequest.post("/").queryParam("q", "query").build();
@@ -82,7 +144,7 @@ class ApiContractsTest {
         AtomicInteger handled = new AtomicInteger();
         App app = new App()
                 .beforeRequest(req -> WebResponse.empty(HttpStatus.FORBIDDEN))
-                .error(HttpStatus.FORBIDDEN, req -> WebResponse.text("denied"))
+                .statusPage(HttpStatus.FORBIDDEN, req -> WebResponse.text("denied"))
                 .responseFilter((req, res) -> res.header("X-Filtered", "yes"))
                 .securityHeaders()
                 .get("/route", req -> {
@@ -123,8 +185,8 @@ class ApiContractsTest {
             client.get("/outside");
         });
         assertThat(visited).containsExactly("request", "7");
-        assertThat(app.guards()).containsExactly(
-                new Guard.BeforeRequest("/api/*"), new Guard.BeforeRoute("/api/*"));
+        assertThat(app.hooks()).containsExactly(
+                new Hook.BeforeRequest("/api/*"), new Hook.BeforeRoute("/api/*"));
     }
 
     @Test
@@ -133,7 +195,7 @@ class ApiContractsTest {
             throw new IllegalArgumentException("rejected");
         }).exception(IllegalArgumentException.class,
                 (req, e) -> WebResponse.empty(HttpStatus.BAD_REQUEST))
-                .error(HttpStatus.BAD_REQUEST, req -> WebResponse.text("bad request"));
+                .statusPage(HttpStatus.BAD_REQUEST, req -> WebResponse.text("bad request"));
         WebTest.test(app, client -> {
             var response = client.get("/style.css");
             assertThat(response.statusCode()).isEqualTo(400);
@@ -148,7 +210,7 @@ class ApiContractsTest {
                 .responseFilter((req, res) -> {
                     calls.incrementAndGet();
                     return null;
-                }).error(HttpStatus.INTERNAL_SERVER_ERROR, req -> WebResponse.text("broken filter"));
+                }).statusPage(HttpStatus.INTERNAL_SERVER_ERROR, req -> WebResponse.text("broken filter"));
         WebTest.test(app, client -> {
             var response = client.get("/");
             assertThat(response.statusCode()).isEqualTo(500);

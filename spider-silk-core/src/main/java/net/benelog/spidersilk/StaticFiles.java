@@ -210,7 +210,7 @@ public final class StaticFiles {
             body.discard();
         }
         response = response
-                .body(new WebResponse.Stream(out -> {
+                .body(new WebResponse.Streamed(out -> {
                     try (InputStream in = body.open()) {
                         in.transferTo(out);
                     }

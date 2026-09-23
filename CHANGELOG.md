@@ -7,6 +7,38 @@ The release workflow copies a version's section into its GitHub Release, so a se
 
 ## [Unreleased]
 
+This release renames the public names a first-time reader guessed wrong.
+Every rename is a compile error whose fix is the new name, and no deprecated alias is left behind.
+
+### Added
+
+- `spider-silk-core`: `req.session()` answers a `WebSession`, with `get(key)`, `get(key, type)`, `set(key, value)`, `remove(key)`, and `invalidate()`.
+  Asking for it starts no session.
+- `spider-silk-core`: `JsonObject.getString(key, default)`, `getLong(key, default)`, `getDouble(key, default)`, `getBoolean(key, default)`, `getObjectOrNull(key)`, and `getArrayOrNull(key)`.
+  They follow the absence rule `WebRequest` follows: the plain name requires the value, a default as the last argument makes it optional, and `OrNull` answers null.
+
+### Changed
+
+- `spider-silk-core`: `WebResponse.json(String)` is `WebResponse.rawJson(String)`.
+  `json` now takes only a `JsonValue` or a value with its `JsonWriter`, so a Java string can no longer be sent as a JSON document by mistake.
+- `spider-silk-core`: `app.error(status, handler)` is `app.statusPage(status, handler)`.
+- `spider-silk-core`: `app.guards()` is `app.hooks()`, and the sealed `Guard` is `Hook`.
+  `Guard.Error` is `Hook.StatusPage`, and `Guard.ResponseFilter` is `Hook.EveryResponse`.
+- `spider-silk-core`: `RequestCompletion.failure()` and `failed()` are `writeFailure()` and `writeFailed()`, and `exception()` is `thrown()`.
+- `spider-silk-core`: `Json.JsonValue`, `Json.JsonObject`, `Json.JsonArray`, `Json.JsonPrimitive`, and `Json.JsonException` are top-level types in `net.benelog.spidersilk.json`.
+  `Json.obj()` and `Json.arr()` are `Json.object()` and `Json.array()`.
+- `spider-silk-core`: the `WebResponse.Stream` body is `WebResponse.Streamed`.
+- `spider-silk-core`: `app.server()`, the running server, is `app.runningServer()`.
+- `spider-silk-core`: a path pattern containing whitespace is rejected at registration with an `IllegalArgumentException`.
+  A description passed where the path goes used to register a route nothing could reach.
+- `spider-silk-core`: `pathParam` read before routing, in a `beforeRequest` filter, says that no route has matched yet, and an undeclared variable names the route's pattern.
+- `spider-silk-test`: `TestRequest.sessionAttr(key, value)` is `TestRequest.session(key, value)`.
+
+### Removed
+
+- `spider-silk-core`: `WebRequest.sessionAttr`, `setSessionAttr`, `removeSessionAttr`, and `invalidateSession`, replaced by `req.session()`.
+- `spider-silk-core`: `JsonObject.optString`, `optLong`, `optDouble`, `optBoolean`, `optObject`, and `optArray`, replaced by the getters above.
+
 ## [1.1.0] - 2026-09-17
 
 ### Added

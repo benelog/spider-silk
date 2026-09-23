@@ -58,7 +58,7 @@ class ResponseFilterTest {
     void theFilterSeesTheErrorBodyAndTheRenderedTemplate() {
         List<String> seen = new ArrayList<>();
         App app = new App()
-                .error(HttpStatus.NOT_FOUND, req -> WebResponse.text("styled 404"))
+                .statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.text("styled 404"))
                 .get("/page", req -> WebResponse.template("greeting", Map.of("name", "Silk")))
                 .responseFilter((req, res) -> {
                     seen.add(switch (res.body()) {
@@ -131,7 +131,7 @@ class ResponseFilterTest {
         AtomicInteger calls = new AtomicInteger();
         App app = new App()
                 .get("/", req -> WebResponse.text("ok"))
-                .error(HttpStatus.INTERNAL_SERVER_ERROR, req -> WebResponse.text("styled 500"))
+                .statusPage(HttpStatus.INTERNAL_SERVER_ERROR, req -> WebResponse.text("styled 500"))
                 .responseFilter((req, res) -> {
                     calls.incrementAndGet();
                     throw new IllegalStateException("filter broke");

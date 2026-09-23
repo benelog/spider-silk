@@ -19,7 +19,7 @@ class JsonSeamTest {
     }
 
     static final JsonWriter<Deck> DECK =
-            deck -> Json.obj().put("id", deck.id()).put("name", deck.name());
+            deck -> Json.object().put("id", deck.id()).put("name", deck.name());
 
     static final JsonReader<String> DECK_NAME = json -> json.asObject().getString("name");
 

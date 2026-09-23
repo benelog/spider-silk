@@ -16,7 +16,7 @@ class ContentNegotiationTest {
     /** The app the negotiation tests ask: HTML for a browser, JSON for a client. */
     private static App negotiating() {
         return new App().get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
-            case "application/json" -> WebResponse.json("[]");
+            case "application/json" -> WebResponse.rawJson("[]");
             default -> WebResponse.html("<h1>Decks</h1>");
         });
     }

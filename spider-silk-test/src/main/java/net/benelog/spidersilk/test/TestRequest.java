@@ -23,6 +23,7 @@ import org.jspecify.annotations.Nullable;
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
 import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonValue;
 import net.benelog.spidersilk.json.JsonWriter;
 
 /**
@@ -33,7 +34,7 @@ import net.benelog.spidersilk.json.JsonWriter;
  * @Test
  * void createDeckRespondsWith201() {
  *     WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
- *             .jsonBody(Json.obj().put("name", "Spanish"))
+ *             .jsonBody(Json.object().put("name", "Spanish"))
  *             .build());
  *
  *     assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
@@ -211,10 +212,10 @@ public final class TestRequest {
      * handler reads it with rather than in escaped quotes:
      *
      * <pre>{@code
-     * TestRequest.post("/api/decks").jsonBody(Json.obj().put("name", "Spanish"))
+     * TestRequest.post("/api/decks").jsonBody(Json.object().put("name", "Spanish"))
      * }</pre>
      */
-    public TestRequest jsonBody(Json.JsonValue json) {
+    public TestRequest jsonBody(JsonValue json) {
         return jsonBody(json.toJson());
     }
 
@@ -223,7 +224,7 @@ public final class TestRequest {
      * the handler agree on the wire format by construction:
      *
      * <pre>{@code
-     * static final JsonWriter<NewDeck> NEW_DECK = deck -> Json.obj().put("name", deck.name());
+     * static final JsonWriter<NewDeck> NEW_DECK = deck -> Json.object().put("name", deck.name());
      *
      * TestRequest.post("/api/decks").jsonBody(new NewDeck("Spanish"), NEW_DECK)
      * }</pre>
@@ -257,10 +258,10 @@ public final class TestRequest {
 
     /**
      * A session attribute already in place, as if an earlier request had put it
-     * there. Reading one back is {@code req.sessionAttr(key)}; a request built
+     * there. Reading one back is {@code req.session().get(key)}; a request built
      * without any of these has no session until the handler asks for one.
      */
-    public TestRequest sessionAttr(String key, Object value) {
+    public TestRequest session(String key, Object value) {
         if (session == null) {
             session = new StubServletRequest.StubSession();
         }
@@ -272,8 +273,8 @@ public final class TestRequest {
 
     /**
      * The request to hand a handler. What the handler leaves in the session is
-     * readable afterwards through {@code sessionAttr(key)} on the request this
-     * returns.
+     * readable afterwards through {@code session().get(key)} on the request
+     * this returns.
      */
     public WebRequest build() {
         Map<String, List<String>> headerCopy = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);

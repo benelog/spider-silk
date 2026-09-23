@@ -9,6 +9,7 @@ import net.benelog.spidersilk.HttpException;
 import net.benelog.spidersilk.HttpStatus;
 import net.benelog.spidersilk.WebResponse;
 import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonArray;
 import net.benelog.spidersilk.test.TestRequest;
 
 import flashcard.repository.CardRepository;
@@ -42,7 +43,7 @@ class ApiControllerTest extends RepositoryTestSupport {
 
         WebResponse response = controller.listDecks(TestRequest.get("/api/decks").build());
 
-        Json.JsonArray decks = Json.parse(body(response)).asArray();
+        JsonArray decks = Json.parse(body(response)).asArray();
         assertThat(decks).hasSize(1);
         assertThat(decks.get(0).asObject().getString("name")).isEqualTo("English");
         assertThat(decks.get(0).asObject().getLong("cardCount")).isEqualTo(0);
@@ -51,7 +52,7 @@ class ApiControllerTest extends RepositoryTestSupport {
     @Test
     void createDeckRespondsWith201AndLocation() {
         WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
-                .jsonBody(Json.obj().put("name", "Spanish"))
+                .jsonBody(Json.object().put("name", "Spanish"))
                 .build());
 
         assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
@@ -74,7 +75,7 @@ class ApiControllerTest extends RepositoryTestSupport {
     void createDeckRejectsABodyWithoutANameWith400() {
         assertThatExceptionOfType(HttpException.class)
                 .isThrownBy(() -> controller.createDeck(TestRequest.post("/api/decks")
-                        .jsonBody(Json.obj().put("title", "Spanish"))
+                        .jsonBody(Json.object().put("title", "Spanish"))
                         .build()))
                 .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
@@ -144,7 +145,7 @@ class ApiControllerTest extends RepositoryTestSupport {
     /** A streamed body is produced by running its writer, which is what the servlet does. */
     private static String streamedBody(WebResponse response) throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ((WebResponse.Stream) response.body()).writer().write(out);
+        ((WebResponse.Streamed) response.body()).writer().write(out);
         return out.toString(StandardCharsets.UTF_8);
     }
 }

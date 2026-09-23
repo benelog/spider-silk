@@ -31,6 +31,7 @@ final class PathPattern {
     private final @Nullable String tailName;
 
     PathPattern(String pattern) {
+        rejectWhitespace(pattern);
         String[] parsed = split(pattern);
         for (int i = 0; i < parsed.length - 1; i++) {
             if (parsed[i].equals("*")) {
@@ -46,6 +47,23 @@ final class PathPattern {
         this.tailName = last == null ? null : tailVariableName(last);
         this.matchesRest = last != null && (last.equals("*") || tailName != null);
         this.segments = matchesRest ? Arrays.copyOf(parsed, parsed.length - 1) : parsed;
+    }
+
+    /**
+     * A pattern never holds whitespace, since a request path cannot: a space in
+     * a URL arrives percent-encoded. Registering one is almost always a
+     * description passed where the path goes — {@code app.get("List decks",
+     * "/decks", handler)} — and without this check it would register a route
+     * nothing can reach, and compile.
+     */
+    private static void rejectWhitespace(String pattern) {
+        for (int i = 0; i < pattern.length(); i++) {
+            if (Character.isWhitespace(pattern.charAt(i))) {
+                throw new IllegalArgumentException(("A path pattern has no whitespace: \"%s\"."
+                        + " With a description, the path comes first: get(path, description, handler).")
+                        .formatted(pattern));
+            }
+        }
     }
 
     /** Splits a path into segments. A trailing slash is ignored. */

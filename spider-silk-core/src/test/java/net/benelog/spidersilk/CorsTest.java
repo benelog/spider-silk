@@ -20,8 +20,8 @@ class CorsTest {
 
     private static App api() {
         return new App()
-                .get("/api/decks", req -> WebResponse.json("[]"))
-                .post("/api/decks", req -> WebResponse.json("{}"));
+                .get("/api/decks", req -> WebResponse.rawJson("[]"))
+                .post("/api/decks", req -> WebResponse.rawJson("{}"));
     }
 
     // ---- The preflight ----

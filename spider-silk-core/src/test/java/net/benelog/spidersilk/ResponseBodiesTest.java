@@ -109,7 +109,7 @@ class ResponseBodiesTest {
             case WebResponse.Text text -> text.content();
             case WebResponse.Bytes bytes -> bytes.data().length + " bytes";
             case WebResponse.Template template -> "template " + template.name();
-            case WebResponse.Stream ignored -> "a stream";
+            case WebResponse.Streamed ignored -> "a stream";
             case WebResponse.Sse ignored -> "an event stream";
             case WebResponse.Raw ignored -> "written by hand";
         };

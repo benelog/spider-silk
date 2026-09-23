@@ -5,6 +5,7 @@ import java.net.http.HttpResponse;
 import org.junit.jupiter.api.Test;
 
 import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonException;
 import net.benelog.spidersilk.test.WebTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -84,7 +85,7 @@ class ExceptionHandlersTest {
                 })
                 .exception(IllegalArgumentException.class,
                         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND))
-                .exception(Json.JsonException.class,
+                .exception(JsonException.class,
                         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
         WebTest.test(app, client -> {
@@ -98,7 +99,7 @@ class ExceptionHandlersTest {
     /**
      * An HttpException is a status a handler chose, not something that went
      * wrong. A catch-all registered for what goes wrong must not turn a
-     * deliberate 404 into its 500, and the body still comes from error(status).
+     * deliberate 404 into its 500, and the body still comes from statusPage(status).
      */
     @Test
     void anHttpExceptionPassesACatchAllHandlerByAndReachesTheErrorHandler() {
@@ -109,7 +110,7 @@ class ExceptionHandlersTest {
                 .exception(RuntimeException.class,
                         (req, e) -> WebResponse.text("caught: " + e.getMessage())
                                 .status(HttpStatus.INTERNAL_SERVER_ERROR))
-                .error(HttpStatus.NOT_FOUND,
+                .statusPage(HttpStatus.NOT_FOUND,
                         req -> WebResponse.text("missing: " + req.errorMessage()));
 
         WebTest.test(app, client -> {

@@ -9,7 +9,7 @@ import java.util.List;
  *
  * <p>A reader rejects bad input by throwing {@link IllegalArgumentException}
  * or {@link java.time.DateTimeException}, as parameter parsers do.
- * {@code Json}'s own accessors throw {@link Json.JsonException}, a subtype, for
+ * {@code Json}'s own accessors throw {@link JsonException}, a subtype, for
  * a missing key or a value of the wrong type. {@code req.bodyJson(reader)}
  * turns these into a 400, so a reader never has to return a half-built object.
  *
@@ -23,14 +23,14 @@ import java.util.List;
 @FunctionalInterface
 public interface JsonReader<T> {
 
-    T read(Json.JsonValue json);
+    T read(JsonValue json);
 
     /** A reader for a list, built from the reader for one element. */
     static <T> JsonReader<List<T>> list(JsonReader<T> element) {
         return json -> {
-            Json.JsonArray array = json.asArray();
+            JsonArray array = json.asArray();
             List<T> values = new ArrayList<>(array.size());
-            for (Json.JsonValue value : array) {
+            for (JsonValue value : array) {
                 values.add(element.read(value));
             }
             return List.copyOf(values);

@@ -14,7 +14,7 @@ class JsonCodecTest {
     }
 
     static final JsonWriter<Deck> DECK_OUT =
-            deck -> Json.obj().put("id", deck.id()).put("name", deck.name());
+            deck -> Json.object().put("id", deck.id()).put("name", deck.name());
 
     static final JsonReader<Deck> DECK_IN =
             json -> new Deck(json.asObject().getLong("id"), json.asObject().getString("name"));

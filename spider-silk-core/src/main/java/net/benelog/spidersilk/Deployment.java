@@ -25,7 +25,7 @@ record Deployment(
         List<AfterEntry> afterFilters,
         List<ResponseFilter> responseFilters,
         Map<Class<? extends Exception>, ExceptionHandler<? extends Exception>> exceptionHandlers,
-        Map<HttpStatus, Handler> errorHandlers,
+        Map<HttpStatus, Handler> statusPages,
         List<StaticFiles> staticFiles,
         @Nullable RequestLogger requestLogger,
         @Nullable Cors cors,
@@ -39,7 +39,7 @@ record Deployment(
         responseFilters = List.copyOf(responseFilters);
         // Insertion order is kept, which Map.copyOf would not promise.
         exceptionHandlers = Collections.unmodifiableMap(new LinkedHashMap<>(exceptionHandlers));
-        errorHandlers = Collections.unmodifiableMap(new LinkedHashMap<>(errorHandlers));
+        statusPages = Collections.unmodifiableMap(new LinkedHashMap<>(statusPages));
         staticFiles = List.copyOf(staticFiles);
     }
 }

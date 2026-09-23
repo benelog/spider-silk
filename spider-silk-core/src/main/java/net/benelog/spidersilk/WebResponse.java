@@ -25,6 +25,7 @@ import org.jspecify.annotations.Nullable;
 import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.json.JsonSink;
 import net.benelog.spidersilk.json.JsonStreamWriter;
+import net.benelog.spidersilk.json.JsonValue;
 import net.benelog.spidersilk.json.JsonWriter;
 
 /**
@@ -66,7 +67,7 @@ import net.benelog.spidersilk.json.JsonWriter;
  *         case WebResponse.Text text -> text.content();
  *         case WebResponse.Bytes bytes -> bytes.data().length + " bytes";
  *         case WebResponse.Template template -> "template " + template.name();
- *         case WebResponse.Stream ignored -> "a stream";
+ *         case WebResponse.Streamed ignored -> "a stream";
  *         case WebResponse.Sse ignored -> "an event stream";
  *         case WebResponse.Raw ignored -> "written by hand";
  *     };
@@ -119,7 +120,7 @@ public final class WebResponse {
     }
 
     /** A body written straight to the output stream, for content too big to hold. */
-    public record Stream(StreamWriter writer) implements Body {
+    public record Streamed(StreamWriter writer) implements Body {
     }
 
     /** A Server-Sent Events stream, filled for as long as it should last. */
@@ -132,7 +133,7 @@ public final class WebResponse {
 
     private static final Empty EMPTY_BODY = new Empty();
 
-    /** Null means "not set", which answers 200 and lets {@link App#error} fill in a status. */
+    /** Null means "not set", which answers 200 and lets {@link App#statusPage} fill in a status. */
     private final @Nullable HttpStatus status;
     private final Headers headers;
     private final List<Cookie> cookies;
@@ -157,13 +158,24 @@ public final class WebResponse {
         return of(new Text(content)).contentType("text/plain; charset=UTF-8");
     }
 
-    /** A JSON document that is already serialized. */
-    public static WebResponse json(String rawJson) {
-        return of(new Text(rawJson)).contentType("application/json");
+    /**
+     * A JSON document that is already serialized, sent as it is.
+     *
+     * <pre>{@code
+     * app.get("/health", req -> WebResponse.rawJson("{\"status\":\"up\"}"));
+     * }</pre>
+     *
+     * <p>The name says that the text is JSON already. A Java string meant as a
+     * JSON string value is {@code json(Json.object().put("message", text))}: sent
+     * here, {@code hi} would go out as {@code hi}, which is not JSON.
+     */
+    public static WebResponse rawJson(String json) {
+        return of(new Text(json)).contentType("application/json");
     }
 
-    public static WebResponse json(Json.JsonValue value) {
-        return json(value.toJson());
+    /** A JSON document built as a tree. */
+    public static WebResponse json(JsonValue value) {
+        return rawJson(value.toJson());
     }
 
     /** A value written as JSON through a hand-written writer. */
@@ -292,12 +304,12 @@ public final class WebResponse {
      * returned, not inside the writer.
      */
     public static WebResponse stream(String contentType, StreamWriter writer) {
-        return of(new Stream(Objects.requireNonNull(writer, "writer"))).contentType(contentType);
+        return of(new Streamed(Objects.requireNonNull(writer, "writer"))).contentType(contentType);
     }
 
     /**
      * A file on disk, answered with the content type its name implies, its size
-     * as {@code Content-Length}, and a {@link Stream} body.
+     * as {@code Content-Length}, and a {@link Streamed} body.
      *
      * <pre>{@code
      * app.get("/decks/{deckId}/export", req ->
@@ -334,7 +346,7 @@ public final class WebResponse {
             throw new UncheckedIOException(
                     new IOException("Not a regular file: " + path));
         }
-        return of(new Stream(out -> Files.copy(path, out)))
+        return of(new Streamed(out -> Files.copy(path, out)))
                 .contentType(ContentTypes.byPath(path.getFileName().toString()))
                 .header("Content-Length", Long.toString(attributes.size()));
     }
@@ -348,7 +360,7 @@ public final class WebResponse {
      *     long deckId = req.pathParamLong("deckId");
      *     return WebResponse.sse(stream -> {
      *         while (stream.isOpen()) {
-     *             stream.send("due", Json.obj().put("count", service.due(deckId)).toJson());
+     *             stream.send("due", Json.object().put("count", service.due(deckId)).toJson());
      *             Thread.sleep(1000);
      *         }
      *     });
@@ -452,7 +464,7 @@ public final class WebResponse {
         return status == null ? HttpStatus.OK : status;
     }
 
-    /** Whether a status was set explicitly, which {@link App#error} needs to know. */
+    /** Whether a status was set explicitly, which {@link App#statusPage} needs to know. */
     boolean hasStatus() {
         return status != null;
     }
@@ -658,7 +670,7 @@ public final class WebResponse {
 
     /**
      * This response, keeping the headers and cookies of the one it replaces. An
-     * {@link App#error(HttpStatus, Handler)} handler answering a 405 gets the
+     * {@link App#statusPage(HttpStatus, Handler)} handler answering a 405 gets the
      * {@code Allow} header the framework had already worked out, without having
      * to know about it.
      */
@@ -689,7 +701,7 @@ public final class WebResponse {
         }
 
         @Override
-        public void write(Json.JsonValue value) {
+        public void write(JsonValue value) {
             try {
                 out.write(started ? ',' : '[');
                 started = true;
@@ -715,7 +727,7 @@ public final class WebResponse {
         }
 
         @Override
-        public void write(Json.JsonValue value) {
+        public void write(JsonValue value) {
             try {
                 out.write(value.toJson());
                 out.write('\n');
