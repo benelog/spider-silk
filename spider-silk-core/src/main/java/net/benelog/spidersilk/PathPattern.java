@@ -2,7 +2,9 @@ package net.benelog.spidersilk;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 import org.jspecify.annotations.Nullable;
 
@@ -21,6 +23,10 @@ import org.jspecify.annotations.Nullable;
  * kept, since the tail is a remainder rather than a segment. Like "*", it is
  * only allowed as the last segment, and the two forms match the same set of
  * paths, so {@link #canonicalForm()} reports them as one shape.
+ *
+ * <p>A variable name appears once per pattern, a named tail included:
+ * "/tenants/{id}/items/{id}" and "/decks/{id}/{id*}" are rejected, since one
+ * binding would silently overwrite the other.
  */
 final class PathPattern {
 
@@ -43,6 +49,7 @@ final class PathPattern {
                         "\"" + parsed[i] + "\" is only allowed as the last segment: " + pattern);
             }
         }
+        rejectDuplicateNames(pattern, parsed);
         String last = parsed.length == 0 ? null : parsed[parsed.length - 1];
         this.tailName = last == null ? null : tailVariableName(last);
         this.matchesRest = last != null && (last.equals("*") || tailName != null);
@@ -62,6 +69,27 @@ final class PathPattern {
                 throw new IllegalArgumentException(("A path pattern has no whitespace: \"%s\"."
                         + " With a description, the path comes first: get(path, description, handler).")
                         .formatted(pattern));
+            }
+        }
+    }
+
+    /**
+     * Each variable binds under its own name. Two segments binding one name —
+     * "/tenants/{id}/items/{id}", or "/decks/{id}/{id*}" with a named tail —
+     * would leave the later value in place of the earlier one, and a lookup
+     * or an authorization check would read the wrong identifier.
+     */
+    private static void rejectDuplicateNames(String pattern, String[] parsed) {
+        Set<String> names = new HashSet<>();
+        for (String segment : parsed) {
+            String tail = tailVariableName(segment);
+            String name = tail != null ? tail
+                    : isVariable(segment) ? segment.substring(1, segment.length() - 1)
+                    : null;
+            if (name != null && !names.add(name)) {
+                throw new IllegalArgumentException(("A path pattern binds each variable once: \"%s\" repeats {%s}."
+                        + " Give each segment its own name, such as {tenantId} and {itemId}.")
+                        .formatted(pattern, name));
             }
         }
     }

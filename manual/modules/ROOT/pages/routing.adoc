@@ -51,6 +51,13 @@ The value always exists when the handler runs, because a request without the seg
 The 400 therefore reports a value of the wrong type, not a missing one.
 A `\{name*}` tail is read the same way, and is the one variable that can come back empty.
 
+A variable name appears once per pattern, a named tail included.
+`/tenants/\{id}/items/\{id}` and `/files/\{id}/\{id*}` throw `IllegalArgumentException` at registration.
+The message names the pattern and the repeated variable.
+A second binding would overwrite the first, so the handler would read the wrong identifier.
+A group's prefix is part of the pattern, so a route `/items/\{id}` under the prefix `/tenants/\{id}` throws as well.
+Filter paths and `Cors.forPath` are checked the same way.
+
 == Groups
 
 Routes that share a prefix register through `path`.

@@ -128,6 +128,61 @@ class RoutingFeaturesTest {
         });
     }
 
+    /** The duplicate is caught at registration, before a request could read the wrong {id}. */
+    @Test
+    void aRouteRepeatingAVariableNameFailsAtRegistration() {
+        App app = new App();
+
+        assertThatThrownBy(() -> app.get("/tenants/{id}/items/{id}", req -> WebResponse.text("")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("/tenants/{id}/items/{id}")
+                .hasMessageContaining("repeats {id}");
+        assertThatThrownBy(() -> app.get("/files/{id}/{id*}", req -> WebResponse.text("")))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("repeats {id}");
+    }
+
+    /** The prefix and the route are checked as the one pattern they register. */
+    @Test
+    void aGroupPrefixRepeatingARouteVariableFailsAtRegistration() {
+        assertThatThrownBy(() -> new App().path("/tenants/{id}",
+                tenants -> tenants.get("/items/{id}", req -> WebResponse.text(""))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("/tenants/{id}/items/{id}");
+        assertThatThrownBy(() -> new App().path("/tenants/{id}", tenants -> tenants.path("/items",
+                items -> items.get("/{id*}", req -> WebResponse.text("")))))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("/tenants/{id}/items/{id*}");
+        assertThatThrownBy(() -> new App().path("/tenants/{id}",
+                tenants -> tenants.beforeRoute("/items/{id}", req -> null)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("repeats {id}");
+    }
+
+    /** Filters and CORS compile their paths the same way routes do. */
+    @Test
+    void everyPathPatternRejectsARepeatedVariableName() {
+        assertThatThrownBy(() -> new App().beforeRoute("/{id}/{id}", req -> null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("repeats {id}");
+        assertThatThrownBy(() -> new App().afterRoute("/{id}/{id*}", (req, res) -> res))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("repeats {id}");
+        assertThatThrownBy(() -> Cors.anyOrigin().forPath("/{id}/{id}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("repeats {id}");
+    }
+
+    @Test
+    void distinctVariablesInAGroupStillBindEachValue() {
+        App app = new App().path("/tenants/{tenantId}",
+                tenants -> tenants.get("/items/{itemId}",
+                        req -> WebResponse.text(req.pathParam("tenantId") + "/" + req.pathParam("itemId"))));
+
+        WebTest.test(app, client ->
+                assertThat(client.get("/tenants/7/items/99").body()).isEqualTo("7/99"));
+    }
+
     @Test
     void nestedGroupsAppendPrefixes() {
         App app = new App().path("/api", api -> api.path("/decks",

@@ -51,6 +51,13 @@ Direction direction = req.pathParamEnum("direction", Direction.class);
 따라서 400은 값이 없다는 뜻이 아니라 타입이 맞지 않는다는 뜻이다.
 `\{name*}` 꼬리 변수도 같은 방식으로 읽으며, 비어 있는 채로 돌아올 수 있는 유일한 변수다.
 
+변수 이름은 이름 붙은 꼬리 변수를 포함해 한 패턴 안에서 한 번만 쓴다.
+`/tenants/\{id}/items/\{id}`와 `/files/\{id}/\{id*}`는 등록 시점에 `IllegalArgumentException`을 던진다.
+예외 메시지는 패턴과 반복된 변수를 밝힌다.
+두 번째 바인딩은 첫 번째를 덮어쓰므로, 핸들러가 엉뚱한 식별자를 읽게 된다.
+그룹의 접두사는 패턴의 일부이므로, 접두사 `/tenants/\{id}` 아래의 라우트 `/items/\{id}`도 예외를 던진다.
+필터 경로와 `Cors.forPath`도 같은 방식으로 검사한다.
+
 == 그룹
 
 접두사를 공유하는 라우트는 `path`를 통해 등록한다.

@@ -76,6 +76,32 @@ class PathPatternTest {
                 .hasMessageContaining("{path*}");
     }
 
+    /** A second {id} would overwrite the first, so the pattern never compiles. */
+    @Test
+    void rejectsADuplicateVariableName() {
+        assertThatThrownBy(() -> new PathPattern("/tenants/{id}/items/{id}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("/tenants/{id}/items/{id}")
+                .hasMessageContaining("repeats {id}");
+    }
+
+    @Test
+    void rejectsANamedTailThatRepeatsAVariableName() {
+        assertThatThrownBy(() -> new PathPattern("/{id}/{id*}"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("/{id}/{id*}")
+                .hasMessageContaining("repeats {id}");
+    }
+
+    @Test
+    void distinctVariableNamesBindEachValue() {
+        assertThat(new PathPattern("/tenants/{tenantId}/items/{itemId}")
+                .match(PathPattern.split("/tenants/7/items/99")))
+                .isEqualTo(Map.of("tenantId", "7", "itemId", "99"));
+        assertThat(new PathPattern("/{id}/{rest*}").match(PathPattern.split("/7/a/b")))
+                .isEqualTo(Map.of("id", "7", "rest", "a/b"));
+    }
+
     /** A named tail matches what "*" matches, so the router sees one shape. */
     @Test
     void aNamedTailCanonicalizesToAWildcard() {
