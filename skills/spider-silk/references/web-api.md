@@ -94,11 +94,11 @@ int pg = req.queryParam("page", Integer::parseInt, 1);      // ...or the default
 String theme = req.cookie("theme");                         // null when absent
 Map<String, String> all = req.cookies();
 
-String body = req.body();                                   // read once, kept: a filter's read leaves it for the handler
+String body = req.body();                                   // read once, kept: a filter's read leaves it for the handler; over 1MB -> 413
 JsonValue json = req.bodyJson();                       // unparseable -> 400
 NewDeck deck = req.bodyJson(NEW_DECK_READER);               // reader rejection -> 400
-Stream<Card> cards = req.bodyNdjson(CARD_READER);           // lazy; a bad line -> 400 naming it
-InputStream in = req.bodyStream();                          // unread bytes, for another library's parser
+Stream<Card> cards = req.bodyNdjson(CARD_READER);           // lazy; a bad line -> 400 naming it, a line over 1MB -> 413
+InputStream in = req.bodyStream();                          // unread bytes, for another library's parser; no size limit
 BufferedReader r = req.bodyReader();                        // unread characters; never mixed with body() or each other
 UploadedFile file = req.file("file");                       // missing part or not multipart -> 400
 UploadedFile avatar = req.fileOrNull("avatar");             // optional upload; null when absent
@@ -187,7 +187,7 @@ app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Ma
 - `exception(Type, handler)` runs the handler for the most specific registered type the exception is an instance of, in any registration order.
 - `JsonException` is an `IllegalArgumentException`, so map it separately when `IllegalArgumentException` means 404.
 - Register everything before `app.start(...)`: a route, filter, or setting added while an `AppServlet` serves the app (embedded, a server started directly, or an external container) throws `IllegalStateException`; `stop()` reopens it.
-- `app.cors(...)`, `app.gzip(...)`, `app.securityHeaders(...)`, and `app.staticFiles(...)` copy the value they are given, so changing it afterwards does nothing.
+- `app.cors(...)`, `app.gzip(...)`, `app.securityHeaders(...)`, `app.staticFiles(...)`, and `app.bodyLimits(...)` copy the value they are given, so changing it afterwards does nothing.
 - `throw new HttpException(HttpStatus.UNAUTHORIZED, "...")` rejects from anywhere and lets `statusPage(status, ...)` render the body. It passes a handler for a broader type (`RuntimeException`, `Exception`) by; only `exception(HttpException.class, ...)` or a handler for a subtype catches it.
 - `statusPage(status, handler)` fills the body for any response that ended on that status with no body (router 404s, `HttpException`, `WebResponse.empty(status)`); a response that already carries a body is left alone.
 - Inside a status page's handler, `req.errorMessage()` is the plain-text message the framework would have used.
@@ -237,6 +237,11 @@ app.securityHeaders(SecurityHeaders.defaults()
         .permissionsPolicy("camera=()")
         .header("X-Robots-Tag", "noindex"));
 // A response that set one of these headers itself keeps its own value
+
+app.bodyLimits(BodyLimits.defaults()        // on without the call: 1MB body, 1MB per NDJSON line
+        .maxBytes(8 * 1024 * 1024)          // body() and bodyJson(), in bytes; over it -> 413
+        .maxNdjsonLineBytes(64 * 1024));    // one bodyNdjson line; the number of lines is free
+// BodyLimits.unlimited() lifts both; bodyStream()/bodyReader(), forms, and multipart are never counted
 ```
 
 CORS is a browser rule about what a script may read; authentication stays a before-filter's job.

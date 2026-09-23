@@ -42,7 +42,7 @@ import net.benelog.spidersilk.server.WebServerFactory;
  * serves when it is initialized and gives it back when it is destroyed.
  *
  * <p>A setting object — {@link Cors}, {@link Gzip}, {@link SecurityHeaders},
- * {@link StaticFiles} — is copied when it is registered. Changing the one you
+ * {@link StaticFiles}, {@link BodyLimits} — is copied when it is registered. Changing the one you
  * passed afterwards changes nothing this application does.
  */
 public final class App {
@@ -63,6 +63,7 @@ public final class App {
     @Nullable Cors cors;
     @Nullable Gzip gzip;
     @Nullable SecurityHeaders securityHeaders;
+    BodyLimits bodyLimits = BodyLimits.defaults();
 
     /** Guards the one lazy assignment in {@link #templateRenderer()}. */
     private final Object templatesLock = new Object();
@@ -520,6 +521,28 @@ public final class App {
         return this;
     }
 
+    /**
+     * How much of a request body {@code body()} and {@code bodyNdjson(...)}
+     * hold in memory, in place of {@link BodyLimits#defaults()} — 1MB for the
+     * body, and 1MB for one NDJSON line.
+     *
+     * <pre>{@code
+     * app.bodyLimits(BodyLimits.defaults().maxBytes(8 * 1024 * 1024));
+     * }</pre>
+     *
+     * <p>Named here rather than on the server, because the reads it bounds are
+     * the framework's, and it therefore applies under every server and in an
+     * external container alike.
+     *
+     * <p>The value is copied as it is now, so changing it afterwards changes
+     * nothing this application reads.
+     */
+    public App bodyLimits(BodyLimits bodyLimits) {
+        BodyLimits copy = Objects.requireNonNull(bodyLimits, "bodyLimits").copy();
+        register(() -> this.bodyLimits = copy);
+        return this;
+    }
+
     // ---- Server ----
 
     /**
@@ -564,7 +587,7 @@ public final class App {
         synchronized (registrationLock) {
             deployments++;
             return new Deployment(router.copy(), requestFilters, beforeFilters, afterFilters, responseFilters, exceptionHandlers,
-                    statusPages, staticFiles, requestLogger, cors, gzip, securityHeaders);
+                    statusPages, staticFiles, requestLogger, cors, gzip, securityHeaders, bodyLimits);
         }
     }
 

@@ -59,6 +59,7 @@ app.post("/api/decks", req -> {
 
 들어오는 쪽에서는 `body()`가 아니라 `bodyStream()`을 통해 읽는다.
 그러면 Jackson이 요청 스트림을 곧바로 파싱하고, 본문이 하나의 String으로 존재하는 일은 없다.
+`bodyStream()`과 `bodyReader()`는 xref:request.adoc#body-limits[본문 크기 한도] 바깥에도 있으며, 이 한도는 `body()`와 `bodyNdjson()`이 담는 것만 제한한다.
 
 핸들러가 둘 이상이 되면 두 `try` 블록을 `App`의 `exception(JsonProcessingException.class, ...)` 핸들러로 옮긴다.
 

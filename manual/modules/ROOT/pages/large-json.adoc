@@ -73,6 +73,8 @@ app.post("/api/decks/{deckId}/cards.ndjson", req -> {
 Blank lines are skipped.
 A line that is not valid JSON, or that the reader rejects with `IllegalArgumentException` or `DateTimeException`, answers 400 naming the line.
 That is the other reason to read NDJSON rather than one large array: the report says where the body went wrong, not just that it did.
+A line over 1MB answers 413 naming the line, and is refused as soon as it outgrows the limit.
+The number of lines is not limited, and xref:request.adoc#body-limits[Body size limits] describes how to change the line limit.
 
 Because the stream is lazy, those failures happen where it is consumed.
 Consume it before returning the response.
@@ -102,5 +104,6 @@ Every caveat follows from that inheritance:
 
 Core has no streaming *parser*.
 `req.bodyJson()` builds the whole tree, because a tree is what a hand-written `JsonReader` reads.
+It reads the body under the 1MB body limit, so a larger document answers 413 unless xref:request.adoc#body-limits[`bodyLimits`] raises the limit.
 For a single JSON document too large to hold, reach for NDJSON: a body of one value per line never needs a streaming parser, however large it is.
 Where the format is not yours to choose, `req.bodyStream()` hands the unread bytes to a streaming parser from another library, as xref:json-interop.adoc[External JSON Binding] describes.

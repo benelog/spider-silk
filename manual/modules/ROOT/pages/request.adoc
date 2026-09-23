@@ -2,7 +2,7 @@
 :navtitle: The Request
 
 `WebRequest` is the handler's view of what the client sent.
-The plain reads are listed first, followed by the parts that need more than a getter: cookies, repeated parameters, the query-string and form-body split, content negotiation, and file uploads.
+The plain reads are listed first, followed by the parts that need more than a getter: cookies, repeated parameters, the query-string and form-body split, content negotiation, file uploads, and body size limits.
 
 == What the request is
 
@@ -200,3 +200,45 @@ The limits are the servlet container's multipart configuration, set on the serve
 `multipart(new MultipartConfigElement(...))` sets them on `JettyServer`, xref:tomcat.adoc[TomcatServer], and xref:undertow.adoc[UndertowServer] alike.
 The default buffers to the system temp directory with no size cap and a 1MB in-memory threshold.
 `multipart(null)` turns multipart handling off.
+
+[#body-limits]
+== Body size limits
+
+`body()` and `bodyNdjson(reader)` hold at most 1MB of a request body in memory, and answer 413 for more.
+`body()`, and `bodyJson()` over it, hold the whole body, so their limit bounds the body.
+`bodyNdjson(reader)` holds one line at a time, so its limit bounds a line and leaves the number of lines free.
+`app.bodyLimits(BodyLimits)` changes either limit:
+
+[source,java]
+----
+app.bodyLimits(BodyLimits.defaults()
+        .maxBytes(8 * 1024 * 1024)          // body() and bodyJson(): 8MB
+        .maxNdjsonLineBytes(64 * 1024));    // one NDJSON line: 64KB
+----
+
+Both limits count bytes, not characters.
+The bytes are counted as they arrive, before any character is decoded, so `é` counts as two in UTF-8.
+A limit of N bytes reads a body of exactly N bytes and refuses one of N + 1.
+A line's count leaves out its line break, including the `\r` of a `\r\n` break.
+
+The limit does not trust `Content-Length`.
+A declared length over the limit is refused before a byte is read.
+A body that declares no length, such as a chunked one, is refused at the first byte past the limit, and so is one that declares less than it sends.
+An NDJSON line is refused as soon as it outgrows the limit, so a line that never ends costs the limit and one 8KB chunk rather than the whole line.
+
+The 413 is an `HttpException` with the status `CONTENT_TOO_LARGE`, and takes the ordinary error path through `exception(...)` and `statusPage(...)`.
+A body refused once stays refused.
+A handler that catches the exception and reads again gets another 413 from `body()`, `bodyStream()`, and `bodyReader()`, never the rest of a body whose start was already consumed.
+
+`bodyStream()` and `bodyReader()` are not limited.
+A caller that reads a stream decides for itself how much of it to keep, so a large upload streamed to a file or to a parser needs no setting.
+`BodyLimits.unlimited()` lifts both limits, for an application whose proxy or container already bounds the body.
+
+Neither limit counts form fields or multipart uploads, because the servlet container parses those.
+A form's size is the container's own setting, and an upload's is the multipart configuration the previous section describes.
+
+`AppServlet` enforces the limits, so they hold the same way under Jetty, Tomcat, Undertow, and an external container.
+A limit the container or a proxy in front of it sets applies in addition, and the lower of the two answers first.
+
+The defaults change what an existing application accepts.
+A body over 1MB read through `body()` or `bodyJson()`, or an NDJSON line over 1MB, now answers 413 until `bodyLimits` raises the limit.

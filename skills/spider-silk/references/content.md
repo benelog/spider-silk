@@ -72,9 +72,10 @@ app.post("/api/decks/{deckId}/cards.ndjson", req -> {
   Anything that can fail in a way the client should hear about — a missing deck, an unauthorized caller — must be settled *before* the response is returned; a failure inside the writer can no longer change the status.
 - `req.bodyNdjson(reader)` is a lazy `Stream<T>`.
   A line that is not valid JSON, or that the reader rejects, answers 400 naming the line — but only where the stream is consumed, so consume it before returning the response, ideally inside one transaction so a bad line rolls the import back.
+  A line over 1MB answers 413 naming the line, refused as soon as it outgrows the limit; the number of lines is not limited. `app.bodyLimits(BodyLimits.defaults().maxNdjsonLineBytes(...))` changes it.
 - Prefer NDJSON over an array for bulk data: each line stands alone, so a consumer acts on record one without waiting for the last, and a cut-off transfer leaves whole records rather than an unclosed document.
   It is bulk transfer, not live events — [SSE](#server-sent-events) is the one that flushes per event and reconnects.
-- There is no streaming *parser*: `bodyJson()` builds the whole tree, because a tree is what a hand-written `JsonReader` reads.
+- There is no streaming *parser*: `bodyJson()` builds the whole tree, because a tree is what a hand-written `JsonReader` reads, under the 1MB body limit (`app.bodyLimits(...)` raises it).
   For a single document too large to hold, the answer is NDJSON.
 
 ### Binding JSON with another library

@@ -54,6 +54,7 @@ Raw text is the form for a body no writer would produce, such as the malformed o
 Path variables are supplied rather than matched, since no route is involved: `pathParam("deckId", "3")` is what the router would have resolved.
 Everything a handler can tell apart still holds: a query parameter and a form field of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 the way a non-multipart request does.
 The body is read the way it is behind a container: a second `req.body()` answers the text the first one kept, and `req.bodyStream()` after it throws `IllegalStateException`.
+A `TestRequest` reads its body under the default xref:request.adoc#body-limits[body size limits], since it has no `App` to take other limits from.
 The stub hands back one reader, already at its end on the second call, so a handler that reads the body twice through `raw()` fails the unit test rather than only failing in production.
 `formParam` fields are the body as well, URL-encoded under `application/x-www-form-urlencoded`, so a form cannot also take `body`.
 Reading a parameter consumes a form body as a container's form parsing does, so `req.bodyStream()` after it is empty, and a form body read as bytes first leaves no fields.

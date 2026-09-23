@@ -30,7 +30,8 @@ record Deployment(
         @Nullable RequestLogger requestLogger,
         @Nullable Cors cors,
         @Nullable Gzip gzip,
-        @Nullable SecurityHeaders securityHeaders) {
+        @Nullable SecurityHeaders securityHeaders,
+        BodyLimits bodyLimits) {
 
     Deployment {
         requestFilters = List.copyOf(requestFilters);

@@ -17,13 +17,15 @@ Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that
 * Errors: `exception(Type, handler)`, where the most specific registered type wins and an `HttpException` reaches only a handler for its own type or a subtype, `statusPage(HttpStatus, handler)`
 * Response-wide concerns: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
   Each is off until called, and applies to every answer including static files and errors, which is why they are not filters; see xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security]
+* Body limits: `bodyLimits(BodyLimits)`, where `BodyLimits.defaults()` holds 1MB for `body()` and 1MB for one `bodyNdjson` line, and `BodyLimits.unlimited()` lifts both.
+  The defaults apply without the call, and a body over a limit answers 413; see xref:request.adoc#body-limits[The Request]
 * Rendering and assets: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)`.
   jte over `classpath:/jte` and `classpath:/public` at the root are the defaults, so neither has to be called.
   `StaticFiles.directory(path)` serves a directory on disk instead of the classpath, several roots given at once are read in order, and `precompressed()` answers with a `.br` or `.gz` sibling where a build left one.
   `FreeMarkerTemplates`, `HandlebarsTemplates`, and `ThymeleafTemplates` are `TemplateRenderer` implementations in modules of their own
 * Server: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`.
   Registration closes while an `AppServlet` serves the application, however it was started: a route, filter, or setting added then throws `IllegalStateException`, and `stop()` opens it again.
-  `Cors`, `Gzip`, `SecurityHeaders`, and `StaticFiles` are copied when they are registered
+  `Cors`, `Gzip`, `SecurityHeaders`, `StaticFiles`, and `BodyLimits` are copied when they are registered
 
 == What `WebRequest` provides
 
@@ -42,12 +44,12 @@ Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that
 * Query vs. form: `queryParam`, `queryParams`, `formParam`, `formParams`
 * Content negotiation: `accepts(types...)` answers with the type the caller prefers out of the ones offered, 406 when it will take none of them; `acceptedTypes()` for the parsed `Accept` header
 * Cookies the client sent: `cookie(name)`, `cookies()`
-* Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects).
+* Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects, 413 on a body over the limit).
   The text is read once and kept, so every call returns the whole body
 * Multipart uploads: `file(name)` (400 when absent), `fileOrNull(name)` (null when absent), `files(name)` for a field that carries several.
   `UploadedFile` answers `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, and `writeTo(path)`
 * Body, unread: `bodyStream()` and `bodyReader()` hand it over for a parser from another library, and neither mixes with the kept text: whichever goes second throws `IllegalStateException`.
-  `bodyNdjson(reader)` reads newline-delimited JSON lazily, and answers 400 naming the line; see xref:large-json.adoc[Large JSON and NDJSON] and xref:json-interop.adoc[External JSON Binding]
+  `bodyNdjson(reader)` reads newline-delimited JSON lazily, and answers 400 naming the line, or 413 for a line over the limit; see xref:large-json.adoc[Large JSON and NDJSON] and xref:json-interop.adoc[External JSON Binding]
 * Session: `session()` answers a `WebSession`, where `get(key, Class<T>)` reads under a named type and fails on that line naming the key and both types, `get(key)` leaves the cast to the call site, `set(key, value)` writes, `remove(key)` removes one, and `invalidate()` ends the session
 * Flash: `flash(key, value)`, read exactly once with `flashed(key)` on the request after a redirect, and a null value removes the key as it does for a session attribute
 * Errors: `errorMessage()` inside a `statusPage(status, handler)` handler

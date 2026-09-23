@@ -59,6 +59,7 @@ app.post("/api/decks", req -> {
 
 Read through `bodyStream()` rather than `body()` on the way in.
 Jackson then parses straight from the request stream, and the body never exists as one String.
+`bodyStream()` and `bodyReader()` are also outside the xref:request.adoc#body-limits[body size limits], which bound only what `body()` and `bodyNdjson()` hold.
 
 Move the two `try` blocks into an `exception(JsonProcessingException.class, ...)` handler on the `App` once there is more than one handler.
 

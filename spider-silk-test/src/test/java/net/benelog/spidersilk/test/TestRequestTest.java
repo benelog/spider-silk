@@ -185,9 +185,10 @@ class TestRequestTest {
 
     /**
      * The second read is the body again, because {@code body()} keeps the text it
-     * read. The stub hands back one reader, already at its end on the second
-     * call, as all three containers do, so this passes only because the text is
-     * kept and not because the stub reads the body afresh.
+     * read. {@code body()} reads the bytes, so that its limit counts them, and
+     * the stub hands back one stream, already at its end on the second call, as
+     * all three containers do. This passes only because the text is kept and
+     * not because the stub reads the body afresh.
      */
     @Test
     void theBodyReadsTheSameTextTwice() throws Exception {
@@ -195,7 +196,7 @@ class TestRequestTest {
 
         assertThat(request.body()).isEqualTo("plain text");
         assertThat(request.body()).isEqualTo("plain text");
-        assertThat(request.raw().getReader().read()).isEqualTo(-1);
+        assertThat(request.raw().getInputStream().read()).isEqualTo(-1);
     }
 
     /** Form fields are the body too, encoded the way a browser posts a form. */

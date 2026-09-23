@@ -17,13 +17,15 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 * 에러: `exception(Type, handler)`, 등록된 타입 중 가장 구체적인 것이 이기고 `HttpException`은 자신의 타입이나 하위 타입의 핸들러에만 도달한다, `statusPage(HttpStatus, handler)`
 * 응답 전반에 걸친 관심사: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
   각각은 호출하기 전까지 꺼져 있고, 정적 파일과 에러를 포함한 모든 응답에 적용되므로 필터가 아니다; xref:cors-compression-and-security-headers.adoc[CORS, 압축, 보안]을 참고한다
+* 본문 한도: `bodyLimits(BodyLimits)`이며, `BodyLimits.defaults()`는 `body()`에 1MB, `bodyNdjson`의 한 줄에 1MB를 두고, `BodyLimits.unlimited()`는 둘 다 없앤다.
+  기본값은 호출하지 않아도 적용되며, 한도를 넘는 본문은 413으로 응답한다; xref:request.adoc#body-limits[요청]을 참고한다
 * 렌더링과 자산: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)`.
   `classpath:/jte` 위의 jte와 루트의 `classpath:/public`이 기본값이므로 둘 다 호출하지 않아도 된다.
   `StaticFiles.directory(path)`는 클래스패스 대신 디스크의 디렉터리를 제공하고, 한 번에 주어진 여러 루트는 순서대로 읽히며, `precompressed()`는 빌드가 남겨둔 `.br`이나 `.gz` 형제 파일이 있으면 그 파일로 응답한다.
   `FreeMarkerTemplates`, `HandlebarsTemplates`, `ThymeleafTemplates`는 각자의 모듈에 있는 `TemplateRenderer` 구현체다
 * 서버: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`.
   어떤 방식으로 시작했든 `AppServlet`이 애플리케이션을 서비스하는 동안 등록은 닫힌다: 그때 추가되는 라우트, 필터, 설정은 `IllegalStateException`을 던지고, `stop()`이 등록을 다시 연다.
-  `Cors`, `Gzip`, `SecurityHeaders`, `StaticFiles`는 등록될 때 복사된다
+  `Cors`, `Gzip`, `SecurityHeaders`, `StaticFiles`, `BodyLimits`는 등록될 때 복사된다
 
 == `WebRequest`가 제공하는 것
 
@@ -42,12 +44,12 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 * 쿼리 대 폼: `queryParam`, `queryParams`, `formParam`, `formParams`
 * 콘텐츠 협상: `accepts(types...)`는 제시된 타입 중 호출자가 선호하는 타입으로 응답하고, 어느 것도 받지 않으면 406이다; 파싱된 `Accept` 헤더를 위한 `acceptedTypes()`
 * 클라이언트가 보낸 쿠키: `cookie(name)`, `cookies()`
-* 본문: `body()`, `bodyJson()`, `bodyJson(reader)`(리더가 거부하는 본문에는 400).
+* 본문: `body()`, `bodyJson()`, `bodyJson(reader)`(리더가 거부하는 본문에는 400, 한도를 넘는 본문에는 413).
   텍스트는 한 번 읽어 보관하므로 모든 호출이 본문 전체를 반환한다
 * 멀티파트 업로드: `file(name)`(없으면 400), `fileOrNull(name)`(없으면 null), 여러 파일을 담은 필드를 위한 `files(name)`.
   `UploadedFile`은 `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, `writeTo(path)`를 제공한다
 * 읽지 않은 본문: `bodyStream()`과 `bodyReader()`는 다른 라이브러리의 파서를 위해 본문을 넘겨주며, 둘 다 보관된 텍스트와 섞이지 않는다: 나중에 호출된 쪽이 `IllegalStateException`을 던진다.
-  `bodyNdjson(reader)`는 줄 단위로 구분된 JSON을 지연 읽기하고, 줄 번호를 밝히며 400으로 응답한다; xref:large-json.adoc[대용량 JSON과 NDJSON]과 xref:json-interop.adoc[외부 JSON 바인딩]을 참고한다
+  `bodyNdjson(reader)`는 줄 단위로 구분된 JSON을 지연 읽기하고, 줄 번호를 밝히며 400으로 응답하거나, 한도를 넘는 줄에는 413으로 응답한다; xref:large-json.adoc[대용량 JSON과 NDJSON]과 xref:json-interop.adoc[외부 JSON 바인딩]을 참고한다
 * 세션: `session()`은 `WebSession`을 돌려주며, 그 `get(key, Class<T>)`는 지정한 타입으로 읽고 실패하면 그 줄에서 키와 두 타입을 밝히고, `get(key)`는 캐스트를 호출 지점에 맡기고, `set(key, value)`는 쓰고, `remove(key)`는 하나를 제거하고, `invalidate()`는 세션을 끝낸다
 * 플래시: `flash(key, value)`, 리다이렉트 뒤의 요청에서 `flashed(key)`로 정확히 한 번 읽히며, null 값은 세션 속성에서와 마찬가지로 키를 제거한다
 * 에러: `statusPage(status, handler)` 핸들러 안의 `errorMessage()`

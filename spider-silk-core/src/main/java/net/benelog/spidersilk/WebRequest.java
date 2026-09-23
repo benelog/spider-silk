@@ -1,10 +1,13 @@
 package net.benelog.spidersilk;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.io.UnsupportedEncodingException;
 import java.net.URLDecoder;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.DateTimeException;
 import java.util.ArrayList;
@@ -18,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.stream.Stream;
+import java.util.stream.StreamSupport;
 
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
@@ -66,15 +70,24 @@ public final class WebRequest {
     static final String NEGOTIATED_ATTRIBUTE = "net.benelog.spidersilk.negotiated";
 
     /**
-     * How the body has been read so far: the text {@link #body()} read, or
-     * {@link #HANDED_OVER} once it went out unread. A request attribute rather
-     * than a field, because a before-filter, the handler, and the request logger
-     * each hold a {@code WebRequest} of their own over the one servlet request.
+     * How the body has been read so far: the text {@link #body()} read, or a
+     * {@link BodyMarker} once it went out unread or was refused. A request
+     * attribute rather than a field, because a before-filter, the handler, and
+     * the request logger each hold a {@code WebRequest} of their own over the
+     * one servlet request.
      */
     static final String BODY_ATTRIBUTE = "net.benelog.spidersilk.body";
 
-    /** The marker {@link #BODY_ATTRIBUTE} holds once the body went out as a stream or a reader. */
-    private static final Object HANDED_OVER = new Object();
+    /** What {@link #BODY_ATTRIBUTE} holds when it holds no text. */
+    private enum BodyMarker {
+        /** The body went out as a stream or a reader. */
+        HANDED_OVER,
+        /**
+         * A read was refused for size. Kept so that a handler catching the 413
+         * cannot go on to read the rest of a body whose start was consumed.
+         */
+        TOO_LARGE
+    }
 
     /** How much {@link #body()} reads at a time, and its buffer's floor. */
     private static final int BODY_CHUNK = 8192;
@@ -82,8 +95,12 @@ public final class WebRequest {
     /** The largest buffer a Content-Length header may reserve up front: 1MB. */
     private static final int MAX_BODY_CAPACITY = 1024 * 1024;
 
+    /** The limits a request built outside {@link AppServlet} reads under; never handed out. */
+    private static final BodyLimits DEFAULT_LIMITS = BodyLimits.defaults();
+
     private final HttpServletRequest req;
     private final Map<String, String> pathParams;
+    private final BodyLimits limits;
     private final @Nullable Route route;
 
     private @Nullable Map<String, List<String>> parsedQuery;
@@ -104,12 +121,19 @@ public final class WebRequest {
      * @param pathParams the resolved path variables, empty when there are none
      */
     public WebRequest(HttpServletRequest req, Map<String, String> pathParams) {
-        this(req, pathParams, null);
+        this(req, pathParams, DEFAULT_LIMITS, null);
     }
 
-    private WebRequest(HttpServletRequest req, Map<String, String> pathParams, @Nullable Route route) {
+    /** The request {@link AppServlet} builds, under the limits the application set. */
+    WebRequest(HttpServletRequest req, Map<String, String> pathParams, BodyLimits limits) {
+        this(req, pathParams, limits, null);
+    }
+
+    private WebRequest(HttpServletRequest req, Map<String, String> pathParams, BodyLimits limits,
+            @Nullable Route route) {
         this.req = req;
         this.pathParams = pathParams;
+        this.limits = limits;
         this.route = route;
     }
 
@@ -745,6 +769,12 @@ public final class WebRequest {
      * Asking for the text once it went out unread throws
      * {@link IllegalStateException} rather than answering the part nobody read.
      *
+     * <p>A body over {@link BodyLimits#maxBytes(int)} — 1MB unless
+     * {@link App#bodyLimits(BodyLimits)} says otherwise — answers 413. The limit
+     * counts bytes as they arrive, so a body that declares no length, or less
+     * than it sends, is refused at the first byte past it. Every later read of
+     * the body answers 413 as well, rather than the part nobody checked.
+     *
      * <p>A form-encoded POST is spent by its first {@link #param} read, because
      * the container parses the form by reading the body to its end, and this
      * then answers {@code ""}. The reverse order leaves the form with nothing to
@@ -756,6 +786,9 @@ public final class WebRequest {
         if (read instanceof String text) {
             return text;
         }
+        if (read == BodyMarker.TOO_LARGE) {
+            throw bodyTooLarge();
+        }
         if (read != null) {
             // Anything but the text is the marker handOver(...) left.
             throw new IllegalStateException("The body was already handed over unread, through"
@@ -766,18 +799,68 @@ public final class WebRequest {
         return text;
     }
 
+    /**
+     * Reads the bytes up to the limit and decodes them once, with the charset
+     * the reader would have used. Counting bytes rather than characters is what
+     * bounds memory for every charset alike, and is what Content-Length counts.
+     * At most one byte past the limit is read, which is how a body one byte over
+     * is told apart from one exactly at it.
+     */
     private String readBody() {
+        int max = limits.maxBytes();
+        if (req.getContentLengthLong() > max) {
+            // Refused on the header alone: nothing is read that would be thrown away.
+            throw refuseBody();
+        }
         try {
-            BufferedReader reader = req.getReader();
-            StringBuilder text = new StringBuilder(bodyCapacity());
-            char[] chunk = new char[BODY_CHUNK];
-            for (int read = reader.read(chunk); read >= 0; read = reader.read(chunk)) {
-                text.append(chunk, 0, read);
+            InputStream in = req.getInputStream();
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream(bodyCapacity(max));
+            byte[] chunk = new byte[BODY_CHUNK];
+            long total = 0;
+            while (true) {
+                int read = in.read(chunk, 0, (int) Math.min(chunk.length, max - total + 1));
+                if (read < 0) {
+                    break;
+                }
+                total += read;
+                if (total > max) {
+                    throw refuseBody();
+                }
+                bytes.write(chunk, 0, read);
             }
-            return text.toString();
+            return bytes.toString(bodyCharset());
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
+    }
+
+    /**
+     * The charset the request declared. {@link AppServlet} sets UTF-8 on a
+     * request that declared none, so the fallback here is for a request built
+     * outside it.
+     */
+    private Charset bodyCharset() throws IOException {
+        String declared = req.getCharacterEncoding();
+        if (declared == null) {
+            return StandardCharsets.UTF_8;
+        }
+        try {
+            return Charset.forName(declared);
+        } catch (IllegalArgumentException e) {
+            // What getReader() throws for the same name.
+            throw new UnsupportedEncodingException(declared);
+        }
+    }
+
+    /** Marks the body refused for size, so no later read answers the rest of it, and says so. */
+    private HttpException refuseBody() {
+        req.setAttribute(BODY_ATTRIBUTE, BodyMarker.TOO_LARGE);
+        return bodyTooLarge();
+    }
+
+    private HttpException bodyTooLarge() {
+        return new HttpException(HttpStatus.CONTENT_TOO_LARGE,
+                "Request body is larger than the limit of %d bytes".formatted(limits.maxBytes()));
     }
 
     /**
@@ -786,27 +869,30 @@ public final class WebRequest {
      * own; this adds the rule the cached text needs.
      */
     private void handOver(String asked) {
-        if (req.getAttribute(BODY_ATTRIBUTE) instanceof String) {
+        Object read = req.getAttribute(BODY_ATTRIBUTE);
+        if (read == BodyMarker.TOO_LARGE) {
+            // Part of the body is already gone: handing on the rest would be a truncated body.
+            throw bodyTooLarge();
+        }
+        if (read instanceof String) {
             throw new IllegalStateException("The body was already read as text by body() or bodyJson(),"
                     + " so " + asked + " has nothing left to hand over. Read the text again with body()");
         }
-        req.setAttribute(BODY_ATTRIBUTE, HANDED_OVER);
+        req.setAttribute(BODY_ATTRIBUTE, BodyMarker.HANDED_OVER);
     }
 
     /**
-     * How much room to give the buffer {@link #body()} fills. Content-Length
-     * counts bytes and the buffer holds characters, so for anything but ASCII
-     * this is an over-estimate — which is the right side to be on, since the
-     * point is to not grow at all. It is capped because the header is the
-     * caller's claim rather than a measurement, and a request that declares a
-     * gigabyte and sends nothing must not reserve one.
+     * How much room to give the buffer {@link #body()} fills: what
+     * Content-Length declares, so that it need not grow at all. It is capped
+     * because the header is the caller's claim rather than a measurement, and a
+     * request that declares the whole limit and sends nothing must not reserve it.
      */
-    private int bodyCapacity() {
-        int declared = req.getContentLength();
+    private int bodyCapacity(int max) {
+        long declared = req.getContentLengthLong();
         if (declared <= 0) {
             return BODY_CHUNK;
         }
-        return Math.min(declared, MAX_BODY_CAPACITY);
+        return (int) Math.min(declared, Math.min(max, MAX_BODY_CAPACITY));
     }
 
     /**
@@ -850,6 +936,11 @@ public final class WebRequest {
      * }
      * }</pre>
      *
+     * <p>No {@link BodyLimits} applies here: the caller reads the stream and
+     * decides how much of it to keep, which is what makes a large upload
+     * possible. A body {@link #body()} already refused for size answers 413
+     * rather than a stream that starts partway through.
+     *
      * <p>The body goes out once, one way: a request whose text
      * {@link #body()} or {@link #bodyJson()} already read throws
      * {@link IllegalStateException} here, and so does one whose body went out
@@ -875,7 +966,7 @@ public final class WebRequest {
     /**
      * The body as characters, unread, decoded with the charset the request
      * declared. The counterpart of {@link #bodyStream()} for a library that
-     * reads text, and subject to the same one-way rule.
+     * reads text, subject to the same one-way rule, and likewise not limited.
      */
     public BufferedReader bodyReader() {
         handOver("bodyReader()");
@@ -903,6 +994,13 @@ public final class WebRequest {
      * NDJSON rather than one big array when the body is large: the report says
      * where the body went wrong, not just that it did.
      *
+     * <p>A line over {@link BodyLimits#maxNdjsonLineBytes(int)} — 1MB unless
+     * {@link App#bodyLimits(BodyLimits)} says otherwise — answers 413 naming the
+     * line, as soon as it outgrows the limit rather than once it has arrived.
+     * The number of lines is not limited, so memory holds one line at a time
+     * however long the body runs. Lines are split on the bytes, so the body is
+     * read in a charset that encodes a newline as one byte, which UTF-8 does.
+     *
      * <p>The body goes out unread, as it does through {@link #bodyReader()}, so
      * {@link #body()} cannot read it afterwards and a body already read as text
      * throws {@link IllegalStateException} here.
@@ -913,13 +1011,28 @@ public final class WebRequest {
      * handling has finished, so rejection cannot become a 400 response.
      */
     public <T> Stream<T> bodyNdjson(JsonReader<T> reader) {
+        handOver("bodyNdjson()");
+        NdjsonLines lines;
+        try {
+            lines = new NdjsonLines(req.getInputStream(), bodyCharset(), limits.maxNdjsonLineBytes(),
+                    this::refuseLine);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
         AtomicLong line = new AtomicLong();
-        return bodyReader().lines().<T>mapMulti((text, values) -> {
+        return StreamSupport.stream(lines, false).<T>mapMulti((text, values) -> {
             long number = line.incrementAndGet();
             if (!text.isBlank()) {
                 values.accept(readLine(text, number, reader));
             }
         });
+    }
+
+    private HttpException refuseLine(long number) {
+        req.setAttribute(BODY_ATTRIBUTE, BodyMarker.TOO_LARGE);
+        return new HttpException(HttpStatus.CONTENT_TOO_LARGE,
+                "Line %d of the NDJSON body is larger than the limit of %d bytes"
+                        .formatted(number, limits.maxNdjsonLineBytes()));
     }
 
     private static <T> T readLine(String text, long number, JsonReader<T> reader) {
@@ -1168,7 +1281,7 @@ public final class WebRequest {
 
     /** The same request, with the route that matched and the path variables it resolved. */
     WebRequest withRoute(Route matched, Map<String, String> resolved) {
-        WebRequest copy = new WebRequest(req, resolved, matched);
+        WebRequest copy = new WebRequest(req, resolved, limits, matched);
         // The same servlet request, so the same path: the copy is made after
         // routing has already asked for it.
         copy.path = path;

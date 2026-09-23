@@ -122,7 +122,7 @@ public class AppServlet extends HttpServlet {
         promoteFlash(req);
 
         long startedAt = System.nanoTime();
-        WebRequest arrived = new WebRequest(req, Map.of());
+        WebRequest arrived = new WebRequest(req, Map.of(), deployment.bodyLimits());
         // Split here and nowhere else: the router, the filters, and the CORS
         // path all read the same segments, and the path cannot change under them.
         String[] segments = PathPattern.split(arrived.path());

@@ -34,8 +34,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import net.benelog.spidersilk.App;
+import net.benelog.spidersilk.BodyLimits;
+import net.benelog.spidersilk.HttpException;
 import net.benelog.spidersilk.StaticFiles;
 import net.benelog.spidersilk.WebResponse;
+import net.benelog.spidersilk.json.JsonReader;
 
 /**
  * The Jetty and Tomcat acceptance tests, run against Undertow. What core
@@ -43,6 +46,8 @@ import net.benelog.spidersilk.WebResponse;
  * {@code JettyServerTest} and {@code TomcatServerTest}.
  */
 class UndertowServerTest {
+
+    private static final JsonReader<String> NAME = json -> json.asObject().getString("name");
 
     private final HttpClient client = HttpClient.newHttpClient();
     private App app;
@@ -299,6 +304,74 @@ class UndertowServerTest {
 
         assertThat(postForm("/text-twice").body()).isEqualTo("name=English|name=English");
         assertThat(postForm("/text-then-bytes").statusCode()).isEqualTo(500);
+    }
+
+    /**
+     * The body limits are the framework's, counted in bytes as the body arrives,
+     * so they hold on Undertow as they do on any server: a body at the limit is
+     * read, one byte over is a 413 whether or not it declared its length, and a
+     * refused body stays refused rather than handing on what is left of it.
+     */
+    @Test
+    void theBodyLimitsHoldOnUndertow() throws Exception {
+        startOnUndertow(new App()
+                .bodyLimits(BodyLimits.defaults().maxBytes(4).maxNdjsonLineBytes(16))
+                .post("/body", req -> WebResponse.text(req.body().length() + ""))
+                .post("/retry", req -> {
+                    try {
+                        req.body();
+                    } catch (HttpException refused) {
+                        // A handler that ignores the refusal and reads again.
+                    }
+                    return WebResponse.text("read " + bytesOf(req.bodyStream()));
+                })
+                .post("/ndjson", req -> WebResponse.text(req.bodyNdjson(NAME).count() + "")));
+
+        assertThat(postBody("/body", "éé", false).body()).isEqualTo("2");
+        assertThat(postBody("/body", "éé", true).body()).isEqualTo("2");
+        assertThat(postBody("/body", "ééa", false).statusCode()).isEqualTo(413);
+        assertThat(postBody("/body", "ééa", true).statusCode()).isEqualTo(413);
+        assertThat(postBody("/retry", "abcdefgh", true).statusCode()).isEqualTo(413);
+    }
+
+    /**
+     * An NDJSON line over its limit is a 413 naming the line, and a body of many
+     * small records, far longer than either limit, is read to its end.
+     */
+    @Test
+    void theNdjsonLineLimitHoldsOnUndertow() throws Exception {
+        startOnUndertow(new App()
+                .bodyLimits(BodyLimits.defaults().maxBytes(4).maxNdjsonLineBytes(16))
+                .post("/body", req -> WebResponse.text(req.body().length() + ""))
+                .post("/retry", req -> {
+                    try {
+                        req.body();
+                    } catch (HttpException refused) {
+                        // A handler that ignores the refusal and reads again.
+                    }
+                    return WebResponse.text("read " + bytesOf(req.bodyStream()));
+                })
+                .post("/ndjson", req -> WebResponse.text(req.bodyNdjson(NAME).count() + "")));
+
+        HttpResponse<String> tooLong = postBody("/ndjson", "{\"name\":\"a\"}\n{\"name\":\"abcdef\"}\n", true);
+        assertThat(tooLong.statusCode()).isEqualTo(413);
+        assertThat(tooLong.body()).contains("Line 2");
+        String records = "{\"name\":\"abcde\"}\r\n".repeat(5_000);
+        assertThat(postBody("/ndjson", records, false).body()).isEqualTo("5000");
+        assertThat(postBody("/ndjson", records, true).body()).isEqualTo("5000");
+    }
+
+    /** A body sent from a stream carries no Content-Length and goes chunked. */
+    private HttpResponse<String> postBody(String path, String body, boolean chunked)
+            throws IOException, InterruptedException {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        HttpRequest request = HttpRequest
+                .newBuilder(URI.create("http://localhost:" + app.port() + path))
+                .POST(chunked
+                        ? HttpRequest.BodyPublishers.ofInputStream(() -> new ByteArrayInputStream(bytes))
+                        : HttpRequest.BodyPublishers.ofByteArray(bytes))
+                .build();
+        return client.send(request, HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> postForm(String path) throws IOException, InterruptedException {
