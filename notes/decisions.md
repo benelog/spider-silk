@@ -1,13 +1,11 @@
 # Design Decisions
 
-Why Spider Silk has the shape it has, item by item.
-
-This is the reasoning behind the framework, not a description of it.
+Why Spider Silk has the shape it has: each decision, its reason, and what was rejected on the way.
 What each thing *does* is the [manual](https://spider-silk.benelog.net).
-What is kept here is the decision, why it went that way, and what was rejected on the way.
-The numbers are load-bearing: the write-ups cross-reference each other by number, and the [rejected list](#rejected--decisions-with-the-reason) at the end closes questions that would otherwise be asked again.
 
-What is still open lives in the [issue tracker](https://github.com/benelog/spider-silk/issues), one issue per item, each carrying the condition that would make it worth doing.
+- The numbers are load-bearing: the write-ups cross-reference each other by number.
+- The [rejected list](#rejected--decisions-with-the-reason) at the end closes questions that would otherwise be asked again.
+- Open items live in the [issue tracker](https://github.com/benelog/spider-silk/issues), one issue per item, each with the condition that would make it worth doing.
 
 ## Index
 
@@ -77,179 +75,170 @@ What is still open lives in the [issue tracker](https://github.com/benelog/spide
 | 59 | A pass over names a first reader guesses wrong, taken as a breaking 1.2.0 | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
-The remaining one is 15b, which is a decision rather than a gap.
-One entry, "WebSocket / SSE", split once the two halves were asked the same question and gave opposite answers: SSE is HTTP and rides through `AppServlet`, and WebSocket is a protocol upgrade that does not.
+The exception, 15b, is a decision rather than a gap.
+"WebSocket / SSE" split into 15a–15c because SSE is HTTP and rides through `AppServlet`, while WebSocket is a protocol upgrade that does not.
 
 ## 1–7 · Server, lifecycle, routing, and the test harness
 
 ### 1. Embedded Jetty and lifecycle
 
-`start(port)` binds and returns rather than blocking, because Jetty's threads are non-daemon and hold the JVM up on their own.
-`start(0)` plus `port()` is what makes tests portable.
+`start(port)` binds and returns rather than blocking, because Jetty's threads are non-daemon and hold the JVM up.
+`start(0)` plus `port()` makes tests portable.
 
 ### 2. Server seam
 
 `WebServer` is four methods, and `App.server(factory)` swaps the implementation.
-Deliberately *not* `ServiceLoader`: that is reflection, and discovery-by-classpath is the thing this framework avoids.
+
+Rejected: `ServiceLoader`, which is reflection and classpath discovery.
 
 ### 3. Jetty configuration
 
-The settings that usually need tuning are methods.
-Three customizers cover everything else, running against the real Jetty objects.
+Commonly tuned settings are methods, and three customizers reach the real Jetty objects for the rest.
 Sessions default on, because `req.flash`/`req.sessionAttr` need them.
 
 ### 4. Path-scoped filters
 
-A before-filter that returns a response ends the request, because a guard that turned the caller away must not be followed by the handler answering anyway.
-Item 18 made that a signature rather than a convention: the halt used to be inferred from a `bodyWritten` flag, and is now the difference between returning a value and returning nothing.
-Deliberate edge: `WebResponse.empty(401)` still halts, since it *is* an answer.
-What does not halt is a filter that only reads.
+A before-filter that returns a response ends the request, so the handler cannot answer a caller the guard turned away.
+
+- Item 18 made the halt a signature: returning a value halts, returning nothing continues.
+  It used to be inferred from a `bodyWritten` flag.
+- `WebResponse.empty(401)` still halts, since it is an answer.
+- A filter that only reads does not halt.
 
 ### 5. Route groups
 
 `app.path("/api", api -> ...)` passes the group as an argument.
-Spark's static-import equivalent keeps the prefix in process-global state, which rules out two apps per JVM.
+
+Rejected: Spark's static-import equivalent, whose process-global prefix rules out two apps per JVM.
 
 ### 6. Status-code error handlers
 
-One place to render a 404 or 500, whatever set the status.
-A response that already carries a body is left alone, which the sealed `WebResponse.Body` states outright rather than by sniffing the servlet response.
-No per-status shorthand: `notFound(handler)` was one, and it went, because the status a shorthand stands for is the one thing the call no longer says.
-`error(HttpStatus.NOT_FOUND, handler)` names it, the way `redirect(url, HttpStatus.MOVED_PERMANENTLY)` names its status in decision 24 and for the same reason.
-A family that stops at one status is also the harder thing to read: a reader who has seen `notFound` expects `serverError` beside it, and the 500 page is written as often as the 404.
+One place renders a 404 or 500, whatever set the status.
+
+- A response that already carries a body is left alone, which the sealed `WebResponse.Body` states without sniffing the servlet response.
+- `error(HttpStatus.NOT_FOUND, handler)` names the status, as `redirect(url, HttpStatus.MOVED_PERMANENTLY)` does in decision 24.
+
+Rejected: per-status shorthands such as `notFound(handler)`, which existed and went.
+
+- The shorthand hides the status, the one thing the call should say.
+- A reader who has seen `notFound` expects `serverError` beside it, and the 500 page is written as often as the 404.
 
 ### 7. Test harness
 
-`WebTest.test(app, client -> ...)` returns the JDK's raw `HttpResponse`, so the project's own assertion library stays in charge.
+`WebTest.test(app, client -> ...)` returns the JDK's raw `HttpResponse`, so the project keeps its own assertion library.
 
 ## 8–12 · JSON, static files, the request API, logging, shutdown
 
 ### 9. Static file caching
 
-Deliberately left out: pre-compressed variants (`.gz`/`.br`).
-Real, and not needed until someone deploys behind something that is not already doing it.
+`StaticFiles.directory(path)` serves a directory on disk, because uploads and mounted volumes are not on the classpath.
 
-A directory on disk is in, as `StaticFiles.directory(path)`, because uploads and mounted volumes are not on the classpath and had no way in at all.
-Three things came with it:
-
-- **`staticFiles(StaticFiles...)`, not one root.**
-  The deployment that wants a directory is the one that already has assets in the jar, so a single slot would have made the two exclusive.
-  Roots are read in the order given and the first that holds the file answers.
-  `staticFiles()` with nothing at all is how you turn file serving off.
-- **The traversal guard is ours, not the container's.**
-  Jetty and Tomcat answer a `..` with a 400 before the servlet sees it, Undertow does not, and none of that is core's promise to make.
-  The rule is therefore enforced in `StaticFiles` and asserted in all three modules' acceptance tests: a regular file whose real path, symbolic links followed, lies under the root's own real path.
-  Everything else is a 404, which does not say which of the reasons it was.
-  Following links out of the root is therefore refused, which is the answer to "the uploads directory has a symlink in it" that needs no configuration flag.
+- **`staticFiles(StaticFiles...)` takes several roots.**
+  A deployment that wants a directory usually has jar assets too.
+  The first root in order that holds the file answers, and `staticFiles()` with no arguments turns serving off.
+- **The traversal guard is core's, not the container's.**
+  Jetty and Tomcat reject `..` with a 400 before the servlet, and Undertow does not.
+  `StaticFiles` serves only a regular file whose real path, links followed, lies under the root's real path, and all three modules' acceptance tests assert it.
+  Anything else is a 404 that does not say why.
+  A symlink out of the uploads directory is therefore refused with no configuration flag.
 - **The root is read per request.**
-  A volume mounted after start-up needs no restart, and one that is never mounted 404s instead of failing to boot.
-  That is the same posture the classpath root already had, where a root with nothing in it still routes.
+  A volume mounted after start-up needs no restart, and an unmounted one 404s instead of failing to boot, as an empty classpath root already did.
+
+Left out: pre-compressed `.gz`/`.br` variants, until someone deploys behind something that does not already provide them.
 
 ### 8. `JsonCodec<T>` seam
 
-Codecs stay hand-written, so the mapping is still visible.
-They just stopped being re-inlined in every handler.
-The four decisions:
+Codecs stay hand-written, so the mapping stays visible, but they are no longer re-inlined in every handler.
 
-- **Two interfaces, not one with two methods.**
-  Most codecs are write-only, and a combined interface would make those fill `read` with `UnsupportedOperationException`.
-  Split, each half is a SAM and therefore a lambda.
-  That is also why `JsonCodec.of(writer, reader)` exists, since a two-method interface cannot be a lambda at all.
-- **Codecs live in the web layer**, not on the record.
-  A codec on `Deck` would make the domain import `net.benelog.spidersilk.json.Json`, which is the domain depending on the web framework to state its own wire format.
-  Core ships the interfaces only.
-  Where codecs sit is a convention the example demonstrates.
-- **Collections compose** through `JsonWriter.list(...)` and friends: function composition, no reflection.
-- **`read` throws, and `req.bodyJson(reader)` turns `IllegalArgumentException` into a 400.**
-  The same contract as `pathParamLong`: it returns the value or it rejects the request.
-  No `Result` or `Validator` type in core: business rules stay in the service layer, where they already throw.
+- **Two interfaces, not one.**
+  Most codecs are write-only and would otherwise fill `read` with `UnsupportedOperationException`.
+  Each half is a SAM and therefore a lambda, and `JsonCodec.of(writer, reader)` combines them.
+- **Codecs live in the web layer, not on the record.**
+  A codec on `Deck` would make the domain import `net.benelog.spidersilk.json.Json` to state its own wire format.
+  Core ships only the interfaces, and the example shows where codecs sit.
+- **Collections compose** through `JsonWriter.list(...)` and friends, by function composition.
+- **`read` throws, and `req.bodyJson(reader)` turns `IllegalArgumentException` into a 400**, the same contract as `pathParamLong`.
+
+Rejected: a `Result` or `Validator` type in core, since business rules already throw from the service layer.
 
 ### 10a. Cookies and repeated parameters
 
-The convenience cookie forms default to `Path=/`, `HttpOnly`, and `SameSite=Lax`, since a cookie worth setting from the server is usually one a script has no business reading.
-`params(name)` returns an empty list rather than throwing when nothing matched: an unchecked checkbox group is an answer, not a 400.
+The convenience cookie forms default to `Path=/`, `HttpOnly`, and `SameSite=Lax`, since a server-set cookie is rarely one a script should read.
+`params(name)` returns an empty list when nothing matched, because an unchecked checkbox group is an answer, not a 400.
 
 ### 10b. The rest of the request API
 
-The query string is parsed here rather than through the servlet API, which merges it with the form body.
-`formParam` is what is left once the query values are subtracted **by count, not by position**, so a name appearing in both places still splits correctly.
-HEAD runs the GET route and drops the body, so the headers are the ones the GET would have sent.
-`AppServlet` overrides `service` rather than relying on `HttpServlet`'s own HEAD machinery, so the behaviour is the framework's on any container.
-OPTIONS answers from the router, and `head`/`options` register a route for when the automatic answer is wrong.
+The query string is parsed here, because the servlet API merges it with the form body.
+
+- `formParam` subtracts the query values **by count, not by position**, so a name in both places still splits correctly.
+- HEAD runs the GET route and drops the body, so the headers match the GET's.
+  `AppServlet` overrides `service` instead of using `HttpServlet`'s HEAD machinery, so this holds on any container.
+- OPTIONS answers from the router, and `head`/`options` register a route when the automatic answer is wrong.
 
 ### 11. Request logging hook
 
-One lambda, no logging framework in core.
-It runs in a `finally` around the whole dispatch, *after* the error handler, so the status it reports is the one that was sent rather than the one the router set.
-A logger that throws goes to the servlet log: the response is already out by then, and a broken logger must not become a broken response.
+The hook is one lambda, with no logging framework in core.
+
+- It runs in a `finally` around the whole dispatch, after the error handler, so it reports the status actually sent.
+- A logger that throws goes to the servlet log, since the response is already out and must not break.
 
 ### 12. Graceful shutdown
 
-On by default, with a method to turn each half off.
-The discovery that shaped it: a stop timeout of *any* size made `stop()` wait out the whole timeout for **idle** keep-alive connections and then throw.
-`ServerConnector.setShutdownIdleTimeout` limits the drain to requests in flight, which is what it was ever supposed to mean.
-The hook is Jetty's own `setStopAtShutdown` rather than a thread of ours: one per JVM, deregistered on stop, so a suite that starts a server per test does not accumulate them.
+Graceful shutdown is on by default, and each half can be turned off.
+
+- Any stop timeout made `stop()` wait it out for idle keep-alive connections and then throw.
+  `ServerConnector.setShutdownIdleTimeout` limits the drain to requests in flight.
+- The hook is Jetty's `setStopAtShutdown`, one per JVM and deregistered on stop, so a suite starting a server per test does not accumulate hooks.
 
 ## 13–16 · Introspection, routing index, streaming, threads
 
-These are what decides whether this is more than a teaching framework.
+These decide whether this is more than a teaching framework.
 
 ### 13. Route introspection *(the differentiator)*
 
-`app.routes()` is the same list the dispatcher walks, read back as data, with **no reflection at all**, where Javalin needs a plugin.
-The four decisions:
+`app.routes()` reads back the list the dispatcher walks, as data and with no reflection, where Javalin needs a plugin.
 
-- **The handler is left out.**
-  It is a lambda, so the only name it has is what reflection would dig out of its synthetic class.
-  `PathPattern` stays package-private too: what is exposed is plain strings, not a matching engine.
-- **No description, no response types — at first.**
-  `PathPattern`'s `{deckId}` *is* OpenAPI's path-template syntax verbatim, so the minimal shape already yielded a valid document.
-  A description would mean a parameter on all seven registration methods on both `App` and `RouteGroup`, which is an annotation with the reflection taken out.
-  So it waited on a need rather than on a nicer document, and the overloads were purely additive whenever that need arrived.
-  It arrived with 29: decision 30 added them, and the wait cost nothing, since neither `routes()` nor the export changed shape to take them.
-  Response types are still out, for the reason 29 gives.
+- **The handler is left out**, since a lambda's only name is what reflection digs out of its synthetic class.
+  `PathPattern` stays package-private: plain strings are exposed, not a matching engine.
+- **Descriptions waited on a need.**
+  `PathPattern`'s `{deckId}` is OpenAPI's path-template syntax, so the minimal shape already yielded a valid document.
+  A description means a parameter on all seven registration methods of `App` and `RouteGroup`, an annotation with the reflection taken out.
+  The need arrived with 29, and decision 30 added the overloads without changing `routes()` or the export.
+  Response types stay out, for the reason 29 gives.
 - **The overview page and the OpenAPI export are not in core.**
-  A spec format is not the web tier, and its version drift is not a web framework's to own.
-  The export earned its keep and became a module rather than entering core, which is decision 29.
-  The overview page stays the example's, since a page is a template and a look, which is nobody's to ship.
-- **A second list for the guards, not a richer route.**
-  "Which guard covers this path" was left out at first as nice-to-have, and came back as `guards()`: the `before`/`after` filters and the `error(status, ...)` handlers, read off the same registrations and landing beside `routes()` without changing it.
-  It is a sealed `Guard` of three records, `Before(path)`, `After(path)`, and `Error(status)`, because a filter is scoped to a path and an error handler to a status, and one record with a component that is null half the time would report that dishonestly.
-  A filter's coverage is a pattern and not a path, so decision 4's trailing `*` is reported verbatim rather than expanded, and matching against it stays the dispatcher's job: still plain strings, still not a matching engine.
-  The `exception(Type, handler)` handlers stay out, since neither a path nor a status describes where a type-scoped handler applies.
-
-The automatic HEAD and OPTIONS answers do **not** appear: `routes()` lists what was registered, which is the honest answer for a framework whose pitch is that only what you register runs.
+  A spec format and its version drift are not the web tier's.
+  The export became a module, decision 29.
+  The overview page stays in the example, since a page is a template and a look.
+- **`guards()` lists the filters and handlers beside `routes()`**, read off the same registrations.
+  - It is a sealed `Guard` of `Before(path)`, `After(path)`, and `Error(status)`, because one record with a half-null component would misreport a path scope or a status scope.
+  - Decision 4's trailing `*` is reported verbatim, and matching stays the dispatcher's job.
+  - `exception(Type, handler)` handlers stay out, since neither a path nor a status describes a type scope.
+- **The automatic HEAD and OPTIONS answers are not listed**, since `routes()` lists only what was registered.
 
 ### 14. Router indexing
 
-Routes are bucketed by method and first literal segment, and a lookup merges the candidate lists **by registration index**, so the tie-break is exactly what it was when `find` scanned everything.
-That is the constraint the index had to preserve: `/study/today` registered before `/study/{mode}` still wins.
+Routes are bucketed by method and first literal segment, and a lookup merges candidates **by registration index**.
+The tie-break is unchanged from the full scan: `/study/today` registered before `/study/{mode}` still wins.
 
 ### 15a. SSE
 
-`text/event-stream` is plain HTTP, so it goes through `AppServlet` unchanged and a servlet deployment gets it too.
-That is the whole reason this half is in and 15b is out.
-Core adds the framing and nothing else, with no new dependency.
-The five decisions:
+`text/event-stream` is plain HTTP through `AppServlet`, so a servlet deployment gets it too, which is why this is in and 15b is out.
+Core adds only the framing, with no new dependency.
 
-- **An SSE endpoint is a `get` route**, not a registration of its own, so `routes()`, filters, and the request logger all still reach it.
-  That is exactly the argument that sinks 15b, so the implementation had to keep it true.
-- **The events are strings.**
-  `stream.send(writer.write(value).toJson())` rather than an overload taking a codec: the mapping stays visible at the call site, the same rule as everywhere else.
-- **The stream is blocking and holds its thread.**
-  One open stream is one server thread, which is the honest servlet answer and the one `AppServlet` can keep on any container.
-  `AsyncContext` would be a second dispatch model in core for a feature that has yet to prove it needs one.
-  The recipe for many streams is item 16's virtual threads, where a parked thread costs almost nothing.
+- **An SSE endpoint is a `get` route**, so `routes()`, filters, and the request logger reach it, the property whose absence sinks 15b.
+- **Events are strings**: `stream.send(writer.write(value).toJson())` keeps the mapping at the call site.
+- **The stream blocks and holds its thread**: one open stream is one server thread, which `AppServlet` can keep on any container.
+  Many streams call for item 16's virtual threads.
 - **Ending a stream is never an error.**
-  A write to a stream that has gone throws `SseStream.Closed`, caught by that one type so an IO failure in the handler's own code still reaches the exception handlers.
-  A write *after* `close()` throws the same thing, because otherwise every graceful shutdown would log a handler failure per open stream.
-- **Graceful shutdown is resolved, not documented away.**
-  An open stream is a request in flight that never finishes, so item 12's drain would wait it out and report failure.
-  `App` closes registered streams as the first statement of `stop()`, and the writes are synchronized because that close comes from another thread and must not cut a frame in half.
+  Writing to a gone stream throws `SseStream.Closed`, caught by that type alone so the handler's own IO failures still reach the exception handlers.
+  Writing after `close()` throws the same, or graceful shutdown would log a failure per open stream.
+- **Shutdown closes streams.**
+  An open stream never finishes, so item 12's drain would wait it out and fail.
+  `App` closes registered streams first in `stop()`, and writes are synchronized so that close from another thread cannot cut a frame in half.
+- **A HEAD of an SSE route answers headers without running the handler**, since a bodiless stream would never end.
+- **The heartbeat is the application's**, since core does not choose a connector idle timeout.
 
-Two deliberate edges.
-A HEAD of an SSE route answers with the headers and never runs the handler, since a stream with the body thrown away would never end.
-The heartbeat stays the application's, because a connector idle timeout is a number core has no business choosing for anyone.
+Rejected: `AsyncContext`, a second dispatch model for a feature not yet shown to need one.
 
 ### 15b. WebSocket in core — *rejected*
 
@@ -259,1213 +248,978 @@ Where it does live is 15c.
 
 ### 15c. WebSocket as `spider-silk-jetty-websocket`
 
-The half 15b rejected was `app.ws(path, config)` on `App`.
-What was left open was narrower: whether the Jetty recipe an application writes for itself is worth wrapping, and the answer is a module whose name carries the tie to one server, the way 22's `spider-silk-tomcat` does.
-`WebSockets` maps paths to a `WebSocketHandler`, and core does not change at all to allow it: the module is a `Consumer<Server>`, which is what item 3's `customizeServer` already took.
+The Jetty recipe is a module named for its server, as 22's `spider-silk-tomcat` is, in place of the `app.ws(path, config)` 15b rejected.
+`WebSockets` maps paths to a `WebSocketHandler` and is a `Consumer<Server>` for item 3's `customizeServer`, so core does not change.
 
-Five decisions inside it:
-
-- **Jetty's `Handler`-level WebSocket, not the `ee10` one.**
-  The two artifacts share a name.
-  The `ee10` one is the servlet-container integration, and arrives with annotation scanning, ASM, CDI, and JNDI behind it.
-  Ten jars against thirty-four, and none of the ten does bytecode scanning, which is the difference between a module this framework can carry and one it cannot.
-- **`customizeServer`, not `customizeContext`.**
-  Jetty builds its WebSocket container from the `Server`, from its buffer pool and its executor, and a context is not linked to a server until after the context customizers have run.
-  The hook that reads right in a sketch is not the one the API can actually use.
-- **The reflection is confined to one class.**
-  Jetty binds an endpoint's callbacks by looking its methods up and taking a `MethodHandle` to each, cached per endpoint class.
-  Every connection the module opens is the same class, its own `SessionListener` adapter, so that is the one class Jetty ever looks up and an application's `WebSocketHandler` is reached through an interface call.
-  Same confinement as jte's generated classes, arrived at the same way: not by avoiding the library's mechanism, but by making sure it never points at a class the application wrote.
-- **`Session` is Jetty's and is not wrapped.**
-  A facade would buy portability the module's own name has already ruled out, and would hide which Jetty knob was turned, which is item 16's argument applied again.
+- **Jetty's `Handler`-level WebSocket, not the same-named `ee10` one.**
+  `ee10` brings annotation scanning, ASM, CDI, and JNDI: thirty-four jars against ten, none of the ten scanning bytecode.
+- **`customizeServer`, not `customizeContext`**, because the WebSocket container is built from the `Server`'s buffer pool and executor, and a context links to its server only after context customizers run.
+- **Reflection is confined to one class.**
+  Jetty looks up an endpoint's callback methods as `MethodHandle`s, cached per class.
+  Every connection uses the module's `SessionListener` adapter, so that is the only class looked up, and the application's `WebSocketHandler` is reached by an interface call, as with jte's generated classes.
+- **Jetty's `Session` is not wrapped**, since the module's name already rules out portability and a facade would hide the knob, item 16's argument.
 - **A refused upgrade is answered.**
-  Jetty's creator contract leaves that to the creator: return null and the handshake is never written, so the client waits on a response that never comes.
-  Returning null from a `WebSocketFactory` answers 403 instead, or the error status the factory set.
-  That, and mapping a path, is the whole of what the module does beyond passing Jetty through.
+  A Jetty creator returning null writes no handshake, and the client hangs.
+  A `WebSocketFactory` returning null answers 403, or the status it set.
+  That and mapping a path are all the module adds to Jetty.
 
-What does not follow an upgrade is unchanged and is the point of 15b: the router, `before`/`after`, `error(status, ...)`, the request logger, `routes()`, and `WebTest` all stop at the servlet.
-The module's own tests say so from the other side.
-They start a real Jetty and talk to it with the JDK's `java.net.http.WebSocket` client, because no harness could stand in.
+After an upgrade, 15b's point stands: the router, `before`/`after`, `error(status, ...)`, the request logger, `routes()`, and `WebTest` stop at the servlet.
+The tests use a real Jetty and the JDK's `java.net.http.WebSocket` client, since no harness can stand in.
 
 ### 16. Virtual threads
 
-Documented, not wrapped.
-No `virtualThreads()` method.
-It would be two lines of the server's own API behind a name that hides which knob was turned, and the choice is not ours to make: it pays off only when handlers block, and `synchronized` around the blocking call takes the benefit back.
+Virtual threads are documented, not wrapped.
+
+Rejected: a `virtualThreads()` method.
+It would hide two lines of the server's API behind a name.
+The choice is the application's: it pays off only when handlers block, and `synchronized` around the blocking call takes the benefit back.
 
 ## 17–20 · Structural
 
 ### 17. Split `spider-silk-test`
 
-The harness is its own module, so core's jar carries no test code at all.
-Core's own tests are a consumer of it like anyone else.
-That looks circular and is not, since the arrow runs core's *test* source set → the harness → core's *main* source set.
+The harness is its own module, so core's jar carries no test code, and core's tests consume it like anyone else.
+The arrow runs core's *test* source set → the harness → core's *main* source set, so it is not circular.
 
 ### 18. `WebContext` split into `WebRequest` and a sealed `WebResponse`
 
-"The request, the response, the session, and every way of answering" is four responsibilities wearing one name.
-Splitting it along the HTTP metaphor was the obvious half.
-The other half was making `Handler` *return* the answer, so the compiler checks that every branch answers and answering twice stopped being expressible.
-The five decisions:
+`WebContext` held the request, the response, the session, and every way of answering, so it was split along the HTTP metaphor.
+`Handler` returns the answer, so the compiler checks every branch answers and answering twice is inexpressible.
 
-- **`WebRequest`/`WebResponse`, not `HttpRequest`/`HttpResponse`.**
-  `WebTest`'s own idiom asserts on `java.net.http.HttpResponse`, so the JDK name would collide inside this framework's own test style, and `HttpServletRequest` is one import away in the other direction.
-- **An envelope around a sealed `Body`, not a sealed response.**
-  Status, headers, and cookies are the same for every kind of answer, so they live once.
-  What differs is the body, and *that* is the sealed type.
-  A `switch` over the kinds needs no default case, and the `with`-style methods stay type-stable, which is what lets an `AfterFilter` be `WebResponse -> WebResponse` at all.
-- **Templates are rendered during dispatch, not while writing.**
-  This is the trap the return-based model sets: a body produced after dispatch has left its `try` block can no longer reach `app.exception(...)`.
-  `Stream`, `Sse`, and `Raw` genuinely cannot be materialized, and their failures land in the servlet log with a best-effort 500.
-  That is the honest limit, since the headers are already committed.
-- **Filters return `null` to continue**, rather than `Optional`: an observational filter stays a one-liner either way, and `Optional.empty()` reads worse in the common case.
-  After-filters run only on a route that completed normally: not after a before-filter answered, and not on an exception handler's output.
-- **`…Handler` answers a request; `…Writer` fills a body.**
-  Without the rule, `RawHandler` read as a relative of `Handler` and reviewers guessed one extended the other.
-  `Handler` itself stayed: it is the central type, `App.error(status, Handler)` uses it too, and it is what Javalin and Helidon call the same thing.
-
-Two behaviours changed on purpose: `redirect` sets a `Location` header rather than calling `sendRedirect`, and cookies moved to the response while the session and flash stayed on the request, since a session outlives the response and cannot be a value returned from one.
+- **`WebRequest`/`WebResponse`, not `HttpRequest`/`HttpResponse`**, which would collide with `WebTest`'s `java.net.http.HttpResponse` and sit next to `HttpServletRequest`.
+- **An envelope around a sealed `Body`.**
+  Status, headers, and cookies live once, and only the body varies.
+  A `switch` over body kinds needs no default, and type-stable `with`-style methods let an `AfterFilter` be `WebResponse -> WebResponse`.
+- **Templates render during dispatch**, so their failures still reach `app.exception(...)`.
+  `Stream`, `Sse`, and `Raw` cannot be materialized, so their failures go to the servlet log with a best-effort 500 after the headers are committed.
+- **Filters return `null` to continue**, since `Optional.empty()` reads worse in the common case.
+  After-filters run only after a route completes normally, not after a before-filter answered or on an exception handler's output.
+- **`…Handler` answers a request, and `…Writer` fills a body**, so `RawHandler` no longer reads as a subtype of `Handler`.
+  `Handler` kept its name as the central type, used by `App.error(status, Handler)` and shared with Javalin and Helidon.
+- **Two deliberate behaviour changes.**
+  - `redirect` sets `Location` instead of calling `sendRedirect`.
+  - Cookies moved to the response, and the session and flash stayed on the request, since a session outlives the response.
 
 ### 19. The example's routing table, in one place
 
-A `Controller` interface with `register(App)` read like good structure and was the wrong shape: the routing table became the *union* of what seven `register` methods each decided, so "what does this application answer?" was answered by reading seven files.
-That is what annotation scanning produces, arrived at by hand.
-Item 13's whole claim is that `app.routes()` is trustworthy because routing is an explicit list.
-The three decisions:
+The example registers every route in one explicit list, which item 13's trust in `app.routes()` depends on.
 
-- **A handler arrives in one of three shapes, chosen by how much there is to hold**: a lambda when there is no state worth a class, an `Action` class when a class answers exactly one route, public methods registered by reference when one class answers several.
-- **The handler methods are public, and that is the trade.**
-  It buys the property that mattered more: the path and the method that answers it sit on one line, in a list nothing else contributes to.
-- **`Action` is a class-naming convention, not a rename of `Handler`.**
-  See the table below for why the interface kept its name.
+- **A handler has one of three shapes**: a lambda with no state, an `Action` class answering one route, or public methods registered by reference when one class answers several.
+- **Handler methods are public**, the price of the path and its handler sitting on one line in a list nothing else adds to.
+- **`Action` is a class-naming convention**, not a rename of `Handler` (see the table below).
+
+Rejected: a `Controller` interface with `register(App)`.
+The table became the union of seven `register` methods, readable only by opening seven files, which is annotation scanning by hand.
 
 ### 20. `TestRequest`, and no mock library
 
-Item 18 left handler tests needing no `MockHttpServletResponse`.
-The request half stayed behind, so a framework whose pitch is that nothing is resolved by name at runtime was answering "how do I test a handler?" with "add two Spring artifacts".
-The four decisions:
+Item 18 left handler tests needing no `MockHttpServletResponse`, but the request half still meant adding two Spring artifacts.
+`TestRequest` builds the request, so testing a handler needs no mock library.
 
-- **`spider-silk-test`, never core**, with the servlet API `compileOnly` exactly as core takes it, so what the module puts on a consumer's classpath stays core and the JDK.
-  Depending on the bundled server's transitive copy would have tied the test module to the server the `WebServer` seam exists to keep replaceable.
-- **A builder for the request, not for `WebRequest` or `WebResponse`.**
-  Neither wants one: `WebResponse`'s `with`-style methods already are a builder, and `WebRequest` is a read view over the servlet request.
-  What actually needed building was that.
-- **A hand-written stub, not a mock library.**
-  It answers the servlet methods `WebRequest` reads and throws from the rest, so a method added to `WebRequest` and missing here fails loudly rather than returning a quiet null.
-  The same bet as the rest of the framework: a small explicit thing over a general mechanism.
-- **Faithful where a handler can tell the difference.**
-  `getParameterValues` returns query values then form values, which is what makes 10b's subtraction behave as it does behind a container.
-  That is precisely what a mock holding one parameter map cannot show.
-  The body is read once for the same reason, and a form body counts parameters as a read of it.
-  The first parameter read leaves `bodyStream()` an empty stream, and a body taken as a stream first leaves no form fields.
-  Both orders were measured against Jetty, Tomcat, and Undertow rather than assumed.
-  None of the three throws `IllegalStateException` when the stream follows a parameter read.
-
-A query string in the path is rejected rather than parsed, since a path that quietly kept its `?` would fail much later as a routing mismatch.
+- **It lives in `spider-silk-test`, never core**, taking the servlet API `compileOnly` as core does, so consumers get only core and the JDK.
+  Using the bundled server's transitive copy would tie it to one server, against the `WebServer` seam.
+- **It builds the servlet request**, since `WebResponse`'s `with`-methods already are a builder and `WebRequest` is a view over the servlet request.
+- **It is a hand-written stub**, answering what `WebRequest` reads and throwing elsewhere, so a gap fails loudly instead of returning null.
+- **It is faithful where a handler can tell.**
+  - `getParameterValues` returns query then form values, which 10b's subtraction relies on and a single-map mock cannot show.
+  - The body is read once, and form parameter reads count as reading it: after one, `bodyStream()` is empty, and after streaming the body, no form fields remain.
+  - Both orders were measured on Jetty, Tomcat, and Undertow, and none throws `IllegalStateException` when the stream follows a parameter read.
+- **A query string in the path is rejected**, since a kept `?` would surface much later as a routing mismatch.
 
 ## 21 · The status type
 
 ### 21. `HttpStatus`: an enum, not an int
 
-An int accepts `42` and `4040` as readily as `404`, and the enum makes a status that does not exist unwritable.
-That is the same bet as `paramEnum` and the rest of the typed extraction.
-Three calls inside that decision:
+A status is an enum, because an int accepts `42` and `4040` as readily as `404`.
+It is the same bet as `paramEnum`.
 
 - **The IANA registry, under RFC 9110 names**: `CONTENT_TOO_LARGE` and `UNPROCESSABLE_CONTENT`, not the older names Spring readers know.
-  Deprecated registrations are left out, and the numbers were cross-checked against an existing constant table rather than written from memory, since a transposed digit is exactly the bug the type exists to prevent.
-- **`of(int)` is the sanctioned runtime path, not a loophole.**
-  A handler mirroring an upstream answer has a number, not a name.
-  `of` throws on a code the registry does not know, so the enforcement moves to the boundary instead of disappearing.
-- **The getter answers the enum too**, because a setter taking `HttpStatus` and a getter handing back `int` would be the asymmetry `paramEnum` avoids.
-  `WebTest`'s client is the JDK's, so `statusCode()` there stays an int: the boundary is this framework's API, not other people's.
+  Deprecated registrations are left out.
+  The numbers were cross-checked against an existing constant table, since a transposed digit is the bug the type exists to prevent.
+- **`of(int)` is the sanctioned runtime path** for a handler mirroring an upstream number.
+  It throws on a code the registry does not know, so enforcement moves to the boundary.
+- **The getter answers the enum too**, avoiding the asymmetry `paramEnum` avoids.
+  `WebTest`'s `statusCode()` stays an int, because its client is the JDK's and the boundary is this framework's API.
 
 ## 22–23 · The other servers
 
 ### 22. `spider-silk-tomcat`, with Jetty still the default
 
-Decision 2 cashed in: `WebServer` was made four methods so a second server would be a small job, and this is what proves it.
-A module rather than a class in core, following 17: a tie to one server is stated in the artifact's name.
-The dependency tracks Servlet 6.0, matching core's servlet API, so the three servers stay on one specification level.
-It has since moved to Tomcat 11.0.x, which is Servlet 6.1 and one level above the other two.
-Core calls nothing that Servlet 6.1 added, so that skew does not reach an application.
+Tomcat ships as a module, following 17, and Jetty stays the default.
+It cashes in decision 2: `WebServer` has four methods so a second server is a small job.
 
-Jetty stays the default, which is the actual decision.
-Tomcat wants a working directory on disk where Jetty runs diskless, and logs through JULI rather than slf4j.
-The one that cost real code is that it has no graceful shutdown of its own, so decision 12's guarantee is rebuilt here by pausing the connector and draining the request pool.
-Its shutdown hook and its JVM lifetime are the same story: both are things decision 1 and decision 12 get from Jetty for free and have to be assembled for Tomcat.
-
-Two asymmetries are left visible rather than papered over.
-There is no `sessions(false)`, because Tomcat offers no way out of its session manager and a method that silently did nothing would be worse than its absence.
-`stopTimeout` only has something to wait on while the connector runs a thread pool, so handing `executor(...)` a virtual-thread executor turns the drain into a no-op.
-That is said in the Javadoc rather than worked around, since the alternative is tracking in-flight requests ourselves, a second lifecycle model in a module that exists to have none.
-
-What Tomcat buys is not technical: the operational knowledge an organisation already has, the runtime Spring Boot defaults to for anyone migrating off it, and a security-advisory pipeline most enterprise processes already track.
-That is a real reason to want it and not a reason to make it the default, which is exactly what a seam is for.
+- **Servlet level**: it first tracked Servlet 6.0 like core, and has since moved to Tomcat 11.0.x, which is Servlet 6.1.
+  Core calls nothing Servlet 6.1 added, so the skew does not reach an application.
+- **Costs that keep Jetty the default:**
+  - A working directory on disk, where Jetty runs diskless.
+  - Logging through JULI rather than slf4j.
+  - No graceful shutdown of its own, so decision 12's guarantee is rebuilt by pausing the connector and draining the request pool.
+  - A shutdown hook and JVM lifetime that decision 1 and decision 12 get from Jetty for free.
+- **Two asymmetries stay visible:**
+  - No `sessions(false)`, because Tomcat cannot drop its session manager and a no-op method would be worse than none.
+  - `stopTimeout` waits on the connector's thread pool, so a virtual-thread executor passed to `executor(...)` makes the drain a no-op.
+    The Javadoc says so, because tracking in-flight requests ourselves would be a second lifecycle model.
+- **What Tomcat buys is operational**: existing organisational knowledge, Spring Boot's default runtime for anyone migrating, and an advisory pipeline enterprises already track.
+  That is a reason to want it, not to make it the default.
 
 ### 23. `spider-silk-undertow`
 
-Two implementations prove a seam works.
-The third tells you what it costs, which is why this was built rather than asserted.
+A third server was built to show what the seam costs, not just that it works.
 
-Undertow turned out to be the *easiest* of the three to embed, which was not the expected answer.
-Its graceful shutdown is a first-class handler that counts requests, so decision 12's guarantee is a wire-up rather than the reconstruction Tomcat needed.
-Because it counts requests rather than shutting a pool down, it is also the only one of the three where the drain survives being handed a virtual-thread executor.
-It needs no working directory, and its logging finds slf4j by itself, so neither of Tomcat's environmental costs applies.
-
-So the default did not move again, and the reason is worth being honest about: it is not technical.
-Jetty is still the one whose lifecycle is entirely its own, and that is a real difference in how much of this project's code sits between an application and its server.
-Undertow's disadvantage is reach rather than design: it is a WildFly component rather than a standalone product, so operational familiarity and tooling are thinner than Tomcat's.
-That is a deployment fact, not an engineering one, and it belongs in the manual as advice rather than in core as a default.
-
-One structural note.
-Each server module carries its own copy of the acceptance tests, deliberately: they assert what *core* promises against each container in turn.
-Factoring them into one parameterised suite would mean a shared module that every server module depends on: a dependency built to save duplication in tests.
+- **Undertow was the easiest of the three to embed**, unexpectedly.
+  - Its graceful shutdown is a request-counting handler, so decision 12's guarantee is a wire-up.
+  - Counting requests, it is the only one whose drain survives a virtual-thread executor.
+  - It needs no working directory, and its logging finds slf4j itself.
+- **The default still did not move, for non-technical reasons.**
+  - Jetty's lifecycle is entirely its own, so less of this project's code sits between an application and its server.
+  - Undertow is a WildFly component rather than a standalone product, so its operational familiarity and tooling are thinner than Tomcat's.
+    That is advice for the manual, not a default for core.
+- **Each server module carries its own copy of the acceptance tests**, asserting what core promises against each container.
+  A shared parameterised suite would need a module every server depends on only to save test duplication.
 
 ## 24 · The redirect default
 
 ### 24. `redirect` defaults to 302, and only accepts a 3xx
 
-The choice between 301 and 302 is not symmetric, and that asymmetry decides it: a 302 can be taken back, a 301 cannot.
-Browsers and intermediaries cache a 301, often indefinitely, so a wrong one keeps sending visitors to the wrong place long after the code is fixed, with no way to call it back.
-Every comparable default agrees: `HttpServletResponse.sendRedirect`, Javalin, Spark, Spring MVC, Express, Rails, and Django all send 302, so a framework defaulting to 301 would be surprising in the one direction that cannot be undone.
+`redirect` defaults to 302, because a 302 can be taken back and a 301 cannot.
 
-`redirect(location, HttpStatus)` is how an application says otherwise, and it takes the enum for decision 21's reason.
-It rejects a status outside 3xx: a `Location` header on a 200 is not a redirect, and failing at the call beats shipping a response no client will follow.
+- Browsers and intermediaries cache a 301, often indefinitely, so a wrong one outlives the fix.
+- `HttpServletResponse.sendRedirect`, Javalin, Spark, Spring MVC, Express, Rails, and Django all default to 302.
+- `redirect(location, HttpStatus)` overrides it, taking the enum for decision 21's reason.
+- A status outside 3xx is rejected, because a `Location` on a 200 is no redirect, and failing at the call beats a response no client will follow.
 
-No `redirectPermanent(...)` convenience method.
-`redirect(url, HttpStatus.MOVED_PERMANENTLY)` already names the status out loud, and a second spelling would only hide which one was chosen.
-That is the same argument that kept `virtualThreads()` out in decision 16.
+Rejected: `redirectPermanent(...)`.
+`redirect(url, HttpStatus.MOVED_PERMANENTLY)` already names the status, the argument that kept `virtualThreads()` out in decision 16.
 
 ## 25 · The Gradle plugin
 
 ### 25. `spider-silk-gradle-plugin`: packaging conventions, in an included build
 
-The example's build file had grown a packaging block any application would copy verbatim: jte precompilation with its native-resources extension, Jib with a JRE base and a restated `targetCompatibility`, the `-Pnative` switch with the task dependency Jib's extension forgets to declare, and a `resolveDependencies` task for Dockerfile layer caching.
-Code copied unchanged into every consumer is a convention plugin by definition, so it became one: `net.benelog.spidersilk`, an included build so the example applies it exactly as a published application would.
+The packaging block every application would copy became the convention plugin `net.benelog.spidersilk`, an included build the example applies as a published app would.
 
-The no-reflection principle is about the runtime, and this framework already puts its magic at build time: precompiled templates, generated reflect-config.
-A build-time convention plugin therefore extends the pattern rather than breaking it.
-The line it holds is that only packaging every application shares goes in.
-The example's `domainReflectConfig` stays out, because it is the price of that app's reflective row mapper, not a shared convention.
-Everything the plugin sets lands before the build script's own blocks run, so overriding is plain `jib { }` / `graalvmNative { }` configuration, and every convention has its expanded form in the manual for a build that would rather own it.
-
-The cost accepted: the plugin pins jte, Jib, and the GraalVM build tools, so their upgrades now arrive as plugin releases, and its DSL joins the API that freezes at 1.0.
-A Maven counterpart was initially deferred, then shipped as decision 26.
+- **Contents**: jte precompilation with its native-resources extension, Jib with a JRE base and restated `targetCompatibility`, the `-Pnative` switch with the task dependency Jib's extension forgets, and `resolveDependencies` for Dockerfile layer caching.
+- **No-reflection holds**, because it governs the runtime and the framework already does its magic at build time (precompiled templates, generated reflect-config).
+- **Only shared packaging goes in.**
+  The example's `domainReflectConfig` stays out as the price of that app's reflective row mapper.
+- **Overrides are plain `jib { }` / `graalvmNative { }`**, since the plugin's settings land before the script's blocks.
+  The manual gives each convention's expanded form.
+- **Cost**: jte, Jib, and GraalVM build tool upgrades arrive as plugin releases, and the DSL joins the API frozen at 1.0.
+- The Maven counterpart, first deferred, shipped as decision 26.
 
 ## 26 · The Maven counterpart
 
 ### 26. `spider-silk-maven-parent`: a parent POM, not a Maven plugin
 
-Maven's counterpart of a Gradle convention plugin is not a Maven plugin: a Mojo runs goals, and cannot declare other plugins' configuration.
-Inheritance is where Maven puts build conventions, so decision 25's conventions ship for Maven as a parent POM.
-Its `pluginManagement` entries stay inert until the child declares the plugin, which makes the declaration itself the opt-in, the way `spiderSilk { jte() }` is on the Gradle side.
+Decision 25's conventions ship for Maven as a parent POM, because a Mojo runs goals and cannot configure other plugins.
 
-The one convention that could not carry over structurally is the `-Pnative` tag switch: a profile cannot append to a value the child wrote, so the parent defaults a `spider-silk.image.tag` property to `latest`, the `native` profile flips it, and the child places the placeholder in its image name.
-That is a documented convention where Gradle has an override.
-The parent POM is a hand-written file published verbatim by a Gradle module, and the publication fails if the file's coordinates and the module's ever drift.
-Gradle's POM DSL has no model for `pluginManagement` or profiles, and generating XML through it would only obscure a file whose whole value is being readable.
-
-The versions diverge where upstream does: Jib's Maven plugin stops at 3.5.2 on Central while its Gradle plugin is at 3.5.4, and the parent pins what exists rather than what would be symmetric.
+- `pluginManagement` entries stay inert until the child declares the plugin, so the declaration is the opt-in, like `spiderSilk { jte() }`.
+- **The `-Pnative` tag** cannot be a profile appending to the child's value.
+  The parent defaults `spider-silk.image.tag` to `latest`, the `native` profile flips it, and the child puts the placeholder in its image name.
+- **The POM is hand-written, published verbatim by a Gradle module**, which fails if their coordinates drift.
+  Gradle's POM DSL cannot model `pluginManagement` or profiles, and generated XML would obscure a file meant to be read.
+- **Versions follow upstream**: Jib's Maven plugin stops at 3.5.2 on Central while the Gradle plugin is at 3.5.4.
 
 ## 27 · The three every deployment turns on
 
 ### 27. CORS, gzip, and security headers: named on `App`, not filters and not plugins
 
-All three are the web tier, so all three are core-eligible, and the question the issue left open was what shape they take.
-A helper each, registered as an ordinary `before`/`after` filter, was the tempting answer and is the wrong one: a filter runs only once a route has matched, and what these three have to reach is precisely the answers where none did.
-A CORS preflight is an `OPTIONS` nobody registered a handler for, which is decision 10b's automatic answer.
-A cross-origin 404 has to carry the CORS headers, or the browser reports a CORS failure rather than the 404 that happened.
-Security headers belong on an error page like any other page, and the biggest thing most applications send is a static file, which decision 9 answers before routing gets as far as a filter.
-Making filters run for unmatched paths to fit them in would change what `before`/`after` mean for every application that already has one.
+Each is one method on `App` taking an inert value: `cors(Cors)`, `gzip(Gzip)`, `securityHeaders(SecurityHeaders)`.
+They cannot be `before`/`after` filters, which run only after a route matches.
 
-So each is one named method on `App` taking one inert value: `cors(Cors)`, `gzip(Gzip)`, and `securityHeaders(SecurityHeaders)`.
-Each is applied in `AppServlet` between working the answer out and putting it on the wire, which is the one point every path meets.
-That is the shape decision 9's `staticFiles(StaticFiles)` and decision 11's `requestLogger` already have, and it is deliberately not Javalin's bundled-plugin registry: nothing registers itself, nothing is on until it is named, and reading the three lines is reading the whole of what they do.
-
-Compression is a transform over the sealed `WebResponse` of decision 18 rather than a servlet response wrapper, which is what decides its cases.
-A body already in memory is compressed there and then, so the length it announces is the length it sends.
-A `Stream` body wraps the output stream as it is written, so a large file never lands in memory whole and its `Content-Length` goes.
-SSE is excluded by what it is: a stream buffered until it is worth deflating is a stream that no longer arrives.
-`Raw` is excluded by definition.
-It also had to agree with decision 9's validators: a compressed answer's `ETag` is marked weak, since the two bodies are the same file and not the same bytes, and `StaticFiles` already accepts the weak form back, so revalidation keeps working without an inbound rewrite.
-Every compressible answer carries `Vary: Accept-Encoding` whether or not it ended up compressed, which is what `WebResponse.vary(field)` exists for: `header(name, value)` overwrites, and CORS and compression each add a field to the same header.
-A body that compression declines leaves as the type it arrived as, so a `Text` too small to compress, or no smaller compressed, is still a `Text` to decision 11's `requestLogger`.
-Handing back the UTF-8 bytes it had already encoded would spare the writer a second encode, but it would make the body type `decorate` passes on depend on whether gzip is on.
-A `Text` is instead measured before it is encoded.
-Its length alone decides most cases, because a char encodes to between one and three bytes, and the rest are counted char by char without allocating.
-The one body still encoded twice is one that reaches the threshold and comes out no smaller, which is rare.
-
-Gzip's stream wrapping is the one container-sensitive piece, so it is in the acceptance tests decision 22 and 23 mirror onto Tomcat and Undertow.
+- **Answers with no matched route:**
+  - A CORS preflight is an unregistered `OPTIONS`, decision 10b's automatic answer.
+  - A cross-origin 404 without CORS headers shows up in the browser as a CORS failure.
+  - Error pages need security headers.
+  - Static files, decision 9, are answered before routing.
+- Running filters for unmatched paths would change `before`/`after` for existing applications.
+- **Applied in `AppServlet`** between computing the answer and writing it, like decision 9's `staticFiles(StaticFiles)` and decision 11's `requestLogger`.
+  Unlike Javalin's plugin registry, nothing self-registers and nothing is on until named.
+- **Compression transforms decision 18's sealed `WebResponse`**, not a servlet wrapper:
+  - An in-memory body is compressed there, so its announced length is exact.
+  - A `Stream` body wraps the output stream and drops `Content-Length`, so a large file never sits in memory.
+  - SSE is excluded, since buffering it would stop it arriving.
+  - `Raw` is excluded by definition.
+- **Validators**: a compressed `ETag` is weak (same file, different bytes), which `StaticFiles` already accepts back, so revalidation works.
+- **`Vary: Accept-Encoding`** goes on every compressible answer via `WebResponse.vary(field)`, since `header(name, value)` overwrites and CORS also adds a field.
+- **A declined body keeps its type**, so decision 11's `requestLogger` still sees a `Text`.
+  - Returning the already-encoded bytes would make the body type `decorate` passes on depend on whether gzip is on.
+  - A `Text` is measured before encoding: a char is one to three bytes, so length decides most cases, and the rest are counted without allocating.
+  - Only a body at the threshold that comes out no smaller is encoded twice.
+- Gzip's stream wrapping is container-sensitive, so it is in the acceptance tests decision 22 and 23 mirror.
 
 ## 28 · The Accept header
 
 ### 28. Content negotiation: `accepts(...)` answers with a type, not a serializer
 
-The gap was real: a handler answering HTML to a browser and JSON to a client parsed `Accept` itself, quality values and all.
-The shape it closed with is what keeps it out of the reflection the framework exists without.
+Handlers used to parse `Accept` themselves, and `accepts(...)` replaces that without reflection.
 
-**`accepts(candidates...)` returns one of the strings it was handed.**
-Not a parsed media-type object, and not a serializer chosen on the handler's behalf: the answer is a value the handler wrote on that line, so the branch is an ordinary `switch` and the compiler still sees every case.
-The reflective half of what the other frameworks call content negotiation, picking a writer once the type is known, is decision 8's territory and stays refused.
-
-**It never returns null.**
-A caller that will take none of what is offered is a 406, the same contract as `param` answering 400 and `pathParamLong` throwing rather than handing a `null` onward.
-That is decision 10b's rule, applied to one more question.
-A caller that sent no `Accept` at all gets the first candidate, since the specification reads an absent header as "anything", which makes the argument list the order the *handler* prefers.
-
-**One parser, two headers.**
-`AcceptHeader` is package-private and answers `Accept-Encoding` for decision 27's `gzip()` as well, because both are the same grammar of comma-separated values with a `q=` weight.
-`q=0` is a refusal rather than an absence, and is honoured even where a wildcard would otherwise have covered the type.
-Ordering is by specificity where the weights tie: `text/html` before `text/*` before `*/*`.
-Only `acceptedTypes()` can observe that, since `accepts` matches each candidate against the closest entry that names it.
-
-**Asking is what declares the dependency.**
-A handler that calls either method gets `Vary: Accept` on its answer without saying so, because the answer now depends on a request header and a shared cache must not hand JSON to the next browser.
-That is the same bookkeeping `gzip()` does for `Accept-Encoding`, and it is on the request rather than the response so that a handler cannot ask the question and forget the header.
-
-`acceptedTypes()` is the parsed view underneath, for the handler that has to decide something `accepts` cannot phrase.
-It is empty for a request with no `Accept`: a caller that will take anything, which is not a caller that will take nothing.
+- **`accepts(candidates...)` returns one of its own arguments**, not a media-type object or a chosen serializer, so the branch is a plain `switch`.
+  Picking a writer by type is decision 8's territory and stays refused.
+- **It never returns null.**
+  - Nothing acceptable is a 406, like `param`'s 400 and `pathParamLong` throwing, decision 10b's rule.
+  - No `Accept` means "anything", so the first candidate wins and argument order is the handler's preference.
+- **One parser**: package-private `AcceptHeader` also parses `Accept-Encoding` for decision 27's `gzip()`.
+  - `q=0` is a refusal, even under a wildcard.
+  - Ties sort by specificity (`text/html`, `text/*`, `*/*`), visible only through `acceptedTypes()`.
+- **Asking adds `Vary: Accept` automatically**, so a shared cache never hands JSON to a browser and a handler cannot forget the header.
+- **`acceptedTypes()`** is the parsed list, empty when there is no `Accept`, which means anything, not nothing.
 
 ## 29 · The OpenAPI export
 
 ### 29. `spider-silk-openapi`, outside core
 
-Decision 13 left the export in the example with a condition on it: the reading was worth writing once, but not worth putting in the artifact every application depends on.
-15c had just settled the same question the same way, with a module whose name carries what it is tied to, and this one is tied to a document format instead of a server.
-Four decisions inside it:
+The export moved from the example into a module, as 15c did for a server, because decision 13 judged it not worth putting in every application's dependency.
 
-- **A module, not a method on `App`.**
-  Pinning `3.1.0` inside core would sign core up to track someone else's document version forever, and an application that wants no spec at all would carry the pin anyway.
-  In a module the pin is a dependency an application chooses, which is what 17's split bought for the test harness.
+- **Not a method on `App`**: pinning `3.1.0` in core would tie core to another document version forever.
+  As a module it is a dependency an application chooses, like 17's split.
 - **Core does not change by one line.**
-  That is the claim being proved rather than a convenience: `routes()` was already enough, since `{deckId}` *is* the path template and a `Route` is a record.
-  A module that needed a new accessor would have been evidence that 13's minimal shape was too minimal, and it needed none.
-- **`document(title, version, routes)` — a list, not the `App`.**
-  Which routes a document covers is the application's call, not the reader's: an app serving HTML alongside its API passes the `/api` routes, and this module cannot tell a page from an endpoint.
-  Taking the `App` would have made the guess mandatory and hidden it, so what the module takes is the list 13 exists to hand out.
-  Title and version are arguments for the same reason a default would be wrong: OpenAPI requires both, and neither is this module's to name.
-- **A wildcard throws rather than being skipped.**
-  The example used to drop `*` routes quietly, which is fine when the filter and the reader are the same forty lines and dishonest once they are not: a document silently missing a route claims the application answers less than it does.
-  Refusing it moves the filter to the call site, where it is visible, the same trade as `HttpStatus.of` throwing on a code the registry does not know.
-
-What is *not* in the document is the other half of the decision: no request or response schema, no server list, no security scheme.
-None is derivable from a route, so each would have to be declared at the registration site.
-That is the door 13's deferred description parameter came through, and decision 30 opened it exactly one line wide.
+  `routes()` suffices, since `{deckId}` is the path template and a `Route` is a record, which confirms 13's minimal shape.
+- **`document(title, version, routes)` takes a list, not the `App`.**
+  - The application picks the routes, for instance only `/api`, since the module cannot tell a page from an endpoint.
+  - Taking the `App` would have made that guess mandatory and hidden it.
+  - Title and version are required by OpenAPI and are not the module's to name.
+- **A wildcard throws**, where the example silently dropped `*` routes.
+  A missing route understates the API, and throwing moves the filter to the call site, like `HttpStatus.of`.
+- **Omitted**: request and response schemas, servers, security schemes, none of which a route can supply.
+  That is the door 13's deferred description parameter came through, and decision 30 opened it one line wide.
 
 ## 30 · Route descriptions
 
 ### 30. An overload, not an annotation
 
-13 deferred this with the condition written down: a description is worth a parameter on fourteen methods only when something reads it, not when it merely makes a nicer document.
-29 is what made something read it.
-The export turns the route list into the artifact a client generator or a Swagger UI consumes.
-In that document the one field a reader looks at first, `summary`, was the one field nothing could fill, because a method and a path do not say what a route is *for*.
-Three decisions:
+A route takes an optional description as a `String`, because 29 gave 13's deferred parameter a reader: OpenAPI's `summary`.
 
-- **A `String` between the path and the handler.**
-  `get(path, description, handler)` on `App` and on `RouteGroup`, seven methods each.
-  Last would read worse: the handler is a lambda or a method reference, and an argument after it pushes the closing brace away from the call.
-  The parameter is what an annotation would be with the reflection taken out, which is the point rather than an accident: the text lives at the registration site either way, and the difference is whether reading it costs a classpath scan.
-- **A third component on `Route`, and `""` for a route without one.**
-  Not null: the guard write-up rejected a record whose component is null half the time, and this is the same rule read the other way round.
-  A `Guard` needed three records because a path and a status are different things.
-  A described and an undescribed route are the same thing, one of them undocumented, so one record with a documented empty string reports it honestly and a reader prints `description()` without a null check.
-  `Route(method, path)` stays as a second constructor, so every existing fixture and reader compiles unchanged.
+- **Between path and handler**: `get(path, description, handler)`, seven methods each on `App` and `RouteGroup`.
+  After the handler, it would push the lambda's closing brace away from the call.
+  It is an annotation without the classpath scan.
+- **A third `Route` component, `""` when absent.**
+  - Not null, per the guard write-up's rule against half-null components.
+  - A `Guard` needed three records because a path and a status differ, but described and undescribed routes are one kind.
+  - `Route(method, path)` stays as a second constructor, so existing code compiles.
 - **The framework never reads it.**
-  Nothing in the dispatcher, the router index, or the duplicate check sees the string.
-  `routes()` hands it back and that is all.
-  A description that changed behaviour would be a configuration language growing inside a documentation field.
-
-`spider-silk-openapi` maps a non-empty description to the operation's `summary` and omits the field entirely when there is none, rather than writing an empty string a UI would render as a blank line.
-29's second bullet still holds as it was written: core did not change to let the export be a module.
-It changed here for a need of its own, the route list saying what a route is for, and the export reads that the way it reads everything else, off the list.
+  Neither dispatcher, router index, nor duplicate check sees it, and `routes()` only hands it back.
+  A description that changed behaviour would be a configuration language inside a documentation field.
+- **`spider-silk-openapi`** maps a non-empty description to `summary` and omits the field otherwise, sparing UIs a blank line.
+- 29's second bullet still holds: core changed here for its own need, not the export's.
 
 ## 31 · The pre-compressed sibling
 
 ### 31. `.br` and `.gz` siblings: `precompressed()` on `StaticFiles`, not on by default
 
-Decision 27's `gzip()` deflates the same unchanging stylesheet again on every request that asks for it, and brotli it cannot answer at all, since the JDK ships no encoder.
-A `.br` or `.gz` file a build left next to the asset closes both halves at once, and is the only way core would ever answer brotli.
-Five decisions inside it:
+With `precompressed()`, `StaticFiles` serves a `.br` or `.gz` sibling a build left beside an asset.
+Decision 27's `gzip()` recompresses every request and cannot produce brotli, since the JDK has no encoder.
 
-- **Off until it is named.**
-  This is the one that was genuinely open, because two rules pointed opposite ways: 27's is that nothing is on until it is named, and 9's `classpath:/public` is already served without being asked for.
-  The argument for a default is that placing an `app.css.br` *is* the naming, and it is a good argument.
-  It lost to what happens to an application that upgrades.
-  A `.gz` left behind by a pipeline that no longer runs would start being served by a version bump, which is a content change nobody wrote, and every static request would pay up to two extra lookups to find the siblings that are usually not there.
-  So it is `precompressed()`, one more method on the value 9 already hands to `staticFiles(...)`.
-- **The validators come from the original, whichever body is sent.**
-  The two encodings are one resource, so the `ETag` is derived from the original's modification time and length and the `Last-Modified` is the original's, with the tag marked weak on an encoded answer.
-  That is the same reading 27 gave its own compressed answers, and `StaticFiles` already accepted the weak form back.
-  A browser that cached the plain body and revalidates while accepting brotli keeps its 304.
-  `Content-Type` comes from the original name for the same reason read the other way: a `.gz` extension is the encoding, not the type.
-- **`Vary: Accept-Encoding` from `StaticFiles`, not from `Gzip`.**
-  27 puts the field on every compressible answer, and this is the case it could not reach: `Gzip` stops at the first sight of a `Content-Encoding`, so the answer it must not touch is exactly the answer it would never mark.
-  A root with `precompressed()` on therefore varies every answer itself, sibling found or not, and `WebResponse.vary` not repeating a field already listed is what lets both add it.
-- **A stale sibling is passed over rather than declared the build's problem.**
-  A `.gz` older than the file beside it is a build that did not rerun, and serving it is serving content that no longer exists: a wrong answer, not a slow one.
-  Both timestamps are already read, so comparing them costs nothing.
-  A time neither file reports is no evidence of staleness, and the sibling still answers.
-- **Brotli over gzip, fixed.**
-  Not by the client's `q=` ordering: brotli is the smaller of the two and the one core cannot produce any other way, so where both siblings exist and the client takes both, the choice is not the client's to reverse.
-  Whether it takes them at all is read through `AcceptHeader`, decision 28's one parser, rather than by reading `Accept-Encoding` a second way.
-
-Unlike 27's stream wrapping, none of this touches the output stream: it is a file's bytes and two headers.
-So it is not mirrored onto the Tomcat and Undertow acceptance tests of 22 and 23.
-The external-directory half that used to sit beside this in the deferred list shipped separately, as `StaticFiles.directory(path)`.
+- **Off by default.**
+  - 27 says nothing is on until named, but 9 serves `classpath:/public` unasked.
+  - The case for on: placing `app.css.br` is the naming.
+  - It lost to upgrades, where a `.gz` left by a retired pipeline would start being served by a version bump, a content change nobody wrote.
+  - It would also cost every static request up to two lookups for siblings usually absent.
+  - So it is `precompressed()`, one more method on the value 9 hands to `staticFiles(...)`.
+- **Validators come from the original.**
+  - `ETag` from its modification time and length, and its `Last-Modified`.
+  - The tag is weak on an encoded answer, as in 27, so a browser caching the plain body keeps its 304.
+  - `Content-Type` comes from the original name, since `.gz` is the encoding.
+- **`StaticFiles` sets `Vary: Accept-Encoding` itself**, because `Gzip` skips answers that already carry `Content-Encoding`.
+  With `precompressed()` on, every answer varies, and `WebResponse.vary` dedupes the field.
+- **A stale sibling is skipped.**
+  - One older than the original is from a build that did not rerun, and serving it is a wrong answer, not a slow one.
+  - The timestamps are already read, so the check is free.
+  - Missing times do not mean stale.
+- **Brotli wins over gzip regardless of `q=`**, being smaller and otherwise unavailable.
+  Acceptance is read through `AcceptHeader`, decision 28's parser.
+- **Not mirrored onto 22 and 23's acceptance tests**, since it touches no output stream, unlike 27's wrapping.
+- The external-directory half shipped separately as `StaticFiles.directory(path)`.
 
 ## 32 · The public surface, before 1.0
 
 ### 32. One name — `net.benelog.spidersilk` — and a pass over what is public
 
-1.0 is the promise that what is public stays public and keeps its shape, so everything public becomes permanent on the day it is made.
-Nothing had ever been read with that in mind: a type was public because a caller in another package needed it, and a method was public because making it so was the shortest way past a compiler error.
-Two questions came out of that, and the second one had to wait for the first, since a package rename decides what half the answers are written in.
+1.0 promises that what is public keeps its shape, so everything public was read once before it became permanent.
+The name came first, since a package rename decides what the other answers are written in.
 
 **The name.**
-There were three of them for one thing: the group id `io.github.benelog.spidersilk`, the package root `spidersilk`, and a module name derived from the project name.
-They are now one string, `net.benelog.spidersilk`, and it is the group id, the package root, the `Automatic-Module-Name` in every manifest, and the Gradle plugin id.
+The group id `io.github.benelog.spidersilk`, the package root `spidersilk`, and a module name derived from the project name are now one string, `net.benelog.spidersilk`.
+It is also the `Automatic-Module-Name` in every manifest and the Gradle plugin id.
 
 - **`net.benelog`, not `io.github.benelog`.**
-  `io.github.<user>` is the coordinate Maven Central lends to a publisher with no domain of its own, and this project has one: the manual is served from `spider-silk.benelog.net`.
-  A group id is a claim of ownership, and the domain is the thing owned.
-  The GitHub handle is a name that moves if the account does.
+  Maven Central lends `io.github.<user>` to a publisher with no domain, and this project owns `spider-silk.benelog.net`.
+  A group id claims ownership of a domain, whereas a GitHub handle moves with the account.
 - **`net.benelog.spidersilk`, not `net.benelog`.**
-  The artifact ids already say `spider-silk-*`, so the shorter group would read fine.
-  It would also put two group ids in one repository, because a Gradle plugin id has to be `net.benelog.spidersilk` whatever the jars use, and the plugin marker artifact's group *is* the plugin id.
-  A domain alone also stops distinguishing anything the moment a second project publishes under it.
-  Appending the project to the domain is what the multi-module projects a reader already knows do, such as `org.springframework.boot:spring-boot-*` and `org.eclipse.jetty:jetty-*`.
-  It is also what makes the group id and the package root the same string, which is the whole point of the exercise.
+  - The plugin marker artifact's group is the plugin id, `net.benelog.spidersilk`, so a shorter group would put two group ids in one repository.
+  - A bare domain stops distinguishing anything once a second project publishes under it.
+  - It follows `org.springframework.boot:spring-boot-*` and `org.eclipse.jetty:jetty-*`, and makes the group id equal the package root.
 - **The module name is the package root, hyphens read as dots.**
-  It used to be `'spidersilk.' + project.name.substring('spider-silk-'.length())`, which for `spider-silk-jetty-websocket` produced `spidersilk.jetty-websocket`.
-  That is not a legal Java module name, so that jar was unusable on the module path, while its package was `spidersilk.jetty.websocket` all along.
-  The hyphen in a project name is the package separator it reads as, so it is substituted for one: the name a build writes on the module path and the name a source file writes in an `import` are now the same string, which is the property that made the alignment worth doing.
+  The old rule, `'spidersilk.' + project.name.substring('spider-silk-'.length())`, gave `spidersilk.jetty-websocket`, an illegal module name for a package named `spidersilk.jetty.websocket`.
+  The module name and the `import` name are now the same string.
 
 **What is public.**
-The pass found less to close than expected, because most of the surface was already deliberate, and the useful outcome was writing down *why* in the places where the answer is "it stays".
+Most of the surface was already deliberate, so the pass mostly wrote down why things stay.
 
 - **`RouteGroup.resolve(String)` is private.**
-  The one method that was public for no reason: nothing outside the class ever called it, and it is how a group builds the path it hands to `App`, not something a caller holding a group has a use for.
+  Nothing outside the class called it, and a caller holding a group has no use for it.
 - **`WebRequest`'s constructor stays public, with the reason restated.**
-  It carried `Public so a test can build a request and call a handler method directly`, which names a caller instead of a contract.
-  A contract stated as "for tests" is one nobody can tell the boundaries of.
-  What is true is that anything holding a servlet request and knowing what the path variables should be can build the argument a handler takes.
-  `TestRequest` in `spider-silk-test` is one such caller, in another module, which is why the constructor cannot be anything narrower.
-- **`raw()` stays, documented as what it costs.**
-  Core itself reads through it, and `WebResponse.raw(...)` already blesses raw servlet access on the way out, so removing the one on the way in would leave a one-directional escape hatch.
-  What it is missing is the warning.
-  What is read through it is read behind the framework's back: `accepts` records that an answer varies by `Accept` and reading the header directly does not, and a body consumed there is a body `body()` can no longer read.
-  A handler that uses it is also tied to the servlet API rather than to this one.
-- **What escapes is frozen where freezing it is possible.**
-  Two leaks were real.
-  `queryParams(name)` handed back the live `ArrayList` out of the map cached on the request, so a caller that altered it altered what every later read of that request saw.
-  `cookies()` built a fresh `LinkedHashMap` and handed it over unwrapped.
-  Both are frozen now, with `Collections.unmodifiableMap` and not `Map.copyOf`, since the order the request sent them in is part of the answer.
-  Where the element is mutable by nature the javadoc says so instead: a `jakarta` `Cookie` is a mutable object and `WebResponse.cookies()` hands back the ones it was given, the `byte[]` of a `Bytes` body is held rather than copied because a download's second copy is exactly the cost the byte array was avoiding, and a `Template`'s model is held because a template model takes null values that the unmodifiable copies refuse.
-  A caveat a reader can act on beats a defensive copy that quietly doubles the memory of the one case that cannot afford it.
-- **`AppServlet` stays non-final, and now says why.**
-  A `web.xml` names a class and calls the no-argument constructor the container requires, so a subclass that builds its `App` and passes it up is the only way to deploy that way at all.
-  What the subclass gets is the servlet lifecycle and nothing else: `dispatch` and `write` are private, so the two halves of decision 18's split are not an extension point.
-- **`net.benelog.spidersilk.server` and `net.benelog.spidersilk.test` were read and left as they are.**
-  The server package is decision 2's seam: `WebServer`, `WebServerFactory`, and the bundled `JettyServer`.
-  It sitting in core while `TomcatServer` sits in a module named after its server is the asymmetry of *being the default*, not an oversight: core's server is core's, and the ones core does not bundle name what they are tied to.
-  In the test package `StubServletRequest` and `TestClient`'s constructor were already package-private, and the three public types are the three a test calls.
+  "Public so a test can build a request" named a caller, not a contract with boundaries.
+  The contract: anything holding a servlet request and the path variables can build a handler's argument, and `TestRequest` in `spider-silk-test` is such a caller in another module.
+- **`raw()` stays, documented with what it costs.**
+  - Core reads through it, and `WebResponse.raw(...)` allows the outbound direction, so removing it would leave a one-directional escape hatch.
+  - A read through it bypasses the framework: `accepts` records that an answer varies by `Accept` and a direct read does not, and a body consumed there is lost to `body()`.
+  - A handler using it is tied to the servlet API.
+- **What escapes is frozen where freezing is possible.**
+  - `queryParams(name)` returned the live cached `ArrayList`, and `cookies()` an unwrapped `LinkedHashMap`.
+    Both use `Collections.unmodifiableMap` now, not `Map.copyOf`, because the request's order is part of the answer.
+  - Where an element is mutable by nature, the javadoc says so instead of copying:
+    - `WebResponse.cookies()` returns the mutable `jakarta` `Cookie` objects it was given.
+    - A `Bytes` body holds its `byte[]`, because a second copy is the cost a download cannot afford.
+    - A `Template` holds its model, because a model takes null values that unmodifiable copies refuse.
+- **`AppServlet` stays non-final.**
+  A `web.xml` calls a no-argument constructor, so a subclass that builds its `App` is the only way to deploy that way.
+  `dispatch` and `write` are private, so the two halves of decision 18's split are not an extension point.
+- **`net.benelog.spidersilk.server` and `net.benelog.spidersilk.test` stay as they are.**
+  - The server package is decision 2's seam: `WebServer`, `WebServerFactory`, and `JettyServer`.
+    It is in core while `TomcatServer` is not because Jetty is the default, and the servers core does not bundle name what they are tied to.
+  - In the test package, `StubServletRequest` and `TestClient`'s constructor were already package-private, and the three public types are the three a test calls.
 
 **Not yet: japicmp or revapi.**
-Binary-compatibility tooling compares a build against a baseline, and there is no released baseline to compare against until 1.0 exists.
-It belongs to the release after this one, when the first frozen surface is on a repository somewhere.
+Binary-compatibility tooling needs a released baseline, so it belongs to the release after 1.0.
 
 ## 33 · JSON too big to hold
 
 ### 33. Streamed JSON and NDJSON, on the `Stream` body already there
 
-`WebResponse.json(list, JsonWriter.list(w))` builds every element as a tree and then one string holding all of them, so a large answer is in memory twice before a byte of it is sent.
-That is the right trade for an answer that fits and the wrong one for an export.
-`jsonArray(sink -> ...)` and `ndjson(sink -> ...)` write the elements as they are produced, and `req.bodyNdjson(reader)` reads a body the same way.
-The decisions:
+`jsonArray(sink -> ...)` and `ndjson(sink -> ...)` write elements as they are produced, and `req.bodyNdjson(reader)` reads them the same way.
+`WebResponse.json(list, JsonWriter.list(w))` holds a large answer in memory twice, as a tree and as a string, which suits an answer that fits but not an export.
 
 - **No new `Body` kind.**
-  Both are a `WebResponse.stream(...)` body underneath, built by two static factories that supply the framing.
-  A seventh member of the sealed `Body` interface would have been a change every server module, every filter, and the compression had to answer for, in exchange for nothing the existing one does not already do.
-  What that inheritance costs is stated rather than fixed: the headers commit before the writer runs, a HEAD runs the writer to find the length, and gzip covers it, since `application/x-ndjson` was added to `Gzip.DEFAULT_TYPES`.
+  Both are a `WebResponse.stream(...)` body from two static factories that supply the framing.
+  A seventh member of the sealed `Body` would be a change every server module, filter, and the compression must answer for, for nothing new.
+  The inherited costs are documented: headers commit before the writer runs, a HEAD runs the writer to find the length, and gzip applies, since `application/x-ndjson` joined `Gzip.DEFAULT_TYPES`.
 - **The framing belongs to the response, the mapping to the writer.**
-  A `JsonSink` takes one value at a time and the brackets, commas, and newlines are the factory's.
-  So the same hand-written `JsonWriter<T>` serves a held answer and a streamed one: this is a different way of framing output, not a different way of mapping it.
+  A `JsonSink` takes one value at a time and the factory writes brackets, commas, and newlines, so one hand-written `JsonWriter<T>` serves held and streamed answers.
 - **`JsonSink.write` throws `UncheckedIOException`, not `IOException`.**
-  The values come from a database cursor, and a row callback is a `Consumer`.
-  A checked exception would have made `card -> sink.write(card, CARD)` illegal there and forced a wrapper at every call site, for an exception whose only meaning is that the client is gone and the response is already committed.
-  `req.body()` had set the precedent.
-- **NDJSON is bulk transfer; SSE stays the live one.**
-  Each line stands alone, so a consumer acts on record one without waiting for the last and a cut-off transfer leaves whole records rather than an unclosed document.
-  What it does not do is flush per value or reconnect, which is decision 15a's job and the boundary between the two.
+  Values come from a database cursor whose row callback is a `Consumer`, and a checked exception would make `card -> sink.write(card, CARD)` illegal there.
+  The exception only means the client is gone after the commit, and `req.body()` set the precedent.
+- **NDJSON is bulk transfer, and SSE stays the live one.**
+  Each line stands alone, so a consumer acts on record one immediately and a cut-off transfer leaves whole records.
+  It neither flushes per value nor reconnects, which is decision 15a's job.
 - **`bodyNdjson` is lazy, and says which line.**
-  A hundred thousand records are never a list, and a rejected line answers 400 naming it: the report a large body needs, which one big array cannot give.
-  The cost is that the failure happens where the stream is consumed, so it must be consumed before the response is returned.
-  The javadoc says so.
+  A hundred thousand records never become a list, and a rejected line answers 400 naming it.
+  The failure surfaces where the stream is consumed, so the javadoc says to consume it before returning the response.
 - **No streaming parser in core.**
-  `bodyJson()` builds the whole tree because a tree is what a hand-written `JsonReader` reads, and a pull parser would be a second JSON API to keep.
-  For a single document too large to hold, the answer is NDJSON.
-  Where the format is not the application's to choose, `bodyStream()` hands the bytes to a parser from another library.
+  A hand-written `JsonReader` reads a tree, and a pull parser would be a second JSON API.
+  A document too large to hold should be NDJSON, and a format the application does not own goes through `bodyStream()` to another library's parser.
 
-**And the seam for that library was written down.**
-`WebResponse.json(String)` and the new `bodyStream()`/`bodyReader()` are the whole of it, which the manual now has a page for.
-Hand-written mapping is core's decision for core, not for an application with a wire format it does not own.
-Worth recording is what an external binder does and does not keep.
-avaje-jsonb generates an adapter per type at compile time with no reflective fallback, so a native image needs no entry.
-Its field names still come from the record's components, though, so a rename changes the wire silently, which is the *stronger* promise the rejected `json(Object)` was rejected for.
-No reflection was never the whole rule.
-It was the mechanism by which the rule was kept.
+**The seam for that library is written down.**
+`WebResponse.json(String)`, `bodyStream()`, and `bodyReader()` are the whole of it, with a manual page.
+Hand-written mapping is core's rule for core, not for an application with a wire format it does not own.
+
+- avaje-jsonb generates adapters at compile time with no reflective fallback, so a native image needs no entry.
+- Its field names still come from record components, so a rename silently changes the wire, the stronger promise the rejected `json(Object)` was rejected for.
+- No reflection was the mechanism that kept the rule, never the whole rule.
 
 ## 34 · The contract, checked against the code
 
 ### 34. Six places the contract and the behaviour disagreed
 
-The API states one contract for input, "a value or a 400", and six places in the code did something else.
-Decision 32 read what was public.
-This one read what the public things did.
-Each fix is small, and each would have cost more after 1.0, because correcting a behaviour a caller has coded around is the breaking change that looks like a bug fix.
+The input contract is "a value or a 400", and six places did something else.
+Decision 32 read what was public, and this one read what it did.
+Each fix is cheaper before 1.0, because correcting a behaviour callers coded around is a breaking change disguised as a bug fix.
 
 - **`Json.JsonException`, a subtype of `IllegalArgumentException`.**
-  `Json`'s accessors threw the plain type, and so did `pathParam` for a variable the pattern never declared.
-  An application that maps `IllegalArgumentException` to 404, as the example did, therefore answered 404 for a body that failed to parse and for a typo in a handler.
-  The subtype keeps decision 8's reader contract: a reader throwing the plain type for a rule of its own is still a 400 through `bodyJson(reader)`.
-  It also lets an application map parsing failures on their own.
-  The `pathParam` case became `IllegalStateException`, since a mismatch between a pattern and the handler reading it is not bad input.
+  - `Json`'s accessors threw the plain type, as did `pathParam` for an undeclared variable, so the example's `IllegalArgumentException`-to-404 mapping answered 404 for a bad body and for a handler typo.
+  - The subtype keeps decision 8's reader contract, where a reader's plain `IllegalArgumentException` is still a 400 through `bodyJson(reader)`, and lets parsing failures be mapped separately.
+  - The `pathParam` case became `IllegalStateException`, since a pattern/handler mismatch is not bad input.
 - **The most specific exception handler runs.**
-  It used to be the first registered that matched, so `Exception.class` registered first made every later handler unreachable, silently.
-  Decision 14's router throws on a route that can never run, and the same shape here would throw on a subtype registered after its supertype, which forbids an order that is perfectly readable.
-  Matching by specificity resolves it with no rule to remember: every type that matches one exception lies on one inheritance chain, so of any two the one assignable to the other is the more specific.
-  `isAssignableFrom` is `Class` API of the same kind as the `isInstance` already in use, not the scanning this framework refuses.
+  - First-registered-wins made every handler after `Exception.class` silently unreachable.
+  - Throwing on a subtype after its supertype, as decision 14's router throws on an unreachable route, would forbid a readable order.
+  - All types matching one exception lie on one inheritance chain, so specificity is well defined.
+  - `isAssignableFrom` is `Class` API like the `isInstance` already in use, not scanning.
 - **Registration closes at `start()`.**
-  The router's maps are read by every request thread without a lock, and decision 13's claim that `routes()` is the list the dispatcher walks holds only while that list does not change underneath it.
-  Registering on a running `App` throws, and `stop()` opens registration again, so a suite that reconfigures between starts still works.
+  Request threads read the router's maps without a lock, and decision 13's claim that `routes()` is the list the dispatcher walks holds only while it does not change.
+  Registering on a running `App` throws, and `stop()` reopens registration for suites that reconfigure between starts.
 - **Three strict readings.**
-  `paramBoolean` read `yes` as false through `Boolean.parseBoolean`, where `paramLong` answers 400 for `x`.
-  It now takes `true` and `false` and rejects the rest, and gained the required form the other typed parameters already had.
-  `asLong` truncated `1.5` to 1.
-  It now rejects a fraction and still reads `2.0` and `1e3` as whole.
-  `AppServlet` set UTF-8 on every request, which overrode a charset the request declared.
-  The default now applies only where none was.
+  - `paramBoolean` read `yes` as false via `Boolean.parseBoolean`, where `paramLong` answers 400 for `x`.
+    It now accepts only `true` and `false`, and gained the required form.
+  - `asLong` truncated `1.5` to 1, and now rejects fractions while still reading `2.0` and `1e3`.
+  - `AppServlet` forced UTF-8 over a declared request charset, and now defaults only where none was declared.
 
-Rejected on the way: the framework turning an uncaught `JsonException` into a 400 itself.
-That would make a reader-less `bodyJson()` answer 400 with no line saying so, one implicit mapping in an API whose point is that mappings are written.
-The example and the agent skill carry the explicit line instead, and specificity matching is what lets that line sit after the `IllegalArgumentException` one.
+Rejected: turning an uncaught `JsonException` into a 400 in the framework.
+A reader-less `bodyJson()` would answer 400 through a mapping nobody wrote, in an API whose point is that mappings are written.
+The example and the agent skill carry the explicit line, which specificity matching lets sit after the `IllegalArgumentException` one.
 
 ## 35 · The argument order of a body
 
 ### 35. The content type first, on every body that takes one
 
-`bytes` takes the content type first, as `stream` already did.
-It used to take it last, so the two factories that name a content type named it in opposite places.
-They are the same answer in a different shape, bytes held in memory or bytes written as they go, and a reader who had used one guessed the other wrong.
-`stream` is the one that cannot move: its writer is a lambda, and a lambda reads as a block only when it is the last argument.
-So `bytes` moved, and the rule is now stateable in one line: the content type is the first argument of every body that takes one.
+`bytes` takes the content type first, as `stream` does, so every body that takes a content type takes it first.
+The two are the same answer, held or streamed, and opposite orders made a reader of one guess the other wrong.
 
-No deprecated overload was left behind.
-`bytes(byte[], String)` and `bytes(String, byte[])` would both compile, which is exactly the ambiguity the change removes.
-The break is mechanical: every call site is a compile error whose fix is visible in the error.
-It is taken before 1.0 for the reason decision 34 gives, that the cost only grows.
+- `stream` could not move, because its lambda reads as a block only as the last argument.
+- No deprecated overload was kept: `bytes(byte[], String)` beside `bytes(String, byte[])` is the ambiguity being removed.
+- Every call site breaks as a compile error whose fix the error shows.
+- It is taken before 1.0 for the reason decision 34 gives, that the cost only grows.
 
 ## 36 · The argument order of an exception handler
 
 ### 36. The request first, in `ExceptionHandler` too
 
-`ExceptionHandler.handle` takes `(WebRequest request, E exception)`.
-It used to take the exception first, and it was the one handler interface that did.
-`Handler`, `BeforeFilter`, `AfterFilter`, and `RequestLogger` all name the request first, so a reader who had written three lambdas for this framework had to look the fourth one up.
-Decision 18 set the naming rule for these interfaces.
-This is the argument rule that goes with it.
-Every handler now takes the request first, and whatever else it is given follows.
+`ExceptionHandler.handle` takes `(WebRequest request, E exception)`, where it was the one handler interface taking the exception first.
+`Handler`, `BeforeFilter`, `AfterFilter`, and `RequestLogger` name the request first, so decision 18's naming rule now has an argument rule: the request first, then the rest.
 
-The order it left reads like a `catch` clause, and Javalin's `(e, ctx)` is the same.
-That echo is the argument for having kept it, and it loses to consistency across five interfaces of the same framework.
-The interface is functional, so its shape is final at 1.0 and was settled on purpose rather than by default.
-
-No deprecated overload was left behind, for the reason decision 35 gives.
-The break is mechanical wherever the lambda touches the exception: a body calling `e.getMessage()` stops compiling until the parameters are swapped.
-A lambda that uses neither parameter compiles either way, which is the one case the compiler cannot flag, and also the case where the order does not matter.
-It is taken before 1.0 for the reason decision 34 gives, that the cost only grows.
+- The old order read like a `catch` clause, as Javalin's `(e, ctx)` does, and lost to consistency across five interfaces.
+- The interface is functional, so its shape is final at 1.0.
+- No deprecated overload was kept, for the reason decision 35 gives.
+- A lambda touching the exception, such as one calling `e.getMessage()`, stops compiling until swapped.
+  One using neither parameter compiles either way, where the order does not matter.
+- It is taken before 1.0 for the reason decision 34 gives, that the cost only grows.
 
 ## 37 · The type of an elapsed time
 
 ### 37. `RequestLogger` reports a `Duration`
 
-`RequestLogger.log` takes a `Duration`, where it used to take a `long` of milliseconds.
-It was the one place the API handed out a duration as a number.
-`maxAge`, `hsts`, `stopTimeout`, and the cookie forms all take a `Duration`, so a reader had one exception to hold in mind.
+`RequestLogger.log` takes a `Duration` instead of a `long` of milliseconds, the API's one duration handed out as a number.
 
-The measurement is `System.nanoTime`, and a `long` of milliseconds threw away everything below a millisecond before the logger saw it.
-A request that finished in 400 microseconds was reported as `0`.
-A `Duration` carries what was measured, and a logger that wants the old number calls `took.toMillis()`.
+- `maxAge`, `hsts`, `stopTimeout`, and the cookie forms all take a `Duration`.
+- The measurement is `System.nanoTime`, and milliseconds reported a 400-microsecond request as `0`.
+  `took.toMillis()` gives the old number.
+- The break is not mechanical: a lambda passing the value to a logger compiles and prints `PT0.4S` instead of `400`.
+  Decision 34's argument for breaking before 1.0 applies with more force.
 
-Rejected on the way: reporting nanoseconds as a `long`.
-It keeps the precision and loses the unit, which is the half of the problem that costs more.
-`Duration` names its own unit at every call site that reads it.
-
-The break is not mechanical, which is why it is taken now rather than after 1.0.
-A lambda that passes the argument straight to a logger keeps compiling and starts printing `PT0.4S` where it printed `400`.
-Decision 34's argument applies with more force for that reason, not less.
+Rejected: nanoseconds as a `long`.
+It keeps the precision and loses the unit, the costlier half, while `Duration` names its unit at every call site.
 
 ## 38 · Typed parameters beyond the named forms
 
 ### 38. `param(name, parser)`, alongside the named forms rather than in their place
 
-`param(name, parser)`, `param(name, parser, default)`, and `pathParam(name, parser)` read any type, where the parser is a `Function<String, T>` written at the call site.
-`paramLong`, `paramBoolean`, and `paramEnum` each exist as a required form and a default form, and the same again for path variables.
-Every further type was two or four more overloads, and `int`, `double`, `UUID`, and `LocalDate` had none.
-One seam covers them all, and it is the framework's own idiom: the mapping is a lambda, so there is still no reflection.
+`param(name, parser)`, `param(name, parser, default)`, and `pathParam(name, parser)` read any type through a `Function<String, T>` at the call site, with no reflection.
+Each new type used to cost two or four overloads, and `int`, `double`, `UUID`, and `LocalDate` had none.
 
-The named forms stay.
-`req.paramLong("id")` is shorter than `req.param("id", Long::parseLong)`, and the common types are common enough to be worth the shorter spelling.
-The seam covers the rest, so the overload list stops growing.
+- **The named forms stay.**
+  `paramLong`, `paramBoolean`, and `paramEnum` (required and default forms, for parameters and path variables) are shorter for common types, as `req.paramLong("id")` against `req.param("id", Long::parseLong)` shows.
+  The seam covers the rest, so the overload list stops growing.
+- **The contract is decision 8's, the one `bodyJson(reader)` has.**
+  A parser that rejects the text answers 400 naming the parameter.
+  Rejecting is throwing `IllegalArgumentException` **or `DateTimeException`**, because `DateTimeParseException` descends from `DateTimeException`, not `IllegalArgumentException`, and `LocalDate::parse` would otherwise give a 500.
 
-The contract is decision 8's, the one `bodyJson(reader)` has: a parser that rejects the text answers 400 naming the parameter, so a handler receives a whole value or none.
-Rejecting is throwing `IllegalArgumentException` **or `DateTimeException`**.
-`DateTimeParseException` is not an `IllegalArgumentException` — it descends from `DateTimeException`, which descends straight from `RuntimeException` — so an `IllegalArgumentException`-only catch would have made `LocalDate::parse`, one of the types the seam exists for, a 500 on a bad date.
-
-Rejected on the way: catching `RuntimeException`.
-The value handed to a parser is never null, since `param(name)` has already answered 400 for an absent one.
-A `NullPointerException` or an `IllegalStateException` out of a parser is therefore a fault in the parser and not in the request, and a 500 is the honest answer.
+Rejected: catching `RuntimeException`.
+A parser never receives null, since `param(name)` answers 400 for an absent value first.
+A `NullPointerException` or `IllegalStateException` from a parser is a parser fault, and 500 is the honest answer.
 
 ## 39 · A file a handler chose
 
 ### 39. `WebResponse.file(Path)`, and the content-type table stays private
 
-`WebResponse.file(path)` answers with the content type the name implies, the file's size as `Content-Length`, and a `Stream` body.
-A handler serving an export, an attachment, or anything else outside the classpath was writing `stream(contentType, out -> Files.copy(path, out))` and working out the content type itself.
-`ContentTypes.byPath` already had the table, and `StaticFiles` already built exactly this response.
+`WebResponse.file(path)` answers with the content type the name implies, the size as `Content-Length`, and a `Stream` body.
+Handlers were writing `stream(contentType, out -> Files.copy(path, out))` plus their own content type, while `ContentTypes.byPath` and `StaticFiles` already did this.
 
-**The table stays package-private.**
-That was the open question, and decision 32 answers it: 1.0 is the promise that what is public keeps its shape, so a public table is a permanent one.
-The table has fourteen extensions and is deliberately incomplete, and made public that incompleteness becomes the promise: `.pdf`, `.webp`, and `.mp4` each turn into a request to extend a published list.
-Reached only through `file`, it is an implementation detail of a factory, and a handler that disagrees with what the name implied writes `.contentType(...)`, which was already there.
-The case that pushes the other way is a blob out of a database with a filename stored beside it, where there is no `Path` to hand to `file`.
-That handler names its own content type, which is one string it already has the information to write, and the alternative is a permanent public list to keep it from writing it.
+- **The table stays package-private.**
+  - Under decision 32 a public table is permanent, and its fourteen extensions are deliberately incomplete: `.pdf`, `.webp`, and `.mp4` would each become a request to extend a published list.
+  - A handler that disagrees with the implied type writes `.contentType(...)`.
+  - A database blob with a stored filename has no `Path`, and that handler writes its own content type rather than getting a permanent public list.
+- **A missing file throws `UncheckedIOException`, as `bodyStream()` does, and does not answer 404.**
+  - Only the handler can tell a cleaned-up export from a wrongly built path, so the 404 is its line.
+  - The check runs in the factory, not the writer, because of decision 18's trap: a body produced after dispatch has left its `try` block cannot reach `app.exception(...)`.
+  - One `readAttributes` call gives the size and whether it is a regular file, so a directory fails before the headers commit.
+- **`StaticFiles` is not refactored onto this.**
+  It works on a `Resource`, not a `Path`, and carries the `ETag`, `Last-Modified`, and decision 31's pre-compressed sibling branch.
+  Only the handler knows whether its file can change.
 
-**A missing file throws; it does not answer 404.**
-The framework cannot tell an export that was cleaned up from a path the handler built wrong.
-The handler can, so a 404 for a missing file is the line the handler writes, after its own check.
-`UncheckedIOException` is what `bodyStream()` already throws for the same class of problem.
-
-The check runs in the factory rather than in the writer, and that is the load-bearing part.
-Decision 18 names the trap: a body produced after dispatch has left its `try` block can no longer reach `app.exception(...)`.
-One `readAttributes` call answers both questions the factory has — the size, and whether this is a regular file at all — so a directory fails while the handler can still be told, not after the headers are committed.
-
-Rejected on the way: a `file(contentType, path)` overload.
-Decision 35 would put the content type first, `.contentType(...)` already overrides, and two ways to say the same thing is what that decision removed rather than added.
-
-Validators and conditional requests stay with `StaticFiles`, which is not refactored onto this.
-It works on a `Resource` rather than a `Path`, and it carries the `ETag`, the `Last-Modified`, and the pre-compressed sibling branch that decision 31 added.
-A file a handler chose is not a static file: only the handler knows whether it can change.
+Rejected: a `file(contentType, path)` overload.
+Decision 35 would put the content type first, `.contentType(...)` already overrides, and that decision removed two ways of saying one thing.
 
 ## 40 · The reads that only `raw()` reached
 
 ### 40. Eight read-only delegates on `WebRequest`, and `SecurityHeaders` stops going behind the API
 
-`isSecure()`, `remoteAddress()`, `contentType()`, `queryString()`, `scheme()`, `host()`, `headers(name)`, and `headers()` are methods on `WebRequest`.
-Each was answered through `raw()` before, and each is an ordinary question about a request rather than a container detail.
-`SecurityHeaders` asked `request.raw().isSecure()`, which is core reaching around its own API for something the API should have said.
-The bar decision 32 sets for the public surface is a use a handler or a `RequestLogger` has today, not completeness against `HttpServletRequest`: a request logger wants the client address, a signature wants the query string as it arrived, and HSTS wants the scheme.
+`isSecure()`, `remoteAddress()`, `contentType()`, `queryString()`, `scheme()`, `host()`, `headers(name)`, and `headers()` are `WebRequest` methods, where each went through `raw()` before.
+They are ordinary request questions, and `SecurityHeaders` calling `request.raw().isSecure()` was core bypassing its own API.
 
-`raw()` stays, and stays what decision 32 made it: the escape hatch for an async context, a client certificate, or a container-specific attribute.
-The eight are read-only, so nothing about the one deliberate write in this class changes.
-
-**`host()` carries the port when it is not the scheme's default.**
-That was the open question, and it is the one method here that is not a bare delegate.
-`getServerName()` alone would make `scheme() + "://" + host() + path()` wrong on every development server that is not on 80, which is the case the method exists for.
-Both halves come from the container rather than from the `Host` header directly, so a proxy's `X-Forwarded-Host` applies here on the same terms as it does to `scheme()`.
-`header("Host")` still reads the header as sent, for a handler that wants exactly that.
-
-`headers()` answers `Map<String, List<String>>` in the order the request sent them, and its names are therefore case-sensitive where `header(name)` is not.
-That is the shape `cookies()` already has, and the alternative — a case-insensitive map — would promise a lookup semantics that the one-name `headers(name)` already provides better.
-
-`TestRequest` gains `remoteAddress(addr)` and nothing else.
-`secure()` already covered `isSecure()` and `scheme()`, and `contentType()` and `queryString()` are already stated by `header("Content-Type")` and `queryParam(name, value)`.
-The host is stated as `header("Host", ...)`, which is how a real request states it, so the stub derives the name and the port from that header the way a container does rather than taking a setter of its own.
+- **The bar is decision 32's**: a use a handler or `RequestLogger` has today, such as a logger's client address, a signature's raw query string, or HSTS's scheme, not parity with `HttpServletRequest`.
+- **`raw()` stays what decision 32 made it**, the escape hatch for an async context, a client certificate, or a container attribute.
+  The eight are read-only, so the class's one deliberate write is unchanged.
+- **`host()` carries the port when it is not the scheme's default.**
+  Otherwise `scheme() + "://" + host() + path()` breaks on every development server off port 80.
+  Both halves come from the container, so `X-Forwarded-Host` applies as it does to `scheme()`, and `header("Host")` still reads the raw header.
+- **`headers()` answers `Map<String, List<String>>` in request order**, with case-sensitive names, the shape `cookies()` has.
+  Case-insensitive lookup is what `headers(name)` already provides.
+- **`TestRequest` gains only `remoteAddress(addr)`.**
+  `secure()`, `header("Content-Type")`, and `queryParam(name, value)` already state the rest.
+  The host is set with `header("Host", ...)`, and the stub derives name and port from it as a container does.
 
 ## 41 · The session, read under a type and ended
 
 ### 41. `sessionAttr(key, Class<T>)` and `invalidateSession()`
 
 `sessionAttr(key, User.class)` casts with `Class.cast` and fails on the line that reads, naming the key, the type found, and the type asked for.
-`sessionAttr(key)` returns `<T> T`, so the cast happens at the call site and a wrong type is a `ClassCastException` on the assignment rather than on the read.
-`paramEnum(name, Class<E>)` already takes the class for the same reason, and neither is reflection in the sense this framework refuses: the type is written at the call site, not discovered from the value.
+The unchecked `sessionAttr(key)` returns `<T> T`, so its wrong type is a `ClassCastException` on the assignment rather than on the read.
 
-The unchecked form stays, for the cases where the type is obvious and the assignment is the read.
-It is also the form that reads a value whose type is a type variable, which a `Class` argument cannot name.
+- This is not the reflection the framework refuses, as `paramEnum(name, Class<E>)` is not: the type is written at the call site, not discovered from the value.
+- The unchecked form stays for cases where the type is obvious and the assignment is the read.
+  It is also the only form that reads a value whose type is a type variable, which a `Class` argument cannot name.
+- **A wrong type is an `IllegalStateException`, not a 400.**
+  - `paramEnum` is the wrong precedent: a parameter is the caller's text, and a session value is something the application itself put there.
+  - The mismatch is between two lines of one application, which `pathParam(name)` already answers with `IllegalStateException` rather than the `IllegalArgumentException` an application maps to a status.
+  - It answers 500, with a message naming the key and both types.
+- **`sessionAttr(key, User.class)` reads rather than writes**, because overload resolution prefers the more specific `Class<T>` over `Object`.
+  Storing a `Class` value therefore needs `sessionAttr(key, (Object) User.class)`, a price paid by nobody, since applications do not keep a `Class` in a session.
+- **`invalidateSession()` ends the session**, the one session operation every application with a login has.
+  - It was `raw().getSession(false).invalidate()`: three calls, a null check to remember, and the escape hatch decision 40 had just narrowed the need for.
+  - A request with no session is left alone, since logging out twice is not an error.
 
-**A wrong type is an `IllegalStateException`, not a 400.**
-That was the open question, and `paramEnum` is the wrong precedent for it: a parameter is the caller's text, and a session value is something the application itself put there.
-A type it does not expect is a mismatch between two lines of the same application, which is what `pathParam(name)` already answers with an `IllegalStateException` rather than with the `IllegalArgumentException` an application maps to a status.
-So it answers 500, and the message says which key and which two types, which is the whole point of naming the type.
-Rejected on the way: a `ClassCastException` carrying the better message.
-It would keep the failure type the unchecked form gives, and it would read as the framework failing to cast something rather than as the application disagreeing with itself.
+Rejected: a `ClassCastException` carrying the better message.
+It would keep the unchecked form's failure type, and would read as the framework failing to cast rather than as the application disagreeing with itself.
 
-`sessionAttr(key, User.class)` reads rather than writes, since `Class<T>` is more specific than `Object` and overload resolution takes the more specific one.
-Storing a `Class` as a session value therefore has to say `sessionAttr(key, (Object) User.class)`.
-That is the price of the name, and it is paid by nobody: a session holding a `Class` is not a thing applications do.
-
-`invalidateSession()` ends the session, which is the one session operation every application with a login has.
-It was `raw().getSession(false).invalidate()`, which is three calls with a null check the caller has to remember, through the escape hatch decision 40 has just narrowed the need for.
-A request with no session is left alone rather than told off, since logging out twice is not an error.
 ## 42 · An upload the handler need not hold, and one it need not have
 
 ### 42. `inputStream()` and `writeTo(Path)`, an absent upload as null, and `files(name)`
 
-`UploadedFile` read its content two ways, `bytes()` and `asText()`, and both build the whole upload in memory.
-A framework that streams an answer through `stream`, `jsonArray`, and `ndjson` was making the request side hold a video as one byte array.
-`inputStream()` hands the part to a parser, and `writeTo(path)` puts it on disk.
+`inputStream()` hands an upload to a parser and `writeTo(path)` puts it on disk, because `bytes()` and `asText()` both build the whole upload in memory.
+A framework that streams answers through `stream`, `jsonArray`, and `ndjson` was making the request side hold a video as one byte array.
 
-**`writeTo` is `Part.write`, not a copy loop.**
-It is what the servlet API offers, and a container that had already buffered the upload to disk moves that file rather than reading the bytes back through the framework.
-The cost is that the content is written once, because the buffered file is gone afterwards, and the javadoc says so.
-The path is made absolute before it is handed over: `Part.write` resolves a relative name against the container's multipart location, which is a directory the handler did not choose and cannot see.
-Relative to the working directory is the meaning a caller can predict, and it is the same on Jetty, Tomcat, and Undertow, which the acceptance test in each server module now checks.
+- **`writeTo` is `Part.write`, not a copy loop.**
+  - A container that already buffered the upload to disk moves that file rather than reading the bytes back through the framework.
+  - The content can then be written only once, because the buffered file is gone, and the javadoc says so.
+  - The path is made absolute first, because `Part.write` resolves a relative name against the container's multipart location, a directory the handler did not choose and cannot see.
+    Relative to the working directory is predictable on Jetty, Tomcat, and Undertow alike, which each server module's acceptance test checks.
+- **An absent upload answers null, through `fileOrNull(name)`.**
+  - There is no default file for the `param(name, default)` shape to take.
+  - `cookie(name)`, `queryParam(name)`, `formParam(name)`, and `flashed(key)` already answer null where absence is an answer rather than an error, so this is the fifth.
+  - The name carries the contract to the call site, and `file(name)` is the one that answers 400.
+- **A part counts only when it carries a submitted file name.**
+  - A browser sends an untouched file input as a part with an empty `filename` and no content, so checking only for the part would answer an empty file in exactly the case `fileOrNull` exists for.
+  - The text fields of a multipart form are parts too, and `getParts()` hands them to `files(name)` beside the files.
+  - `file(name)` follows the rule too, and answers 400 where it used to hand back an empty file, as decision 34 reads the same class of mismatch.
+- **`files(name)` is empty when the field carried nothing**, as `params(name)` answers an unsent repeated parameter: "none chosen" is an answer.
+  `file(name)` stays the field's first file, which is what a container answers for the name alone.
+- `TestRequest` holds its parts as a list rather than a map keyed by field name, so a test states a repeated file field the way a form sends it.
+  Its stub part implements `write` by writing the bytes out, so `writeTo` is testable without a server, as decision 20 asks of that harness.
 
-**An absent upload answers null, not an `Optional` and not a default.**
-`param(name, default)` is the optional form for a parameter, and there is no default file for that shape to take.
-`cookie(name)`, `queryParam(name)`, `formParam(name)`, and `flashed(key)` already answer null for a value whose absence is an answer rather than an error, so `fileOrNull(name)` is the fifth of those.
-An `Optional<UploadedFile>` would be the only `Optional` in the API, and the question it would raise about those four is the reason it was rejected.
-The name carries the contract to the call site, where `file(name)` is the one that answers 400.
+Rejected: an `Optional<UploadedFile>`.
+It would be the only `Optional` in the API, and would raise the same question about the four null-answering methods.
 
-**A part with no file name is not an upload.**
-A browser sends the part anyway when a file input is left alone, with an empty `filename` and no content, so a `fileOrNull` that asked only whether the part was there would answer with an empty file in exactly the case it exists for.
-The text fields of a multipart form are parts too, and `getParts()` hands them to `files(name)` beside the files.
-One rule settles both: a part counts when it carries a submitted file name.
-`file(name)` follows it as well, and now answers 400 where it used to hand back an empty file, which is the reading decision 34 took for the same class of mismatch.
-
-**`files(name)` is empty when the field carried nothing.**
-`params(name)` answers a repeated parameter that was not sent with an empty list, on the grounds that "none chosen" is an answer, and a file input asks the same question.
-`file(name)` stays the first file of the field, which is what a container answers for the name alone.
-
-`TestRequest` holds its parts as a list rather than as a map keyed by field name, so a test states a repeated file field the way a form sends it.
-Its stub part implements `write` by writing the bytes out, so `writeTo` is testable without a server, which is what decision 20 asks of that harness.
 ## 43 · The tail of a wildcard route
 
 ### 43. A named tail variable, `/files/{path*}`
 
 `/files/{path*}` binds everything under `/files` to `req.pathParam("path")`, with the slashes it arrived with.
-A route on `/files/*` matched the same requests and had no way to read what came after the prefix.
-`PathPattern.match` compared the length and dropped the tail, so the handler cut `req.path()` itself, repeating the prefix its own registration already named.
-The matcher has that remainder in hand by the time it answers, so what was missing was a name to hand it over under.
+`/files/*` matched the same requests, but `PathPattern.match` dropped the tail it already had in hand, so the handler cut `req.path()` itself and repeated its own prefix.
 
-**The bare `*` is unchanged.**
-It is the filter form, `before("/admin/*", ...)` and the `/*` a group registers for `before(filter)`, where there is no handler to read a variable and nothing worth naming.
-Nothing registered before this changes, and a pattern gains a tail only by being rewritten.
+- **The bare `*` is unchanged.**
+  It is the filter form, `before("/admin/*", ...)` and the `/*` a group registers for `before(filter)`, where no handler reads a variable.
+  Nothing registered before changes, and a pattern gains a tail only by being rewritten.
+- **An empty tail matches, and binds `""`.**
+  - `/admin/*` covers `/admin` itself, and a named tail requiring a segment would be a second matching rule for one piece of syntax.
+  - `/files/{path*}` therefore answers `/files` and `/files/` as well as `/files/docs/a.txt`.
+  - Matching the same paths lets both erase to one canonical form, so registering `/files/*` and `/files/{path*}` under one method is refused as a dead second registration.
+- **The router's index is untouched**, as decision 14 asks of any new pattern syntax.
+  It buckets by the first segment and a tail is the last, so `/files/{path*}` indexes under `files` like `/files/*`, and `/{path*}` matches any first segment like `/*`.
+- **In `routes()` a named tail is one variable in the path template**, the difference decision 13 exists to make useful.
+  - `spider-silk-openapi` refuses a bare `*`, having no template to write and no name to write into one.
+  - It writes `/files/{path*}` as `/files/{path}` and describes the parameter as "The rest of the path, slashes included."
+  - OpenAPI has no wildcard in a path template, so the choice was between refusing a route the application answers and a template that reads as one segment.
+    The description is the only place left to say which it is.
 
-**An empty tail matches, and binds `""`.**
-`/admin/*` covers `/admin` itself, and a named tail that insisted on at least one segment would be a second matching rule for one piece of syntax.
-`/files/{path*}` therefore answers `/files` and `/files/` as well as `/files/docs/a.txt`.
-Matching the same set of paths as `*` is also what lets the two erase to one canonical form, so registering `/files/*` and `/files/{path*}` under one method is refused as the dead second registration it is.
+Rejected: `req.pathTail()`.
+It means nothing on a route without a wildcard, so every handler holding a `WebRequest` would gain a method that is empty or meaningless for most of them.
+A name in the pattern is already how this framework says what a segment matched.
 
-The router's index is untouched, which is what decision 14 asks of any new pattern syntax.
-The index buckets by the first segment and a tail is the last one, so `/files/{path*}` indexes under `files` exactly as `/files/*` does, and `/{path*}` matches any first segment exactly as `/*` does.
-
-**In `routes()` a named tail is one variable in the path template**, which is the difference decision 13 exists to make useful.
-`spider-silk-openapi` refuses a bare `*`, having no template to write and no name to write into one.
-It writes `/files/{path*}` as the path `/files/{path}`, the star dropped, and describes that parameter as "The rest of the path, slashes included."
-OpenAPI has no wildcard in a path template, so the choice was between refusing a route the application does answer and publishing a template that reads as one segment where it matches many.
-A description on the parameter is the only place left to say which it is.
-
-Rejected on the way: `req.pathTail()`.
-It reads the same value off the request without a variable, and it means nothing on a route registered without a wildcard.
-Every handler holding a `WebRequest` would gain a method that is empty or meaningless for most of them.
-A name in the pattern is this framework's existing answer to what a segment matched, and a tail is one more thing a pattern can name.
 ## 44 · Reading an object whose keys are data
 
 ### 44. `JsonObject` iterates as members, rather than handing out a `Map`
 
-`JsonObject` implements `Iterable<Map.Entry<String, JsonValue>>`, and carries `size()` and `keys()` beside it.
-`JsonArray` already had `size()`, `values()`, and for-each, while the object half had only `has` and `get`.
-A document whose keys are data rather than schema, a map of tag names to counts for instance, could therefore not be read at all: every accessor wanted the key the caller was trying to discover.
-The three members mirror the array's three one for one, so the two containers are read the same way.
+`JsonObject` implements `Iterable<Map.Entry<String, JsonValue>>` and carries `size()` and `keys()`, mirroring `JsonArray`'s `size()`, `values()`, and for-each one for one.
+With only `has` and `get`, a document whose keys are data, such as tag names mapped to counts, could not be read at all.
 
-Rejected on the way: `members()` returning a `Map<String, JsonValue>`.
-`Map.copyOf` leaves iteration order unspecified, so the defensive copy such an accessor should return is the one copy that loses document order.
-Returning the backing `LinkedHashMap` keeps the order and hands out the object's own state, which the rest of this API does not do.
-A `LinkedHashMap` copy declared as `Map` keeps both and states neither: nothing in `Map` promises document order, and nothing in it warns that `put` throws.
-`List<String> keys()` promises both in its own contract, and a for-each over members reads each value beside its key instead of looking it up again.
+- **`optObject` and `optArray` answer `null`, where the four primitive `opt*` forms take a default.**
+  - A caller has a literal default for a string, a number, or a boolean, and none for a container.
+  - An empty `JsonObject` as a default reads as a member that was present and empty, a different fact about the document.
+  - `null` says only that the member was absent, whether the key is missing or explicitly JSON `null`, as the primitive forms already do.
+  - `getObject` and `getArray` still throw for the required case, so the null branch appears only where the caller asked for it.
+- **`isString()`, `isNumber()`, and `isBoolean()` join `isNull()` on `JsonValue`.**
+  - Without them, a string-or-number value was told apart only by calling `asString()` and catching `JsonException`, control flow through the exception decision 34 reserves for wrong input.
+  - No `isObject()` or `isArray()`: `instanceof` answers those and narrows the type in the same expression.
+- The parser needed no change: `JsonObject` was already backed by a `LinkedHashMap`, so document order was preserved all along and only unreachable.
 
-**`optObject` and `optArray` answer `null`, where the four primitive `opt*` forms take a default.**
-A caller naming a default has a literal for a string, a number, or a boolean, and has none for a container.
-An empty `JsonObject` handed back as a default reads as a member that was present and empty, which is a different fact about the document.
-`null` says only that the member was absent, and a missing key and an explicit JSON `null` both reach it, which is the semantic the four existing forms already have.
-That null branch is written only where the caller asked for it, since `getObject` and `getArray` still throw for the required case.
+Rejected: `members()` returning a `Map<String, JsonValue>`.
 
-**`isString()`, `isNumber()`, and `isBoolean()` join `isNull()` on `JsonValue`.**
-`instanceof JsonObject` and `instanceof JsonArray` already told the containers apart, and `isNull()` covered null.
-A value that may be a string or a number could be told apart only by calling `asString()` and catching `JsonException`, which is control flow through the exception decision 34 reserves for input that is wrong.
-No `isObject()` or `isArray()` joins them: `instanceof` answers those questions and narrows the type in the same expression, which a boolean does not.
+- `Map.copyOf` leaves iteration order unspecified, so the proper defensive copy loses document order.
+- The backing `LinkedHashMap` keeps order but hands out the object's own state, which the rest of the API does not do.
+- A `LinkedHashMap` copy declared as `Map` promises neither document order nor that `put` throws.
+- `List<String> keys()` promises both in its own contract, and a for-each reads each value beside its key instead of looking it up again.
 
-The parser needed no change, and that is worth recording.
-`JsonObject` was already backed by a `LinkedHashMap`, so document order was preserved all along and only unreachable.
 ## 45 · The fourth SSE field
 
 ### 45. `SseStream.retry(Duration)`, written where it is called
 
-`stream.retry(Duration.ofSeconds(2))` writes one `retry:` line in milliseconds, which is the delay a browser waits before it reconnects.
-The protocol has four fields and `SseStream` wrote three: `id`, `event`, and `data`, plus the comment decision 15a's heartbeat uses.
-`retry` had no method, so the only way to send it was `WebResponse.raw`, which gives up the framing the rest of the stream has.
+`stream.retry(Duration.ofSeconds(2))` writes one `retry:` line in milliseconds, the delay a browser waits before it reconnects.
+`SseStream` wrote only `id`, `event`, `data`, and decision 15a's heartbeat comment, so `retry` needed `WebResponse.raw` and lost the stream's framing.
 
-Sending it is the application's business, the way `id` is.
-A browser told nothing reconnects on a default of its own, a few seconds.
-A server that closes every stream on a deploy wants the browser back sooner than that, and only the server knows it.
+- Sending it is the application's business, like `id`.
+  A browser told nothing reconnects after a default of a few seconds, and only the server knows it closes every stream on a deploy and wants the browser back sooner.
+- **The line goes out where it is called, not with the next event.**
+  - This is the one difference from `id`, which holds its value until the next event and then clears it.
+  - An id labels one event, and a delay is a stream setting that holds for later connections until replaced.
+  - Held for the next event, a `retry` on a stream that then sends nothing would never be sent, which is exactly what a deploy makes likely.
+- A negative delay throws `IllegalArgumentException`.
+  The protocol defines a non-negative integer and a browser silently drops a line it cannot read, so decision 24's argument applies: fail at the call.
 
-**The line goes out where it is called, not with the next event.**
-That is the one place this differs from `id`, which holds its value until the event that follows and then clears it.
-An id labels one event, and a delay is a setting on the stream: it holds for the connections that follow, until another one replaces it.
-Holding it for the next event would also mean a `retry` on a stream that then sends nothing was never sent at all, which is exactly the shape a deploy makes likely.
-
-A negative delay throws `IllegalArgumentException`.
-The protocol defines the field as a non-negative integer, and a browser drops a line it cannot read without saying so.
-Decision 24's argument applies here too: failing at the call is better than shipping a line no client will act on.
-
-Rejected on the way: a reconnection delay named once on `App` or on `WebResponse.sse`.
+Rejected: a reconnection delay set once on `App` or on `WebResponse.sse`.
 It would read as a server setting, and it is not one.
-The value travels in the body, so it belongs to whatever writes the events, and a stream that wants to change it halfway through can.
+The value travels in the body, so it belongs to whatever writes the events, and a stream can change it halfway through.
 
 ## 46 · The response header map
 
 ### 46. Header names compare without regard to case, and a field still holds one value
 
 `WebResponse.headers()` is still a `Map<String, String>`, and its keys now compare the way HTTP compares field names.
-`res.header("content-type", ...)` followed by `res.header("Content-Type")` answered null, so a filter reading a header it had not set itself had to guess the spelling.
-Core worked around it with a package-private `headerIgnoringCase`, which `Gzip` and `SecurityHeaders` called and an application could not.
-That method is gone, and `header(name)` does what it did.
-The request side never had the problem, since the container compares field names for `req.header(name)`; the response was the half that did not.
+`res.header("content-type", ...)` followed by `res.header("Content-Type")` answered null, so a filter reading a header it had not set had to guess the spelling.
 
-**The map stays single-valued, and the return type is the reason.**
-Decision 18 put `headers()` in the response's public surface, and decision 32's promise freezes its shape at 1.0.
-A `Map<String, String>` says one value per field, which is what almost every response has.
-Carrying a repeated header would mean changing that type, so the question is settled now rather than left to a release that can no longer answer it.
-Cookies are the exception that already has a list of its own.
-A header that must be sent twice, such as two `Link` lines in one answer, is written through `WebResponse.raw`, which is the escape hatch that exists for what the envelope deliberately does not cover.
+- Core's package-private `headerIgnoringCase` workaround, which `Gzip` and `SecurityHeaders` called and an application could not, is gone, and `header(name)` does what it did.
+- The request side never had the problem, since the container compares field names for `req.header(name)`.
+- **The map stays single-valued, and the return type is the reason.**
+  - Decision 18 put `headers()` in the public surface and decision 32's promise freezes its shape at 1.0, so the question is settled now.
+  - A `Map<String, String>` says one value per field, which almost every response has, and cookies already have a list of their own.
+  - A header sent twice, such as two `Link` lines, goes through `WebResponse.raw`, the escape hatch for what the envelope deliberately does not cover.
+- **Insertion order is kept**, which rules out a `TreeMap` with `String.CASE_INSENSITIVE_ORDER`, since it sorts names alphabetically.
+  - A package-private `Headers extends AbstractMap<String, String>` holds a `LinkedHashMap` keyed by the lower-cased name, whose entries carry the spelling first set.
+  - A lookup is one hash rather than `headerIgnoringCase`'s scan, and `headers()` still promises only a `Map`.
+- **The first spelling and position go on the wire.**
+  `header("content-type", ...)` over a `Content-Type` changes only the value, as a `put` on an existing key does.
+  `AppServlet` walks `entrySet()` and calls `setHeader` once per entry, so one field is one line however many spellings set it.
 
-**Insertion order is kept, which rules out the obvious implementation.**
-A `TreeMap` with `String.CASE_INSENSITIVE_ORDER` compares names correctly and then sorts them alphabetically, and the order the headers were set in is part of what `headers()` answers today.
-A package-private `Headers extends AbstractMap<String, String>` holds a `LinkedHashMap` keyed by the lower-cased name, whose entries carry the spelling the field was first set under.
-A lookup is one hash rather than the scan `headerIgnoringCase` did, and the class stays package-private, so `headers()` still promises a `Map` and nothing else.
-
-The spelling that goes on the wire is the one the field was first set under, and so is the position.
-`header("content-type", ...)` over a `Content-Type` changes the value and leaves the rest alone, which is what a `put` on a key already there does.
-Nothing outside the class depends on which map it is: `AppServlet` walks `entrySet()` and calls `setHeader` once per entry, so one field is one line however many spellings set it.
-
-Rejected on the way: normalising in the setter and leaving the map itself alone.
-That fixes what the framework writes and not what a caller reads, so `headers().get("content-type")` would still answer null and something like `headerIgnoringCase` would still be needed to make sense of the map it hands out.
+Rejected: normalising in the setter and leaving the map alone.
+It fixes what the framework writes but not what a caller reads, so `headers().get("content-type")` would still answer null and need something like `headerIgnoringCase`.
 
 ## 47 · A call site that says whether it reads or writes
 
 ### 47. `setSessionAttr(key, value)` for the write, and `paramOrNull(name)` for the optional string
 
 A session write is `setSessionAttr(key, value)`, and `sessionAttr` is only ever a read.
-The write used to be `sessionAttr(key, Object)`, which shared a name and an arity with decision 41's `sessionAttr(key, Class<T>)`.
-Overload resolution chose between them by the static type of the second argument, so the call site did not say which one ran.
-`sessionAttr("user", null)` picked the read, because `Class<T>` is more specific than `Object`, and the attribute a caller meant to remove stayed in the session.
-Storing a `Class` needed an `(Object)` cast for the same reason.
-Decision 41 recorded that price as paid by nobody, and the literal `null` is the case that showed it was paid by the ordinary removal instead.
+The write used to be `sessionAttr(key, Object)`, sharing a name and arity with decision 41's `sessionAttr(key, Class<T>)`, so the static type of the second argument, not the call site, chose which ran.
 
-The rename removes the overlap rather than documenting it.
-A read and a write under two names cannot be confused by any argument, a `Class` value included.
-`sessionAttr(key, type)` also checks its type argument now, so a literal `null` fails with a message naming `removeSessionAttr(key)` rather than with an anonymous `NullPointerException` further in.
+- `sessionAttr("user", null)` picked the read, because `Class<T>` is more specific than `Object`, and the attribute meant for removal stayed in the session.
+  Decision 41 recorded the `(Object)` cast for storing a `Class` as a price paid by nobody, and the literal `null` showed the ordinary removal paid it.
+- Two names remove the overlap rather than documenting it: no argument, a `Class` value included, can confuse a read with a write.
+- `sessionAttr(key, type)` now checks its type argument, so a literal `null` fails naming `removeSessionAttr(key)` rather than with an anonymous `NullPointerException`.
+- No deprecated overload stays, for the reason decision 35 gives.
+  No remaining overload takes an `Object`, so every write with a non-`Class` value stops compiling and each error shows its fix.
+- `TestRequest.sessionAttr(key, value)` keeps its name: it is a builder method with no read beside it, like `header(name, value)` and `cookie(name, value)`.
+- **`paramOrNull(name)` answers the value or null.**
+  - `param(name, null)` does not compile, since `null` fits both `param(name, String)` and decision 38's `param(name, Function)`.
+  - That ambiguity is a compile error rather than a wrong answer, so both overloads stay and the null default gets its own name.
+  - `OrNull` is decision 42's suffix, and `queryParam`, `formParam`, `cookie`, and `flashed` already answer null for an absent value.
 
-No deprecated overload was left behind, for the reason decision 35 gives.
-Every write with a non-`Class` value stops compiling, because no remaining overload takes an `Object`, so the break is mechanical and each error shows its fix.
-`TestRequest.sessionAttr(key, value)` keeps its name: it is a builder method with no read beside it, like `header(name, value)` and `cookie(name, value)`.
-
-`paramOrNull(name)` answers the value or null.
-`param(name, null)` was the obvious way to ask for that, and it does not compile, since `null` fits both `param(name, String)` and decision 38's `param(name, Function)`.
-That ambiguity is a compile error rather than a wrong answer, so both overloads stay, and the null default gains a name of its own.
-`OrNull` is decision 42's suffix, and `queryParam`, `formParam`, `cookie`, and `flashed` already answer null for an absent value.
-
-Rejected on the way: removing `param(name, defaultValue)` so that `null` resolves to the parser form.
-That turns a compile error into a `NullPointerException` at runtime, which is the trade this decision exists to undo.
+Rejected: removing `param(name, defaultValue)` so that `null` resolves to the parser form.
+That turns a compile error into a runtime `NullPointerException`, the trade this decision exists to undo.
 
 ## 48 · A parser on a named source
 
 ### 48. `queryParam(name, parser)` and `formParam(name, parser)`, with the contract `param(name, parser)` has
 
 `queryParam(name, parser)`, `formParam(name, parser)`, and their `(name, parser, default)` forms read one source into a type.
-Decision 10b gave a handler the choice of source, and decision 38 gave it a parser, but no method offered both.
-A handler that needed a date from the form body specifically wrote the null check, the 400, and the `DateTimeException` catch that decision 38 exists to spare it.
+Decision 10b gave a handler the choice of source and decision 38 gave it a parser, but no method offered both, so a date from the form body meant hand-writing the null check, the 400, and the `DateTimeException` catch.
 
-The contract is decision 38's, restated per source.
-An absent value answers 400 naming the source, a value the parser rejects answers 400 naming the parameter, and anything else the parser throws stays a 500.
-A value the other source carries under the same name is absent for this purpose, which is the whole point of naming the source.
+- The contract is decision 38's, per source.
+  - An absent value answers 400 naming the source.
+  - A value the parser rejects answers 400 naming the parameter.
+  - Anything else the parser throws stays a 500.
+  - A value the other source carries under the same name counts as absent, which is the point of naming the source.
+- **The one-argument forms stay optional, and the parser forms are required.**
+  - Decision 10b settled `queryParam(name)` and `formParam(name)` as null-answering lookups, and changing them would break every caller that checks for null.
+  - The parser forms are `param(name, parser)` with a source added, so a reader who knows one knows the other.
+  - The optional typed read takes a default, as `param(name, parser, default)` does.
 
-**The one-argument forms stay optional, and the parser forms are required.**
-That reads as an asymmetry beside `queryParam(name)` answering null.
-The one-argument forms were settled by decision 10b as the null-answering lookups, and changing them now would break every caller that checks for null.
-The parser forms follow `param(name, parser)` because they are that method with a source added, and a reader who knows one knows the other.
-The optional typed read takes a default, as `param(name, parser, default)` does.
-
-Rejected on the way: `queryParam(name, defaultString)` and `formParam(name, defaultString)`.
-Each would sit beside a `(name, Function)` overload, and a literal `null` would match both, which is the ambiguity decision 47 names.
-`queryParam(name)` and `formParam(name)` already answer null, so the string default would add a spelling and no capability.
+Rejected: `queryParam(name, defaultString)` and `formParam(name, defaultString)`.
+A literal `null` would match both it and the `(name, Function)` overload, the ambiguity decision 47 names.
+The one-argument forms already answer null, so a string default adds a spelling and no capability.
 
 ## 49 · A body read twice
 
 ### 49. `body()` keeps the text it read, and the unread body goes out once
 
 `body()` reads the body into a string once and keeps it for the rest of the request.
-It used to read the container's reader on every call, and the servlet API hands back the same reader each time, so the second call answered `""`.
-A before-filter that read the body to verify a signature therefore left the handler's `bodyJson()` parsing an empty document, and the handler answered 400 for a body that was valid.
+It used to read the container's reader on every call, and the servlet API returns the same reader each time, so the second call answered `""`.
+A before-filter verifying a signature therefore left the handler's `bodyJson()` parsing an empty document and answering 400 for a valid body.
 
-The text was already whole in memory, so keeping it costs one reference.
-`bodyJson()` parses the kept text, and so does `bodyJson(reader)` through it.
+- The text was already whole in memory, so keeping it costs one reference.
+  `bodyJson()` parses the kept text, and so does `bodyJson(reader)` through it.
+- **The record lives on the servlet request, not on `WebRequest`.**
+  Decision 11's `RequestLogger` receives the `WebRequest` `AppServlet` built before routing, and `withPathParams` copies it, so a field would be one per copy.
+  A request attribute is shared by every wrapper of one servlet request, as flash and the negotiation flag already are.
+- **The unread body is a separate mode, and the two do not mix.**
+  - `bodyStream()`, `bodyReader()`, and `bodyNdjson()` still hand the body over unread, and decision 33 keeps NDJSON lazy.
+  - After the text was read, each throws `IllegalStateException`, because the container's reader is at its end.
+  - After the body was handed over, `body()` throws, because nobody can say how much of it the caller consumed.
+  - These used to be the container's own `IllegalStateException` in one direction and a silent empty answer in the other.
+- Form parsing and `raw()` stay outside the bookkeeping.
+  - A form-encoded POST is spent by its first `param()` read, which the container performs unseen by core, so `body()` after it answers `""`, as decision 20's stub already models.
+  - What is read through `raw()` is read behind the framework's back, as decision 32 says of that hatch.
 
-**The record lives on the servlet request, not on `WebRequest`.**
-A before-filter and the handler share one `WebRequest`, but decision 11's `RequestLogger` receives the one `AppServlet` built before routing, and `withPathParams` copies it.
-A field would be one per copy.
-A request attribute is shared by every wrapper of one servlet request, which is how flash and the negotiation flag already travel.
-
-**The unread body is a separate mode, and the two do not mix.**
-`bodyStream()`, `bodyReader()`, and `bodyNdjson()` still hand the body over unread, and decision 33 keeps NDJSON lazy.
-After the text was read, each of them throws `IllegalStateException`, because the container's reader is at its end and the stream would answer nothing.
-After the body was handed over, `body()` throws, because nobody can say how much of it the caller consumed.
-Both failures used to be the container's own `IllegalStateException` for one direction and an empty answer for the other, and the empty answer is the silent case this closes.
-
-Rejected on the way: caching the bytes so that `bodyStream()` could replay them after `body()`.
-It holds a large upload in memory, which the unread modes exist to avoid, and a caller who asks for the stream after the text already has the text.
-
-Form parsing and `raw()` stay outside the bookkeeping.
-A form-encoded POST is still spent by its first `param()` read, which the container performs and core does not see, so `body()` after it answers `""`, as decision 20's stub already models.
-What is read through `raw()` is read behind the framework's back, which is what decision 32 says of that hatch.
+Rejected: caching the bytes so that `bodyStream()` could replay them after `body()`.
+It holds a large upload in memory, which the unread modes exist to avoid, and a caller asking for the stream after the text already has the text.
 
 ## 50 · What an immutable response is immutable about
 
 ### 50. A response copies its cookies and its template model, and not its bytes
 
 `WebResponse` copies a `Cookie` when `cookie(Cookie)` adds it and again when `cookies()` hands it out, and `Template` copies its model into a read-only map.
-Decision 18 called the response an immutable value, and three references let a caller change one after it was built.
-A cookie added and then changed was sent changed, a cookie read back through `cookies()` could be altered in place, and a model map the handler kept writing to was rendered with the later writes.
-An `AfterFilter` or a test that reused a response could therefore not rely on what it had read from it.
+Decision 18 called the response an immutable value, yet a cookie changed after adding was sent changed, one read back through `cookies()` could be altered in place, and later writes to a kept model map were rendered.
+An `AfterFilter` or a test reusing a response could therefore not rely on what it had read.
 
-**The copy is `Cookie.clone()`.**
-The servlet API's cookie is `Cloneable`, and its `clone` copies the attribute map that `SameSite` lives in, which a test asserts because a copy that dropped it would quietly weaken every cookie.
-Cloning is not reflection in the sense this framework avoids: it is a method the type declares.
-The writer reads the list without cloning it, since it hands the cookies only to the container.
+- **The copy is `Cookie.clone()`.**
+  - The servlet cookie is `Cloneable`, and `clone` copies the attribute map `SameSite` lives in, which a test asserts because dropping it would quietly weaken every cookie.
+  - Cloning is not reflection in the sense this framework avoids: it is a method the type declares.
+  - The writer reads the list without cloning, since it hands the cookies only to the container.
+- **The model copy keeps nulls, so it is not `Map.copyOf`.**
+  - It is an `unmodifiableMap` over a `LinkedHashMap`, keeping null values, which a template model takes, and the caller's iteration order.
+  - It lives in the record's compact constructor, because `Template` is a public record and `new WebResponse.Template(...)` bypasses the `WebResponse.template` factory.
+  - The copy is shallow, and the javadoc says so: a list inside the model is still the handler's list.
+  - No renderer in the repository writes into its model, which the FreeMarker, Handlebars, and Thymeleaf modules' tests confirm against the read-only map.
+- **Bytes and writers are handed over, not copied.**
+  - `Bytes` already documented that its array belongs to the response once handed over, because a second copy of a download is what the caller was avoiding.
+  - A `Stream`, `Sse`, or `Raw` body holds a writer, which has no content to copy.
+  - So the envelope is immutable, and the large bodies carry an ownership contract instead.
 
-**The model copy keeps nulls, so it is not `Map.copyOf`.**
-The copy is an `unmodifiableMap` over a `LinkedHashMap`, which keeps a null value, which a template model takes, and the order the caller's map iterated in.
-It lives in the record's compact constructor rather than in `WebResponse.template`, because `Template` is a public record and `new WebResponse.Template(...)` does not go through the factory.
-The copy is shallow, and the javadoc says so: a list inside the model is still the handler's list.
-No renderer in the repository writes into its model, which the FreeMarker, Handlebars, and Thymeleaf modules' own tests confirm against the read-only map.
-
-**Bytes and writers are handed over, not copied.**
-`Bytes` already documented that its array belongs to the response once handed over, because a download is the case where a second copy is what the caller was avoiding.
-A `Stream`, `Sse`, or `Raw` body holds a writer, which has no content to copy.
-So the claim is precise rather than total: the envelope is immutable, and the large bodies carry an ownership contract instead.
-
-Rejected on the way: copying the `Bytes` array defensively.
-It doubles the memory of every in-memory download to protect against a caller writing into an array it has already returned, which nothing in the API invites.
+Rejected: copying the `Bytes` array defensively.
+It doubles the memory of every in-memory download to guard against writes into an already-returned array, which nothing in the API invites.
 
 ## 51 · When registration closes
 
 ### 51. Registration closes when `AppServlet` is initialized, and a setting is copied when it is registered
 
-`AppServlet.init` takes a snapshot of the `App`'s routes and settings, and registration on that `App` stays closed until `AppServlet.destroy`.
-Decision 34 closed registration at `start()`, which it detected as `App.server` being non-null.
-`App.start` is only one of three ways a servlet comes to serve an application.
-A `new JettyServer(app).start()` and an external container both left the field null, so a route could still be added while requests were being routed through the table it changed, which is the race decision 34 set out to remove.
+`AppServlet.init` snapshots the `App`'s routes and settings, and registration on that `App` stays closed until `AppServlet.destroy`.
+Decision 34 closed registration at `start()`, detected as `App.server` being non-null, but `new JettyServer(app).start()` and an external container left it null.
+A route could still be added while requests were routed through the table it changed, the race decision 34 set out to remove.
 
-**The servlet lifecycle is the one path all three share.**
-Every deployment constructs an `AppServlet`, and every container calls `init` before the first request and `destroy` after the last.
-`App` counts the servlets between the two calls, so two servers over one `App` keep registration closed until both are gone.
-The check and the change it allows are made under one lock, which a snapshot taken on another thread also takes.
-Registration happens at startup, so no request waits for that lock.
+- **The servlet lifecycle is the one path all three deployments share.**
+  - Every deployment constructs an `AppServlet`, and every container calls `init` before the first request and `destroy` after the last.
+  - `App` counts servlets between the two calls, so two servers over one `App` keep registration closed until both are gone.
+  - The check and the change it allows are made under one lock, which a snapshot on another thread also takes.
+    Registration happens at startup, so no request waits for it.
+- **The snapshot is a copy, not the live table.**
+  The router is rebuilt from its registrations, and filter lists and handler maps are unmodifiable copies in a package-private `Deployment` record that every request reads.
+  A stop, a registration, and a second start build a second table rather than changing one a draining request may still read.
+- **All three server modules initialize the servlet at startup.**
+  Jetty, Tomcat, and Undertow initialize a servlet on its first request by default, which would leave registration open until that request.
+  `JettyServer`, `TomcatServer`, and `UndertowServer` set it to load on startup, and the deployment chapter tells an external deployment to use `<load-on-startup>`.
+- **Stop, restart, and a failed start follow from the lifecycle.**
+  - `stop()` works as decision 34 promised, because each server destroys its servlet before its `stop` returns.
+  - A container destroys a servlet only after in-flight requests drain, so registration stays closed during the drain, which a test shows by holding a request open.
+  - A start that fails after `init` unwinds through the same `destroy`, since each server stops a half-started context before rethrowing, so registration reopens for the retry.
+- **A setting is copied when it is registered.**
+  - `app.gzip(config)`, `app.cors(...)`, `app.securityHeaders(...)`, and `app.staticFiles(...)` copy their values through a package-private `copy()` on each class.
+  - Before, a `Gzip` kept in a field could have its `minBytes` retuned on a running server, and likewise for the other three.
+  - The copy is taken at registration rather than at `init`, so the rule is stated at the call: the value is what it was when `App` was handed it.
+  - A `TemplateRenderer` is not copied, because it is an interface an application implements and there is no general way to copy one.
 
-**The snapshot is a copy, not the live table.**
-The router is rebuilt from its registrations, and the filter lists and handler maps are unmodifiable copies, held in a package-private `Deployment` record that every request reads.
-A stop, a registration, and a second start therefore build a second table rather than changing the one a draining request may still be reading.
+Rejected:
 
-**All three server modules initialize the servlet at startup.**
-Jetty, Tomcat, and Undertow each initialize a servlet on its first request by default, which would leave registration open between `start` returning and that request arriving.
-`JettyServer`, `TomcatServer`, and `UndertowServer` each set the servlet to load on startup, and the deployment chapter tells an external deployment to do the same with `<load-on-startup>`.
-
-**Stop, restart, and a failed start follow from the lifecycle.**
-`stop()` keeps working as decision 34 promised, because each server destroys its servlet before its `stop` returns.
-A container destroys a servlet only after the requests in flight have drained, so registration stays closed during the drain, which a test holds a request open to show.
-A start that fails after the servlet was initialized unwinds through the same `destroy`, because each server already stops a half-started context before it rethrows, so registration is open again for the retry.
-
-**A setting is copied when it is registered.**
-`app.gzip(config)`, `app.cors(...)`, `app.securityHeaders(...)`, and `app.staticFiles(...)` copy their values through a package-private `copy()` on each class.
-Before this, a `Gzip` kept in a field could be retuned with `minBytes` on a running server, and the same held for the other three.
-The copy is taken at registration rather than at `init`, so the rule is stated once, at the call: the value is what it was when `App` was handed it.
-A `TemplateRenderer` is not copied, because it is an interface an application implements and there is no general way to copy one.
-
-Rejected on the way: a public builder that freezes into an immutable `App`.
-It would turn every registration site into a different API for one guarantee that an internal snapshot already gives.
-Also rejected: taking the snapshot in the `AppServlet` constructor.
-A server that fails to start before it initializes the servlet never destroys it, so registration would close for good on an application nothing served.
+- A public builder that freezes into an immutable `App`.
+  It would make every registration site a different API for a guarantee the internal snapshot already gives.
+- Taking the snapshot in the `AppServlet` constructor.
+  A server that fails before initializing the servlet never destroys it, so registration would close for good on an application nothing served.
 
 ## 52 · A filter over every response
 
 ### 52. `responseFilter(filter)`, which sees every response and runs before CORS, security headers, and gzip
 
-`app.responseFilter((req, res) -> ...)` runs on every response `AppServlet` answers, and may replace it.
-Decision 4's after-filter runs only after a route handler returned normally.
-A before-filter's early answer, an exception handler's answer, a router 404 or 405, the automatic `OPTIONS` answer, and a static file all bypass it.
-The manual's own after-filter example set an `X-Request-Id`, and that header was missing on exactly the responses an operator most wants to trace.
-An application had no extension point that reached them, because decision 27 gave that position to three named concerns and to nothing an application wrote.
+`app.responseFilter((req, res) -> ...)` runs on, and may replace, every response `AppServlet` answers.
+Decision 4's after-filter misses early before-filter answers, exception-handler answers, router 404 and 405, automatic `OPTIONS`, and static files, and decision 27 left no application extension point there.
 
-**`after` keeps its meaning.**
-A filter scoped to a route that completed is still the right tool for a header that only makes sense on one, and changing what `after` covers would change every filter already written against it.
-The new filter is a separate registration with a separate interface, `ResponseFilter`, whose shape matches `AfterFilter` so that a lambda moves between the two unchanged.
-It takes no path: it exists to cover every response, and a filter that wants a subset branches on `req.path()`, the answer the rejected path-scoped `error(...)` already gives.
+- The manual's own after-filter example set an `X-Request-Id`, missing on exactly the responses an operator most wants to trace.
+- **`after` keeps its meaning**, since changing it would change every filter already written.
+  - `ResponseFilter` is a separate interface shaped like `AfterFilter`, so a lambda moves between the two unchanged.
+  - It takes no path.
+    A filter wanting a subset branches on `req.path()`, as the rejected path-scoped `error(...)` already advises.
+- **It runs after the answer is final and before the decoration.**
+  - It sees the filled-in error body and the rendered template.
+  - `Vary: Accept`, CORS, security headers, and compression apply to its result, so it cannot strip a security header or skip gzip.
+  - A template body it returns is rendered after it.
+  - Its answer skips `error(status, ...)`: an empty 404 returned on purpose stays empty.
+- **A throwing filter is answered once**, through decision 34's most-specific exception handler and then `error(status, ...)`, so a styled 500 stays styled and decorated.
+  The response filters do not run over that answer, or a filter that always fails would never produce a response.
+- **`guards()` lists it as `Guard.ResponseFilter()`**, with no components, per decision 13.
+  The new sealed case breaks exhaustive `switch`es, a compile error accepted before 1.0 for decision 34's reason.
+- **It shapes responses and does not authorize requests.**
+  The handler has already run, so a guard stays a before-filter, which still skips static files.
+  A `Raw` writer's own writes and post-commit failures happen after the filter, as the javadoc says.
 
-**It runs after the answer is final and before the decoration.**
-The error body is filled in and the template rendered first, so the filter sees what would be sent.
-`Vary: Accept`, CORS, the security headers, and compression are applied to what the filter returns, so a filter cannot strip a security header or leave a body uncompressed that gzip would have compressed.
-A template body a filter returns is rendered after it, since the writer does not accept a template.
-Its answer is not sent back through `error(status, ...)`: a filter that returns an empty 404 on purpose gets an empty 404.
-
-**A filter that throws is answered as a handler that throws is, once.**
-The exception goes through decision 34's most-specific exception handler and then through `error(status, ...)`, so a styled 500 stays styled and decorated.
-The response filters do not run over that answer.
-Running them again would call the filter that just failed on the answer to its own failure, and a filter that always fails would never produce a response.
-
-**`guards()` reports it as `Guard.ResponseFilter()`.**
-Decision 13 promises that what runs around a route is listed, and this runs around all of them.
-The record has no components because it has no scope to report.
-Adding a case to the sealed `Guard` breaks an exhaustive `switch` over it, which is a compile error with an obvious fix, and is taken before 1.0 for the reason decision 34 gives.
-
-It shapes responses and does not authorize requests.
-The handler has already run when the filter is called, so a guard stays a before-filter, and a before-filter still does not run for a static file.
-A `Raw` writer's own writes and a failure after the response is committed happen after the filter, and the javadoc says so.
-
-Rejected on the way: making CORS, gzip, and security headers response filters.
-They would then be ordinary entries whose order an application could get wrong, and a CORS preflight is answered while the `Allow` header is worked out, before any filter runs.
-Decision 27's reasons for naming them on `App` stand, and the response filter sits in front of them rather than among them.
+Rejected: making CORS, gzip, and security headers response filters.
+An application could get their order wrong, and a CORS preflight is answered while `Allow` is computed, before any filter runs.
+Decision 27's reasons for naming them on `App` stand.
 
 ## 53 · Consistent API contracts before 1.0
 
 ### 53. Filter scope, parameter absence, response mutation, and transmission results are explicit
 
-This decision supersedes the API contracts in decisions 4, 10b, 11, 37, 46, 48, and 52 where they differ below.
-The earlier sections retain the reasons for their original choices.
+This decision supersedes the API contracts in decisions 4, 10b, 11, 37, 46, 48, and 52 where they differ below, and those sections keep their original reasons.
+The changes land before 1.0 without deprecated aliases.
 
-`beforeRoute` and `afterRoute` replace `before` and `after` on `App` and `RouteGroup`.
-Their names state that only matched routes reach them.
-`beforeRequest`, with an optional path pattern, runs before routing and covers static files, missing routes, and automatic OPTIONS too.
-It has no path variables, and an early response or exception follows the normal error, response-filter, and decoration pipeline.
-A request filter's policy must explicitly allow preflights when required, since the filter runs before automatic CORS handling.
-`Guard.BeforeRequest`, `Guard.BeforeRoute`, and `Guard.AfterRoute` report the scopes separately.
-All registrations are included in the deployment snapshot and close with the servlet lifecycle.
-
-`afterRoute` and `responseFilter` require a non-null response.
-Returning the response passed in preserves it without a second convention for the same operation.
-A null result follows exception handling as a programming error.
-`BeforeFilter` keeps null as the signal to continue because it has no response to return yet.
-
-`queryParam(name)` and `formParam(name)` require a value, just as their parser overloads do.
-`queryParamOrNull(name)` and `formParamOrNull(name)` are the optional reads.
-A supplied default makes a parser read optional, and a value in another source never counts as present.
-This replaces decision 48's overload-dependent absence policy.
-Existing optional string reads must migrate to the `OrNull` methods.
-
-JSON and NDJSON readers reject input with `IllegalArgumentException` or `DateTimeException`, matching parameter parsers.
-A malformed date therefore produces a 400 whether it came from the query string or from a JSON field.
-Other reader exceptions remain server errors.
-NDJSON errors continue to name the line and occur during stream consumption.
-
-`WebResponse.withoutHeader(name)` is public and compares names without regard to case.
-`body(replacement)` preserves headers, so the caller must update or remove metadata describing the old content, including Content-Length, ETag, Last-Modified, Content-Encoding, and the content type when it changes.
-Automatic deletion is not part of body replacement: internal template rendering and compression also replace bodies and deliberately carry or update their metadata.
-The public removal method lets application filters perform the same operation without switching to a raw servlet writer.
-
-`RequestLogger` takes `(request, completion)`.
-`RequestCompletion` carries the response definition, the final servlet status code, the elapsed Duration, and an exception from decoration or writing when one occurred.
-The status is an int because a raw servlet writer can set a code outside the framework's enum.
-A raw writer's status or a write failure can differ from the response definition's status.
-A failure before commitment can produce a 500, and a failure after commitment can leave a 200 with a partial body.
-The failure and status are independent observations.
-Handled application exceptions are represented by their response, and normal SSE closure remains normal completion.
-Completion does not confirm that the remote client received the entire body.
-
-These changes are made before 1.0 without deprecated aliases.
-Old filter and logger call sites fail to compile, while optional parameter reads require explicit migration because the required string signatures remain valid.
-The examples, agent references, and manual use the new contracts.
+- **Filter scope.**
+  - `beforeRoute` and `afterRoute` replace `before` and `after` on `App` and `RouteGroup`, naming that only matched routes reach them.
+  - `beforeRequest`, with an optional path pattern, runs before routing, over static files, missing routes, and automatic OPTIONS.
+    It has no path variables, its early response or exception takes the normal error, response-filter, and decoration pipeline, and it must allow preflights itself because it precedes automatic CORS.
+  - `Guard.BeforeRequest`, `Guard.BeforeRoute`, and `Guard.AfterRoute` report the scopes, all in the deployment snapshot and closed with the servlet lifecycle.
+- **Filter results.**
+  `afterRoute` and `responseFilter` must return a non-null response, and a null is a programming error handled as an exception.
+  `BeforeFilter` keeps null as "continue", having no response yet.
+- **Parameter absence.**
+  - `queryParam(name)` and `formParam(name)` require a value, like their parser overloads.
+    `queryParamOrNull` and `formParamOrNull` are the optional reads, replacing decision 48's overload-dependent policy.
+  - A default makes a parser read optional, and a value in another source never counts as present.
+- **Body readers** reject input with `IllegalArgumentException` or `DateTimeException`, like parameter parsers, so a malformed date is a 400 from a query string or a JSON field alike.
+  Other reader exceptions stay server errors, and NDJSON errors still name the line and surface during consumption.
+- **Response mutation.**
+  - `WebResponse.withoutHeader(name)` is public and case-insensitive, so filters need no raw servlet writer to remove a header.
+  - `body(replacement)` keeps headers, so the caller fixes Content-Length, ETag, Last-Modified, Content-Encoding, and a changed content type.
+    Nothing is deleted automatically, because template rendering and compression also replace bodies and carry their metadata on purpose.
+- **Transmission results.**
+  - `RequestLogger` takes `(request, completion)`.
+    `RequestCompletion` carries the response definition, the final servlet status as an int (a raw writer can set any code), the elapsed Duration, and any decoration or write exception.
+  - Failure and status are independent: a pre-commit failure can yield a 500, a post-commit one a 200 with a partial body.
+  - Handled exceptions appear as their response, normal SSE closure is normal completion, and completion does not confirm client receipt.
+- **Migration.**
+  Old filter and logger call sites fail to compile, but optional string reads must be moved to `OrNull` by hand because the required signatures still compile.
+  The examples, agent references, and manual use the new contracts.
 
 ## 54 · Nullness in the signatures
 
 ### 54. Every published package is `@NullMarked`, and NullAway checks it at compile time
 
-Every published package carries JSpecify's `@NullMarked`, so a type without `@Nullable` excludes null.
-A member that returns or accepts null says so with `@Nullable` in its signature, where it used to say so only in Javadoc.
-`org.jspecify:jspecify` is an `api` dependency of every published module, because the annotations are part of the public signatures.
-The artifact holds annotations only, so the no-reflection rule stands.
+Every published package carries JSpecify's `@NullMarked`, so nullability is in signatures rather than Javadoc, and NullAway fails the build when they disagree with the code.
 
-NullAway runs through the Error Prone setup every module already had, in JSpecify mode and at error severity, over the main sources of the published modules.
-An annotation that disagrees with the code therefore fails the build instead of drifting from it.
-Test sources are not checked, because tests pass null on purpose to exercise the guards.
-`example-flashcard` is not checked either, because it is an application built on the API rather than part of it.
-
-The annotations record contracts the earlier decisions already made:
-
-- `BeforeFilter.handle` returns `@Nullable WebResponse`, while `Handler`, `AfterFilter`, and `ResponseFilter` return a non-null one, as decision 53 set.
-- On `WebRequest`, the `OrNull` reads, `header`, `contentType`, `queryString`, `cookie`, `sessionAttr`, `flashed`, and `errorMessage` return `@Nullable`.
-- `WebResponse.header`, `Json.optObject`, `Json.optArray`, `RequestCompletion.failure`, `UploadedFile.contentType`, and `WebSocketFactory.create` return `@Nullable`.
-- `setSessionAttr` and `flash` take a `@Nullable` value, because null removes the key.
-- `Json.put` and `Json.add` take a `@Nullable` value, because null writes JSON `null`.
-- A template model is `Map<String, @Nullable Object>`, because decision 50 keeps null values in the copy.
-- The server settings `host` and `multipart` take `@Nullable`, and `jetty()`, `tomcat()`, and `undertow()` return `@Nullable` before `start()`.
-
-A default is never null.
-`param(name, default)`, the parser forms with a default, and `Json.optString(key, default)` take a non-null default and return a non-null value.
-`paramOrNull`, `queryParamOrNull`, and `formParamOrNull` are the optional strings, so a nullable default would only duplicate them.
-
-The Servlet API carries no nullness annotations, so NullAway reads its return values as non-null.
-Each value `WebRequest`, `UploadedFile`, and the test stubs pass on from a servlet type was therefore checked against the Servlet specification by hand.
-`getHeader`, `getContentType`, `getQueryString`, and `Part.getContentType` are the ones that answer null.
-`Part.getSubmittedFileName` can answer null too, but `UploadedFile` is built only for a part whose file name is present, so `fileName()` stays non-null.
-The settings that store into a nullable field without a documented null, such as `threadPool`, `executor`, `baseDir`, and `SseStream.id`, now reject null the way `contextPath` and `stopTimeout` already did.
+- `org.jspecify:jspecify` is an `api` dependency of every published module, and holds annotations only, so no reflection.
+- NullAway runs through the existing Error Prone setup, JSpecify mode, error severity, on published main sources.
+  Tests pass null on purpose, and `example-flashcard` is an application, so neither is checked.
+- **The annotations record earlier contracts.**
+  - `BeforeFilter.handle` returns `@Nullable WebResponse`, while `Handler`, `AfterFilter`, and `ResponseFilter` return non-null, per decision 53.
+  - `@Nullable` returns: `WebRequest`'s `OrNull` reads, `header`, `contentType`, `queryString`, `cookie`, `sessionAttr`, `flashed`, `errorMessage`, plus `WebResponse.header`, `Json.optObject`, `Json.optArray`, `RequestCompletion.failure`, `UploadedFile.contentType`, `WebSocketFactory.create`.
+  - `@Nullable` values: `setSessionAttr` and `flash` (null removes the key), `Json.put` and `Json.add` (null writes JSON `null`).
+  - A template model is `Map<String, @Nullable Object>`, because decision 50 keeps null values.
+  - Server settings `host` and `multipart` accept null, and `jetty()`, `tomcat()`, `undertow()` return `@Nullable` before `start()`.
+- **A default is never null.**
+  `param(name, default)`, parser forms with a default, and `Json.optString(key, default)` take and return non-null, since `paramOrNull`, `queryParamOrNull`, and `formParamOrNull` already cover the optional case.
+- **The Servlet API was checked by hand**, since it is unannotated and NullAway treats it as non-null.
+  - `getHeader`, `getContentType`, `getQueryString`, and `Part.getContentType` answer null.
+  - `Part.getSubmittedFileName` can too, but `UploadedFile` exists only for named parts, so `fileName()` is non-null.
+  - `threadPool`, `executor`, `baseDir`, and `SseStream.id` now reject null, like `contextPath` and `stopTimeout`.
 
 ## 55 · Where a release goes
 
 ### 55. Releases go to Maven Central from a tag, as one signed bundle
 
-Every artifact is published to Maven Central, and GitHub Packages is no longer used.
-GitHub Packages required a personal access token even for a public repository, so trying the framework cost a token and a credentials block before the first request.
-Central needs no repository declaration in Maven and one `mavenCentral()` line in Gradle.
+All artifacts go to Maven Central, replacing GitHub Packages, which demanded a personal access token and credentials block even for a public repository.
+Central needs no Maven repository declaration and one `mavenCentral()` line in Gradle.
 
-A release starts from a `v*` tag, not from a push to `main`.
-A version on Central is permanent, so the thing that publishes it is the one act that says "this is the release".
-The version is written once, in `gradle.properties`.
-The README, the manual's `project-version`, the Maven parent, and the agent skill repeat it where a reader copies it from, and `verifyVersionReferences` fails the build when one of them disagrees.
-`CHANGELOG.md` is written before the tag, and the workflow copies the version's section into the GitHub Release.
+- **A `v*` tag starts a release**, not a push to `main`, because a Central version is permanent.
+  - The version lives in `gradle.properties`.
+    `verifyVersionReferences` fails the build if the README, the manual's `project-version`, the Maven parent, or the agent skill disagree.
+  - `CHANGELOG.md` is written first, and its section is copied into the GitHub Release.
+- **One signed bundle.**
+  All publications, including the Gradle plugin and the Maven parent, are signed into one `build/` directory and zipped into a single Central Portal deployment.
+  It is `USER_MANAGED`: the portal validates, a person presses Publish.
+  Uploading is two `curl` calls, so the build adds only the `signing` plugin.
+- The Gradle plugin's users add `mavenCentral()` to `pluginManagement.repositories`, and the Gradle Plugin Portal is left to its own issue.
 
-Every publication, including the Gradle plugin and the Maven parent, is signed into one directory under `build/`, and its zip is uploaded to the Central Portal's publisher API as a single deployment.
-The deployment is `USER_MANAGED`: the portal validates it, and a person presses Publish.
-The upload is two `curl` calls in the workflow, so the build gains the `signing` plugin and nothing else.
+Rejected:
 
-The Gradle plugin is on Central with the jars, so its users add `mavenCentral()` to `pluginManagement.repositories`.
-The Gradle Plugin Portal would make that line unnecessary, and it is left to an issue of its own.
-
-Rejected: `com.vanniktech.maven.publish`, `com.gradleup.nmcp`, and JReleaser.
-Each would replace the two `curl` calls with a plugin, which is the trade this build has declined elsewhere.
-Also rejected: the portal's OSSRH-compatible staging endpoint.
-It uploads every module separately into an implicit staging repository, where the bundle is one file that can be built and inspected locally before anything leaves the machine.
-Also rejected: snapshots on Central's snapshot repository, until someone asks to depend on an unreleased version.
+- `com.vanniktech.maven.publish`, `com.gradleup.nmcp`, and JReleaser, each a plugin replacing two `curl` calls, a trade declined elsewhere.
+- The OSSRH-compatible staging endpoint, which uploads modules separately, while the bundle is one file inspectable locally.
+- Central snapshots, until someone asks for an unreleased version.
 
 ## 56 · The route a request matched
 
 ### 56. `req.route()` reports the route that answered
 
-`WebRequest.route()` returns the `Route` the router chose, the same record `app.routes()` lists, with the group prefix resolved.
-It is null before routing and where nothing matched, and set from `beforeRoute` on through the handler, the after-filters, the exception and error handlers, the response filters, and the request logger.
+`WebRequest.route()` returns the `Route` the router chose, as listed by `app.routes()` with the group prefix resolved, because the router knows it at match time and decision 13's list is already data.
 
-The case that showed the gap was a tracing filter.
-The OpenTelemetry agent instruments the servlet layer, where one `AppServlet` is mapped at `/*`, so every server span was named `GET /*` and an APM had one endpoint to show.
-The application could rename the span from a `beforeRoute` filter, but the request carried the path and its variables and not the pattern they came from, so it re-matched the path against `app.routes()` with a matcher of its own.
-That matcher preferred a literal segment over a variable, and the router follows registration order, so the two could disagree on which route a request took, and the span would then be named after a route that did not run.
-The router knows the answer at the moment it matches, and decision 13's list already exists as data, so the fix is to hand the entry over rather than to have it found again.
-
-The route is on the request rather than passed as an argument, because every interface that takes a request is functional and settled at 1.0 (decision 36), and because the request logger and the response filters want it as much as the handler does.
-A HEAD answered by a GET route reports that GET route, which is the route that ran.
+- It is null before routing or with no match, and set from `beforeRoute` through the handler, after-filters, exception and error handlers, response filters, and request logger.
+- **Motivation: tracing.**
+  With one `AppServlet` at `/*`, the OpenTelemetry agent named every span `GET /*`.
+  Renaming it meant re-matching the path against `app.routes()` with the application's own matcher, which preferred literals while the router uses registration order, so spans could name a route that did not run.
+- It lives on the request because every request-taking interface is functional and settled at 1.0 (decision 36), and loggers and response filters need it too.
+- A HEAD answered by a GET route reports that GET route.
 
 ## 57 · What an exception handler catches
 
 ### 57. An `HttpException` passes a broader exception handler by
 
-An `HttpException` is matched only by a handler registered for `HttpException` or a subtype of it.
-A handler for `RuntimeException` or `Exception` never sees one, and the exception answers with its status and message and goes to `error(status, ...)` for its body, as it does when no handler is registered at all.
+Only a handler for `HttpException` or a subtype catches one.
+A `RuntimeException` or `Exception` handler never sees it, so it answers with its status and message via `error(status, ...)`, as with no handler at all.
 
-Decision 34 made the most specific handler run, and under that rule a catch-all for `RuntimeException` caught every `HttpException` too.
-An application that registered the catch-all to record failures then had to write the framework's own mapping back into it, `if (e instanceof HttpException http) return ...status(http.status())`, or every deliberate 404 became its 500.
-The trap is silent: the catch-all reads as being about what went wrong, and a status a handler threw on purpose is not that.
-`HttpException` is the one exception whose meaning the framework defines, a status rather than a failure, so it is the one exception the framework may keep out of a handler that did not name it.
-A handler that names it, or a subtype, asked for it and gets it.
+- Under decision 34's most-specific rule, a logging catch-all for `RuntimeException` swallowed every `HttpException`, turning deliberate 404s into 500s unless it re-added `if (e instanceof HttpException http) return ...status(http.status())`.
+- The trap is silent, because a catch-all reads as covering failures, and a deliberate status is not one.
+- `HttpException` is the one exception whose meaning, a status, the framework defines, so only it is withheld from handlers that did not name it.
 
-Rejected: leaving decision 34's rule alone and documenting the trap.
-The line the application had to write was the framework's own `fail` in different words, and a rule that has to be restated in every catch-all is a rule in the wrong place.
+Rejected: keeping decision 34's rule and documenting the trap.
+The re-added line was the framework's own `fail` again, and a rule restated in every catch-all is in the wrong place.
 
 ## 58 · What the request logger is told
 
 ### 58. `RequestCompletion` carries the exception the request was answered for
 
-`RequestCompletion.exception()` is what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did.
-It is null when nothing threw, and for an `HttpException`, which decision 57 makes a status rather than a failure.
-`failure()` stays what it was, decision 53's transmission failure, and the two are different things: one interrupted working out the answer, the other interrupted sending it.
+`RequestCompletion.exception()` holds what a handler, filter, or template threw, whether an exception handler or the framework's 500 answered it, because the logger already sees every outcome.
 
-Before this, an uncaught exception went to the servlet log and became a 500, and the request logger saw the 500 alone.
-An application that wanted the exception on a tracing span or in an error list had to register a catch-all `exception(...)` handler, which is the shape decision 57 records as a trap, and which also made it answer the request it only wanted to observe.
-The logger is already the one lambda that sees every outcome, so it is where the exception belongs.
-
-Every exception is reported, the mapped ones included, with the status they were mapped to.
-A logger that records failures reads the two together, since an exception answered with a 400 is the caller's mistake and one answered with a 500 is the application's, and that line is the application's to draw.
+- It is null when nothing threw and for an `HttpException`, a status per decision 57.
+- `failure()` stays decision 53's transmission failure: one interrupts computing the answer, the other sending it.
+- Previously the logger saw only the 500, and capturing the exception required decision 57's catch-all trap, which also answered a request it only meant to observe.
+- Mapped exceptions are reported too, with their status, so the application decides that a 400 is the caller's mistake and a 500 its own.
 
 Rejected: a separate `app.onException(...)` observer.
-It would be a second lambda called once per request that threw, with the request, the exception, and no answer, and the logger already has all three.
+It would get the request and the exception but no answer, and the logger already has all three.
+
 Decision 59 renamed the two components `thrown` and `writeFailure`.
 
 ## 59 · Names a first reader guesses wrong
 
 ### 59. A pass over the public names, taken as a breaking 1.2.0
 
-A review read the public surface the way a first-time reader does, and listed every name whose meaning that reader would guess wrong.
-Each was renamed outright, with no deprecated alias left behind.
-The framework has one user, so a deprecation cycle would carry every old name for a release without anyone to migrate, and every break is a compile error whose fix is visible in the error.
+Every name a first-time reader would guess wrong was renamed outright, with no deprecated alias.
+The framework has one user, and every break is a compile error whose fix the error shows.
 
-**Absence has one naming rule.**
-The plain name requires the value, a default as the last argument makes it optional, and `OrNull` answers null.
-`WebRequest` already followed it, and `JsonObject` followed org.json's `opt*` instead, so one framework spoke two dialects.
-`optString(key, default)` is now `getString(key, default)`, and `optObject(key)` is `getObjectOrNull(key)`.
-`header`, `cookie`, and a session read keep null under the plain name, because their absence is the usual case, and the javadoc of `WebRequest` states the exception once.
-
-**`Guard` became `Hook`.**
-`app.guards()` listed a response filter and a status page, and neither guards anything.
-`ResponseFilter`'s own javadoc said so.
-Two of its records also collided with names a reader already holds: `Guard.ResponseFilter` with the `ResponseFilter` type, and `Guard.Error` with `java.lang.Error`, which needed a suppressed warning.
-`Hook` names where they run, around a route, and each record names the scope it carries: `Hook.StatusPage(status)` and `Hook.EveryResponse()`.
-
-**`error(status, handler)` became `statusPage(status, handler)`.**
-Beside `exception(Type, handler)`, `error` did not say that it fills the body of a response that already has its status.
-`statusPage` says what it produces.
-
-**`RequestCompletion` names each exception for its half of the request.**
-`failure` and `exception` were synonyms, and `failed()` and `threw()` were too, so the javadoc had to spend a paragraph telling them apart.
-They are now `writeFailure` and `thrown`, with `writeFailed()` and `threw()`.
-
-**`WebResponse.json(String)` became `rawJson(String)`.**
-`json(message)` compiled and sent `hi` for a message of `hi`, which is not JSON.
-The name now says that the text is JSON already, and `json` takes only a tree or a value with its writer.
-
-**The session is one object.**
-`sessionAttr`, `setSessionAttr`, `removeSessionAttr`, and `invalidateSession` sat among forty request methods under four different shapes of name.
-`req.session()` answers a `WebSession` with `get`, `set`, `remove`, and `invalidate`, and asking for it starts no session.
-Flash stays on the request: it is delivered to a request, and the session is only where it waits.
-`TestRequest.sessionAttr(key, value)` became `session(key, value)` to match.
-
-**The JSON types are top-level.**
-`Json.JsonValue` repeated its own name at every call site, and `Json.obj()` and `Json.arr()` abbreviated what the types spell out.
-`JsonValue`, `JsonObject`, `JsonArray`, `JsonPrimitive`, and `JsonException` are now types of their own in `net.benelog.spidersilk.json`, and the factories are `Json.object()` and `Json.array()`.
-
-**Smaller names.**
-The `Stream` body record became `Streamed`, since `bodyNdjson` hands out a `java.util.stream.Stream` and a file using both had to qualify one.
-`app.server()`, the running server, became `runningServer()`, apart from `server(factory)`, which chooses one before start.
-
-**Two failures now say what went wrong.**
-A path pattern with whitespace is rejected at registration, because `get("List decks", "/decks", handler)` compiled and registered a route nothing could reach.
-`pathParam` in a `beforeRequest` filter used to report that the pattern had no such variable, and now reports that no route has matched yet.
+- **Absence has one naming rule.**
+  The plain name requires the value, a default as the last argument makes it optional, and `OrNull` answers null.
+  - `JsonObject` followed org.json's `opt*` instead: `optString(key, default)` is now `getString(key, default)`, and `optObject(key)` is `getObjectOrNull(key)`.
+  - `header`, `cookie`, and a session read keep null under the plain name, because absence is their usual case.
+- **`Guard` became `Hook`.**
+  - A response filter and a status page guard nothing, as `ResponseFilter`'s own javadoc said.
+  - `Guard.ResponseFilter` collided with the `ResponseFilter` type, and `Guard.Error` with `java.lang.Error`.
+  - Each record names the scope it carries: `Hook.StatusPage(status)`, `Hook.EveryResponse()`.
+- **`error(status, handler)` became `statusPage(status, handler)`**, which says what it produces.
+- **`RequestCompletion` names each exception for its half of the request.**
+  `failure`/`exception` and `failed()`/`threw()` were synonyms.
+  They are now `writeFailure`/`writeFailed()` and `thrown`/`threw()`.
+- **`WebResponse.json(String)` became `rawJson(String)`.**
+  `json("hi")` compiled and sent `hi`, which is not JSON.
+- **The session is one object.**
+  - `req.session()` answers a `WebSession` with `get`, `set`, `remove`, and `invalidate`, replacing four differently shaped names among forty request methods.
+  - Asking for it starts no session.
+  - Flash stays on the request, which is what it is delivered to.
+  - `TestRequest.sessionAttr(key, value)` became `session(key, value)`.
+- **The JSON types are top-level**: `JsonValue`, `JsonObject`, `JsonArray`, `JsonPrimitive`, `JsonException`, built with `Json.object()` and `Json.array()`.
+- **Smaller names.**
+  - The `Stream` body record became `Streamed`, apart from the `java.util.stream.Stream` that `bodyNdjson` returns.
+  - `app.server()`, the running server, became `runningServer()`, apart from `server(factory)`.
+- **Two failures say what went wrong.**
+  - A path with whitespace is rejected at registration, because `get("List decks", "/decks", handler)` registered a route nothing could reach.
+  - `pathParam` before routing reports that no route has matched yet.
 
 Rejected: filling in `queryParamLong`, `formParamBoolean`, and the rest of the grid.
-The parser overload already covers every type on every source, and the named forms stay where they are used most, on `param` and the path variables.
-The rule is written down instead, in `WebRequest`'s javadoc and on the request page.
+The parser overload covers every type on every source, and the rule is written down in `WebRequest`'s javadoc instead.
 
 ## Rejected — decisions, with the reason
 
-These are closed.
-If one is reopened, it is a change to what the framework is.
+These are closed: reopening one changes what the framework is.
 
 | Idea | Why not |
 |---|---|
 | `WebResponse.json(Object)`, `req.bodyAsClass(Foo.class)` | Reflection. The whole point is that the wire format changes only when someone edits it. |
 | Annotation-driven routing | Reflection, plus scanning. |
-| Renaming `Handler` to `Action` | In the MVC frameworks that made the name familiar, an `Action` is the opposite model: an object instantiated per request and populated by reflection, whose execute method returns a *result name* that XML or an annotation resolves into a view. `Handler` is a stateless function returning the response itself. The name would import expectations this framework refuses. It also breaks the suffix rule — `…Handler` answers a request, `…Writer` fills a body — leaving `ExceptionHandler` stranded. `Action` stays what it is worth being: a convention for naming the classes that implement `Handler` directly. |
-| A `Controller` interface with `register(App)` in the example | The routing table becomes the union of what every implementation decided, so reading the application's routes means reading every controller. A registry of things that register themselves is the shape of the container this framework exists without. |
+| Renaming `Handler` to `Action` | In MVC frameworks an `Action` is a per-request object populated by reflection, returning a *result name* that XML or an annotation resolves to a view. `Handler` is a stateless function returning the response itself. The name also breaks the suffix rule (`…Handler` answers a request, `…Writer` fills a body) and strands `ExceptionHandler`. `Action` stays a naming convention for classes that implement `Handler`. |
+| A `Controller` interface with `register(App)` in the example | Reading the routes would mean reading every controller. Things that register themselves are the container this framework exists without. |
 | A DI container | Not the web tier, and `FlashcardContext` shows the alternative. |
 | `ServiceLoader`-based server discovery | Classpath-driven binding is the magic this framework exists without. |
-| Javalin-style plugin registry | A registry of things that configure themselves is how a container starts. Decision 27 is what the alternative looks like: three named methods, each taking a value that does nothing until `App` is handed it. |
+| Javalin-style plugin registry | Things that configure themselves are how a container starts. Decision 27 is the alternative: three named methods, each taking an inert value. |
 | Spark's static-import DSL | Process-global mutable state: one app per JVM, no parallel tests. |
-| Path-scoped `error(status, handler)`, or `RouteGroup.error(...)` | An application that answers JSON under `/api` and HTML elsewhere branches inside one handler, on `req.accepts(...)` or `req.path()`, which is one visible line. A path component on `Guard.Error` would turn decision 6's one place that renders a 404 into several, and would report a status handler as covering a pattern where it covers a status. |
-| `app.ws(path, config)` in core | A WebSocket is a protocol upgrade, so it leaves servlet dispatch: the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` all stop applying to it. Core would be handing out an API that core's own features silently do not cover. It also ends the no-lock-in claim that `WebServer` exists for, since `AppServlet` on another container cannot follow. `jakarta.websocket` is no escape either: its default `Configurator` instantiates endpoints reflectively. It lives in `spider-silk-jetty-websocket` instead, where the name carries the tie to Jetty — decision 15c. |
+| Path-scoped `error(status, handler)`, or `RouteGroup.error(...)` | JSON under `/api` and HTML elsewhere is one visible branch on `req.accepts(...)` or `req.path()`. A path on `Guard.Error` would split decision 6's one place that renders a 404, and report a status handler as covering a pattern. |
+| `app.ws(path, config)` in core | An upgrade leaves servlet dispatch, so the router, `before`/`after`, `error(status, ...)`, `requestLogger`, `routes()`, and `WebTest` silently stop applying. It would also end the no-lock-in claim of `WebServer`, since `AppServlet` on another container cannot follow. `jakarta.websocket`'s default `Configurator` instantiates endpoints reflectively. It lives in `spider-silk-jetty-websocket` instead (decision 15c). |
