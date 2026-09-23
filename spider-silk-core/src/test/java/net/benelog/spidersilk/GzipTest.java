@@ -5,13 +5,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import org.junit.jupiter.api.Test;
 
@@ -212,6 +215,84 @@ class GzipTest {
             assertThat(inflate(response.body())).isEqualTo(PAGE);
             assertThat(response.body().length).isLessThan(PAGE.length());
         });
+    }
+
+    // ---- A streamed body that fails ----
+
+    /**
+     * A writer that fails before writing anything leaves nothing sent. Ending
+     * the gzip stream then would write a trailer and commit a whole, empty body
+     * as a 200; not ending it leaves the servlet free to answer 500.
+     */
+    @Test
+    void aWriterThatFailsBeforeWritingIsA500NotAnEmptyGzipBody() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        IOException failure = new IOException("planned writer failure");
+        App app = new App().gzip().requestLogger((req, completion) -> logged.add(completion))
+                .get("/broken", req -> WebResponse.stream("text/plain", out -> {
+                    throw failure;
+                }));
+
+        WebTest.test(app, client -> {
+            HttpResponse<byte[]> response = gzipped(client, "/broken");
+
+            assertThat(response.statusCode()).isEqualTo(500);
+            assertThat(response.headers().firstValue("Content-Encoding")).isEmpty();
+            assertThat(new String(response.body(), StandardCharsets.UTF_8))
+                    .isEqualTo("Internal Server Error");
+        });
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(500);
+            assertThat(completion.writeFailure()).isSameAs(failure);
+        });
+    }
+
+    /**
+     * A writer that fails after the response is committed cannot turn it into a
+     * 500, so the transfer is aborted instead: the client sees a body that never
+     * ended, not a truncated one that inflates cleanly.
+     */
+    @Test
+    void aWriterThatFailsAfterCommittingAbortsTheTransfer() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        IOException failure = new IOException("planned committed failure");
+        App app = new App().gzip().requestLogger((req, completion) -> logged.add(completion))
+                .get("/partial", req -> WebResponse.stream("text/plain", out -> {
+                    out.write("partial".getBytes(StandardCharsets.UTF_8));
+                    out.flush();
+                    throw failure;
+                }));
+
+        WebTest.test(app, client ->
+                assertThatThrownBy(() -> gzipped(client, "/partial"))
+                        .isInstanceOf(UncheckedIOException.class));
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(200);
+            assertThat(completion.writeFailure()).isSameAs(failure);
+        });
+    }
+
+    /**
+     * A failed writer still releases the Deflater's native memory rather than
+     * leaving it to the Cleaner. The stream the writer was handed is ended, so
+     * writing to it afterwards has no Deflater left to write through.
+     */
+    @Test
+    void aWriterThatFailsStillEndsTheDeflater() {
+        AtomicReference<OutputStream> handed = new AtomicReference<>();
+        App app = new App().gzip()
+                .get("/broken", req -> WebResponse.stream("text/plain", out -> {
+                    handed.set(out);
+                    throw new IOException("planned writer failure");
+                }));
+
+        WebTest.test(app, client ->
+                assertThat(gzipped(client, "/broken").statusCode()).isEqualTo(500));
+        assertThat(handed.get()).isInstanceOf(GZIPOutputStream.class);
+        assertThatThrownBy(() -> handed.get().write("late".getBytes(StandardCharsets.UTF_8)))
+                // Which unchecked type says so depends on the JDK; the message does not.
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Deflater has been closed");
     }
 
     // ---- Static files, which are streams and carry validators ----

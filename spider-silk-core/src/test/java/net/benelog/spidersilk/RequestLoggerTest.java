@@ -1,8 +1,10 @@
 package net.benelog.spidersilk;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -48,8 +50,12 @@ class RequestLoggerTest {
         });
     }
 
+    /**
+     * The client sees the transfer cut short, and the logger still sees the
+     * status that went out and the failure that cut it.
+     */
     @Test
-    void aWriteFailureAfterCommitReports200AndItsCause() {
+    void aWriteFailureAfterCommitAbortsTheTransferAndReports200AndItsCause() {
         List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
         IOException failure = new IOException("export interrupted");
         App app = new App().requestLogger((req, completion) -> logged.add(completion))
@@ -58,11 +64,8 @@ class RequestLoggerTest {
                     out.flush();
                     throw failure;
                 }));
-        WebTest.test(app, client -> {
-            var response = client.get("/");
-            assertThat(response.statusCode()).isEqualTo(200);
-            assertThat(response.body()).isEqualTo("partial");
-        });
+        WebTest.test(app, client -> assertThatThrownBy(() -> client.get("/"))
+                .isInstanceOf(UncheckedIOException.class));
         assertThat(logged).singleElement().satisfies(completion -> {
             assertThat(completion.statusCode()).isEqualTo(200);
             assertThat(completion.writeFailed()).isTrue();

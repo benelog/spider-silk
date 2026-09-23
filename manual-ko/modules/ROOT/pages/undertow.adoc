@@ -64,5 +64,10 @@ Tomcat 모듈에도 같은 비데몬 스레드가 필요하며, `join()`은 이 
 조용히 아무것도 하지 않는 메서드는 메서드가 없는 것보다 나쁘다.
 정적 파일은 클래스패스 루트든 디렉터리든 여전히 core 자체의 `StaticFiles`가 제공하므로, Undertow의 리소스 매니저는 의도적으로 비워 둔다.
 
+응답이 커밋된 뒤에 실패한 응답 본문은 연결을 닫는다.
+Undertow는 그대로 두면 본문이 온전한 것처럼 응답을 끝내므로, 이 모듈은 응답이 시작된 뒤라면 연결을 닫는 서블릿 예외 핸들러를 설치한다.
+그러면 클라이언트는 Jetty와 Tomcat에서와 같이 중단된 전송을 받는다.
+`setExceptionHandler(...)`를 호출하는 `customizeDeployment(...)`는 그 핸들러를 대체한다.
+
 로깅은 JBoss Logging을 거치며, JBoss Logging은 클래스패스에 slf4j가 있으면 slf4j를 쓴다.
 따라서 이미 slf4j를 쓰는 애플리케이션은 브리지 없이 Undertow의 로그를 받는다.

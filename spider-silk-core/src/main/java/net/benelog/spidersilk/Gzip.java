@@ -255,12 +255,19 @@ public final class Gzip {
      */
     private WebResponse compressed(WebResponse response, StreamWriter writer) {
         return encoded(response.body(new WebResponse.Streamed(out -> {
-            // finish() writes the trailer but leaves the Deflater's native memory
-            // to the Cleaner; close() is what ends it. Closing the servlet stream
-            // is the container's business, so the shield absorbs that one call.
-            try (GZIPOutputStream zipped = new GZIPOutputStream(new NonClosing(out))) {
+            // Only a writer that returned has a body to end. close() writes the
+            // trailer and flushes, which on a failed writer would commit what
+            // looks like a whole, empty 200; abandon() ends the Deflater and
+            // writes nothing, so the servlet can still answer 500, or let the
+            // container abort a transfer that is already under way.
+            Deflating zipped = new Deflating(new NonClosing(out));
+            try {
                 writer.write(zipped);
+            } catch (Throwable failure) {
+                zipped.abandon();
+                throw failure;
             }
+            zipped.close();
         }))).withoutHeader("Content-Length");
     }
 
@@ -285,6 +292,23 @@ public final class Gzip {
             throw new UncheckedIOException(e);
         }
         return out.toByteArray();
+    }
+
+    /**
+     * A gzip stream that can be given up on. {@link #close()} finishes the body:
+     * it writes the trailer, ends the Deflater, and flushes. {@link #abandon()}
+     * ends the Deflater's native memory without writing another byte, which is
+     * what a writer that failed halfway leaves behind.
+     */
+    private static final class Deflating extends GZIPOutputStream {
+
+        Deflating(OutputStream out) throws IOException {
+            super(out);
+        }
+
+        void abandon() {
+            def.end();
+        }
     }
 
     /**

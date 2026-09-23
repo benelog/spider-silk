@@ -88,7 +88,8 @@ Every caveat follows from that inheritance:
 
 * **The writer runs outside handler exception handling.**
   A failure before commitment gets a generic 500.
-  After commitment the status cannot change, and the response may be partial.
+  After commitment the status cannot change, so the transfer is aborted instead.
+  The client sees an incomplete response rather than a partial one that looks complete.
   `RequestCompletion.writeFailure()` reports the write failure independently of the status.
   Anything that can fail in a way the client should hear about, such as a missing deck or an unauthorized caller, belongs before the response is returned.
   The example looks the deck up first for exactly this reason.

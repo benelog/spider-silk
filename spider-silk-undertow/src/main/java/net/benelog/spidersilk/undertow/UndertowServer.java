@@ -12,19 +12,24 @@ import java.util.function.Consumer;
 
 import jakarta.servlet.MultipartConfigElement;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.ServletRequest;
+import jakarta.servlet.ServletResponse;
 
 import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
+import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.GracefulShutdownHandler;
 import io.undertow.server.handlers.resource.ResourceManager;
 import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
+import io.undertow.servlet.api.LoggingExceptionHandler;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.util.ImmediateInstanceFactory;
 
 import org.jspecify.annotations.Nullable;
+import org.xnio.IoUtils;
 
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.AppServlet;
@@ -295,6 +300,7 @@ public final class UndertowServer implements WebServer {
                 // Static files are read by core's own StaticFiles, classpath
                 // root or directory alike, so Undertow is never asked for one.
                 .setResourceManager(ResourceManager.EMPTY_RESOURCE_MANAGER)
+                .setExceptionHandler(UndertowServer::abortStartedResponse)
                 .addServlet(servlet);
         if (executor != null) {
             info.setExecutor(executor);
@@ -302,6 +308,25 @@ public final class UndertowServer implements WebServer {
 
         deploymentCustomizers.forEach(customizer -> customizer.accept(info));
         return info;
+    }
+
+    /**
+     * What a servlet failure after the response has started does to the
+     * connection. AppServlet rethrows a body that failed once its status was on
+     * the wire, so the container can cut the transfer short. Jetty and Tomcat
+     * abort it; Undertow, left to itself, finishes the response as if the body
+     * were whole, ending a chunked stream with its last chunk. Closing the
+     * connection first leaves the client a transfer it can tell was cut short.
+     * A failure before the response started is left to Undertow's own handling.
+     */
+    private static boolean abortStartedResponse(HttpServerExchange exchange,
+            ServletRequest request, ServletResponse response, Throwable failure) {
+        boolean handled = LoggingExceptionHandler.DEFAULT
+                .handleThrowable(exchange, request, response, failure);
+        if (exchange.isResponseStarted()) {
+            IoUtils.safeClose(exchange.getConnection());
+        }
+        return handled;
     }
 
     /**

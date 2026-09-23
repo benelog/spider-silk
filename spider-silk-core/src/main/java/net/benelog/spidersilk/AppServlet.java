@@ -110,7 +110,8 @@ public class AppServlet extends HttpServlet {
     }
 
     @Override
-    protected void service(HttpServletRequest req, HttpServletResponse res) throws IOException {
+    protected void service(HttpServletRequest req, HttpServletResponse res)
+            throws IOException, ServletException {
         if (deployment == null) {
             throw new IllegalStateException("AppServlet has not been initialized: the container calls init() first");
         }
@@ -686,15 +687,25 @@ public class AppServlet extends HttpServlet {
     }
 
     /**
-     * A body that failed halfway. The status and the headers may already be on
-     * the wire by then, so this is best-effort: a 500 when nothing has been sent,
-     * and a log entry either way. Nothing is rethrown into the container, which
-     * would only turn a broken page into a broken page plus a stack trace.
+     * A body that failed halfway. When nothing has been sent yet, the answer
+     * becomes a 500. When the status and the headers are already on the wire,
+     * the failure is rethrown into the container, which aborts the transfer
+     * rather than ending it: the client sees a connection cut short, or a body
+     * shorter than its {@code Content-Length}, instead of a truncated download
+     * that looks complete. The failure is logged here either way, since how
+     * loudly a container reports what it was handed differs from one to the next.
      */
-    private void writeFailed(Exception e, HttpServletResponse res) throws IOException {
+    private void writeFailed(Exception e, HttpServletResponse res)
+            throws IOException, ServletException {
         log("Failed while writing the response", e);
         if (res.isCommitted()) {
-            return;
+            if (e instanceof IOException io) {
+                throw io;
+            }
+            if (e instanceof RuntimeException unchecked) {
+                throw unchecked;
+            }
+            throw new ServletException("Failed while writing the response", e);
         }
         res.reset();
         res.setStatus(500);

@@ -109,6 +109,69 @@ class JettyServerTest {
         }
     }
 
+    /**
+     * A streamed body that fails before anything is sent is still a 500, with
+     * or without compression: nothing about the failure reached the client, so
+     * nothing about it has to be taken back.
+     */
+    @Test
+    void aStreamThatFailsBeforeCommittingIsA500() throws Exception {
+        app = failingStreams().start(0);
+
+        for (String encoding : List.of("gzip", "identity")) {
+            HttpResponse<String> response = client.send(HttpRequest
+                    .newBuilder(URI.create("http://localhost:" + app.port() + "/broken"))
+                    .header("Accept-Encoding", encoding)
+                    .build(), HttpResponse.BodyHandlers.ofString());
+
+            assertThat(response.statusCode()).as(encoding).isEqualTo(500);
+            assertThat(response.headers().firstValue("Content-Encoding")).as(encoding).isEmpty();
+            assertThat(response.body()).as(encoding).isEqualTo("Internal Server Error");
+        }
+    }
+
+    /**
+     * A streamed body that fails after the status went out cannot become a 500,
+     * so the container aborts the transfer: the client sees a chunked body with
+     * no last chunk, or fewer bytes than {@code Content-Length} announced, and
+     * never a truncated body that reads as complete.
+     */
+    @Test
+    void aStreamThatFailsAfterCommittingAbortsTheTransfer() {
+        app = failingStreams().start(0);
+
+        for (String path : List.of("/partial", "/partial-with-length")) {
+            for (String encoding : List.of("gzip", "identity")) {
+                HttpRequest request = HttpRequest
+                        .newBuilder(URI.create("http://localhost:" + app.port() + path))
+                        .header("Accept-Encoding", encoding)
+                        .build();
+
+                assertThatThrownBy(() -> client.send(request, HttpResponse.BodyHandlers.ofByteArray()))
+                        .as(path + " with " + encoding)
+                        .isInstanceOf(IOException.class);
+            }
+        }
+    }
+
+    private static App failingStreams() {
+        byte[] partial = "partial".getBytes(StandardCharsets.UTF_8);
+        return new App().gzip()
+                .get("/broken", req -> WebResponse.stream("text/plain", out -> {
+                    throw new IOException("planned writer failure");
+                }))
+                .get("/partial", req -> WebResponse.stream("text/plain", out -> {
+                    out.write(partial);
+                    out.flush();
+                    throw new IOException("planned committed failure");
+                }))
+                .get("/partial-with-length", req -> WebResponse.stream("text/plain", out -> {
+                    out.write(partial);
+                    out.flush();
+                    throw new IOException("planned committed failure");
+                }).header("Content-Length", "1000"));
+    }
+
     /** Sessions are on by default, so flash works without any extra configuration. */
     @Test
     void sessionsAreEnabledByDefault() throws Exception {

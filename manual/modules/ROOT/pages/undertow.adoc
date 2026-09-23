@@ -64,5 +64,10 @@ There is no `sessions(boolean)`: an Undertow deployment always gets a session ma
 A method that silently did nothing would be worse than no method.
 Static files are still served by core's own `StaticFiles`, classpath root or directory alike, so Undertow's resource manager is left empty on purpose.
 
+A response body that fails after the response is committed closes the connection.
+Undertow on its own would end the response as if the body were whole, so the module installs a servlet exception handler that closes the connection once the response has started.
+The client then sees an aborted transfer, as it does on Jetty and Tomcat.
+A `customizeDeployment(...)` that calls `setExceptionHandler(...)` replaces that handler.
+
 Logging goes through JBoss Logging, which uses slf4j when slf4j is on the classpath.
 An application already using slf4j therefore gets Undertow's log lines without a bridge.
