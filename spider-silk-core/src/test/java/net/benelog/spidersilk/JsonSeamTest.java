@@ -59,4 +59,27 @@ class JsonSeamTest {
             assertThat(client.postJson("/decks", "not-json").statusCode()).isEqualTo(400);
         });
     }
+
+    static final JsonReader<Long> DECK_ID = json -> json.asObject().getLong("id");
+
+    /**
+     * An identifier is read from its digits, not from the nearest double: a
+     * decimal that is exactly a long reads as that long, and one with a
+     * fraction the double rounded away is a 400 rather than a different id.
+     */
+    @Test
+    void aDecimalIdIsReadExactlyOrRejectedAsA400() {
+        App app = new App().post("/decks", req -> WebResponse.text(String.valueOf(req.bodyJson(DECK_ID))));
+
+        WebTest.test(app, client -> {
+            var exact = client.postJson("/decks", "{\"id\":9007199254740993.0}");
+            assertThat(exact.statusCode()).isEqualTo(200);
+            assertThat(exact.body()).isEqualTo("9007199254740993");
+
+            assertThat(client.postJson("/decks", "{\"id\":1.0000000000000001}").statusCode())
+                    .isEqualTo(400);
+            assertThat(client.postJson("/decks", "{\"id\":9223372036854775808.0}").statusCode())
+                    .isEqualTo(400);
+        });
+    }
 }

@@ -1,6 +1,9 @@
 package net.benelog.spidersilk.json;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -249,6 +252,77 @@ class JsonTest {
         assertThat(Json.parse("2.0").asLong()).isEqualTo(2L);
         assertThat(Json.parse("1e3").asLong()).isEqualTo(1000L);
         assertThat(Json.parse("-7").asLong()).isEqualTo(-7L);
+    }
+
+    /**
+     * A decimal or exponent token is converted to a long from its text, not
+     * from the nearest double, which has already lost the digits that decide
+     * whether it is whole and which whole number it is.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "9007199254740993.0     | 9007199254740993",
+            "9007199254740993e0     | 9007199254740993",
+            "9.007199254740993e15   | 9007199254740993",
+            "9007199254740992.0     | 9007199254740992",
+            "9007199254740995.00    | 9007199254740995",
+            "-9007199254740993.0    | -9007199254740993",
+            "9223372036854775807.0  | 9223372036854775807",
+            "9.223372036854775807e18 | 9223372036854775807",
+            "-9223372036854775808.0 | -9223372036854775808",
+            "-9.223372036854775808E18 | -9223372036854775808",
+            "2.0                    | 2",
+            "1e3                    | 1000",
+            "1E+3                   | 1000",
+            "12.5e1                 | 125",
+            "100e-2                 | 1",
+            "-0.0                   | 0",
+            "0e-5                   | 0",
+            "0.0e99999999999        | 0",
+            "0e-99999999999         | 0",
+    })
+    void asLongConvertsADecimalTokenExactly(String text, long expected) {
+        assertThat(Json.parse(text).asLong()).isEqualTo(expected);
+        assertThat(Json.parse("{\"n\":" + text + "}").asObject().getLong("n")).isEqualTo(expected);
+    }
+
+    /** A fraction that rounds to a whole double, and a value past either end of long. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "1.0000000000000001",
+            "0.99999999999999999",
+            "9007199254740992.5",
+            "9007199254740993.1",
+            "-9007199254740992.5",
+            "4503599627370496.5",
+            "125e-1",
+            "1e-400",
+            "1e-99999999999",
+            "9223372036854775808.0",
+            "9.223372036854775808e18",
+            "-9223372036854775809.0",
+            "-9.223372036854775809e18",
+            "9.3e18",
+            "1e19",
+            "-1e19",
+    })
+    void asLongRejectsADecimalTokenThatIsNotALong(String text) {
+        JsonValue value = Json.parse(text);
+        assertThatThrownBy(value::asLong)
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Not a JSON integer: " + text);
+        assertThatThrownBy(() -> Json.parse("{\"n\":" + text + "}").asObject().getLong("n", 0))
+                .isInstanceOf(JsonException.class);
+    }
+
+    /** asDouble stays the nearest double, and a decimal serializes as it did before. */
+    @Test
+    void aDecimalTokenStillReadsAndWritesAsADouble() {
+        assertThat(Json.parse("9007199254740993.0").asDouble()).isEqualTo(9007199254740992.0);
+        assertThat(Json.parse("1.0000000000000001").asDouble()).isEqualTo(1.0);
+        assertThat(Json.parse("1e3").toJson()).isEqualTo("1000.0");
+        assertThat(Json.parse("[2.5,-0.5]").toJson()).isEqualTo("[2.5,-0.5]");
+        assertThat(Json.parse("2.5").isNumber()).isTrue();
     }
 
     /**

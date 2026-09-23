@@ -287,7 +287,7 @@ public final class Json {
                 if (!Double.isFinite(value)) {
                     throw error("Number out of range: " + number);
                 }
-                return new JsonPrimitive(value);
+                return new JsonPrimitive(new JsonDecimal(value, number));
             } catch (NumberFormatException e) {
                 throw error("Invalid number format: " + number);
             }

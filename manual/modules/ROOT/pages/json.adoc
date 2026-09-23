@@ -46,6 +46,8 @@ Other reader exceptions remain server errors.
 `bodyJson(reader)` wraps input rejection in `HttpException`, so custom handling of these errors targets that type or the 400 status page.
 A `JsonException` that handler code throws directly is not wrapped, so an exception handler registered for `JsonException` still receives it.
 `asLong` and `getLong` reject a number with a fractional part rather than truncating it: `1.5` is not a long, while `2.0` and `1e3` are whole and read as one.
+The conversion reads the number's own digits rather than the nearest `double`, so `9007199254740993.0` reads as exactly that long and `1.0000000000000001` is rejected as a fraction.
+`asDouble` and `getDouble` answer the nearest `double`, which is approximate by nature.
 For a key that is allowed to be absent, `getString(key, defaultValue)`, `getLong`, `getDouble`, and `getBoolean` with a default answer the default instead, for a missing key and for an explicit JSON `null` alike.
 `getObjectOrNull` and `getArrayOrNull` answer `null` on the same terms, and throw when the key is present with a value of another type.
 The names follow the rule `WebRequest` follows: the plain name requires the value, a default as the last argument makes it optional, and `OrNull` answers null.

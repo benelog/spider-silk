@@ -42,11 +42,21 @@ public sealed interface JsonValue permits JsonObject, JsonArray, JsonPrimitive {
      * The value as a {@code long}. A number with a fractional part is not
      * one, and is rejected rather than truncated: {@code 1.5} is not 1.
      * {@code 1e3} and {@code 2.0} are whole and read as 1000 and 2.
+     * A parsed number is converted from its text, not from the nearest
+     * double, so {@code 9007199254740993.0} reads as exactly that and
+     * {@code 1.0000000000000001} is rejected as a fraction.
      */
     default long asLong() {
         if (this instanceof JsonPrimitive primitive && primitive.value() instanceof Number n) {
             if (n instanceof Long whole) {
                 return whole;
+            }
+            if (n instanceof JsonDecimal decimal) {
+                try {
+                    return decimal.exactLong();
+                } catch (ArithmeticException e) {
+                    throw new JsonException("Not a JSON integer: " + decimal.text());
+                }
             }
             double d = n.doubleValue();
             if (d == Math.rint(d) && d >= -0x1p63 && d < 0x1p63) {
