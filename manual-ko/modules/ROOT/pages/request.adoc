@@ -232,6 +232,23 @@ NDJSON 줄은 한도를 넘어서는 즉시 거부되므로, 끝나지 않는 �
 
 `bodyStream()`과 `bodyReader()`에는 한도가 없다.
 스트림을 읽는 호출자는 그중 얼마를 담을지 스스로 정하므로, 파일이나 파서로 스트리밍하는 큰 업로드에는 설정이 필요 없다.
+큰 본문을 받는 핸들러는 처음부터 `bodyStream()`으로 읽고, 중간에 바이트 배열 없이 파일로 복사한다:
+
+[source,java]
+----
+app.put("/backups", req -> {
+    Path saved = backups.resolve(UUID.randomUUID() + ".tar.gz");
+    try (InputStream in = req.bodyStream()) {
+        Files.copy(in, saved);
+    }
+    return WebResponse.text(saved.getFileName().toString()).status(HttpStatus.CREATED);
+});
+----
+
+본문은 한 번, 한 가지 방식으로만 나가므로, 이 핸들러는 같은 요청에서 `body()`를 부르지 않는다.
+`body()`가 이미 응답한 413은 뒤이은 `bodyStream()`으로 되돌려지지 않으므로, 엔드포인트는 처음부터 스트림을 택한다.
+이 복사를 제한하는 것은 핸들러 자신과 애플리케이션 앞의 프록시뿐이므로, 업로드에 상한을 둬야 하는 핸들러는 복사하는 바이트를 직접 센다.
+
 `BodyLimits.unlimited()`는 프록시나 컨테이너가 이미 본문을 제한하는 애플리케이션을 위해 두 한도를 모두 없앤다.
 
 어느 한도도 폼 필드와 멀티파트 업로드는 세지 않는데, 이들은 서블릿 컨테이너가 파싱하기 때문이다.

@@ -232,6 +232,23 @@ A handler that catches the exception and reads again gets another 413 from `body
 
 `bodyStream()` and `bodyReader()` are not limited.
 A caller that reads a stream decides for itself how much of it to keep, so a large upload streamed to a file or to a parser needs no setting.
+A handler that takes a large body reads it through `bodyStream()` from the start, and copies it to a file with no byte array in between:
+
+[source,java]
+----
+app.put("/backups", req -> {
+    Path saved = backups.resolve(UUID.randomUUID() + ".tar.gz");
+    try (InputStream in = req.bodyStream()) {
+        Files.copy(in, saved);
+    }
+    return WebResponse.text(saved.getFileName().toString()).status(HttpStatus.CREATED);
+});
+----
+
+The body goes out once, one way, so this handler never calls `body()` on the same request.
+A 413 that `body()` already answered is not undone by a later `bodyStream()`, so the endpoint chooses the stream up front.
+Nothing bounds this copy but the handler itself and whatever proxy stands in front of the application, so a handler that must cap an upload counts the bytes it copies.
+
 `BodyLimits.unlimited()` lifts both limits, for an application whose proxy or container already bounds the body.
 
 Neither limit counts form fields or multipart uploads, because the servlet container parses those.
