@@ -111,18 +111,44 @@ Everything else is in the [documentation](https://spider-silk.benelog.net).
 
 ## Modules
 
+### Core
+
+Every application uses these two.
+
 | Module | Contents | Dependencies |
 |---|---|---|
-| `spider-silk-core` | The framework itself | `gg.jte:jte`, embedded Jetty (`jetty-ee10-servlet`) |
-| `spider-silk-test` | The `WebTest` harness and `TestRequest`, for test scope | core, and otherwise the JDK only (the servlet API compile-time only, as in core) |
-| `spider-silk-tomcat` | `TomcatServer`, for running the same app on an embedded Tomcat instead | core, `tomcat-embed-core` |
-| `spider-silk-undertow` | `UndertowServer`, the same for an embedded Undertow | core, `undertow-servlet` |
-| `spider-silk-freemarker` | `FreeMarkerTemplates`, for rendering FreeMarker templates | core, `freemarker` |
-| `spider-silk-handlebars` | `HandlebarsTemplates`, the same for Handlebars | core, `handlebars` |
-| `spider-silk-thymeleaf` | `ThymeleafTemplates`, the same for Thymeleaf | core, `thymeleaf` |
-| `spider-silk-jetty-websocket` | `WebSockets`, for WebSocket endpoints alongside the routes, on Jetty | core, `jetty-websocket-jetty-server` |
-| `spider-silk-openapi` | `OpenApi`, for the route list as an OpenAPI 3.1 document | core only |
-| `example-flashcard` | Example: a flashcard study app | core, spring-jdbc, H2 |
+| `spider-silk-core` | The framework, with jte templates and embedded Jetty | `gg.jte:jte`, `jetty-ee10-servlet` |
+| `spider-silk-test` | `WebTest` and `TestRequest`, for test scope | core, and the JDK only |
+
+### Extensions
+
+Optional: add one only when you want what it names instead of, or beside, the core default.
+
+| Module | Use it when you want | Dependencies |
+|---|---|---|
+| **Servers** (core's default is Jetty) | | |
+| `spider-silk-tomcat` | `TomcatServer`: embedded Tomcat | core, `tomcat-embed-core` |
+| `spider-silk-undertow` | `UndertowServer`: embedded Undertow | core, `undertow-servlet` |
+| **Templates** (core's default is jte) | | |
+| `spider-silk-freemarker` | `FreeMarkerTemplates`: FreeMarker | core, `freemarker` |
+| `spider-silk-handlebars` | `HandlebarsTemplates`: Handlebars | core, `handlebars` |
+| `spider-silk-thymeleaf` | `ThymeleafTemplates`: Thymeleaf | core, `thymeleaf` |
+| **Features** | | |
+| `spider-silk-jetty-websocket` | `WebSockets`: WebSocket endpoints beside the routes, on Jetty | core, `jetty-websocket-jetty-server` |
+| `spider-silk-openapi` | `OpenApi`: the route list as an OpenAPI 3.1 document | core only |
+
+### Build
+
+Optional packaging conventions: precompiled jte, a Jib image, and a native build.
+
+| Module | Build tool |
+|---|---|
+| `spider-silk-gradle-plugin` | Gradle, as the plugin `net.benelog.spidersilk` |
+| `spider-silk-maven-parent` | Maven, as a parent POM |
+
+### Example
+
+`example-flashcard` is a flashcard study app built on core, spring-jdbc, and H2.
 
 ## AI coding agents
 
