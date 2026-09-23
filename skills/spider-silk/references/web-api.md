@@ -124,7 +124,7 @@ Cookies are copied on the way in and on the way out of `cookies()`, and a templa
 ```java
 // Bodies
 WebResponse.html(page); WebResponse.text(s); WebResponse.bytes("application/pdf", pdf);
-WebResponse.json(rawString); WebResponse.json(jsonValue); WebResponse.json(value, writer);
+WebResponse.rawJson(text); WebResponse.json(jsonValue); WebResponse.json(value, writer);   // rawJson: text that is JSON already
 WebResponse.jsonArray(sink -> ...); WebResponse.ndjson(sink -> ...);   // written a value at a time, see content.md
 WebResponse.template("deck");                       // name carries no extension
 WebResponse.template("deck", Map.of("deck", deck));
@@ -161,7 +161,7 @@ Set the new content type explicitly when needed.
 Header names are case-insensitive both ways: `header("content-type", ...)` over a `Content-Type` replaces the value and keeps the first name and its position, so `headers()` is one value per field, in the order they were set.
 A header that has to be sent more than once — two `Link` lines in one answer — is out of scope: cookies have `cookie(...)` / `cookies()`, and everything else repeated is written through `WebResponse.raw((req, res) -> res.addHeader(...))`.
 
-`body()` is a sealed `WebResponse.Body` (`Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, `Raw`), so a `switch` needs no default and tests assert without a servlet response.
+`body()` is a sealed `WebResponse.Body` (`Empty`, `Text`, `Bytes`, `Template`, `Streamed`, `Sse`, `Raw`), so a `switch` needs no default and tests assert without a servlet response.
 
 ## Filters and errors
 
@@ -250,9 +250,9 @@ app.requestLogger((req, completion) -> logger.info("{} {} -> {} ({}ms)",
 
 `RequestCompletion.statusCode()` reports the servlet status after writing.
 `response()` is the response definition and may differ from a raw writer's output.
-`took()` is the elapsed Duration, and `failure()` / `failed()` record an exception during decoration or writing independently of status.
+`took()` is the elapsed Duration, and `writeFailure()` / `writeFailed()` record an exception during decoration or writing independently of status.
 A write failure can leave a 200 after commitment or cause a 500 before commitment.
-`exception()` / `threw()` report what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did; null for an `HttpException`, which is a status rather than a failure.
+`thrown()` / `threw()` report what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did; null for an `HttpException`, which is a status rather than a failure.
 Read it with `statusCode()`: a 400 is the caller's mistake, a 500 the application's.
 `req.route()` there is the route that answered (null for a static file, 404, 405, OPTIONS), so a metric or a span groups by `req.route().path()`.
 `req.body()` there answers the text a filter or handler already read.
