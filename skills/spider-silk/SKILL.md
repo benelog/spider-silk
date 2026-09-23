@@ -37,7 +37,7 @@ Spider Silk is built around explicitness, and code that fights this reads as wro
    Never introduce annotation-based routing or classpath scanning: those fight the framework itself, and there is no seam for them.
    JSON mapping is hand-written with the framework's `Json` API — that is a feature, not a gap to fill, so do not reach for a binding library unasked.
    A library the *application* adds is a different question, and the answer to it is not "no".
-   When the user asks for Jackson, Gson, or avaje-jsonb, wire it through the seam that exists for exactly that: `WebResponse.json(String)` on the way out, `req.bodyStream()` or `bodyReader()` on the way in.
+   When the user asks for Jackson, Gson, or avaje-jsonb, wire it through the seam that exists for exactly that: `WebResponse.rawJson(String)` on the way out, `req.bodyStream()` or `bodyReader()` on the way in.
    [references/content.md](references/content.md) has the shape.
 2. **A handler is a function from a request to a response**: `WebResponse handle(WebRequest req)`.
    Handlers return a `WebResponse` value; they never write to a servlet response directly (except a deliberate `WebResponse.raw(...)`).
@@ -100,11 +100,11 @@ app.get("/decks/{deckId}", req -> {
 
 // JSON API: you state in code what goes out (no automatic serialization)
 app.get("/api/decks", req -> WebResponse.json(
-        Json.arr().add(Json.obj().put("id", 1L).put("name", "English"))));
+        Json.array().add(Json.object().put("id", 1L).put("name", "English"))));
 
 app.post("/api/decks", req -> {
     String name = req.bodyJson().asObject().getString("name");   // missing key -> 400
-    return WebResponse.json(Json.obj().put("name", name)).status(HttpStatus.CREATED);
+    return WebResponse.json(Json.object().put("name", name)).status(HttpStatus.CREATED);
 });
 
 // Routes sharing a prefix: the group is an argument, not ambient state
@@ -117,9 +117,9 @@ app.path("/api/decks", group -> {
 // Exception-to-response mapping, and a styled error page for any 404
 app.exception(IllegalArgumentException.class,
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-app.exception(Json.JsonException.class,        // the more specific type wins, whatever the order
+app.exception(JsonException.class,        // the more specific type wins, whatever the order
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
-app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
+app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 
 // What almost every deployed app turns on (off until named)
 app.cors(Cors.allowOrigin("https://app.example.com").forPath("/api/*"))
@@ -133,7 +133,7 @@ Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus
 
 ## Contracts that hold everywhere
 
-- Nullness is in the signatures: every published package is JSpecify `@NullMarked`, so only a `@Nullable` parameter or return takes or answers null (`paramOrNull`, `header`, `cookie`, `sessionAttr`, `optObject`, a `BeforeFilter` result). Everything else is non-null, and a default passed to `param(name, default)` or `optString(key, default)` is never null.
+- Nullness is in the signatures: every published package is JSpecify `@NullMarked`, so only a `@Nullable` parameter or return takes or answers null (`paramOrNull`, `header`, `cookie`, `session().get`, `getObjectOrNull`, a `BeforeFilter` result). Everything else is non-null, and a default passed to `param(name, default)` or `getString(key, default)` is never null. The names follow one rule: the plain name requires the value, a default as the last argument makes it optional, and `OrNull` answers null.
 - Typed extraction fails as a 400, not a null: `pathParamLong`, `paramLong`, `paramEnum`, `bodyJson(reader)`, `file(name)` all answer the request with 400 on bad or missing input, so handlers have no null branches to write.
 - A type with no named form takes a parser: `req.param("since", LocalDate::parse)`, `req.param("page", Integer::parseInt, 1)`, `req.pathParam("deckId", UUID::fromString)`. A parser that throws `IllegalArgumentException` or `DateTimeException` answers 400 naming the parameter. Do not write `Long.parseLong(req.param(...))` by hand: that is a 500 on bad input.
 - One source only, with a parser: `req.queryParam("page", Integer::parseInt, 1)`, `req.formParam("due", LocalDate::parse)`. Same contract as `param(name, parser)`; a value in the other source does not count. The one-argument `queryParam(name)` / `formParam(name)` require a value; `queryParamOrNull(name)` / `formParamOrNull(name)` answer null when absent.
@@ -144,19 +144,19 @@ Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus
 - `WebResponse` is immutable: every builder method returns a new value, so chains work and filters can rewrite responses. `cookie(Cookie)` keeps a copy and `cookies()` hands out copies; a template model is copied into a read-only map (null values kept). A `bytes(...)` array and a stream writer are handed over, not copied.
 - Response header names compare without regard to case, and one field holds one value: `res.header("content-type")` reads what `.contentType(...)` set, and setting it again under another spelling replaces the value in place. A header that has to be sent twice (two `Link` lines) is not something `headers()` can carry — write it through `WebResponse.raw`; cookies have `cookie(...)` / `cookies()` of their own.
 - Statuses are `HttpStatus` constants, never raw ints; `HttpStatus.of(int)` when the number arrives at runtime.
-- A header every response must carry (a request id) is `app.responseFilter((req, res) -> ...)`, not `app.afterRoute(...)`: an after-filter never sees a before-filter's answer, an exception or error response, a 404/405, or a static file. Neither one authorizes; guards stay before-filters.
+- A header every response must carry (a request id) is `app.responseFilter((req, res) -> ...)`, not `app.afterRoute(...)`: an after-filter never sees a before-filter's answer, an exception handler's or status page's response, a 404/405, or a static file. Neither one authorizes; guards stay before-filters.
 - `beforeRequest(filter)` or `beforeRequest(path, filter)` runs before routing and guards static files and missing routes too. `beforeRoute` runs only for matched routes and exposes their path variables. `afterRoute` and `responseFilter` must return a response; return the one passed in to keep it, never null.
 - `body(replacement)` preserves headers. Update or remove old `Content-Length`, `ETag`, `Last-Modified`, and `Content-Encoding` with `withoutHeader(name)` when replacing content.
 - `requestLogger((req, completion) -> ...)` reports `RequestCompletion`: `statusCode()` is the servlet status, `took()` a Duration, `response()` the response definition, `failure()`/`failed()` record decoration or writing failure independently of status, and `exception()`/`threw()` report what the handler threw (null for an `HttpException`). Record failures on a span or in an error list from there, never from a catch-all `exception(...)` handler.
-- A before-filter returning `null` continues to the route; returning a response ends the request; `throw new HttpException(status, msg)` rejects and lets `error(status, ...)` render the body. An `HttpException` passes `exception(RuntimeException.class, ...)` and `exception(Exception.class, ...)` by; only a handler for `HttpException` or a subtype catches it.
+- A before-filter returning `null` continues to the route; returning a response ends the request; `throw new HttpException(status, msg)` rejects and lets `statusPage(status, ...)` render the body. An `HttpException` passes `exception(RuntimeException.class, ...)` and `exception(Exception.class, ...)` by; only a handler for `HttpException` or a subtype catches it.
 - Registering a second route that matches the same requests throws `IllegalStateException` at registration.
 - Register everything before the app is served. Registration closes while an `AppServlet` serves the app — `app.start`, `new JettyServer(app).start()`, or an external container — and `stop()` reopens it. `app.cors/gzip/securityHeaders/staticFiles(value)` copy the value, so changing it afterwards does nothing. An external container maps `AppServlet` with load-on-startup (`holder.setInitOrder(0)`, `<load-on-startup>0</load-on-startup>`).
 - `redirect(location)` is 302; say `HttpStatus.SEE_OTHER` (303) after a POST.
 - Template names carry no extension (`template("deck")` renders `deck.jte`).
 - Sessions are on by default; `req.flash(key, value)` + `req.flashed(key)` is the Post/Redirect/Get message pattern.
-- Read a session attribute under its type: `req.sessionAttr("user", User.class)` fails on that line with the key and both types named, where `req.sessionAttr("user")` fails on the assignment. Writing is `req.setSessionAttr("user", user)`, a name of its own. Logging out is `req.invalidateSession()`, not `raw().getSession(false).invalidate()`.
+- Read a session attribute under its type: `req.session().get("user", User.class)` fails on that line with the key and both types named, where `req.session().get("user")` fails on the assignment. Writing is `req.session().set("user", user)`, a name of its own. Logging out is `req.session().invalidate()`, not `raw().getSession(false).invalidate()`.
 - `app.routes()` returns every registered route as data (`Route(method, path, description)`); build introspection pages and OpenAPI export on it. `req.route()` is the entry that answered the current request (null before routing and for a static file, 404, 405, or OPTIONS): name a tracing span or a metric by `req.route().path()`, never by re-matching `req.path()` against the list.
-- A JSON object whose keys are data rather than schema reads with for-each — `for (var member : json.asObject())` hands over a `Map.Entry` per member in document order — with `keys()` and `size()` beside it. `optObject`/`optArray` answer `null` for an absent container, and `isString()`/`isNumber()`/`isBoolean()` tell a primitive's type without a try/catch.
+- A JSON object whose keys are data rather than schema reads with for-each — `for (var member : json.asObject())` hands over a `Map.Entry` per member in document order — with `keys()` and `size()` beside it. `getObjectOrNull`/`getArrayOrNull` answer `null` for an absent container, and `isString()`/`isNumber()`/`isBoolean()` tell a primitive's type without a try/catch.
 - An answer too large to hold in memory is `WebResponse.jsonArray(sink -> ...)` or `WebResponse.ndjson(sink -> ...)`, written a value at a time, and `req.bodyNdjson(reader)` reads a large body back lazily — never build a hundred thousand rows into one tree. See [references/content.md](references/content.md).
 
 ## Testing
@@ -171,7 +171,7 @@ WebTest.test(app, client -> {
 
 // A handler alone: no port, no container, no mocks
 WebResponse response = controller.createDeck(
-        TestRequest.post("/api/decks").jsonBody(Json.obj().put("name", "Spanish")).build());
+        TestRequest.post("/api/decks").jsonBody(Json.object().put("name", "Spanish")).build());
 assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
 ```
 
@@ -199,7 +199,7 @@ To watch it serve a real request, `app.start(8080)` and `curl` it.
 | `IllegalStateException` at startup, naming a path | Two routes match exactly the same requests (the same path, or the same shape with a variable renamed). Registration is the check, because one of them could never run |
 | A template is not found | The name carried an extension. `template("deck")`, never `template("deck.jte")` — the engine appends its own suffix |
 | A 400 where you expected a null | Typed extraction rejects rather than returning null. Use `paramOrNull(name)`, `queryParamOrNull(name)`, `formParamOrNull(name)`, or a `(name, default)` form for a parameter that may be absent; a present-but-unparseable value is still a 400 |
-| `req.sessionAttr("user", user)` does not compile | The write is `req.setSessionAttr("user", user)`; `sessionAttr` only reads. Removing is `removeSessionAttr(key)` |
+| `req.session().get("user", user)` does not compile | The write is `req.session().set("user", user)`; `get` only reads. Removing is `req.session().remove(key)` |
 | `req.param("q", null)` does not compile | `null` matches both the default and the parser overloads. Say `req.paramOrNull("q")` |
 | `IllegalStateException` adding a route, filter, or setting | The app is being served. Register before `start()` (or before the container initializes `AppServlet`), or `stop()` first |
 | `IllegalStateException` from `bodyStream()`, `bodyReader()`, or `body()` | The body was already taken the other way: text (`body()`/`bodyJson()`) and unread (`bodyStream()`/`bodyReader()`/`bodyNdjson()`) do not mix. Pick one per request |
@@ -208,7 +208,7 @@ To watch it serve a real request, `app.start(8080)` and `curl` it.
 | A before-filter never runs for paths under its own | Use `beforeRequest` for static files and unmatched routes. A filter path needs the trailing `*` to cover what is under it: `/admin/*`, not `/admin` |
 | A wildcard route's handler cannot see what came after the prefix | A bare `*` captures nothing. Register `/files/{path*}` and read the remainder with `req.pathParam("path")` |
 | An after-filter's change is lost | `WebResponse` is immutable. The filter has to *return* the new response; calling a builder method and dropping the result changes nothing |
-| A streamed response answers 200 and then fails | Once the headers are committed the status cannot change. `RequestCompletion.failure()` still reports the write failure. Whatever can fail in a way the client should hear about belongs before the response is returned |
+| A streamed response answers 200 and then fails | Once the headers are committed the status cannot change. `RequestCompletion.writeFailure()` still reports the write failure. Whatever can fail in a way the client should hear about belongs before the response is returned |
 | `WebResponse.file(path)` throws where a 404 was expected | A file a handler chose is not a static file, so a missing one is not automatically a 404. Check `Files.isRegularFile` and throw `HttpException(HttpStatus.NOT_FOUND, ...)` when that is what missing means |
 | Reflection errors under a native image | The framework needs no configuration; a library the application added does. Precompile jte templates, and generate metadata for the reflective library |
 

@@ -16,16 +16,16 @@ The lambda receives a `RequestCompletion` after response writing finishes.
 `response()` is the response definition after decoration, or the last definition available if decoration failed.
 Its status and headers may differ from what a raw writer sent.
 
-`failure()` is the exception from decoration or writing, or null when neither failed.
-`failed()` reports whether that exception is present.
+`writeFailure()` is the exception from decoration or writing, or null when neither failed.
+`writeFailed()` reports whether that exception is present.
 A failure before the response is committed can produce a 500.
 A failure after it is committed can leave a 200 with a partial body.
-Check `failed()` rather than inferring a failure from the status code.
+Check `writeFailed()` rather than inferring a failure from the status code.
 An application exception handled during dispatch is represented by its response status, not by a transmission failure.
 Normal SSE closure is not a transmission failure.
 A completion does not confirm that the remote client received the entire body.
 
-`exception()` is what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did.
+`thrown()` is what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did.
 `threw()` reports whether that exception is present.
 It is null when nothing threw, and for an `HttpException`, which is a status the handler chose rather than a failure.
 Read it together with `statusCode()`: an exception mapped to a 400 is the caller's mistake, and one answered with a 500 is the application's.
@@ -35,7 +35,7 @@ A logger that records failures on a tracing span or in an error list reads it he
 ----
 app.requestLogger((req, completion) -> {
     if (completion.threw() && completion.statusCode() >= 500) {
-        Span.current().recordException(completion.exception());
+        Span.current().recordException(completion.thrown());
     }
 });
 ----

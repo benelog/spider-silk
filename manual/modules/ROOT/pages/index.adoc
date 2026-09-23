@@ -86,8 +86,8 @@ app.get("/decks/{deckId}", req -> {
 });
 
 app.get("/api/decks", req -> {
-    Json.JsonArray resBody = Json.arr().add(
-        Json.obj()
+    JsonArray resBody = Json.array().add(
+        Json.object()
             .put("id", 1L)
             .put("name", "English")
     );
@@ -96,7 +96,7 @@ app.get("/api/decks", req -> {
 
 app.post("/api/decks", req -> {
     String name = req.bodyJson().asObject().getString("name");
-    Json.JsonObject resBody = Json.obj().put("name", name);
+    JsonObject resBody = Json.object().put("name", name);
     return WebResponse.json(resBody).status(HttpStatus.CREATED);
 });
 
@@ -108,10 +108,10 @@ app.path("/api/decks", group -> {
 
 app.exception(IllegalArgumentException.class,
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-app.exception(Json.JsonException.class,        // the more specific type wins, whatever the order
+app.exception(JsonException.class,        // the more specific type wins, whatever the order
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
-app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
+app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 
 app.start(8080);                                // embedded Jetty, sessions on
 ----

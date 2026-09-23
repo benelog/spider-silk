@@ -11,7 +11,7 @@
 [source,java]
 ----
 app.get("/openapi.json", req -> {
-    Json.JsonValue resBody = OpenApi.document("Flashcard API", "1.0.0", app.routes());
+    JsonValue resBody = OpenApi.document("Flashcard API", "1.0.0", app.routes());
     return WebResponse.json(resBody);
 });
 ----

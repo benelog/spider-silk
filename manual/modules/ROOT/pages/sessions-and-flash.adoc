@@ -6,41 +6,41 @@ A flash value is a session value that survives exactly one request more.
 
 == Session attributes
 
-Session attributes are read and written through the request:
+Session attributes are read and written through `req.session()`, a `WebSession` that holds every session operation in one place:
 
 [source,java]
 ----
-req.setSessionAttr("user", user);                 // creates the session if there is none yet
-User user = req.sessionAttr("user", User.class);  // null when absent
-User same = req.sessionAttr("user");              // the same read, cast by the caller
-req.removeSessionAttr("user");                    // creates no session to remove from
+req.session().set("user", user);                    // creates the session if there is none yet
+User user = req.session().get("user", User.class);  // null when absent
+User same = req.session().get("user");              // the same read, cast by the caller
+req.session().remove("user");                       // creates no session to remove from
 ----
 
-Reading never creates a session, so a visitor who has not signed in costs no session object.
+Neither `session()` nor a read creates a session, so a visitor who has not signed in costs no session object.
 Writing creates one on demand.
 The value is any object and stays on the server: only the container's session cookie travels.
 
 Passing the type makes a wrong type fail on the line that reads it.
-`sessionAttr(key, User.class)` casts with `Class.cast` and fails on that line with an `IllegalStateException` naming the key, the type found, and the type asked for.
-`sessionAttr(key)` casts at the call site instead, so the same mistake is a `ClassCastException` on the assignment rather than on the read.
+`get(key, User.class)` casts with `Class.cast` and fails on that line with an `IllegalStateException` naming the key, the type found, and the type asked for.
+`get(key)` casts at the call site instead, so the same mistake is a `ClassCastException` on the assignment rather than on the read.
 Either mistake answers 500, not 400: the application put the value in the session itself, so a type it does not expect is its own mistake.
 Neither is reflection in the sense this framework avoids, since the type is written at the call site.
 
-The write is named `setSessionAttr`, and every read is named `sessionAttr`.
+The write is named `set`, and every read is named `get`.
 No argument turns one into the other, so a `Class` is stored like any other value.
-A literal `null` passed as the type to `sessionAttr(key, type)` throws `NullPointerException`, and the message names `removeSessionAttr(key)`.
+A literal `null` passed as the type to `get(key, type)` throws `NullPointerException`, and the message names `remove(key)`.
 
 Writing a null value removes the attribute, which is the container's rule for `HttpSession.setAttribute`.
-`setSessionAttr(key, null)` and `removeSessionAttr(key)` therefore do the same thing, and only the second says so by name.
+`set(key, null)` and `remove(key)` therefore do the same thing, and only the second says so by name.
 
 == Ending a session
 
-`invalidateSession()` ends the session, which is how an application logs a visitor out:
+`session().invalidate()` ends the session, which is how an application logs a visitor out:
 
 [source,java]
 ----
 app.post("/logout", req -> {
-    req.invalidateSession();
+    req.session().invalidate();
     return WebResponse.redirect("/", HttpStatus.SEE_OTHER);
 });
 ----

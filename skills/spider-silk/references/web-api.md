@@ -95,7 +95,7 @@ String theme = req.cookie("theme");                         // null when absent
 Map<String, String> all = req.cookies();
 
 String body = req.body();                                   // read once, kept: a filter's read leaves it for the handler
-Json.JsonValue json = req.bodyJson();                       // unparseable -> 400
+JsonValue json = req.bodyJson();                       // unparseable -> 400
 NewDeck deck = req.bodyJson(NEW_DECK_READER);               // reader rejection -> 400
 Stream<Card> cards = req.bodyNdjson(CARD_READER);           // lazy; a bad line -> 400 naming it
 InputStream in = req.bodyStream();                          // unread bytes, for another library's parser
@@ -166,7 +166,7 @@ A header that has to be sent more than once — two `Link` lines in one answer �
 ## Filters and errors
 
 ```java
-app.beforeRoute("/admin/*", req -> req.sessionAttr("user") == null
+app.beforeRoute("/admin/*", req -> req.session().get("user") == null
         ? WebResponse.redirect("/login")    // answers here; the route never runs
         : null);                            // null = carry on
 
@@ -176,31 +176,31 @@ app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));  // e
 
 app.exception(NoSuchDeckException.class,
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-app.exception(Json.JsonException.class,       // most specific type wins, whatever the order
+app.exception(JsonException.class,       // most specific type wins, whatever the order
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
-app.error(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
+app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 ```
 
 - `afterRoute` sees only a route that returned normally; `responseFilter` sees every response (before-filter answers, exception answers, 404/405, OPTIONS, static files), runs before CORS/security headers/gzip, and a filter that throws goes to `exception`/`error` without the filters running again. Authorization uses `beforeRequest` for every matching request, including static files and missing routes, or `beforeRoute` for a matched route with path variables. `afterRoute` and `responseFilter` reject null results as programming errors.
 - `beforeRequest(filter)` / `beforeRequest(path, filter)` runs before routing, including automatic OPTIONS, and has no path variables. Return null to continue or a response to stop. Its errors and early responses use the normal response pipeline. Route groups support the same two forms.
 - `exception(Type, handler)` runs the handler for the most specific registered type the exception is an instance of, in any registration order.
-- `Json.JsonException` is an `IllegalArgumentException`, so map it separately when `IllegalArgumentException` means 404.
+- `JsonException` is an `IllegalArgumentException`, so map it separately when `IllegalArgumentException` means 404.
 - Register everything before `app.start(...)`: a route, filter, or setting added while an `AppServlet` serves the app (embedded, a server started directly, or an external container) throws `IllegalStateException`; `stop()` reopens it.
 - `app.cors(...)`, `app.gzip(...)`, `app.securityHeaders(...)`, and `app.staticFiles(...)` copy the value they are given, so changing it afterwards does nothing.
-- `throw new HttpException(HttpStatus.UNAUTHORIZED, "...")` rejects from anywhere and lets `error(status, ...)` render the body. It passes a handler for a broader type (`RuntimeException`, `Exception`) by; only `exception(HttpException.class, ...)` or a handler for a subtype catches it.
-- `error(status, handler)` fills the body for any response that ended on that status with no body (router 404s, `HttpException`, `WebResponse.empty(status)`); a response that already carries a body is left alone.
-- Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.
+- `throw new HttpException(HttpStatus.UNAUTHORIZED, "...")` rejects from anywhere and lets `statusPage(status, ...)` render the body. It passes a handler for a broader type (`RuntimeException`, `Exception`) by; only `exception(HttpException.class, ...)` or a handler for a subtype catches it.
+- `statusPage(status, handler)` fills the body for any response that ended on that status with no body (router 404s, `HttpException`, `WebResponse.empty(status)`); a response that already carries a body is left alone.
+- Inside a status page's handler, `req.errorMessage()` is the plain-text message the framework would have used.
 
 ## Sessions and flash
 
 ```java
-req.setSessionAttr("user", user);                 // writing creates the session on demand
-User user = req.sessionAttr("user", User.class);  // reading never creates one; null when absent
-                                                  //   wrong type -> IllegalStateException here (500)
-User same = req.sessionAttr("user");              // caller's cast; wrong type fails on the assignment
-req.removeSessionAttr("user");                    // setSessionAttr(key, null) does the same
-req.invalidateSession();                          // logging out; no session = nothing to do
+req.session().set("user", user);                    // writing creates the session on demand
+User user = req.session().get("user", User.class);  // reading never creates one; null when absent
+                                                    //   wrong type -> IllegalStateException here (500)
+User same = req.session().get("user");              // caller's cast; wrong type fails on the assignment
+req.session().remove("user");                       // session().set(key, null) does the same
+req.session().invalidate();                         // logging out; no session = nothing to do
 
 // Post/Redirect/Get: a flash value is visible exactly once, on the request after the redirect
 req.flash("message", "Imported 12 cards.");
@@ -261,7 +261,7 @@ Core carries no logging framework — which logger and format is the application
 ## Route introspection
 
 `app.routes()` is an immutable snapshot of `record Route(String method, String path, String description)`, in registration order, with group prefixes resolved; `{name}` segments are OpenAPI path-template syntax verbatim.
-`app.guards()` lists filters, error handlers, and response filters the same way, as a sealed `Guard` (`BeforeRequest(path)`, `BeforeRoute(path)`, `AfterRoute(path)`, `Error(status)`, `ResponseFilter()`); an exhaustive `switch` needs all five cases.
+`app.hooks()` lists filters, status pages, and response filters the same way, as a sealed `Hook` (`BeforeRequest(path)`, `BeforeRoute(path)`, `AfterRoute(path)`, `StatusPage(status)`, `EveryResponse()`); an exhaustive `switch` needs all five cases.
 A route registered without a description reports `""`, not null.
 The automatic HEAD/OPTIONS answers and `exception(...)` handlers are not listed.
 `req.route()` reports the entry that answered the current request, set from `beforeRoute` through the request logger and null before routing or where nothing matched; a HEAD answered by a GET route reports the GET route.

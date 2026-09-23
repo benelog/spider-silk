@@ -45,6 +45,15 @@ Map<String, String> all = req.cookies();    // a repeated name keeps the first v
 
 `WebResponse.cookie(...)`가 쿠키 하나를 설정하며, 기본값은 xref:response.adoc#cookies[응답]에서 설명한다.
 
+== 없는 값
+
+읽기 메서드의 이름은 값이 없을 때 무슨 일이 일어나는지 밝힌다.
+기본 이름은 값을 요구하며 값이 없으면 400으로 답한다: `param(name)`, `queryParam(name)`, `formParam(name)`, `file(name)`.
+같은 이름에 `OrNull`을 붙이면 대신 null로 답한다: `paramOrNull(name)`, `queryParamOrNull(name)`, `formParamOrNull(name)`, `fileOrNull(name)`.
+마지막 인자로 기본값을 주면 null 없이 선택적인 읽기가 된다: `param(name, default)`, `paramLong(name, default)`.
+`header(name)`, `cookie(name)`, `session().get(key)`는 기본 이름으로 null을 답하는데, 그 헤더나 쿠키나 속성이 없는 요청은 잘못된 요청이 아니라 흔한 경우이기 때문이다.
+`JsonObject`도 xref:json.adoc[JSON]에서 설명하듯이 같은 규칙을 따른다.
+
 == 반복 파라미터
 
 `params(name)`은 반복 파라미터가 담은 모든 값을 읽는다.
@@ -81,6 +90,9 @@ int deckId = req.pathParam("deckId", Integer::parseInt);   // path variables too
 거부한다는 것은 `IllegalArgumentException`이나 `DateTimeException`을 던진다는 뜻이며, `UUID::fromString`, `Integer::parseInt`, `LocalDate::parse`가 이미 그렇게 한다.
 파서가 던지는 그 밖의 예외는 요청이 아니라 파서의 결함이며, 500으로 남는다.
 리플렉션은 개입하지 않는다: 매핑은 직접 작성한 람다다.
+
+전용 메서드는 요청 전체의 `param`과 경로 변수에만 있다: `paramLong`, `paramBoolean`, `paramEnum`, `pathParamLong`, `pathParamEnum`.
+쿼리 문자열과 폼 본문은 그 밖의 모든 타입을 파서로 읽으므로, `queryParamLong`을 찾을 필요가 없다.
 
 == 쿼리 문자열 대 폼 본문
 

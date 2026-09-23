@@ -65,7 +65,7 @@ app.get("/api/decks/{deckId}/cards.ndjson", req -> {
 app.post("/api/decks/{deckId}/cards.ndjson", req -> {
     long deckId = req.pathParamLong("deckId");
     int imported = cardService.importCards(deckId, req.bodyNdjson(Codecs.CARD_DRAFT));
-    Json.JsonObject resBody = Json.obj().put("imported", imported);
+    JsonObject resBody = Json.object().put("imported", imported);
     return WebResponse.json(resBody);
 });
 ----
@@ -89,7 +89,7 @@ app.post("/api/decks/{deckId}/cards.ndjson", req -> {
 * **라이터는 핸들러 예외 처리 바깥에서 실행된다.**
   커밋 전의 실패는 일반적인 500을 받는다.
   커밋 후에는 상태를 바꿀 수 없고, 응답은 부분적일 수 있다.
-  `RequestCompletion.failure()`는 상태와 무관하게 쓰기 실패를 보고한다.
+  `RequestCompletion.writeFailure()`는 상태와 무관하게 쓰기 실패를 보고한다.
   없는 덱이나 권한 없는 호출자처럼 클라이언트가 들어야 할 방식으로 실패할 수 있는 것은 모두 응답을 반환하기 전에 둔다.
   예제가 덱을 먼저 조회하는 것은 바로 이 이유 때문이다.
 * **HEAD는 라이터를 실행한다.**

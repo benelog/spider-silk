@@ -12,7 +12,7 @@
 
 == 본문
 
-`html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `file(path)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
+`html`, `text`, `rawJson(text)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `file(path)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`.
 콘텐츠 타입을 받는 모든 본문에서 콘텐츠 타입은 첫 번째 인자이다.
 템플릿 이름에는 확장자가 없다.
 xref:templates.adoc[템플릿]에서 설명하듯이, 엔진이 자신의 확장자를 덧붙인다.
@@ -22,7 +22,7 @@ xref:templates.adoc[템플릿]에서 설명하듯이, 엔진이 자신의 확장
 
 [source,java]
 ----
-Json.JsonObject requestBody = Json.obj().put("name", "Spanish");
+JsonObject requestBody = Json.object().put("name", "Spanish");
 WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
         .jsonBody(requestBody)
         .build());

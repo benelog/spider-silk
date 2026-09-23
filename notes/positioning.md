@@ -75,7 +75,7 @@ Its static-import DSL is the thing *not* to borrow, because process-global mutab
 6. **Route introspection comes almost for free.**
    `app.routes()` reads back the same list the dispatcher walks, as data, with no reflection at all.
    Javalin needs a plugin for the equivalent.
-   `app.guards()` is the same trick on the registrations beside it, so "which filter covers this path" and "which statuses have a body of their own" are answered off the table rather than by reading the startup code.
+   `app.hooks()` is the same trick on the registrations beside it, so "which filter covers this path" and "which statuses have a body of their own" are answered off the table rather than by reading the startup code.
    A route registered as `get(path, "List every deck", handler)` reports that line too, so `spider-silk-openapi` can write a `summary` a method and a path could never imply.
 7. **Content negotiation asks the handler's question.**
    `req.accepts("text/html", "application/json")` answers with one of the strings that were passed in, so the branch is a `switch` over values written on that line.
@@ -90,7 +90,7 @@ Its static-import DSL is the thing *not* to borrow, because process-global mutab
 ## Weaknesses, stated precisely
 
 1. **JSON output is verbose.**
-   `Json.obj().put("id", d.id()).put("name", d.name())` for every DTO is the single biggest ergonomic gap versus a reflective `json(deck)`.
+   `Json.object().put("id", d.id()).put("name", d.name())` for every DTO is the single biggest ergonomic gap versus a reflective `json(deck)`.
    This is the cost of the core principle and does not go away.
    `JsonWriter`, `JsonReader`, and `JsonCodec` take it out of the handlers: the mapping is written once and reused.
    What is left is one lambda per type rather than one tree per handler.
@@ -99,7 +99,7 @@ Its static-import DSL is the thing *not* to borrow, because process-global mutab
    Core produces neither, though, so an asset with no sibling is deflated again by `gzip()` on every request that asks for it, and brotli is answerable only where a build wrote the file.
    That is the JDK's boundary rather than a decision: it has no brotli encoder, and a bundled one would be a dependency in the artifact every application carries.
 3. **No WebSocket in core.**
-   An upgrade leaves servlet dispatch, and with it the router, the filters, the error handlers, the request logger, `routes()`, and `WebTest`.
+   An upgrade leaves servlet dispatch, and with it the router, the filters, the status pages, the request logger, `routes()`, and `WebTest`.
    Decisions 15b and 15c have why that keeps it out of core.
    `spider-silk-jetty-websocket` maps one on Jetty, under a name that says which server it is tied to, and states the same limit rather than papering over it.
    SSE, which servlet dispatch *can* carry, ships as `WebResponse.sse(stream -> ...)` on an ordinary `get` route.

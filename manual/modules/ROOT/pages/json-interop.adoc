@@ -7,19 +7,19 @@ An application with three hundred DTOs, or one whose wire format is generated fr
 
 == The seam
 
-Going out, `WebResponse.json(String rawJson)` takes a document that is already serialized.
+Going out, `WebResponse.rawJson(String json)` takes a document that is already serialized.
 Coming in, `req.bodyStream()` and `req.bodyReader()` hand over the body unread.
 
 [source,java]
 ----
-public static WebResponse json(String rawJson)   // whatever produced it
+public static WebResponse rawJson(String json)   // whatever produced it
 public InputStream bodyStream()                  // the bytes, unparsed
 public BufferedReader bodyReader()               // the characters, unparsed
 ----
 
 That is the whole integration.
-Do not route another library's output through `JsonWriter<T>`: a `JsonWriter` returns a `Json.JsonValue`, which would mean re-parsing a document the library had just finished writing.
-The library serializes, and `json(String)` sends what it produced.
+Do not route another library's output through `JsonWriter<T>`: a `JsonWriter` returns a `JsonValue`, which would mean re-parsing a document the library had just finished writing.
+The library serializes, and `rawJson(String)` sends what it produced.
 
 A body is read one way: as the text `body()` keeps, or unread through `bodyStream()`, `bodyReader()`, or `bodyNdjson()`.
 `body()` reads the text once and keeps it for the rest of the request, so `bodyJson()` and a second `body()` answer the same body, whichever filter or handler asked first.

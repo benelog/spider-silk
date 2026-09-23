@@ -97,8 +97,8 @@ app.get("/study/{mode}", study::byMode);    // everything else under /study
 다른 메서드만 아는 경로는 405로 답하며, 받아들여지는 메서드를 나열한 `Allow` 헤더를 붙인다.
 GET이나 HEAD에서는 404 전에 xref:static-files.adoc[정적 파일]을 확인한다.
 라우트를 먼저 매칭하므로, 라우트가 파일을 가릴 수 있다.
-`error(HttpStatus.NOT_FOUND, handler)`는 404가 답할 본문을 등록한다.
-에러 핸들러가 본문을 채우는 방법은 xref:filters-and-errors.adoc[필터와 에러]에서 다룬다.
+`statusPage(HttpStatus.NOT_FOUND, handler)`는 404가 답할 본문을 등록한다.
+상태 페이지가 본문을 채우는 방법은 xref:filters-and-errors.adoc[필터와 에러]에서 다룬다.
 
 == HEAD와 OPTIONS
 

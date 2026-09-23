@@ -137,7 +137,7 @@ Jetty는 기본적으로 30초 동안 유휴 상태인 연결을 닫는다.
 
 * 라우터가 따르지 않으며, `app.routes()`는 소켓을 나열하지 않는다,
 * `beforeRequest`, `beforeRoute`, `afterRoute`, `responseFilter` 필터가 실행되지 않는다,
-* `error(status, ...)`가 이를 다루지 않는다,
+* `statusPage(status, ...)`가 이를 다루지 않는다,
 * 요청 로거는 업그레이드를 포함해 그 연결을 전혀 보지 못하는데, 업그레이드 핸들러가 `AppServlet`보다 앞서 응답하고 서블릿은 실행되지 않기 때문이다,
 * `WebTest`는 서버를 시작하지 않으므로 전혀 닿을 수 없다.
 

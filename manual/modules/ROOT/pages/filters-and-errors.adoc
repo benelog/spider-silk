@@ -3,11 +3,11 @@
 
 A request filter runs before routing, a route filter runs around a matched handler, and a response filter runs on every response.
 An exception handler turns an exception a handler threw into a response.
-An error handler fills in the body of a response that ended on a status with nothing to show.
+A status page fills in the body of a response that ended on a status with nothing to show.
 The diagram shows where each one runs, for one request through `AppServlet`.
 
 .One request through AppServlet
-image::request-pipeline.svg[Request filters run before routing; the router finds a match; the before-route filters, the handler, the after-route filters, and the template renderer run in that order; an exception handler answers for anything that threw, and an error handler fills an empty error body; then the response filters run, and the response is decorated, written, and logged,link=self]
+image::request-pipeline.svg[Request filters run before routing; the router finds a match; the before-route filters, the handler, the after-route filters, and the template renderer run in that order; an exception handler answers for anything that threw, and a status page fills an empty error body; then the response filters run, and the response is decorated, written, and logged,link=self]
 
 Static files answer only when no route matched, and only for `GET` and `HEAD`.
 The response-wide concerns from xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security] run after every answer, the static file and the error response included, which is why they are not after-filters.
@@ -25,7 +25,7 @@ Use `beforeRequest` when authorization must also cover static files and unmatche
 
 [source,java]
 ----
-app.beforeRequest("/admin/*", req -> req.sessionAttr("user") == null
+app.beforeRequest("/admin/*", req -> req.session().get("user") == null
         ? WebResponse.redirect("/login")
         : null);
 ----
@@ -39,14 +39,14 @@ A trailing `*` covers the prefix _and_ everything under it, so `++/admin/*++` gu
 
 [source,java]
 ----
-app.beforeRoute("/admin/*", req -> req.sessionAttr("user") == null
+app.beforeRoute("/admin/*", req -> req.session().get("user") == null
         ? WebResponse.redirect("/login")    // answers here, so the route handler never runs
         : null);                            // carry on
 ----
 
 A before-filter that returns a response ends the request there.
 Returning `null` continues to the next filter and then to routing or the matched handler.
-Throw `new HttpException(HttpStatus.UNAUTHORIZED, "...")` to reject without a body of your own, and let `error(HttpStatus.UNAUTHORIZED, ...)` render it.
+Throw `new HttpException(HttpStatus.UNAUTHORIZED, "...")` to reject without a body of your own, and let `statusPage(HttpStatus.UNAUTHORIZED, ...)` render it.
 
 An after-filter takes the response the route returned and hands back a replacement, or that same response to leave it unchanged:
 
@@ -80,16 +80,16 @@ A response filter runs once the answer has been worked out and before it is deco
 
 . Request filters run before routing and may answer immediately.
 . Route filters and the matched handler answer, or static files and routing produce the answer.
-. An exception handler answers for anything that threw, the template is rendered, and an error handler fills an empty error body.
+. An exception handler answers for anything that threw, the template is rendered, and a status page fills an empty error body.
 . The response filters run, and a template body one of them returns is rendered.
 . `Vary: Accept`, CORS, the security headers, and compression are applied, in that order.
 . The response is written and logged.
 
 A response filter therefore sees the error body and the rendered page, and cannot undo CORS, a security header, or compression, since those are applied to what it returns.
-Its answer is final: an empty 404 it returns does not go back to `error(HttpStatus.NOT_FOUND, ...)` for a body.
+Its answer is final: an empty 404 it returns does not go back to `statusPage(HttpStatus.NOT_FOUND, ...)` for a body.
 
 A filter that throws is answered the way a handler that throws is.
-The exception reaches the `exception(Type, handler)` handlers, then `error(status, ...)`, and the answer to it is decorated and written without running the response filters again, so a filter that always fails cannot fail in a loop.
+The exception reaches the `exception(Type, handler)` handlers, then `statusPage(status, ...)`, and the answer to it is decorated and written without running the response filters again, so a filter that always fails cannot fail in a loop.
 
 A response filter shapes a response and does not authorize a request.
 The handler has already run by the time it is called, so authorization belongs in `beforeRequest` or `beforeRoute`, depending on its scope.
@@ -103,28 +103,28 @@ What a `WebResponse.raw(...)` writer writes to the servlet response, and a failu
 ----
 app.exception(IllegalArgumentException.class,
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-app.exception(Json.JsonException.class,
+app.exception(JsonException.class,
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 ----
 
 The handler for the most specific type the exception is an instance of runs, whatever order the handlers were registered in.
-`Json.JsonException` is an `IllegalArgumentException`, and a body that failed to parse reaches the second handler above rather than the first.
+`JsonException` is an `IllegalArgumentException`, and a body that failed to parse reaches the second handler above rather than the first.
 Registering a type twice replaces the first handler.
 An `HttpException` is a status the handler chose, not a failure.
-It answers with its status and message and goes to `error(status, ...)` for its body, and a handler registered for a broader type such as `RuntimeException` never sees it.
+It answers with its status and message and goes to `statusPage(status, ...)` for its body, and a handler registered for a broader type such as `RuntimeException` never sees it.
 A handler registered for `HttpException` itself, or for a subtype of it, does.
 Any other exception that no handler covers answers 500 and is logged.
-Whether an exception handler or the framework's 500 answered it, the exception is reported to the xref:request-logging.adoc[request logger] as `completion.exception()`, so recording failures does not take a catch-all handler.
+Whether an exception handler or the framework's 500 answered it, the exception is reported to the xref:request-logging.adoc[request logger] as `completion.thrown()`, so recording failures does not take a catch-all handler.
 A template that fails to render throws inside the handler's own dispatch, so it reaches these handlers too.
 
-== Error handlers
+== Status pages
 
-`error(status, handler)` fills in the body for any response that ended on that status with no body, whether from the router, from an `HttpException`, or from a handler that returned `WebResponse.empty(HttpStatus.FORBIDDEN)`.
-`error(HttpStatus.NOT_FOUND, handler)` therefore styles the router's own 404 and every handler-made one alike, in one registration.
+`statusPage(status, handler)` fills in the body for any response that ended on that status with no body, whether from the router, from an `HttpException`, or from a handler that returned `WebResponse.empty(HttpStatus.FORBIDDEN)`.
+`statusPage(HttpStatus.NOT_FOUND, handler)` therefore styles the router's own 404 and every handler-made one alike, in one registration.
 A response that already carries a body is left alone.
-What the error handler returns keeps the headers the framework had already worked out, such as the `Allow` of a 405.
+What the status page's handler returns keeps the headers the framework had already worked out, such as the `Allow` of a 405.
 It answers with the registered status unless it sets one of its own.
-Inside an error handler, `req.errorMessage()` is the plain-text message the framework would have used.
+Inside a status page's handler, `req.errorMessage()` is the plain-text message the framework would have used.
 
 The registrations are readable back.
-`app.guards()` reports the filters, the response filters, and the error handlers the way `app.routes()` reports the routes, in xref:route-introspection.adoc#guards[Route Introspection].
+`app.hooks()` reports the filters, the response filters, and the status pages the way `app.routes()` reports the routes, in xref:route-introspection.adoc#hooks[Route Introspection].

@@ -6,41 +6,41 @@
 
 == 세션 속성
 
-세션 속성은 요청을 통해 읽고 쓴다:
+세션 속성은 모든 세션 연산을 한곳에 모은 `WebSession`인 `req.session()`을 통해 읽고 쓴다:
 
 [source,java]
 ----
-req.setSessionAttr("user", user);                 // creates the session if there is none yet
-User user = req.sessionAttr("user", User.class);  // null when absent
-User same = req.sessionAttr("user");              // the same read, cast by the caller
-req.removeSessionAttr("user");                    // creates no session to remove from
+req.session().set("user", user);                    // creates the session if there is none yet
+User user = req.session().get("user", User.class);  // null when absent
+User same = req.session().get("user");              // the same read, cast by the caller
+req.session().remove("user");                       // creates no session to remove from
 ----
 
-읽기는 결코 세션을 만들지 않으므로, 로그인하지 않은 방문자에게는 세션 객체 비용이 들지 않는다.
+`session()`도 읽기도 세션을 만들지 않으므로, 로그인하지 않은 방문자에게는 세션 객체 비용이 들지 않는다.
 쓰기는 필요할 때 세션을 만든다.
 값은 어떤 객체든 될 수 있고 서버에 머무른다: 컨테이너의 세션 쿠키만 오간다.
 
 타입을 넘기면 잘못된 타입이 그 값을 읽는 줄에서 실패한다.
-`sessionAttr(key, User.class)`는 `Class.cast`로 캐스팅하며 그 줄에서 `IllegalStateException`으로 실패하고, 키, 발견된 타입, 요청한 타입을 알려준다.
-`sessionAttr(key)`는 대신 호출 지점에서 캐스팅하므로, 같은 실수가 읽기가 아니라 대입에서 `ClassCastException`이 된다.
+`get(key, User.class)`는 `Class.cast`로 캐스팅하며 그 줄에서 `IllegalStateException`으로 실패하고, 키, 발견된 타입, 요청한 타입을 알려준다.
+`get(key)`는 대신 호출 지점에서 캐스팅하므로, 같은 실수가 읽기가 아니라 대입에서 `ClassCastException`이 된다.
 어느 쪽 실수든 400이 아니라 500으로 답한다: 값을 세션에 넣은 것은 애플리케이션 자신이므로, 예상하지 못한 타입은 애플리케이션 자신의 실수이다.
 타입이 호출 지점에 쓰여 있으므로, 어느 쪽도 이 프레임워크가 피하는 의미의 리플렉션이 아니다.
 
-쓰기는 `setSessionAttr`이라는 이름이고, 모든 읽기는 `sessionAttr`이라는 이름이다.
+쓰기는 `set`이라는 이름이고, 모든 읽기는 `get`이라는 이름이다.
 어떤 인자도 한쪽을 다른 쪽으로 바꾸지 않으므로, `Class`는 다른 값과 똑같이 저장된다.
-`sessionAttr(key, type)`에 타입으로 리터럴 `null`을 넘기면 `NullPointerException`을 던지며, 메시지는 `removeSessionAttr(key)`를 알려준다.
+`get(key, type)`에 타입으로 리터럴 `null`을 넘기면 `NullPointerException`을 던지며, 메시지는 `remove(key)`를 알려준다.
 
 null 값을 쓰면 속성이 제거되는데, 이는 `HttpSession.setAttribute`에 대한 컨테이너의 규칙이다.
-따라서 `setSessionAttr(key, null)`과 `removeSessionAttr(key)`는 같은 일을 하며, 이름으로 그 일을 드러내는 것은 두 번째뿐이다.
+따라서 `set(key, null)`과 `remove(key)`는 같은 일을 하며, 이름으로 그 일을 드러내는 것은 두 번째뿐이다.
 
 == 세션 끝내기
 
-`invalidateSession()`은 세션을 끝내며, 애플리케이션은 이것으로 방문자를 로그아웃시킨다:
+`session().invalidate()`는 세션을 끝내며, 애플리케이션은 이것으로 방문자를 로그아웃시킨다:
 
 [source,java]
 ----
 app.post("/logout", req -> {
-    req.invalidateSession();
+    req.session().invalidate();
     return WebResponse.redirect("/", HttpStatus.SEE_OTHER);
 });
 ----

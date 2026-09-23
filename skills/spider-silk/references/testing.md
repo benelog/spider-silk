@@ -37,7 +37,7 @@ When the handler is under test rather than the routing that reaches it, build th
 @Test
 void createDeckRespondsWith201() {
     WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
-            .jsonBody(Json.obj().put("name", "Spanish"))
+            .jsonBody(Json.object().put("name", "Spanish"))
             .build());
 
     assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
@@ -45,15 +45,15 @@ void createDeckRespondsWith201() {
 }
 ```
 
-Builder methods: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, `secure()`, `remoteAddress(addr)`, `sessionAttr`; `build()` hands back a `WebRequest`.
+Builder methods: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, `secure()`, `remoteAddress(addr)`, `session(key, value)`; `build()` hands back a `WebRequest`.
 The host a handler reads with `req.host()` is stated as a header: `header("Host", "shop.example.com:8080")`.
 
-- `jsonBody` takes a `Json.JsonValue` tree, a value with the `JsonWriter` the application already declares, or raw text.
+- `jsonBody` takes a `JsonValue` tree, a value with the `JsonWriter` the application already declares, or raw text.
   Raw text is the form for a body no writer would produce, such as the malformed one a 400 test sends.
 - Path variables are supplied, not matched, since no route is involved: `pathParam("deckId", "3")` states what the router would have resolved.
 - Everything a handler can tell apart still holds: query and form parameters of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 exactly as production would.
 - The body behaves as behind a container: `req.body()` twice answers the same kept text, `req.bodyStream()` after it throws `IllegalStateException`, and a `param(...)` read spends a form body.
-- `TestRequest.sessionAttr(key, value)` is the builder that puts an attribute in place; inside the handler the write is `req.setSessionAttr(key, value)`.
+- `TestRequest.session(key, value)` is the builder that puts an attribute in place; inside the handler the write is `req.session().set(key, value)`.
 - `file` twice with one name is the field that carries several files (`req.files(name)`), an empty file name is the input a browser sent with nothing chosen (`req.fileOrNull(name)` answers null), and `UploadedFile.writeTo(path)` writes the bytes out here as it does behind a container.
 
 ## Asserting on the response value

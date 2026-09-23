@@ -18,7 +18,7 @@ app.get("/_routes", req -> WebResponse.template("routes", Map.of("routes", app.r
 [source,java]
 ----
 for (Route route : app.routes()) {
-    paths.put(route.path(), Json.obj().put(route.method().toLowerCase(Locale.ROOT), ...));
+    paths.put(route.path(), Json.object().put(route.method().toLowerCase(Locale.ROOT), ...));
 }
 ----
 
@@ -47,7 +47,7 @@ app.beforeRoute(req -> {
 ----
 
 `req.route()`는 라우팅 전과 매칭된 라우트가 없는 곳에서 null이다: `beforeRequest` 필터 안에서, 그리고 정적 파일, 404, 405, 자동 OPTIONS 응답에서 그렇다.
-`beforeRoute`부터는 설정되어 핸들러, after 필터, 예외 핸들러와 에러 핸들러, 응답 필터, 요청 로거까지 이어진다.
+`beforeRoute`부터는 설정되어 핸들러, after 필터, 예외 핸들러와 상태 페이지, 응답 필터, 요청 로거까지 이어진다.
 GET 라우트가 응답한 HEAD는 그 GET 라우트를 보고한다.
 보고되는 라우트는 라우터가 고른 것이므로, 자체의 선호가 아니라 동점을 가리는 등록 순서를 따른다.
 
@@ -69,6 +69,7 @@ app.path("/api/decks", decks -> {
 
 설명은 경로와 핸들러 사이에 놓이므로 핸들러는 람다가 가장 잘 읽히는 마지막 자리에 남는다.
 설명 없이 등록된 라우트는 null이 아니라 `""`를 보고하므로, 읽는 쪽은 있는지 묻지 않고 `route.description()`을 출력할 수 있다.
+경로 패턴에는 공백이 들어가지 않으므로, 경로 자리에 넘긴 설명은 아무것도 도달하지 못하는 라우트를 등록하는 대신 등록 시점에 `IllegalArgumentException`으로 실패한다.
 
 설명은 등록 지점에 쓰는 문서이며, 리플렉션을 뺀 애너테이션이 바로 이것이다.
 설명을 등록 지점에 두는 것은 의도한 것인데, 다른 곳에 두면 등록과 계속 맞춰야 하는 두 번째 장소가 생기기 때문이다.
@@ -76,36 +77,36 @@ app.path("/api/decks", decks -> {
 
 xref:openapi.adoc[`spider-silk-openapi`]는 비어 있지 않은 설명을 오퍼레이션의 `summary`로 쓰고, 설명이 없는 라우트에서는 그 필드를 생략한다.
 
-[#guards]
-== 가드
+[#hooks]
+== 훅
 
 `routes()`는 경로에 응답하는 것을 나열한다.
-`app.guards()`는 그 주위에서 그 밖에 무엇이 실행되는지 나열한다: `beforeRequest`, `beforeRoute`, `afterRoute` 필터, `error(status, ...)` 핸들러, `responseFilter(...)` 필터를 같은 등록에서 읽어, sealed `Guard`의 불변 스냅샷으로 돌려준다:
+`app.hooks()`는 그 주위에서 그 밖에 무엇이 실행되는지 나열한다: `beforeRequest`, `beforeRoute`, `afterRoute` 필터, `statusPage(status, ...)` 핸들러, `responseFilter(...)` 필터를 같은 등록에서 읽어, sealed `Hook`의 불변 스냅샷으로 돌려준다:
 
 [source,java]
 ----
-for (Guard guard : app.guards()) {
-    String scope = switch (guard) {
-        case Guard.BeforeRequest before -> "before request " + before.path();
-        case Guard.BeforeRoute before -> "before " + before.path();
-        case Guard.AfterRoute after -> "after " + after.path();
-        case Guard.Error error -> "error " + error.status().code();
-        case Guard.ResponseFilter ignored -> "every response";
+for (Hook hook : app.hooks()) {
+    String scope = switch (hook) {
+        case Hook.BeforeRequest before -> "before request " + before.path();
+        case Hook.BeforeRoute before -> "before " + before.path();
+        case Hook.AfterRoute after -> "after " + after.path();
+        case Hook.StatusPage page -> "status page " + page.status().code();
+        case Hook.EveryResponse ignored -> "every response";
     };
 }
 ----
 
-종류 필드를 가진 하나의 레코드가 아니라 다섯 개의 레코드인 이유는, 필터는 경로에, 에러 핸들러는 상태에, 응답 필터는 아무것에도 범위가 정해지지 않으며, 절반의 경우에 null인 컴포넌트로는 이 차이를 정직하게 보고할 수 없기 때문이다.
-`Guard.ResponseFilter`는 모든 응답에서 실행되므로 컴포넌트가 없고, 두 번 등록하면 항목도 두 개다.
+종류 필드를 가진 하나의 레코드가 아니라 다섯 개의 레코드인 이유는, 필터는 경로에, 상태 페이지는 상태에, 응답 필터는 모든 응답에 범위가 정해지며, 절반의 경우에 null인 컴포넌트로는 이 차이를 정직하게 보고할 수 없기 때문이다.
+`Hook.EveryResponse`는 모든 응답에서 실행되므로 컴포넌트가 없고, 두 번 등록하면 항목도 두 개다.
 
-목록은 실행 시점별로 묶인다: 요청 필터, 그다음 before 라우트 필터, 그다음 after 라우트 필터, 그다음 에러 핸들러, 그다음 응답 필터다.
+목록은 실행 시점별로 묶인다: 요청 필터, 그다음 before 라우트 필터, 그다음 after 라우트 필터, 그다음 상태 페이지, 그다음 응답 필터다.
 각 묶음 안에서는 등록 순서를 따르며, 이는 실행되는 순서이기도 하다.
 
 필터의 적용 범위는 경로가 아니라 패턴이며, 패턴으로 보고된다.
 `++/admin/*++`는 `++/admin/*++`로 남고, `/admin`과 그 아래 모든 것을 포괄한다.
 `beforeRoute(filter)`는 자신이 등록하는 `++/*++`를 보고하고, 그룹의 `decks.beforeRoute(filter)`는 해석된 `++/api/decks/*++`를 보고한다.
 요청을 그 패턴에 매칭하는 것은 디스패처의 일이지 이 목록의 일이 아니다: 여기서 노출되는 것은 라우트에서와 같은 평범한 문자열이다.
-가드가 어떤 경로를 열어 두는지 감사하는 기능은, xref:openapi.adoc[OpenAPI 내보내기]가 `routes()` 위에 만들어지듯이, 이 목록 위에 만들 몫이다.
+필터가 어떤 경로를 열어 두는지 감사하는 기능은, xref:openapi.adoc[OpenAPI 내보내기]가 `routes()` 위에 만들어지듯이, 이 목록 위에 만들 몫이다.
 
 `exception(Type, handler)` 핸들러는 나열되지 않는다.
 예외 핸들러는 타입에 범위가 정해지므로, 경로도 상태도 그것이 적용되는 곳을 설명하지 못한다.

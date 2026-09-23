@@ -74,7 +74,7 @@ Two are written already: xref:tomcat.adoc[Tomcat] and xref:undertow.adoc[Underto
 [#choosing]
 == Choosing a server
 
-Everything core provides works the same on all three: routing, filters, error handlers, JSON, templates, static files, SSE, multipart uploads, and sessions.
+Everything core provides works the same on all three: routing, filters, status pages, JSON, templates, static files, SSE, multipart uploads, and sessions.
 All core ever needed was a servlet container.
 `WebTest` starts no server at all, so tests do not change either.
 The servers differ in the embedding: what each one needs from its surroundings, and how much of its lifecycle this project had to assemble by hand.

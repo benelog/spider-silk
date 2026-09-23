@@ -18,7 +18,7 @@ That form is OpenAPI's path-template syntax verbatim, so an export needs no tran
 [source,java]
 ----
 for (Route route : app.routes()) {
-    paths.put(route.path(), Json.obj().put(route.method().toLowerCase(Locale.ROOT), ...));
+    paths.put(route.path(), Json.object().put(route.method().toLowerCase(Locale.ROOT), ...));
 }
 ----
 
@@ -47,7 +47,7 @@ app.beforeRoute(req -> {
 ----
 
 `req.route()` is null before routing and where no route matched: in a `beforeRequest` filter, and for a static file, a 404, a 405, and the automatic OPTIONS answer.
-From `beforeRoute` on, it stays set through the handler, the after-filters, the exception and error handlers, the response filters, and the request logger.
+From `beforeRoute` on, it stays set through the handler, the after-filters, the exception handlers and status pages, the response filters, and the request logger.
 A HEAD answered by a GET route reports that GET route.
 The route reported is the one the router chose, so it follows the registration order that breaks ties rather than a preference of its own.
 
@@ -69,6 +69,7 @@ app.path("/api/decks", decks -> {
 
 The description sits between the path and the handler so the handler stays last, where a lambda reads best.
 A route registered without one reports `""` rather than null, so a reader can print `route.description()` without asking whether it is there.
+A path pattern never holds whitespace, so a description passed where the path goes fails at registration with an `IllegalArgumentException` instead of registering a route nothing reaches.
 
 A description is documentation written at the registration site, which is what an annotation is with the reflection taken out.
 Keeping it there is deliberate, because documentation kept anywhere else is a second place to keep in step with the registration.
@@ -76,36 +77,36 @@ It stays a string argument and nothing more: the framework never reads it, and a
 
 xref:openapi.adoc[`spider-silk-openapi`] writes a non-empty description as the operation's `summary`, and omits the field for a route that has none.
 
-[#guards]
-== Guards
+[#hooks]
+== Hooks
 
 `routes()` lists what answers a path.
-`app.guards()` lists what else runs around it: the `beforeRequest`, `beforeRoute`, and `afterRoute` filters, the `error(status, ...)` handlers, and the `responseFilter(...)` filters, read off the same registrations, as an immutable snapshot of a sealed `Guard`:
+`app.hooks()` lists what else runs around it: the `beforeRequest`, `beforeRoute`, and `afterRoute` filters, the `statusPage(status, ...)` handlers, and the `responseFilter(...)` filters, read off the same registrations, as an immutable snapshot of a sealed `Hook`:
 
 [source,java]
 ----
-for (Guard guard : app.guards()) {
-    String scope = switch (guard) {
-        case Guard.BeforeRequest before -> "before request " + before.path();
-        case Guard.BeforeRoute before -> "before " + before.path();
-        case Guard.AfterRoute after -> "after " + after.path();
-        case Guard.Error error -> "error " + error.status().code();
-        case Guard.ResponseFilter ignored -> "every response";
+for (Hook hook : app.hooks()) {
+    String scope = switch (hook) {
+        case Hook.BeforeRequest before -> "before request " + before.path();
+        case Hook.BeforeRoute before -> "before " + before.path();
+        case Hook.AfterRoute after -> "after " + after.path();
+        case Hook.StatusPage page -> "status page " + page.status().code();
+        case Hook.EveryResponse ignored -> "every response";
     };
 }
 ----
 
-There are five records rather than one with a kind field, because a filter is scoped to a path, an error handler to a status, and a response filter to nothing, and a component that is null half the time would report that dishonestly.
-`Guard.ResponseFilter` has no components, since it runs on every response, and registering two gives two entries.
+There are five records rather than one with a kind field, because a filter is scoped to a path, a status page to a status, and a response filter to every response, and a component that is null half the time would report that dishonestly.
+`Hook.EveryResponse` has no components, since it runs on every response, and registering two gives two entries.
 
-The list is grouped by when it runs: the request filters, then the before-route filters, then the after-route filters, then the error handlers, then the response filters.
+The list is grouped by when it runs: the request filters, then the before-route filters, then the after-route filters, then the status pages, then the response filters.
 Within each group, entries follow registration order, which is also the order they run in.
 
 A filter's coverage is a pattern and not a path, and it is reported as one.
 `++/admin/*++` stays `++/admin/*++`, and covers `/admin` along with everything under it.
 `beforeRoute(filter)` reports the `++/*++` it registers, and a group's `decks.beforeRoute(filter)` reports the resolved `++/api/decks/*++`.
 Matching a request against those patterns is the dispatcher's job, not this list's: what is exposed here is plain strings, the same as for routes.
-An audit of which paths a guard leaves open belongs on top of the list, the way xref:openapi.adoc[the OpenAPI export] is built on `routes()`.
+An audit of which paths a filter leaves open belongs on top of the list, the way xref:openapi.adoc[the OpenAPI export] is built on `routes()`.
 
 The `exception(Type, handler)` handlers are not listed.
 An exception handler is scoped to a type, so neither a path nor a status describes where it applies.

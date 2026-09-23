@@ -25,13 +25,13 @@ The module adds no dependency beyond core: it is one class over core's route lis
 [source,java]
 ----
 app.get("/openapi.json", req -> {
-    Json.JsonValue resBody = OpenApi.document("Flashcard API", "1.0.0", app.routes());
+    JsonValue resBody = OpenApi.document("Flashcard API", "1.0.0", app.routes());
     return WebResponse.json(resBody);
 });
 ----
 
 The title and version are arguments because OpenAPI requires both under `info`, and a default for either would be this module naming someone's API.
-`document` returns a `Json.JsonValue`, so it composes with everything else in xref:json.adoc[the JSON API].
+`document` returns a `JsonValue`, so it composes with everything else in xref:json.adoc[the JSON API].
 Writing it to a file at build time is the same call.
 
 The handler reads `app.routes()` per request, so it lists whatever was registered, including routes added after this line.
@@ -93,7 +93,7 @@ The automatic HEAD and OPTIONS answers are not listed either, for the reason `ro
 
 [source,java]
 ----
-Json.JsonObject paths = OpenApi.document("Flashcard API", "1.0.0",
+JsonObject paths = OpenApi.document("Flashcard API", "1.0.0",
         List.of(new Route("GET", "/api/decks/{deckId}/cards"))).asObject().getObject("paths");
 
 assertThat(paths.getObject("/api/decks/{deckId}/cards").getObject("get").getArray("parameters"))

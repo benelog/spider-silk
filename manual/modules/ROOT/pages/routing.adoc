@@ -97,8 +97,8 @@ A path no route knows answers 404.
 A path that only other methods know answers 405, with an `Allow` header listing the methods that would have worked.
 For a GET or HEAD, xref:static-files.adoc[static files] are consulted before the 404.
 Routes are matched first, so a route can shadow a file.
-`error(HttpStatus.NOT_FOUND, handler)` registers the body that 404 answers with.
-xref:filters-and-errors.adoc[Filters and Errors] covers how an error handler fills in the body.
+`statusPage(HttpStatus.NOT_FOUND, handler)` registers the body that 404 answers with.
+xref:filters-and-errors.adoc[Filters and Errors] covers how a status page fills in the body.
 
 == HEAD and OPTIONS
 

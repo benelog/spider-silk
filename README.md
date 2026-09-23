@@ -113,7 +113,7 @@ Hello, silk
 
 `spider-silk-core` brings embedded Jetty with it, so nothing else is needed to serve a request.
 
-Routing groups, filters, error handlers, JSON codecs, SSE, templates, static files, route introspection, the test harness, and server tuning are all in the [documentation](https://spider-silk.benelog.net).
+Routing groups, filters, status pages, JSON codecs, SSE, templates, static files, route introspection, the test harness, and server tuning are all in the [documentation](https://spider-silk.benelog.net).
 
 ## Modules
 

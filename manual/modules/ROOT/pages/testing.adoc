@@ -36,7 +36,7 @@ Reading it as bytes is what a xref:cors-compression-and-security-headers.adoc[co
 ----
 @Test
 void createDeckRespondsWith201() {
-    Json.JsonObject requestBody = Json.obj().put("name", "Spanish");
+    JsonObject requestBody = Json.object().put("name", "Spanish");
     WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
             .jsonBody(requestBody)
             .build());
@@ -46,10 +46,10 @@ void createDeckRespondsWith201() {
 }
 ----
 
-No port, no servlet container, and no mock library: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, `secure()`, `remoteAddress(addr)`, and `sessionAttr` state what the request carries, and `build()` hands back a `WebRequest`.
-`TestRequest.sessionAttr(key, value)` puts an attribute in place before the handler runs, and the handler itself writes one with `req.setSessionAttr(key, value)`.
+No port, no servlet container, and no mock library: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, `secure()`, `remoteAddress(addr)`, and `session(key, value)` state what the request carries, and `build()` hands back a `WebRequest`.
+`TestRequest.session(key, value)` puts an attribute in place before the handler runs, and the handler itself writes one with `req.session().set(key, value)`.
 The host that `req.host()` and `req.scheme()` report comes from the `Host` header, so `header("Host", "shop.example.com:8080")` is how a test states it.
-`jsonBody` takes a `Json.JsonValue` tree, a value with the `JsonWriter` the application already declares, or raw text.
+`jsonBody` takes a `JsonValue` tree, a value with the `JsonWriter` the application already declares, or raw text.
 Raw text is the form for a body no writer would produce, such as the malformed one a 400 test sends.
 Path variables are supplied rather than matched, since no route is involved: `pathParam("deckId", "3")` is what the router would have resolved.
 Everything a handler can tell apart still holds: a query parameter and a form field of the same name stay separate, header lookup ignores case, and `req.file(...)` on a request with no upload answers 400 the way a non-multipart request does.

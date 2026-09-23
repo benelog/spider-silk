@@ -54,7 +54,7 @@ new TomcatServer(app)
         .start();
 ----
 
-Everything core provides works unchanged: routing, filters, error handlers, JSON, templates, static files, SSE, multipart uploads, sessions, and `WebTest`.
+Everything core provides works unchanged: routing, filters, status pages, JSON, templates, static files, SSE, multipart uploads, sessions, and `WebTest`.
 `WebTest` never starts a server at all, so the test suite does not know or care which server is on the classpath.
 
 == What is Tomcat's own

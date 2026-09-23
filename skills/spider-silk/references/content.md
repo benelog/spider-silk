@@ -10,7 +10,7 @@ Build trees inline, or name the mapping as a `JsonWriter<T>` / `JsonReader<T>` l
 ```java
 import net.benelog.spidersilk.json.*;
 
-static final JsonWriter<Deck> DECK = deck -> Json.obj()
+static final JsonWriter<Deck> DECK = deck -> Json.object()
         .put("id", deck.id())
         .put("name", deck.name());
 static final JsonWriter<List<Deck>> DECKS = JsonWriter.list(DECK);
@@ -26,10 +26,10 @@ app.post("/api/decks", req -> {
 });
 ```
 
-- `getString`/`getLong`/... throw `Json.JsonException` (an `IllegalArgumentException`) on a missing key or wrong type, and `req.bodyJson(reader)` turns that or a `DateTimeException` into a 400: a handler gets a whole value or none. `asLong`/`getLong` reject `1.5` rather than truncating it.
-- For keys allowed to be absent: `optString`/`optLong`/`optDouble`/`optBoolean` answer a default, for a missing key and an explicit JSON `null` alike. `optObject`/`optArray` answer `null` on the same terms, since a container has no literal default to name.
-- `isString()`/`isNumber()`/`isBoolean()`, beside `isNull()`, tell a primitive's type without a try/catch; `instanceof Json.JsonObject` and `instanceof Json.JsonArray` do it for the containers.
-- A parsed array reads with for-each: `for (Json.JsonValue v : json.asArray())`.
+- `getString`/`getLong`/... throw `JsonException` (an `IllegalArgumentException`) on a missing key or wrong type, and `req.bodyJson(reader)` turns that or a `DateTimeException` into a 400: a handler gets a whole value or none. `asLong`/`getLong` reject `1.5` rather than truncating it.
+- For keys allowed to be absent: `getString`/`getLong`/`getDouble`/`getBoolean` with a default as the last argument answer that default, for a missing key and an explicit JSON `null` alike. `getObjectOrNull`/`getArrayOrNull` answer `null` on the same terms, since a container has no literal default to name.
+- `isString()`/`isNumber()`/`isBoolean()`, beside `isNull()`, tell a primitive's type without a try/catch; `instanceof JsonObject` and `instanceof JsonArray` do it for the containers.
+- A parsed array reads with for-each: `for (JsonValue v : json.asArray())`.
 - So does a parsed object, one `Map.Entry` per member in document order, with `keys()` and `size()` beside it — that is how keys that are data rather than schema get read:
   ```java
   Map<String, Long> counts = new LinkedHashMap<>();
@@ -62,13 +62,13 @@ app.get("/api/decks/{deckId}/cards.ndjson", req -> {
 // Reading NDJSON back, lazily: a hundred thousand records are never a list
 app.post("/api/decks/{deckId}/cards.ndjson", req -> {
     int imported = service.importCards(req.pathParamLong("deckId"), req.bodyNdjson(CARD_DRAFT));
-    return WebResponse.json(Json.obj().put("imported", imported));
+    return WebResponse.json(Json.object().put("imported", imported));
 });
 ```
 
 - `sink.write(value, writer)` takes the same hand-written `JsonWriter<T>` as everything else: a different way of framing the output, not a different way of mapping it.
   It throws `UncheckedIOException` rather than a checked `IOException`, so `card -> sink.write(card, CARD)` is an ordinary `Consumer` and fits a row callback over a database cursor.
-- Both are a `stream` body underneath, and their writer runs outside handler exception handling. A failure before commitment gets a generic 500; after commitment the status cannot change. `RequestCompletion.failure()` reports the write failure in either case.
+- Both are a `stream` body underneath, and their writer runs outside handler exception handling. A failure before commitment gets a generic 500; after commitment the status cannot change. `RequestCompletion.writeFailure()` reports the write failure in either case.
   Anything that can fail in a way the client should hear about — a missing deck, an unauthorized caller — must be settled *before* the response is returned; a failure inside the writer can no longer change the status.
 - `req.bodyNdjson(reader)` is a lazy `Stream<T>`.
   A line that is not valid JSON, or that the reader rejects, answers 400 naming the line — but only where the stream is consumed, so consume it before returning the response, ideally inside one transaction so a bad line rolls the import back.
@@ -91,7 +91,7 @@ NewDeck body = MAPPER.readValue(req.bodyStream(), NewDeck.class);
 NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
 ```
 
-- Never route a library's output through `JsonWriter<T>`: it returns a `Json.JsonValue`, so the document would be re-parsed the moment the library finished writing it.
+- Never route a library's output through `JsonWriter<T>`: it returns a `JsonValue`, so the document would be re-parsed the moment the library finished writing it.
 - A body is read one way: as the text `body()` keeps (so `bodyJson()` and a second `body()` see the whole body, even after a filter read it), or unread through `bodyStream()`, `bodyReader()`, or `bodyNdjson()`.
   Mixing the two throws `IllegalStateException` whichever comes second, and the stream and the reader exclude each other too.
 - A form-encoded POST is spent by its first `param()` read, since the container parses the form by reading the body.
@@ -188,7 +188,7 @@ app.get("/decks/{deckId}/events", req -> {
     return WebResponse.sse(stream -> {
         while (stream.isOpen()) {
             stream.id(String.valueOf(revision))
-                  .send("due", Json.obj().put("count", service.due(deckId)).toJson());
+                  .send("due", Json.object().put("count", service.due(deckId)).toJson());
             Thread.sleep(1000);
         }
     });
@@ -226,7 +226,7 @@ final class EchoSocket implements WebSocketHandler {
 - `WebSocketHandler` methods (`onOpen`, `onText`, `onBinary`, `onClose`, `onError`) all have do-nothing defaults; the factory builds one handler per connection, and callbacks are never concurrent per connection.
 - Returning `null` from the factory refuses the upgrade with 403; the factory sees the full HTTP request (auth, subprotocols).
 - Paths are Jetty's spec syntax (`/rooms/*`, `*.ws`), not `{name}` — read the path in the factory for variables.
-- An upgrade leaves servlet dispatch: no filters, no `error(...)`, no request logger, not in `app.routes()`, and `WebTest` cannot reach it.
+- An upgrade leaves servlet dispatch: no filters, no `statusPage(...)`, no request logger, not in `app.routes()`, and `WebTest` cannot reach it.
   Prefer SSE when server-push over plain HTTP is enough.
 
 ## OpenAPI export

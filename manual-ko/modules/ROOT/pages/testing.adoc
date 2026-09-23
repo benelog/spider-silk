@@ -36,7 +36,7 @@ void createsADeck() {
 ----
 @Test
 void createDeckRespondsWith201() {
-    Json.JsonObject requestBody = Json.obj().put("name", "Spanish");
+    JsonObject requestBody = Json.object().put("name", "Spanish");
     WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
             .jsonBody(requestBody)
             .build());
@@ -46,10 +46,10 @@ void createDeckRespondsWith201() {
 }
 ----
 
-포트도, 서블릿 컨테이너도, 목 라이브러리도 없다: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, `secure()`, `remoteAddress(addr)`, `sessionAttr`이 요청이 담는 것을 서술하고, `build()`가 `WebRequest`를 돌려준다.
-`TestRequest.sessionAttr(key, value)`는 핸들러가 실행되기 전에 속성을 미리 두고, 핸들러 자신은 `req.setSessionAttr(key, value)`로 속성을 쓴다.
+포트도, 서블릿 컨테이너도, 목 라이브러리도 없다: `queryParam`, `formParam`, `pathParam`, `header`, `cookie`, `body`/`jsonBody`, `file`, `secure()`, `remoteAddress(addr)`, `session(key, value)`가 요청이 담는 것을 서술하고, `build()`가 `WebRequest`를 돌려준다.
+`TestRequest.session(key, value)`는 핸들러가 실행되기 전에 속성을 미리 두고, 핸들러 자신은 `req.session().set(key, value)`로 속성을 쓴다.
 `req.host()`와 `req.scheme()`이 보고하는 호스트는 `Host` 헤더에서 오므로, 테스트는 `header("Host", "shop.example.com:8080")`으로 이를 서술한다.
-`jsonBody`는 `Json.JsonValue` 트리, 애플리케이션이 이미 선언한 `JsonWriter`를 가진 값, 또는 원시 텍스트를 받는다.
+`jsonBody`는 `JsonValue` 트리, 애플리케이션이 이미 선언한 `JsonWriter`를 가진 값, 또는 원시 텍스트를 받는다.
 원시 텍스트는 어떤 라이터도 만들어 내지 않을 본문, 예컨대 400 테스트가 보내는 잘못된 본문을 위한 형태다.
 라우트가 관여하지 않으므로 경로 변수는 매칭되지 않고 직접 지정된다: `pathParam("deckId", "3")`은 라우터가 해석했을 값이다.
 핸들러가 구별할 수 있는 모든 것은 여전히 유지된다: 같은 이름의 쿼리 파라미터와 폼 필드는 따로 남고, 헤더 조회는 대소문자를 무시하며, 업로드가 없는 요청에서 `req.file(...)`은 멀티파트가 아닌 요청과 같은 방식으로 400으로 응답한다.

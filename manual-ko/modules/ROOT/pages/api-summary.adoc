@@ -10,11 +10,11 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 
 * 라우트: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, 각각 `(path, description, handler)` 형태로도 제공되며, `path(prefix, group -> ...)`가 있다; 패턴과 매칭 순서는 xref:routing.adoc[라우팅]에서 다룬다
 * 인트로스펙션: `routes()`는 등록된 모든 라우트를 `Route(method, path, description)`로 등록 순서대로 보고한다.
-  `guards()`는 그 곁에서 동작하는 필터와 에러 핸들러를 `Guard.BeforeRequest(path)`, `Guard.BeforeRoute(path)`, `Guard.AfterRoute(path)`, `Guard.Error(status)`, `Guard.ResponseFilter()`로 보고한다.
+  `hooks()`는 그 곁에서 동작하는 필터와 상태 페이지를 `Hook.BeforeRequest(path)`, `Hook.BeforeRoute(path)`, `Hook.AfterRoute(path)`, `Hook.StatusPage(status)`, `Hook.EveryResponse()`로 보고한다.
   xref:openapi.adoc[`spider-silk-openapi`]는 라우트 목록을 OpenAPI 3.1 문서로 바꾼다
 * 필터: 라우팅 전의 `beforeRequest(filter)` / `beforeRequest(path, filter)`, `beforeRoute(filter)` / `beforeRoute(path, filter)`, 같은 형태의 `afterRoute`, 그리고 after 필터가 보지 못하는 응답까지 포함해 모든 응답에 적용되는 `responseFilter(filter)`
 * 로깅: `requestLogger((request, completion) -> ...)`, `RequestCompletion`에는 서블릿 상태, 경과 시간, 응답 정의, 전송 실패, 그리고 요청에 응답하게 된 예외가 담긴다; xref:request-logging.adoc[요청 로깅]을 참고한다
-* 에러: `exception(Type, handler)`, 등록된 타입 중 가장 구체적인 것이 이기고 `HttpException`은 자신의 타입이나 하위 타입의 핸들러에만 도달한다, `error(HttpStatus, handler)`
+* 에러: `exception(Type, handler)`, 등록된 타입 중 가장 구체적인 것이 이기고 `HttpException`은 자신의 타입이나 하위 타입의 핸들러에만 도달한다, `statusPage(HttpStatus, handler)`
 * 응답 전반에 걸친 관심사: `cors(Cors)`, `gzip()` / `gzip(Gzip)`, `securityHeaders()` / `securityHeaders(SecurityHeaders)`.
   각각은 호출하기 전까지 꺼져 있고, 정적 파일과 에러를 포함한 모든 응답에 적용되므로 필터가 아니다; xref:cors-compression-and-security-headers.adoc[CORS, 압축, 보안]을 참고한다
 * 렌더링과 자산: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)`.
@@ -48,13 +48,13 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
   `UploadedFile`은 `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, `writeTo(path)`를 제공한다
 * 읽지 않은 본문: `bodyStream()`과 `bodyReader()`는 다른 라이브러리의 파서를 위해 본문을 넘겨주며, 둘 다 보관된 텍스트와 섞이지 않는다: 나중에 호출된 쪽이 `IllegalStateException`을 던진다.
   `bodyNdjson(reader)`는 줄 단위로 구분된 JSON을 지연 읽기하고, 줄 번호를 밝히며 400으로 응답한다; xref:large-json.adoc[대용량 JSON과 NDJSON]과 xref:json-interop.adoc[외부 JSON 바인딩]을 참고한다
-* 세션: `sessionAttr(key, Class<T>)`는 지정한 타입으로 읽고 실패하면 그 줄에서 키와 두 타입을 밝히며, `sessionAttr(key)`는 캐스트를 호출 지점에 맡기고, `setSessionAttr(key, value)`는 쓰고, `removeSessionAttr(key)`는 하나를 제거하고, `invalidateSession()`은 세션을 끝낸다
+* 세션: `session()`은 `WebSession`을 돌려주며, 그 `get(key, Class<T>)`는 지정한 타입으로 읽고 실패하면 그 줄에서 키와 두 타입을 밝히고, `get(key)`는 캐스트를 호출 지점에 맡기고, `set(key, value)`는 쓰고, `remove(key)`는 하나를 제거하고, `invalidate()`는 세션을 끝낸다
 * 플래시: `flash(key, value)`, 리다이렉트 뒤의 요청에서 `flashed(key)`로 정확히 한 번 읽히며, null 값은 세션 속성에서와 마찬가지로 키를 제거한다
-* 에러: `error(status, handler)` 핸들러 안의 `errorMessage()`
+* 에러: `statusPage(status, handler)` 핸들러 안의 `errorMessage()`
 
 == `WebResponse`가 제공하는 것
 
-* 본문: `html`, `text`, `json(raw)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `file(path)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
+* 본문: `html`, `text`, `rawJson(text)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `file(path)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
 * `file(path)`는 콘텐츠 타입을 이름에서, 길이를 파일에서 읽는다.
   읽을 수 있는 일반 파일이 아닌 경로는 `UncheckedIOException`을 던지므로, 없는 파일에 대한 404는 핸들러가 직접 작성한다
 * 값을 하나씩 쓰는 본문: 담아 두기에 너무 큰 배열을 위한 `jsonArray(sink -> ...)`, 한 줄에 값 하나를 쓰는 `ndjson(sink -> ...)`.

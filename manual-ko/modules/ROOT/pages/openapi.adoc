@@ -25,13 +25,13 @@ dependencies {
 [source,java]
 ----
 app.get("/openapi.json", req -> {
-    Json.JsonValue resBody = OpenApi.document("Flashcard API", "1.0.0", app.routes());
+    JsonValue resBody = OpenApi.document("Flashcard API", "1.0.0", app.routes());
     return WebResponse.json(resBody);
 });
 ----
 
 제목과 버전이 인자인 이유는 OpenAPI가 `info` 아래에 둘 다를 요구하기 때문이며, 어느 쪽이든 기본값을 두면 이 모듈이 남의 API 이름을 짓는 셈이 된다.
-`document`는 `Json.JsonValue`를 반환하므로 xref:json.adoc[JSON API]의 다른 모든 것과 결합된다.
+`document`는 `JsonValue`를 반환하므로 xref:json.adoc[JSON API]의 다른 모든 것과 결합된다.
 빌드 시점에 파일로 쓰는 것도 같은 호출이다.
 
 핸들러는 요청마다 `app.routes()`를 읽으므로, 이 줄 뒤에 추가된 라우트를 포함해 등록된 것은 무엇이든 나열한다.
@@ -93,7 +93,7 @@ app.get("/api/decks", "List every deck", api::listDecks);
 
 [source,java]
 ----
-Json.JsonObject paths = OpenApi.document("Flashcard API", "1.0.0",
+JsonObject paths = OpenApi.document("Flashcard API", "1.0.0",
         List.of(new Route("GET", "/api/decks/{deckId}/cards"))).asObject().getObject("paths");
 
 assertThat(paths.getObject("/api/decks/{deckId}/cards").getObject("get").getArray("parameters"))

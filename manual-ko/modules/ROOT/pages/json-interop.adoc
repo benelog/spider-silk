@@ -7,19 +7,19 @@ DTO가 삼백 개인 애플리케이션이나, 소유하지 않은 스키마에�
 
 == 이음새
 
-나가는 쪽에서는 `WebResponse.json(String rawJson)`이 이미 직렬화된 문서를 받는다.
+나가는 쪽에서는 `WebResponse.rawJson(String json)`이 이미 직렬화된 문서를 받는다.
 들어오는 쪽에서는 `req.bodyStream()`과 `req.bodyReader()`가 본문을 읽지 않은 채로 넘겨준다.
 
 [source,java]
 ----
-public static WebResponse json(String rawJson)   // whatever produced it
+public static WebResponse rawJson(String json)   // whatever produced it
 public InputStream bodyStream()                  // the bytes, unparsed
 public BufferedReader bodyReader()               // the characters, unparsed
 ----
 
 이것이 통합의 전부다.
-다른 라이브러리의 출력을 `JsonWriter<T>`로 흘려보내지 않는다: `JsonWriter`는 `Json.JsonValue`를 반환하므로, 라이브러리가 방금 다 쓴 문서를 다시 파싱하게 된다.
-라이브러리가 직렬화하고, `json(String)`이 그 결과를 보낸다.
+다른 라이브러리의 출력을 `JsonWriter<T>`로 흘려보내지 않는다: `JsonWriter`는 `JsonValue`를 반환하므로, 라이브러리가 방금 다 쓴 문서를 다시 파싱하게 된다.
+라이브러리가 직렬화하고, `rawJson(String)`이 그 결과를 보낸다.
 
 본문은 한 가지 방식으로만 읽는다: `body()`가 보관하는 텍스트로 읽거나, `bodyStream()`, `bodyReader()`, `bodyNdjson()`을 통해 읽지 않은 채로 넘겨받는다.
 `body()`는 텍스트를 한 번 읽어 요청이 끝날 때까지 보관하므로, 어느 필터나 핸들러가 먼저 요청했든 `bodyJson()`과 두 번째 `body()`는 같은 본문을 답한다.
