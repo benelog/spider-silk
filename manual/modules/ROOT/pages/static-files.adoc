@@ -19,6 +19,8 @@ Directories are never served.
 A static file bypasses `beforeRoute` and `afterRoute`, since no route matched.
 `beforeRequest("/admin/*", ...)` can guard files served under `/admin` before static-file lookup.
 A xref:filters-and-errors.adoc#response-filters[response filter] does run on a static file, as do CORS, compression, and the security headers.
+The file is opened only when its body is written, so a filter may replace the response or throw without leaving the file open.
+A HEAD and a 304 likewise open nothing, whether the file sits in a directory, on an exploded classpath, or inside a jar.
 
 == A directory on disk
 

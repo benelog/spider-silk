@@ -3,6 +3,7 @@ package net.benelog.spidersilk;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URISyntaxException;
+import java.net.JarURLConnection;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Files;
@@ -16,6 +17,8 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.function.Function;
+import java.util.jar.JarEntry;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -84,8 +87,19 @@ public final class StaticFiles {
 
     /** @param classpathRoot the classpath directory to serve, e.g. "/public" */
     public StaticFiles(String classpathRoot) {
+        this(classpathRoot, StaticFiles.class::getResource);
+    }
+
+    /**
+     * A classpath root looked up through something other than this class's own
+     * loader, so a test can stand a packaged or an instrumented resource in for
+     * the real classpath.
+     *
+     * @param lookup the URL for an absolute resource name, or null when none
+     */
+    StaticFiles(String classpathRoot, Function<String, @Nullable URL> lookup) {
         this(new ClasspathSource(withoutTrailingSlash(
-                Objects.requireNonNull(classpathRoot, "classpathRoot"))));
+                Objects.requireNonNull(classpathRoot, "classpathRoot")), lookup));
     }
 
     private StaticFiles(Source source) {
@@ -164,6 +178,11 @@ public final class StaticFiles {
      * The response for the file this path names, or null when it names none and
      * routing should carry on. The body is a stream rather than a byte array, so
      * a large file never lands in memory whole.
+     *
+     * <p>Nothing is held open once this returns. The metadata is read off the
+     * resource here, and the file is opened only by the body writer, so a
+     * response a filter replaces, one a filter throws over, a HEAD, and a 304
+     * leave nothing behind to release.
      */
     @Nullable WebResponse resolve(String path, HttpServletRequest req) throws IOException {
         String relative = relativePath(path);
@@ -188,27 +207,17 @@ public final class StaticFiles {
             response = response.header("ETag", encoded == null ? etag : "W/" + etag)
                     .header("Last-Modified", httpDate(lastModified));
             if (isUnchanged(req, etag, lastModified)) {
-                resource.discard();
-                if (encoded != null) {
-                    encoded.resource().discard();
-                }
                 return response.status(HttpStatus.NOT_MODIFIED);
             }
         }
 
         Resource body = encoded == null ? resource : encoded.resource();
         if (encoded != null) {
-            resource.discard();
             response = response.header("Content-Encoding", encoded.encoding());
         }
         long bodyLength = body.length();
-        if ("HEAD".equals(req.getMethod())) {
-            // The length below is the whole answer, so the body is not written and
-            // nothing else will release what reading the metadata opened. The
-            // writer stays in place regardless: compression rewrites the answer
-            // after this point, and a discarded resource opens again if it runs.
-            body.discard();
-        }
+        // A HEAD keeps the writer too: compression rewrites the answer after this
+        // point, and the writer opens the file only if it runs.
         response = response
                 .body(new WebResponse.Streamed(out -> {
                     try (InputStream in = body.open()) {
@@ -238,7 +247,6 @@ public final class StaticFiles {
                 continue;
             }
             if (isStale(candidate, lastModified)) {
-                candidate.discard();
                 continue;
             }
             return new Encoded(encoding.token(), candidate);
@@ -339,7 +347,8 @@ public final class StaticFiles {
 
     /**
      * One file a {@link Source} found: the validators it can be identified by,
-     * and a way to read it once.
+     * and a way to read it. Finding one holds nothing open; only
+     * {@link #open()} does, and the stream it returns is the caller's to close.
      */
     private interface Resource {
 
@@ -348,81 +357,102 @@ public final class StaticFiles {
         long length();
 
         InputStream open() throws IOException;
-
-        /** Releases what reading the metadata opened, when the body is not sent. */
-        default void discard() {
-        }
     }
 
-    private record ClasspathSource(String root) implements Source {
+    private record ClasspathSource(String root, Function<String, @Nullable URL> lookup)
+            implements Source {
 
         @Override
         public @Nullable Resource find(String relative) throws IOException {
-            URL url = StaticFiles.class.getResource(root + relative);
-            if (url == null || isDirectory(url)) {
+            URL url = lookup.apply(root + relative);
+            if (url == null) {
                 return null;
             }
-            return new UrlResource(url);
+            Path file = fileOf(url);
+            if (file == null) {
+                return UrlResource.of(url);
+            }
+            // An exploded classpath is a directory on disk, whose attributes are
+            // read without opening the file. It hands back directories too, and a
+            // listing is not a file.
+            try {
+                BasicFileAttributes attributes =
+                        Files.readAttributes(file, BasicFileAttributes.class);
+                return attributes.isRegularFile() ? new FileResource(file, attributes) : null;
+            } catch (IOException e) {
+                return null;
+            }
         }
 
-        /** An exploded classpath hands back directories too; a listing is not a file. */
-        private boolean isDirectory(URL url) {
+        /** The file a {@code file:} URL names, or null for any other kind of URL. */
+        private static @Nullable Path fileOf(URL url) {
             if (!"file".equals(url.getProtocol())) {
-                return false;
+                return null;
             }
             try {
-                return Files.isDirectory(Path.of(url.toURI()));
-            } catch (URISyntaxException e) {
-                return false;
+                return Path.of(url.toURI());
+            } catch (URISyntaxException | IllegalArgumentException e) {
+                return null;
             }
         }
     }
 
     /**
-     * A classpath resource, read through the connection that reading its
-     * metadata already opened. Asking a {@link URLConnection} for the
-     * modification time or the length connects it, and what that connects stays
-     * open until the body is read — so a resource whose body is not sent has to
-     * be discarded, and one that is discarded and then read after all opens the
-     * URL again rather than handing back a stream that is closed.
+     * A classpath resource that is not a plain file, such as an entry in a jar.
+     * Asking a {@link URLConnection} for the modification time or the length
+     * connects it, and what connecting opens stays open until the connection's
+     * stream is closed. So the metadata is read once, the connection is released
+     * straight away, and the body opens the URL afresh, if it is ever written.
+     *
+     * <p>A jar entry is read through {@link JarURLConnection} rather than the
+     * connection's headers. Its {@code Last-Modified} header comes from a second
+     * connection to the jar file, which opens the jar once per request and
+     * which closing the entry's stream never releases. The time asked for
+     * instead is the same one: the jar file's own, since a reproducible build
+     * stamps every entry with one fixed date.
      */
-    private static final class UrlResource implements Resource {
+    private record UrlResource(URL url, long lastModified, long length) implements Resource {
 
-        private final URL url;
-        private final URLConnection connection;
-        private boolean discarded;
-
-        UrlResource(URL url) throws IOException {
-            this.url = url;
-            this.connection = url.openConnection();
-        }
-
-        @Override
-        public long lastModified() {
-            return connection.getLastModified();
-        }
-
-        @Override
-        public long length() {
-            return connection.getContentLengthLong();
-        }
-
-        @Override
-        public InputStream open() throws IOException {
-            return discarded ? url.openStream() : connection.getInputStream();
-        }
-
-        @Override
-        public void discard() {
-            if (discarded) {
-                return;
+        static @Nullable UrlResource of(URL url) throws IOException {
+            URLConnection connection = url.openConnection();
+            try {
+                if (connection instanceof JarURLConnection jar) {
+                    JarEntry entry = jar.getJarEntry();
+                    return entry.isDirectory()
+                            ? null
+                            : new UrlResource(url, jarModified(jar, entry), entry.getSize());
+                }
+                return new UrlResource(url,
+                        connection.getLastModified(), connection.getContentLengthLong());
+            } finally {
+                release(connection);
             }
-            discarded = true;
+        }
+
+        /** The jar file's modification time, or the entry's when the jar is not a file. */
+        private static long jarModified(JarURLConnection jar, JarEntry entry) {
+            Path file = ClasspathSource.fileOf(jar.getJarFileURL());
+            if (file != null) {
+                try {
+                    return Files.getLastModifiedTime(file).toMillis();
+                } catch (IOException e) {
+                    // Fall through to the entry's own time.
+                }
+            }
+            return Math.max(entry.getTime(), 0);
+        }
+
+        private static void release(URLConnection connection) {
             try (InputStream ignored = connection.getInputStream()) {
                 // Opened only to be closed, which releases what the connection holds.
             } catch (IOException e) {
                 // Nothing was opened, so there is nothing to release.
             }
+        }
+
+        @Override
+        public InputStream open() throws IOException {
+            return url.openStream();
         }
     }
 
