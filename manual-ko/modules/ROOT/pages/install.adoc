@@ -65,13 +65,85 @@ Hello, silk
 ----
 
 `spider-silk-core`는 내장 Jetty를 함께 가져오므로, 요청을 처리하는 데 더 추가할 것이 없다.
-같은 앱을 내장 Tomcat이나 Undertow에서 실행하려면 `spider-silk-tomcat`이나 `spider-silk-undertow`를 추가한다.
-어느 서버를 고를지는 xref:server.adoc#choosing[서버 고르기]에서 다룬다.
 대신 외부 서블릿 컨테이너에 배포하려면 xref:deployment.adoc[배포]를 참고한다.
-템플릿은 별도 설정 없이 jte로 렌더링된다.
-xref:freemarker.adoc[FreeMarker], xref:handlebars.adoc[Handlebars], xref:thymeleaf.adoc[Thymeleaf]는 별도의 모듈이며, 같은 방식으로 추가한다.
-xref:websocket.adoc[`spider-silk-jetty-websocket`]은 WebSocket 엔드포인트를 추가하며, Jetty에서만 동작한다.
-xref:openapi.adoc[`spider-silk-openapi`]는 라우트 목록을 OpenAPI 문서로 바꾼다.
+
+[#modules]
+== 모듈
+
+모듈은 네 묶음으로 나뉜다.
+필요한 것은 코어 묶음뿐이며, 나머지는 코어와 같은 방식으로 하나씩 추가한다.
+
+=== 코어
+
+모든 애플리케이션이 이 둘을 쓴다.
+
+[cols="2,3",options="header"]
+|===
+| 모듈 | 내용
+
+| `spider-silk-core`
+| jte 템플릿과 내장 Jetty를 포함한 프레임워크
+
+| `spider-silk-test`
+| 테스트 범위의 xref:testing.adoc[`WebTest`와 `TestRequest`]
+|===
+
+=== 확장
+
+확장은 선택 사항이다.
+그 모듈이 가리키는 것을 코어 기본값 대신, 또는 그 곁에 쓰고 싶을 때만 추가한다.
+
+[cols="2,3",options="header"]
+|===
+| 모듈 | 이럴 때 쓴다
+
+2+h| 서버: 코어 기본값은 Jetty이며, 고르는 기준은 xref:server.adoc#choosing[서버 고르기]에서 다룬다
+
+| `spider-silk-tomcat`
+| xref:tomcat.adoc[`TomcatServer`]: 내장 Tomcat
+
+| `spider-silk-undertow`
+| xref:undertow.adoc[`UndertowServer`]: 내장 Undertow
+
+2+h| 템플릿: 코어 기본값은 jte다
+
+| `spider-silk-freemarker`
+| xref:freemarker.adoc[`FreeMarkerTemplates`]: FreeMarker
+
+| `spider-silk-handlebars`
+| xref:handlebars.adoc[`HandlebarsTemplates`]: Handlebars
+
+| `spider-silk-thymeleaf`
+| xref:thymeleaf.adoc[`ThymeleafTemplates`]: Thymeleaf
+
+2+h| 기능
+
+| `spider-silk-jetty-websocket`
+| xref:websocket.adoc[`WebSockets`]: 라우트 곁의 WebSocket 엔드포인트, Jetty 전용
+
+| `spider-silk-openapi`
+| xref:openapi.adoc[`OpenApi`]: 라우트 목록을 담은 OpenAPI 3.1 문서
+|===
+
+=== 빌드
+
+빌드 모듈은 선택적인 패키징 관례를 담는다: 미리 컴파일한 jte, Jib 이미지, 네이티브 빌드.
+
+[cols="2,3",options="header"]
+|===
+| 모듈 | 빌드 도구
+
+| `spider-silk-gradle-plugin`
+| xref:gradle-plugin.adoc[Gradle], 플러그인 `{project-group}`으로 적용한다
+
+| `spider-silk-maven-parent`
+| xref:maven-parent.adoc[Maven], 부모 POM으로 쓴다
+|===
+
+=== 예제
+
+`example-flashcard`는 코어, spring-jdbc, H2로 만든 플래시카드 학습 앱이다.
+이 모듈은 게시되지 않는다.
 
 [#names]
 == 좌표, 패키지, 모듈 이름

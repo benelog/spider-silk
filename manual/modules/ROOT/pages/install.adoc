@@ -65,13 +65,85 @@ Hello, silk
 ----
 
 `spider-silk-core` brings embedded Jetty with it, so nothing else is needed to serve a request.
-Add `spider-silk-tomcat` or `spider-silk-undertow` to run the same app on an embedded Tomcat or Undertow.
-xref:server.adoc#choosing[Choosing a server] covers the choice.
 See xref:deployment.adoc[Deployment] to deploy on an external servlet container instead.
-Templates render with jte out of the box.
-xref:freemarker.adoc[FreeMarker], xref:handlebars.adoc[Handlebars], and xref:thymeleaf.adoc[Thymeleaf] are modules of their own, added the same way.
-xref:websocket.adoc[`spider-silk-jetty-websocket`] adds WebSocket endpoints, and works on Jetty only.
-xref:openapi.adoc[`spider-silk-openapi`] turns the route list into an OpenAPI document.
+
+[#modules]
+== Modules
+
+The modules fall into four groups.
+Only the core group is needed, and the others are added one at a time, the same way as core.
+
+=== Core
+
+Every application uses these two.
+
+[cols="2,3",options="header"]
+|===
+| Module | Contents
+
+| `spider-silk-core`
+| The framework, with jte templates and embedded Jetty
+
+| `spider-silk-test`
+| xref:testing.adoc[`WebTest` and `TestRequest`], for test scope
+|===
+
+=== Extensions
+
+An extension is optional.
+Add one only when you want what it names instead of, or beside, the core default.
+
+[cols="2,3",options="header"]
+|===
+| Module | Use it when you want
+
+2+h| Servers: core's default is Jetty, and xref:server.adoc#choosing[Choosing a server] covers the choice
+
+| `spider-silk-tomcat`
+| xref:tomcat.adoc[`TomcatServer`]: an embedded Tomcat
+
+| `spider-silk-undertow`
+| xref:undertow.adoc[`UndertowServer`]: an embedded Undertow
+
+2+h| Templates: core's default is jte
+
+| `spider-silk-freemarker`
+| xref:freemarker.adoc[`FreeMarkerTemplates`]: FreeMarker
+
+| `spider-silk-handlebars`
+| xref:handlebars.adoc[`HandlebarsTemplates`]: Handlebars
+
+| `spider-silk-thymeleaf`
+| xref:thymeleaf.adoc[`ThymeleafTemplates`]: Thymeleaf
+
+2+h| Features
+
+| `spider-silk-jetty-websocket`
+| xref:websocket.adoc[`WebSockets`]: WebSocket endpoints beside the routes, on Jetty only
+
+| `spider-silk-openapi`
+| xref:openapi.adoc[`OpenApi`]: the route list as an OpenAPI 3.1 document
+|===
+
+=== Build
+
+The build modules carry optional packaging conventions: precompiled jte, a Jib image, and a native build.
+
+[cols="2,3",options="header"]
+|===
+| Module | Build tool
+
+| `spider-silk-gradle-plugin`
+| xref:gradle-plugin.adoc[Gradle], applied as the plugin `{project-group}`
+
+| `spider-silk-maven-parent`
+| xref:maven-parent.adoc[Maven], used as the parent POM
+|===
+
+=== Example
+
+`example-flashcard` is a flashcard study app built on core, spring-jdbc, and H2.
+It is not published.
 
 [#names]
 == Coordinates, packages, and module names
