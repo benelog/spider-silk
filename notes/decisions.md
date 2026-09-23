@@ -750,274 +750,189 @@ They are ordinary request questions, and `SecurityHeaders` calling `request.raw(
 
 ### 41. `sessionAttr(key, Class<T>)` and `invalidateSession()`
 
-`sessionAttr(key, User.class)` casts with `Class.cast` and fails on the line that reads, naming the key, the type found, and the type asked for.
-The unchecked `sessionAttr(key)` returns `<T> T`, so its wrong type is a `ClassCastException` on the assignment rather than on the read.
+`sessionAttr(key, User.class)` casts with `Class.cast` and fails on the reading line, naming the key and both types.
+The unchecked `sessionAttr(key)` fails on the assignment instead.
 
-- This is not the reflection the framework refuses, as `paramEnum(name, Class<E>)` is not: the type is written at the call site, not discovered from the value.
-- The unchecked form stays for cases where the type is obvious and the assignment is the read.
-  It is also the only form that reads a value whose type is a type variable, which a `Class` argument cannot name.
-- **A wrong type is an `IllegalStateException`, not a 400.**
-  - `paramEnum` is the wrong precedent: a parameter is the caller's text, and a session value is something the application itself put there.
-  - The mismatch is between two lines of one application, which `pathParam(name)` already answers with `IllegalStateException` rather than the `IllegalArgumentException` an application maps to a status.
-  - It answers 500, with a message naming the key and both types.
-- **`sessionAttr(key, User.class)` reads rather than writes**, because overload resolution prefers the more specific `Class<T>` over `Object`.
-  Storing a `Class` value therefore needs `sessionAttr(key, (Object) User.class)`, a price paid by nobody, since applications do not keep a `Class` in a session.
-- **`invalidateSession()` ends the session**, the one session operation every application with a login has.
-  - It was `raw().getSession(false).invalidate()`: three calls, a null check to remember, and the escape hatch decision 40 had just narrowed the need for.
-  - A request with no session is left alone, since logging out twice is not an error.
+- The type is written at the call site, so this is not reflection, any more than `paramEnum(name, Class<E>)` is.
+- The unchecked form stays for obvious types, and it is the only one that reads a type variable.
+- **A wrong type is an `IllegalStateException` and a 500, not a 400.**
+  The application put the value there, so the mismatch is its own, as with `pathParam(name)`.
+- `sessionAttr(key, User.class)` reads rather than writes, because `Class<T>` is more specific than `Object`.
+  Storing a `Class` needs an `(Object)` cast, a price paid by nobody.
+- **`invalidateSession()`** replaces `raw().getSession(false).invalidate()`, the escape hatch decision 40 had just narrowed.
+  With no session it does nothing, so logging out twice is not an error.
 
-Rejected: a `ClassCastException` carrying the better message.
-It would keep the unchecked form's failure type, and would read as the framework failing to cast rather than as the application disagreeing with itself.
+Rejected: a `ClassCastException` with a better message.
+It would read as the framework failing to cast, not the application disagreeing with itself.
 
 ## 42 · An upload the handler need not hold, and one it need not have
 
 ### 42. `inputStream()` and `writeTo(Path)`, an absent upload as null, and `files(name)`
 
-`inputStream()` hands an upload to a parser and `writeTo(path)` puts it on disk, because `bytes()` and `asText()` both build the whole upload in memory.
-A framework that streams answers through `stream`, `jsonArray`, and `ndjson` was making the request side hold a video as one byte array.
+`inputStream()` and `writeTo(path)` hand an upload over without holding it in memory, as `bytes()` and `asText()` do.
 
-- **`writeTo` is `Part.write`, not a copy loop.**
-  - A container that already buffered the upload to disk moves that file rather than reading the bytes back through the framework.
-  - The content can then be written only once, because the buffered file is gone, and the javadoc says so.
-  - The path is made absolute first, because `Part.write` resolves a relative name against the container's multipart location, a directory the handler did not choose and cannot see.
-    Relative to the working directory is predictable on Jetty, Tomcat, and Undertow alike, which each server module's acceptance test checks.
-- **An absent upload answers null, through `fileOrNull(name)`.**
-  - There is no default file for the `param(name, default)` shape to take.
-  - `cookie(name)`, `queryParam(name)`, `formParam(name)`, and `flashed(key)` already answer null where absence is an answer rather than an error, so this is the fifth.
-  - The name carries the contract to the call site, and `file(name)` is the one that answers 400.
-- **A part counts only when it carries a submitted file name.**
-  - A browser sends an untouched file input as a part with an empty `filename` and no content, so checking only for the part would answer an empty file in exactly the case `fileOrNull` exists for.
-  - The text fields of a multipart form are parts too, and `getParts()` hands them to `files(name)` beside the files.
-  - `file(name)` follows the rule too, and answers 400 where it used to hand back an empty file, as decision 34 reads the same class of mismatch.
-- **`files(name)` is empty when the field carried nothing**, as `params(name)` answers an unsent repeated parameter: "none chosen" is an answer.
-  `file(name)` stays the field's first file, which is what a container answers for the name alone.
-- `TestRequest` holds its parts as a list rather than a map keyed by field name, so a test states a repeated file field the way a form sends it.
-  Its stub part implements `write` by writing the bytes out, so `writeTo` is testable without a server, as decision 20 asks of that harness.
+- **`writeTo` is `Part.write`**, so a container that buffered the upload to disk moves the file.
+  - The content can therefore be written only once.
+  - The path is made absolute first, because `Part.write` resolves a relative name against the container's multipart location.
+    Each server module's acceptance test checks this.
+- **`fileOrNull(name)` answers null for an absent upload**, since there is no default file to pass.
+  It joins `cookie`, `queryParam`, `formParam`, and `flashed`, and `file(name)` answers 400.
+- **A part counts only with a submitted file name.**
+  A browser sends an untouched file input as an empty part, and text fields are parts too.
+  `file(name)` therefore answers 400 where it used to hand back an empty file, the mismatch decision 34 describes.
+- **`files(name)` is empty when nothing was sent**, like `params(name)`, and `file(name)` stays the first file.
+- `TestRequest` keeps parts as a list, and its stub `write` makes `writeTo` testable without a server, as decision 20 asks.
 
-Rejected: an `Optional<UploadedFile>`.
-It would be the only `Optional` in the API, and would raise the same question about the four null-answering methods.
+Rejected: `Optional<UploadedFile>`, which would be the only `Optional` in the API.
 
 ## 43 · The tail of a wildcard route
 
 ### 43. A named tail variable, `/files/{path*}`
 
-`/files/{path*}` binds everything under `/files` to `req.pathParam("path")`, with the slashes it arrived with.
-`/files/*` matched the same requests, but `PathPattern.match` dropped the tail it already had in hand, so the handler cut `req.path()` itself and repeated its own prefix.
+`/files/{path*}` binds the rest of the path, slashes included, to `req.pathParam("path")`.
+`/files/*` matched the same requests but dropped the tail, so handlers cut `req.path()` themselves.
 
-- **The bare `*` is unchanged.**
-  It is the filter form, `before("/admin/*", ...)` and the `/*` a group registers for `before(filter)`, where no handler reads a variable.
-  Nothing registered before changes, and a pattern gains a tail only by being rewritten.
-- **An empty tail matches, and binds `""`.**
-  - `/admin/*` covers `/admin` itself, and a named tail requiring a segment would be a second matching rule for one piece of syntax.
-  - `/files/{path*}` therefore answers `/files` and `/files/` as well as `/files/docs/a.txt`.
-  - Matching the same paths lets both erase to one canonical form, so registering `/files/*` and `/files/{path*}` under one method is refused as a dead second registration.
-- **The router's index is untouched**, as decision 14 asks of any new pattern syntax.
-  It buckets by the first segment and a tail is the last, so `/files/{path*}` indexes under `files` like `/files/*`, and `/{path*}` matches any first segment like `/*`.
-- **In `routes()` a named tail is one variable in the path template**, the difference decision 13 exists to make useful.
-  - `spider-silk-openapi` refuses a bare `*`, having no template to write and no name to write into one.
-  - It writes `/files/{path*}` as `/files/{path}` and describes the parameter as "The rest of the path, slashes included."
-  - OpenAPI has no wildcard in a path template, so the choice was between refusing a route the application answers and a template that reads as one segment.
-    The description is the only place left to say which it is.
+- The bare `*` stays the filter form, and no existing pattern changes.
+- **An empty tail matches and binds `""`**, as `/admin/*` covers `/admin`.
+  The two forms match the same paths, so registering both under one method is refused as a duplicate.
+- The router's index is untouched, as decision 14 asks, since a tail is the last segment.
+- **`routes()` reports the tail as a variable**, which decision 13 makes useful.
+  `spider-silk-openapi` writes `/files/{path}` with the description "The rest of the path, slashes included.", and refuses a bare `*`.
+  OpenAPI has no wildcard, so the description is the only place to say so.
 
-Rejected: `req.pathTail()`.
-It means nothing on a route without a wildcard, so every handler holding a `WebRequest` would gain a method that is empty or meaningless for most of them.
-A name in the pattern is already how this framework says what a segment matched.
+Rejected: `req.pathTail()`, which is meaningless on most routes.
 
 ## 44 · Reading an object whose keys are data
 
 ### 44. `JsonObject` iterates as members, rather than handing out a `Map`
 
-`JsonObject` implements `Iterable<Map.Entry<String, JsonValue>>` and carries `size()` and `keys()`, mirroring `JsonArray`'s `size()`, `values()`, and for-each one for one.
-With only `has` and `get`, a document whose keys are data, such as tag names mapped to counts, could not be read at all.
+`JsonObject` is `Iterable<Map.Entry<String, JsonValue>>` with `size()` and `keys()`, mirroring `JsonArray`.
+With only `has` and `get`, an object whose keys are data could not be read.
 
-- **`optObject` and `optArray` answer `null`, where the four primitive `opt*` forms take a default.**
-  - A caller has a literal default for a string, a number, or a boolean, and none for a container.
-  - An empty `JsonObject` as a default reads as a member that was present and empty, a different fact about the document.
-  - `null` says only that the member was absent, whether the key is missing or explicitly JSON `null`, as the primitive forms already do.
-  - `getObject` and `getArray` still throw for the required case, so the null branch appears only where the caller asked for it.
-- **`isString()`, `isNumber()`, and `isBoolean()` join `isNull()` on `JsonValue`.**
-  - Without them, a string-or-number value was told apart only by calling `asString()` and catching `JsonException`, control flow through the exception decision 34 reserves for wrong input.
-  - No `isObject()` or `isArray()`: `instanceof` answers those and narrows the type in the same expression.
-- The parser needed no change: `JsonObject` was already backed by a `LinkedHashMap`, so document order was preserved all along and only unreachable.
+- **`optObject` and `optArray` answer `null`**, where the primitive `opt*` forms take a default.
+  A container has no literal default, and an empty one would claim the member was present.
+- **`isString()`, `isNumber()`, and `isBoolean()` join `isNull()`**, so a value is not told apart by catching `JsonException`.
+  `instanceof` covers objects and arrays.
+- The parser needed no change, since `LinkedHashMap` already kept document order.
 
-Rejected: `members()` returning a `Map<String, JsonValue>`.
-
-- `Map.copyOf` leaves iteration order unspecified, so the proper defensive copy loses document order.
-- The backing `LinkedHashMap` keeps order but hands out the object's own state, which the rest of the API does not do.
-- A `LinkedHashMap` copy declared as `Map` promises neither document order nor that `put` throws.
-- `List<String> keys()` promises both in its own contract, and a for-each reads each value beside its key instead of looking it up again.
+Rejected: `members()` returning a `Map`.
+`Map.copyOf` loses order, the backing map exposes state, and a copy typed `Map` promises neither order nor immutability.
 
 ## 45 · The fourth SSE field
 
 ### 45. `SseStream.retry(Duration)`, written where it is called
 
-`stream.retry(Duration.ofSeconds(2))` writes one `retry:` line in milliseconds, the delay a browser waits before it reconnects.
-`SseStream` wrote only `id`, `event`, `data`, and decision 15a's heartbeat comment, so `retry` needed `WebResponse.raw` and lost the stream's framing.
+`stream.retry(Duration.ofSeconds(2))` writes a `retry:` line in milliseconds.
+`SseStream` wrote only `id`, `event`, `data`, and decision 15a's heartbeat, so `retry` used to need `WebResponse.raw`.
 
-- Sending it is the application's business, like `id`.
-  A browser told nothing reconnects after a default of a few seconds, and only the server knows it closes every stream on a deploy and wants the browser back sooner.
-- **The line goes out where it is called, not with the next event.**
-  - This is the one difference from `id`, which holds its value until the next event and then clears it.
-  - An id labels one event, and a delay is a stream setting that holds for later connections until replaced.
-  - Held for the next event, a `retry` on a stream that then sends nothing would never be sent, which is exactly what a deploy makes likely.
-- A negative delay throws `IllegalArgumentException`.
-  The protocol defines a non-negative integer and a browser silently drops a line it cannot read, so decision 24's argument applies: fail at the call.
+- Only the server knows it will close every stream on a deploy and wants browsers back sooner.
+- **The line is written at the call, unlike `id`**, which waits for the next event.
+  A delay is a stream setting, and a stream that sends nothing more would otherwise never send it.
+- A negative delay throws, for decision 24's reason: a browser silently drops a line it cannot read.
 
-Rejected: a reconnection delay set once on `App` or on `WebResponse.sse`.
-It would read as a server setting, and it is not one.
-The value travels in the body, so it belongs to whatever writes the events, and a stream can change it halfway through.
+Rejected: a delay set once on `App` or `WebResponse.sse`.
+The value travels in the body and can change mid-stream, so it is not a server setting.
 
 ## 46 · The response header map
 
 ### 46. Header names compare without regard to case, and a field still holds one value
 
-`WebResponse.headers()` is still a `Map<String, String>`, and its keys now compare the way HTTP compares field names.
-`res.header("content-type", ...)` followed by `res.header("Content-Type")` answered null, so a filter reading a header it had not set had to guess the spelling.
+`WebResponse.headers()` stays a `Map<String, String>` whose keys compare case-insensitively, as HTTP field names do.
+`header("content-type", ...)` then `header("Content-Type")` used to answer null.
 
-- Core's package-private `headerIgnoringCase` workaround, which `Gzip` and `SecurityHeaders` called and an application could not, is gone, and `header(name)` does what it did.
-- The request side never had the problem, since the container compares field names for `req.header(name)`.
-- **The map stays single-valued, and the return type is the reason.**
-  - Decision 18 put `headers()` in the public surface and decision 32's promise freezes its shape at 1.0, so the question is settled now.
-  - A `Map<String, String>` says one value per field, which almost every response has, and cookies already have a list of their own.
-  - A header sent twice, such as two `Link` lines, goes through `WebResponse.raw`, the escape hatch for what the envelope deliberately does not cover.
-- **Insertion order is kept**, which rules out a `TreeMap` with `String.CASE_INSENSITIVE_ORDER`, since it sorts names alphabetically.
-  - A package-private `Headers extends AbstractMap<String, String>` holds a `LinkedHashMap` keyed by the lower-cased name, whose entries carry the spelling first set.
-  - A lookup is one hash rather than `headerIgnoringCase`'s scan, and `headers()` still promises only a `Map`.
-- **The first spelling and position go on the wire.**
-  `header("content-type", ...)` over a `Content-Type` changes only the value, as a `put` on an existing key does.
-  `AppServlet` walks `entrySet()` and calls `setHeader` once per entry, so one field is one line however many spellings set it.
+- The package-private `headerIgnoringCase` workaround is gone.
+- **The map stays single-valued**, the shape decision 18 published and decision 32 freezes.
+  Cookies have their own list, and a repeated header such as `Link` goes through `WebResponse.raw`.
+- **Insertion order is kept**, so the map is a package-private `Headers` over a `LinkedHashMap` keyed by the lower-cased name, not a sorted `TreeMap`.
+- The first spelling and position go on the wire, and a later spelling changes only the value.
+  `AppServlet` calls `setHeader` once per entry, so one field is one line.
 
-Rejected: normalising in the setter and leaving the map alone.
-It fixes what the framework writes but not what a caller reads, so `headers().get("content-type")` would still answer null and need something like `headerIgnoringCase`.
+Rejected: normalising only in the setter, which leaves `headers().get("content-type")` answering null.
 
 ## 47 · A call site that says whether it reads or writes
 
 ### 47. `setSessionAttr(key, value)` for the write, and `paramOrNull(name)` for the optional string
 
-A session write is `setSessionAttr(key, value)`, and `sessionAttr` is only ever a read.
-The write used to be `sessionAttr(key, Object)`, sharing a name and arity with decision 41's `sessionAttr(key, Class<T>)`, so the static type of the second argument, not the call site, chose which ran.
+A session write is `setSessionAttr(key, value)`, so `sessionAttr` is only ever a read.
 
-- `sessionAttr("user", null)` picked the read, because `Class<T>` is more specific than `Object`, and the attribute meant for removal stayed in the session.
-  Decision 41 recorded the `(Object)` cast for storing a `Class` as a price paid by nobody, and the literal `null` showed the ordinary removal paid it.
-- Two names remove the overlap rather than documenting it: no argument, a `Class` value included, can confuse a read with a write.
-- `sessionAttr(key, type)` now checks its type argument, so a literal `null` fails naming `removeSessionAttr(key)` rather than with an anonymous `NullPointerException`.
-- No deprecated overload stays, for the reason decision 35 gives.
-  No remaining overload takes an `Object`, so every write with a non-`Class` value stops compiling and each error shows its fix.
-- `TestRequest.sessionAttr(key, value)` keeps its name: it is a builder method with no read beside it, like `header(name, value)` and `cookie(name, value)`.
-- **`paramOrNull(name)` answers the value or null.**
-  - `param(name, null)` does not compile, since `null` fits both `param(name, String)` and decision 38's `param(name, Function)`.
-  - That ambiguity is a compile error rather than a wrong answer, so both overloads stay and the null default gets its own name.
-  - `OrNull` is decision 42's suffix, and `queryParam`, `formParam`, `cookie`, and `flashed` already answer null for an absent value.
+- The write used to share a name and arity with decision 41's read, so `sessionAttr("user", null)` picked the read and never removed the attribute.
+  The "price paid by nobody" was paid by every ordinary removal.
+- A literal `null` type now fails naming `removeSessionAttr(key)`.
+- No deprecated overload stays, for decision 35's reason.
+- `TestRequest.sessionAttr(key, value)` keeps its name, as a builder with no read beside it.
+- **`paramOrNull(name)` names the null default**, because `param(name, null)` is ambiguous with decision 38's parser form.
+  `OrNull` is decision 42's suffix.
 
-Rejected: removing `param(name, defaultValue)` so that `null` resolves to the parser form.
-That turns a compile error into a runtime `NullPointerException`, the trade this decision exists to undo.
+Rejected: dropping `param(name, defaultValue)` so `null` resolves to the parser, which trades a compile error for a runtime `NullPointerException`.
 
 ## 48 · A parser on a named source
 
 ### 48. `queryParam(name, parser)` and `formParam(name, parser)`, with the contract `param(name, parser)` has
 
-`queryParam(name, parser)`, `formParam(name, parser)`, and their `(name, parser, default)` forms read one source into a type.
-Decision 10b gave a handler the choice of source and decision 38 gave it a parser, but no method offered both, so a date from the form body meant hand-writing the null check, the 400, and the `DateTimeException` catch.
+Decision 10b chose the source and decision 38 added a parser, and these give both at once.
 
-- The contract is decision 38's, per source.
-  - An absent value answers 400 naming the source.
-  - A value the parser rejects answers 400 naming the parameter.
-  - Anything else the parser throws stays a 500.
-  - A value the other source carries under the same name counts as absent, which is the point of naming the source.
-- **The one-argument forms stay optional, and the parser forms are required.**
-  - Decision 10b settled `queryParam(name)` and `formParam(name)` as null-answering lookups, and changing them would break every caller that checks for null.
-  - The parser forms are `param(name, parser)` with a source added, so a reader who knows one knows the other.
-  - The optional typed read takes a default, as `param(name, parser, default)` does.
+- Absent answers 400 naming the source, a rejected value answers 400 naming the parameter, and any other exception stays a 500.
+- The other source's value of the same name counts as absent.
+- The one-argument forms stay null-answering, as decision 10b settled, and the parser forms are required unless given a default.
 
-Rejected: `queryParam(name, defaultString)` and `formParam(name, defaultString)`.
-A literal `null` would match both it and the `(name, Function)` overload, the ambiguity decision 47 names.
-The one-argument forms already answer null, so a string default adds a spelling and no capability.
+Rejected: a `(name, defaultString)` form, which repeats decision 47's `null` ambiguity and adds no capability.
 
 ## 49 · A body read twice
 
 ### 49. `body()` keeps the text it read, and the unread body goes out once
 
-`body()` reads the body into a string once and keeps it for the rest of the request.
-It used to read the container's reader on every call, and the servlet API returns the same reader each time, so the second call answered `""`.
-A before-filter verifying a signature therefore left the handler's `bodyJson()` parsing an empty document and answering 400 for a valid body.
+`body()` reads the body once and keeps the text.
+A second call used to answer `""`, so a signature-checking filter left `bodyJson()` rejecting a valid body.
 
-- The text was already whole in memory, so keeping it costs one reference.
-  `bodyJson()` parses the kept text, and so does `bodyJson(reader)` through it.
-- **The record lives on the servlet request, not on `WebRequest`.**
-  Decision 11's `RequestLogger` receives the `WebRequest` `AppServlet` built before routing, and `withPathParams` copies it, so a field would be one per copy.
-  A request attribute is shared by every wrapper of one servlet request, as flash and the negotiation flag already are.
-- **The unread body is a separate mode, and the two do not mix.**
-  - `bodyStream()`, `bodyReader()`, and `bodyNdjson()` still hand the body over unread, and decision 33 keeps NDJSON lazy.
-  - After the text was read, each throws `IllegalStateException`, because the container's reader is at its end.
-  - After the body was handed over, `body()` throws, because nobody can say how much of it the caller consumed.
-  - These used to be the container's own `IllegalStateException` in one direction and a silent empty answer in the other.
-- Form parsing and `raw()` stay outside the bookkeeping.
-  - A form-encoded POST is spent by its first `param()` read, which the container performs unseen by core, so `body()` after it answers `""`, as decision 20's stub already models.
-  - What is read through `raw()` is read behind the framework's back, as decision 32 says of that hatch.
+- `bodyJson()` and `bodyJson(reader)` parse the kept text.
+- **The text is a servlet request attribute**, because decision 11's logger and `withPathParams` see different `WebRequest` copies.
+- **The unread modes do not mix with it.**
+  `bodyStream()`, `bodyReader()`, and `bodyNdjson()` still hand the body over, and decision 33 keeps NDJSON lazy.
+  Whichever of the two modes goes second throws `IllegalStateException`.
+- A form `param()` read and `raw()` stay outside the bookkeeping.
+  After a form parse `body()` answers `""`, as decision 20's stub models, and `raw()` reads behind the framework's back, as decision 32 says.
 
-Rejected: caching the bytes so that `bodyStream()` could replay them after `body()`.
-It holds a large upload in memory, which the unread modes exist to avoid, and a caller asking for the stream after the text already has the text.
+Rejected: caching bytes so `bodyStream()` can replay them, which holds large uploads in memory.
 
 ## 50 · What an immutable response is immutable about
 
 ### 50. A response copies its cookies and its template model, and not its bytes
 
-`WebResponse` copies a `Cookie` when `cookie(Cookie)` adds it and again when `cookies()` hands it out, and `Template` copies its model into a read-only map.
-Decision 18 called the response an immutable value, yet a cookie changed after adding was sent changed, one read back through `cookies()` could be altered in place, and later writes to a kept model map were rendered.
-An `AfterFilter` or a test reusing a response could therefore not rely on what it had read.
+`WebResponse` clones a `Cookie` when it is added and again when it is read, and `Template` copies its model into a read-only map.
+Before, decision 18's immutable response could change after an `AfterFilter` or a test had read it.
 
-- **The copy is `Cookie.clone()`.**
-  - The servlet cookie is `Cloneable`, and `clone` copies the attribute map `SameSite` lives in, which a test asserts because dropping it would quietly weaken every cookie.
-  - Cloning is not reflection in the sense this framework avoids: it is a method the type declares.
-  - The writer reads the list without cloning, since it hands the cookies only to the container.
-- **The model copy keeps nulls, so it is not `Map.copyOf`.**
-  - It is an `unmodifiableMap` over a `LinkedHashMap`, keeping null values, which a template model takes, and the caller's iteration order.
-  - It lives in the record's compact constructor, because `Template` is a public record and `new WebResponse.Template(...)` bypasses the `WebResponse.template` factory.
-  - The copy is shallow, and the javadoc says so: a list inside the model is still the handler's list.
-  - No renderer in the repository writes into its model, which the FreeMarker, Handlebars, and Thymeleaf modules' tests confirm against the read-only map.
-- **Bytes and writers are handed over, not copied.**
-  - `Bytes` already documented that its array belongs to the response once handed over, because a second copy of a download is what the caller was avoiding.
-  - A `Stream`, `Sse`, or `Raw` body holds a writer, which has no content to copy.
-  - So the envelope is immutable, and the large bodies carry an ownership contract instead.
+- `Cookie.clone()` keeps `SameSite`, and a test asserts it.
+  Cloning is a declared method, not reflection.
+- **The model copy keeps nulls and order**, so it is not `Map.copyOf`, and it is shallow.
+  It sits in the record's compact constructor, because `new WebResponse.Template(...)` bypasses the factory.
+  The FreeMarker, Handlebars, and Thymeleaf tests confirm no renderer writes into the model.
+- **Bytes and writers are handed over.**
+  A download's second copy is what the caller avoided, and a writer has no content to copy.
 
-Rejected: copying the `Bytes` array defensively.
-It doubles the memory of every in-memory download to guard against writes into an already-returned array, which nothing in the API invites.
+Rejected: a defensive copy of `Bytes`, which doubles every in-memory download's memory.
 
 ## 51 · When registration closes
 
 ### 51. Registration closes when `AppServlet` is initialized, and a setting is copied when it is registered
 
-`AppServlet.init` snapshots the `App`'s routes and settings, and registration on that `App` stays closed until `AppServlet.destroy`.
-Decision 34 closed registration at `start()`, detected as `App.server` being non-null, but `new JettyServer(app).start()` and an external container left it null.
-A route could still be added while requests were routed through the table it changed, the race decision 34 set out to remove.
+`AppServlet.init` snapshots the routes and settings, and registration stays closed until `destroy`.
+Decision 34 closed it at `start()`, which `new JettyServer(app).start()` and external containers bypassed.
 
-- **The servlet lifecycle is the one path all three deployments share.**
-  - Every deployment constructs an `AppServlet`, and every container calls `init` before the first request and `destroy` after the last.
-  - `App` counts servlets between the two calls, so two servers over one `App` keep registration closed until both are gone.
-  - The check and the change it allows are made under one lock, which a snapshot on another thread also takes.
-    Registration happens at startup, so no request waits for it.
-- **The snapshot is a copy, not the live table.**
-  The router is rebuilt from its registrations, and filter lists and handler maps are unmodifiable copies in a package-private `Deployment` record that every request reads.
-  A stop, a registration, and a second start build a second table rather than changing one a draining request may still read.
-- **All three server modules initialize the servlet at startup.**
-  Jetty, Tomcat, and Undertow initialize a servlet on its first request by default, which would leave registration open until that request.
-  `JettyServer`, `TomcatServer`, and `UndertowServer` set it to load on startup, and the deployment chapter tells an external deployment to use `<load-on-startup>`.
-- **Stop, restart, and a failed start follow from the lifecycle.**
-  - `stop()` works as decision 34 promised, because each server destroys its servlet before its `stop` returns.
-  - A container destroys a servlet only after in-flight requests drain, so registration stays closed during the drain, which a test shows by holding a request open.
-  - A start that fails after `init` unwinds through the same `destroy`, since each server stops a half-started context before rethrowing, so registration reopens for the retry.
-- **A setting is copied when it is registered.**
-  - `app.gzip(config)`, `app.cors(...)`, `app.securityHeaders(...)`, and `app.staticFiles(...)` copy their values through a package-private `copy()` on each class.
-  - Before, a `Gzip` kept in a field could have its `minBytes` retuned on a running server, and likewise for the other three.
-  - The copy is taken at registration rather than at `init`, so the rule is stated at the call: the value is what it was when `App` was handed it.
-  - A `TemplateRenderer` is not copied, because it is an interface an application implements and there is no general way to copy one.
+- **The servlet lifecycle is what all deployments share.**
+  `App` counts live servlets, so two servers keep registration closed until both are gone.
+  One lock covers the check and the snapshot, and only startup takes it.
+- **The snapshot is a copy**, a package-private `Deployment`, so a restart builds a new table instead of changing one a draining request reads.
+- **Every server module loads the servlet on startup**, since containers default to the first request.
+  An external deployment uses `<load-on-startup>`.
+- `stop()` works as decision 34 promised, registration stays closed during the drain, and a failed start reopens it through `destroy`.
+- **A setting is copied when registered.**
+  `gzip`, `cors`, `securityHeaders`, and `staticFiles` copy their values, so a kept `Gzip` can no longer retune `minBytes` on a running server.
+  A `TemplateRenderer` is not copied, since an interface has no general copy.
 
 Rejected:
 
-- A public builder that freezes into an immutable `App`.
-  It would make every registration site a different API for a guarantee the internal snapshot already gives.
-- Taking the snapshot in the `AppServlet` constructor.
-  A server that fails before initializing the servlet never destroys it, so registration would close for good on an application nothing served.
+- A builder that freezes into an immutable `App`, a second API for a guarantee the snapshot already gives.
+- A snapshot in the `AppServlet` constructor, which would close registration forever if a server failed before `init`.
 
 ## 52 · A filter over every response
 
