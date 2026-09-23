@@ -73,6 +73,9 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 57 | An `HttpException` passes a broader exception handler by | ✅ shipped |
 | 58 | `RequestCompletion` carries the exception the request was answered for | ✅ shipped |
 | 59 | A pass over names a first reader guesses wrong, taken as a breaking 1.2.0 | ✅ shipped |
+| 60 | `body()` and each `bodyNdjson` line bounded in bytes, 1MB by default | ✅ shipped |
+| 61 | A body that fails after commit aborts the transfer | ✅ shipped |
+| 62 | Strict RFC 8259 parsing, whole numbers read from the token's digits | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
 The exception, 15b, is a decision rather than a gap.
@@ -1121,6 +1124,55 @@ The framework has one user, and every break is a compile error whose fix the err
 
 Rejected: filling in `queryParamLong`, `formParamBoolean`, and the rest of the grid.
 The parser overload covers every type on every source, and the rule is written down in `WebRequest`'s javadoc instead.
+
+## 60 · How much of a request body core holds
+
+### 60. `body()` and each `bodyNdjson` line are bounded in bytes, 1MB each by default
+
+A body over its limit is a 413; `app.bodyLimits(BodyLimits)` changes the limits, and `BodyLimits.unlimited()` lifts them.
+
+- **Bytes, counted as they arrive.**
+  Memory is bytes whatever the charset, and Content-Length counts bytes.
+  The header is checked first to refuse without reading, but it never bounds the read.
+- **NDJSON bounds a line, not the body.**
+  The lazy stream exists so that the number of records is free.
+  Lines are split on the bytes, so a line with no newline is refused at the limit instead of being buffered whole.
+- **A refused body stays refused.**
+  A handler that catches the 413 cannot read on and get the rest of a body whose start is gone.
+- **`bodyStream()`, `bodyReader()`, forms, and multipart are not counted.**
+  A stream's reader decides what to keep, and the container parses forms and uploads under its own limits.
+- **The limit is on `App`, not the server**, because the reads are core's: it holds under every server and in an external container.
+
+Rejected: no default, which leaves every endpoint unbounded unless someone remembers.
+Rejected: one limit for the body and the NDJSON line together, because a limit that fits a line would cap an import.
+Rejected: a limit in characters, which does not bound memory for multibyte input.
+Rejected: limiting `bodyStream()`, the escape hatch for large uploads.
+
+## 61 · A body that fails halfway
+
+### 61. A body that fails after the response is committed is rethrown into the container
+
+The status can no longer change, but the container can still abort the transfer, and an aborted transfer is the only signal left for the client.
+
+- **A gzip stream that fails releases its Deflater without writing the trailer**, so a writer that fails before writing anything still becomes a 500.
+- **Undertow finishes a started response normally after a servlet exception**, so `spider-silk-undertow` closes the connection from its exception handler.
+  That behavior lives in the Undertow module, not in core.
+- `RequestCompletion.writeFailure()` still reports the original failure.
+
+Rejected: swallowing committed failures, which makes a truncated download look complete.
+Rejected: a core-side abort API, which the servlet API has no way to carry out.
+
+## 62 · How strict the JSON parser is
+
+### 62. The parser accepts RFC 8259 and nothing more, and whole-number checks read the token's digits
+
+- **The grammar is the parser's, not the JDK's.**
+  Number syntax, raw control characters in strings, JSON whitespace, and hex digits are checked by the parser, because `Double.parseDouble`, `Character.isWhitespace`, and `Character.digit` accept more than JSON does.
+- **A decimal token keeps its text beside the double.**
+  `asLong` converts the text exactly with `BigDecimal.longValueExact`, and `asDouble` stays the approximate reading.
+
+Rejected: a lenient mode, because a body another JSON implementation rejects should not reach a handler.
+Rejected: storing every decimal as a `BigDecimal`, which makes every parse and every `asDouble` pay for what only `asLong` needs.
 
 ## Rejected — decisions, with the reason
 

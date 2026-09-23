@@ -16,6 +16,8 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   Asking for it starts no session.
 - `spider-silk-core`: `JsonObject.getString(key, default)`, `getLong(key, default)`, `getDouble(key, default)`, `getBoolean(key, default)`, `getObjectOrNull(key)`, and `getArrayOrNull(key)`.
   They follow the absence rule `WebRequest` follows: the plain name requires the value, a default as the last argument makes it optional, and `OrNull` answers null.
+- `spider-silk-core`: `app.bodyLimits(BodyLimits)` bounds what `body()` and `bodyJson()` hold (`maxBytes`) and what one `bodyNdjson` line holds (`maxNdjsonLineBytes`), in bytes counted as they arrive, and answers 413 beyond them.
+  `BodyLimits.unlimited()` lifts both, and `bodyStream()` and `bodyReader()` are never limited.
 
 ### Changed
 
@@ -33,11 +35,30 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   A description passed where the path goes used to register a route nothing could reach.
 - `spider-silk-core`: `pathParam` read before routing, in a `beforeRequest` filter, says that no route has matched yet, and an undeclared variable names the route's pattern.
 - `spider-silk-test`: `TestRequest.sessionAttr(key, value)` is `TestRequest.session(key, value)`.
+- `spider-silk-core`: `body()`, `bodyJson()`, and each `bodyNdjson` line default to a 1MB limit, so a larger body answers 413 until `app.bodyLimits(...)` raises the limit.
+  `body()` reads the request through `getInputStream()` rather than `getReader()`, so `raw().getReader()` after it throws `IllegalStateException`.
+- `spider-silk-core`: a path pattern that binds one variable name twice, such as `/tenants/{id}/items/{id}` or `/files/{id}/{id*}`, is rejected at registration with an `IllegalArgumentException`.
+  The later value used to overwrite the earlier one; the check covers routes, route-group prefixes, filter paths, and `Cors.forPath`.
+- `spider-silk-core`: `Json.parse`, and so `bodyJson`, accepts only RFC 8259 syntax.
+  The numbers `01`, `+1`, `.5`, and `1.`, raw control characters inside strings, whitespace other than space, tab, LF, and CR, and non-ASCII hex digits in `\u` escapes are a `JsonException`, which `bodyJson` answers with 400.
+  An integer too large for a long is reported as "Number out of range".
+- `spider-silk-undertow`: `UndertowServer` installs a servlet exception handler that closes the connection when a failure arrives after the response has started.
+  Replacing it through `customizeDeployment(...)` gives up that behavior.
 
 ### Removed
 
 - `spider-silk-core`: `WebRequest.sessionAttr`, `setSessionAttr`, `removeSessionAttr`, and `invalidateSession`, replaced by `req.session()`.
 - `spider-silk-core`: `JsonObject.optString`, `optLong`, `optDouble`, `optBoolean`, `optObject`, and `optArray`, replaced by the getters above.
+
+### Fixed
+
+- `spider-silk-core`: `JsonValue.asLong()` and `getLong` convert a decimal or exponent number from its digits rather than the nearest double.
+  `9007199254740993.0` reads exactly, and `1.0000000000000001` is rejected as a fraction.
+- `spider-silk-core`: a gzip-compressed stream whose writer fails before writing anything answers 500, not a 200 with an empty gzip body.
+- `spider-silk-core`: a response body that fails after the response is committed aborts the transfer on Jetty, Tomcat, and Undertow, so the client sees an incomplete response instead of a truncated one that looks complete.
+  `RequestCompletion.writeFailure()` still reports the original failure, and the logged status stays 200.
+- `spider-silk-core`: a static file served off the classpath is opened only when its body is written, so a response filter that replaces the response or throws no longer leaves the file open.
+  A file served out of a jar no longer holds a descriptor on the jar per request, and a directory entry inside a jar answers 404.
 
 ## [1.1.0] - 2026-09-17
 
