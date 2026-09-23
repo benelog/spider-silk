@@ -54,7 +54,12 @@
 ./gradlew build              # compiles every module + runs all tests
 ./gradlew publishToMavenLocal # verifies the Maven Central publication config (RELEASING.md has the release)
 npm install && npm run docs   # builds the Antora site into build/site
+claude plugin eval . --tag task      # agent-skill task evals, with and without the plugin
+claude plugin eval . --tag trigger --ablation none   # whether the skill description triggers
 ```
+
+- The agent-skill evals live in `evals/` at the plugin root, in the `claude plugin eval` case format: `evals/tasks/` checks what the skill makes Claude write, and `evals/trigger/` checks when its description loads it.
+  Runs write to `evals/results/`, which is git-ignored.
 
 - H2 DB file location for the example app: `~/db/spider-silk/flashcard`
 

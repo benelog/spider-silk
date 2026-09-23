@@ -1,13 +1,16 @@
 ---
 name: spider-silk
 description: >-
-  Build web applications and HTTP APIs with Spider Silk, a no-reflection Java web framework on the Jakarta Servlet API
+  Reference for Spider Silk, a no-reflection Java web framework on the Jakarta Servlet API
   (group net.benelog.spidersilk, embedded Jetty by default).
-  Use this skill whenever the user mentions Spider Silk or spider-silk-core, whenever a build file depends on
-  net.benelog.spidersilk, and for any task in such a project even when the framework is not named:
-  setting up the dependency (Maven Central), adding routes, handlers, filters, error handling, JSON endpoints,
-  templates (jte, FreeMarker, Handlebars, Thymeleaf), static files, SSE, WebSocket, sessions, CORS, compression,
-  tests (WebTest, TestRequest), server tuning (Jetty, Tomcat, Undertow), or deployment (Jib, Docker, GraalVM native image).
+  Its API is newer than your training data, so code written from memory or by analogy with Javalin, Spark, or Spring
+  is wrong: read this skill before answering, even a one-line question or a pasted build error.
+  Use it whenever a request names Spider Silk or spider-silk, or contains net.benelog.spidersilk, spider-silk-core,
+  spider-silk-test, example-flashcard, or the Gradle plugin id net.benelog.spidersilk, and for any task in such a
+  project even when the framework is not named: dependency setup, routes, handlers, filters, sessions, errors, JSON,
+  templates, static files, SSE, WebSocket, CORS, gzip, tests (WebTest, TestRequest), servers (Jetty, Tomcat,
+  Undertow), and deployment (Jib, Docker, GraalVM native image).
+  Not for other Java frameworks, or for spider silk the material.
 license: Apache-2.0
 metadata:
   version: "1.1.0"
