@@ -67,7 +67,9 @@ dependencies {
 ```
 
 The most common first-run failure is `Plugin [id: 'net.benelog.spidersilk'] was not found`: Gradle searches the Plugin Portal alone for a plugin id unless `settings.gradle` adds `mavenCentral()` to `pluginManagement.repositories`.
-For Maven, the module list, optional modules, the Gradle plugin, and the Maven parent, read [references/setup.md](references/setup.md).
+Modules come in four groups: core (`spider-silk-core`, `spider-silk-test`), optional extensions (Tomcat/Undertow servers, FreeMarker/Handlebars/Thymeleaf templates, Jetty WebSocket, OpenAPI), optional build conventions (Gradle plugin, Maven parent), and the example app.
+Add an extension only when the user asks for what it provides.
+For Maven, the module tables, exclusions, the Gradle plugin, and the Maven parent, read [references/setup.md](references/setup.md).
 
 ## Hello, world
 

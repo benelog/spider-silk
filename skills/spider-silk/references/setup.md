@@ -39,19 +39,41 @@ dependencies {
 
 ## Modules
 
+Four groups. Only core is required; add anything else only when the application asks for it.
+
+### Core
+
 | Artifact | What it adds | Note |
 |---|---|---|
 | `spider-silk-core` | The framework: routing, request/response, JSON, jte templates, static files, SSE, embedded Jetty | The only required module |
 | `spider-silk-test` | `WebTest` harness and `TestRequest` | Test scope only |
-| `spider-silk-tomcat` | `TomcatServer` (embedded Tomcat instead of Jetty) | May `exclude group: 'org.eclipse.jetty.ee10'` |
-| `spider-silk-undertow` | `UndertowServer` (embedded Undertow) | Same optional Jetty exclusion |
-| `spider-silk-freemarker` | `FreeMarkerTemplates` | May `exclude group: 'gg.jte'` |
-| `spider-silk-handlebars` | `HandlebarsTemplates` | Same optional jte exclusion |
-| `spider-silk-thymeleaf` | `ThymeleafTemplates` | Same optional jte exclusion |
-| `spider-silk-jetty-websocket` | `WebSockets` endpoint mapping | Jetty-only by design |
-| `spider-silk-openapi` | `OpenApi.document(...)` over `app.routes()` | Depends on core only |
+
+### Extensions (optional)
+
+Add one only when the user wants what it names instead of, or beside, the core default. Do not add one pre-emptively.
+
+| Artifact | Use it when | Note |
+|---|---|---|
+| **Servers** (default: Jetty) | | |
+| `spider-silk-tomcat` | `TomcatServer`: the app should run on embedded Tomcat | May `exclude group: 'org.eclipse.jetty.ee10'` |
+| `spider-silk-undertow` | `UndertowServer`: the app should run on embedded Undertow | Same optional Jetty exclusion |
+| **Templates** (default: jte) | | |
+| `spider-silk-freemarker` | `FreeMarkerTemplates`: templates are FreeMarker | May `exclude group: 'gg.jte'` |
+| `spider-silk-handlebars` | `HandlebarsTemplates`: templates are Handlebars | Same optional jte exclusion |
+| `spider-silk-thymeleaf` | `ThymeleafTemplates`: templates are Thymeleaf | Same optional jte exclusion |
+| **Features** | | |
+| `spider-silk-jetty-websocket` | `WebSockets`: WebSocket endpoints beside the routes | Jetty-only by design |
+| `spider-silk-openapi` | `OpenApi.document(...)`: an OpenAPI 3.1 document from `app.routes()` | Depends on core only |
 
 The exclusions are optional; they only keep an unused server or engine off the classpath.
+
+### Build (optional)
+
+Packaging conventions (precompiled jte, a Jib image, a native build), one per build tool: the [Gradle plugin](#the-gradle-plugin-packaging-conventions) `net.benelog.spidersilk` and the [Maven parent](#the-maven-parent-same-conventions-by-inheritance) `spider-silk-maven-parent`, both below.
+
+### Example
+
+`example-flashcard` in the repository is a full app on core, spring-jdbc, and H2. It is not published.
 Each module's classes live in a subpackage of the core root: `net.benelog.spidersilk.tomcat`, `net.benelog.spidersilk.undertow`, `net.benelog.spidersilk.freemarker`, `net.benelog.spidersilk.jetty.websocket`, `net.benelog.spidersilk.openapi`.
 
 ## The Gradle plugin (packaging conventions)
