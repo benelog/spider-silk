@@ -60,6 +60,27 @@ class JsonSeamTest {
         });
     }
 
+    /** Text outside RFC 8259 that a lenient parser would read is a 400 as well. */
+    @Test
+    void aBodyOutsideTheJsonGrammarIsA400() {
+        App app = new App()
+                .post("/decks", req -> WebResponse.text(req.bodyJson(DECK_NAME)))
+                .post("/raw", req -> WebResponse.text(req.bodyJson().toJson()));
+
+        WebTest.test(app, client -> {
+            for (String number : List.of("01", "+1", ".5", "1.", "-", "1e")) {
+                assertThat(client.postJson("/raw", "{\"n\":" + number + "}").statusCode())
+                        .as(number).isEqualTo(400);
+            }
+            assertThat(client.postJson("/decks", "{\"name\":\"a\nb\"}").statusCode()).isEqualTo(400);
+            assertThat(client.postJson("/decks", "{\"name\":\"a\\n\tb\"}").statusCode()).isEqualTo(400);
+
+            var accepted = client.postJson("/raw", "{\"n\":[-1,0.5,1e2],\"s\":\"a\\nb\\u0009\"}");
+            assertThat(accepted.statusCode()).isEqualTo(200);
+            assertThat(accepted.body()).isEqualTo("{\"n\":[-1,0.5,100.0],\"s\":\"a\\nb\\t\"}");
+        });
+    }
+
     static final JsonReader<Long> DECK_ID = json -> json.asObject().getLong("id");
 
     /**

@@ -209,6 +209,162 @@ class JsonTest {
                 .hasMessageContaining("Expected 4 hex digits");
     }
 
+    /** Every form RFC 8259 section 6 allows: signed, fractional, exponent, whole. */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "0                    | 0.0",
+            "-0                   | 0.0",
+            "7                    | 7.0",
+            "-7                   | -7.0",
+            "120                  | 120.0",
+            "0.5                  | 0.5",
+            "-0.5                 | -0.5",
+            "10.25                | 10.25",
+            "1e2                  | 100.0",
+            "1E2                  | 100.0",
+            "1e+2                 | 100.0",
+            "1e-2                 | 0.01",
+            "-1.5E-2              | -0.015",
+            "0e0                  | 0.0",
+            "0.0e+00              | 0.0",
+            "123456789012345678   | 123456789012345678.0",
+            "9223372036854775807  | 9223372036854775807.0",
+            "-9223372036854775808 | -9223372036854775808.0",
+    })
+    void acceptsEveryNumberTheGrammarAllows(String text, double expected) {
+        assertThat(Json.parse(text).asDouble()).isEqualTo(expected);
+        assertThat(Json.parse("[" + text + "]").asArray().get(0).asDouble()).isEqualTo(expected);
+        assertThat(Json.parse("{\"n\":" + text + "}").asObject().getDouble("n")).isEqualTo(expected);
+    }
+
+    /** An integer reads exactly whether it is scanned in place or handed to Long.parseLong. */
+    @Test
+    void readsAnIntegerExactlyOnEitherSideOfTheScannedFastPath() {
+        assertThat(Json.parse("999999999999999999").asLong()).isEqualTo(999_999_999_999_999_999L);
+        assertThat(Json.parse("-999999999999999999").asLong()).isEqualTo(-999_999_999_999_999_999L);
+        assertThat(Json.parse("1000000000000000000").asLong()).isEqualTo(1_000_000_000_000_000_000L);
+        assertThat(Json.parse("9223372036854775807").asLong()).isEqualTo(Long.MAX_VALUE);
+        assertThat(Json.parse("-9223372036854775808").asLong()).isEqualTo(Long.MIN_VALUE);
+        assertThat(Json.parse("-0").asLong()).isZero();
+        assertThat(Json.parse("[0,-12,345]").toJson()).isEqualTo("[0,-12,345]");
+
+        assertThatThrownBy(() -> Json.parse("9223372036854775808"))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Number out of range");
+        assertThatThrownBy(() -> Json.parse("-9223372036854775809"))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Number out of range");
+    }
+
+    /**
+     * Forms outside RFC 8259's number grammar fail as a syntax error, several
+     * of which Long.parseLong or Double.parseDouble would read, whether the
+     * number stands alone, sits in an array, or is an object member.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "01", "-01", "00", "00.5", "0123", "-00",
+            "+1", "+0", "+1.5",
+            ".5", "-.5", ".e1",
+            "1.", "-1.", "1.e5", "1.E5",
+            "1e", "1E", "1e+", "1e-", "1.5e", "-1e+", "1e++1",
+            "-", "--1", "-+1", "- 1",
+            "1e5.5", "1.5.5", "0x10", "1_000", "1d", "1f", "1L",
+            "NaN", "Infinity", "-Infinity",
+            "\uff11", "\u0661", "-\uff11",
+    })
+    void rejectsANumberOutsideTheGrammar(String text) {
+        assertThatThrownBy(() -> Json.parse(text)).isInstanceOf(JsonException.class);
+        assertThatThrownBy(() -> Json.parse("[" + text + "]")).isInstanceOf(JsonException.class);
+        assertThatThrownBy(() -> Json.parse("{\"n\":" + text + "}")).isInstanceOf(JsonException.class);
+    }
+
+    @Test
+    void aMalformedNumberNamesWhatIsWrong() {
+        assertThatThrownBy(() -> Json.parse("{\"id\":01}"))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Leading zero");
+        assertThatThrownBy(() -> Json.parse("1."))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Expected a digit after the decimal point");
+        assertThatThrownBy(() -> Json.parse("1e+"))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Expected a digit in the exponent");
+    }
+
+    /**
+     * Every character below U+0020 is written as an escape inside a string,
+     * and is rejected written as itself: in a string with no escape, which
+     * the fast path scans, after an escape, where the slow path copies, and
+     * in a key.
+     */
+    @Test
+    void rejectsAnUnescapedControlCharacterInEitherStringPath() {
+        for (char c = 0; c < 0x20; c++) {
+            String raw = String.valueOf(c);
+            assertThatThrownBy(() -> Json.parse("\"a" + raw + "b\""))
+                    .isInstanceOf(JsonException.class)
+                    .hasMessageContaining("Unescaped control character");
+            assertThatThrownBy(() -> Json.parse("\"a\\n" + raw + "b\""))
+                    .isInstanceOf(JsonException.class)
+                    .hasMessageContaining("Unescaped control character");
+            assertThatThrownBy(() -> Json.parse("{\"k" + raw + "\":1}"))
+                    .isInstanceOf(JsonException.class)
+                    .hasMessageContaining("Unescaped control character");
+        }
+        assertThatThrownBy(() -> Json.parse("\"a\nb\""))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("U+000A");
+
+        assertThat(Json.parse("\"a\u007fb\"").asString()).isEqualTo("a\u007fb");
+        assertThat(Json.parse("\"a b\"").asString()).isEqualTo("a b");
+    }
+
+    /** The same characters are accepted written as escapes, short and backslash-u alike. */
+    @Test
+    void acceptsEscapedControlCharacters() {
+        assertThat(Json.parse("\"a\\nb\\tc\\rd\\be\\ff\"").asString())
+                .isEqualTo("a\nb\tc\rd\be\ff");
+        assertThat(Json.parse("\"\\u0000\\u001f\\u001F\"").asString())
+                .isEqualTo("\u0000\u001f\u001f");
+
+        StringBuilder controls = new StringBuilder();
+        for (char c = 0; c < 0x20; c++) {
+            controls.append(c);
+        }
+        String written = Json.array().add(controls.toString()).toJson();
+        assertThat(Json.parse(written).asArray().get(0).asString()).isEqualTo(controls.toString());
+    }
+
+    /** JSON whitespace is space, tab, line feed, and carriage return, and nothing else. */
+    @Test
+    void whitespaceIsOnlyTheFourCharactersTheGrammarNames() {
+        JsonObject object = Json.parse(" \t\r\n{ \t\r\n\"a\" \t\r\n: \t\r\n[ 1 , 2 ] \t\r\n} \t\r\n")
+                .asObject();
+        assertThat(object.get("a").asArray().size()).isEqualTo(2);
+
+        for (String other : new String[] {"\f", "\u000b", "\u001c", "\u001f", "\u00a0", "\u2028", "\u3000"}) {
+            assertThatThrownBy(() -> Json.parse(other + "1")).isInstanceOf(JsonException.class);
+            assertThatThrownBy(() -> Json.parse("1" + other)).isInstanceOf(JsonException.class);
+            assertThatThrownBy(() -> Json.parse("[1," + other + "2]")).isInstanceOf(JsonException.class);
+        }
+    }
+
+    /** A backslash-u escape takes ASCII hex digits only, in either case. */
+    @Test
+    void aUnicodeEscapeTakesAsciiHexDigitsOnly() {
+        assertThat(Json.parse("\"\\uABCD\\uabcd\"").asString()).isEqualTo("\uabcd\uabcd");
+        assertThatThrownBy(() -> Json.parse("\"\\u\uff10041\""))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Expected 4 hex digits");
+        assertThatThrownBy(() -> Json.parse("\"\\u\u0660041\""))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Expected 4 hex digits");
+        assertThatThrownBy(() -> Json.parse("\"\\u004G\""))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Expected 4 hex digits");
+    }
+
     @Test
     void rejectsNestingDeeperThanItCanRecurseThrough() {
         assertThatNoException().isThrownBy(() -> Json.parse("[".repeat(256) + "]".repeat(256)));

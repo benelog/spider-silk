@@ -39,6 +39,10 @@ public final class Json {
      * objects and arrays nested deeper than 256 levels, and on a number too
      * large for a {@code double} to hold, which would otherwise read back as an
      * infinity and serialize as text no JSON parser accepts.
+     *
+     * <p>The syntax is RFC 8259's, with no extension: a number such as
+     * {@code 01}, {@code +1}, {@code .5}, or {@code 1.} is rejected, and so is
+     * a control character written into a string without an escape.
      */
     public static JsonValue parse(String text) {
         Parser parser = new Parser(text);
@@ -201,6 +205,9 @@ public final class Json {
                 if (c == '\\') {
                     return parseEscapedString(start);
                 }
+                if (c < 0x20) {
+                    throw unescapedControlCharacter(c);
+                }
                 pos++;
             }
             throw error("Unexpected end of input");
@@ -218,6 +225,10 @@ public final class Json {
                     return sb.toString();
                 }
                 if (c != '\\') {
+                    if (c < 0x20) {
+                        pos--;
+                        throw unescapedControlCharacter(c);
+                    }
                     sb.append(c);
                     continue;
                 }
@@ -238,12 +249,22 @@ public final class Json {
         }
 
         /**
+         * RFC 8259 section 7: a character below U+0020 inside a string is
+         * written as an escape, never as itself, so a raw line break or tab
+         * is a syntax error rather than part of the value.
+         */
+        private JsonException unescapedControlCharacter(char c) {
+            return error("Unescaped control character U+%04X in a string".formatted((int) c));
+        }
+
+        /**
          * The character a backslash-u escape names, read as exactly four hex
          * digits. Integer.parseInt would do the arithmetic, but it also accepts
          * a leading sign, which is not a hex digit and which JSON's grammar
          * does not allow here, and it reports what it will not read as a
          * NumberFormatException rather than as this parser's positioned
-         * JsonException.
+         * JsonException. Character.digit would accept fullwidth and other
+         * non-ASCII digits, which are not hex digits in JSON either.
          */
         private char parseHexEscape() {
             int value = 0;
@@ -251,7 +272,7 @@ public final class Json {
                 if (atEnd()) {
                     throw error("Expected 4 hex digits after \\u");
                 }
-                int digit = Character.digit(text.charAt(pos), 16);
+                int digit = hexDigit(text.charAt(pos));
                 if (digit < 0) {
                     throw error("Expected 4 hex digits after \\u");
                 }
@@ -261,22 +282,69 @@ public final class Json {
             return (char) value;
         }
 
+        private static int hexDigit(char c) {
+            if (c >= '0' && c <= '9') {
+                return c - '0';
+            }
+            if (c >= 'a' && c <= 'f') {
+                return c - 'a' + 10;
+            }
+            if (c >= 'A' && c <= 'F') {
+                return c - 'A' + 10;
+            }
+            return -1;
+        }
+
+        /**
+         * A number as RFC 8259 section 6 writes it: an optional minus, an
+         * integer part that is 0 or starts with 1 to 9, then an optional
+         * fraction and an optional exponent, each with at least one digit.
+         * The grammar is checked here, because Long.parseLong and
+         * Double.parseDouble accept forms JSON does not, such as {@code +1},
+         * {@code .5}, and {@code 1.}. An integer of up to 18 digits, the
+         * common case, is accumulated as it is scanned, with no substring.
+         */
         private JsonValue parseNumber() {
             int start = pos;
-            if (peek() == '-') {
+            boolean negative = false;
+            if (text.charAt(pos) == '-') {
+                negative = true;
                 pos++;
             }
-            boolean integral = true;
-            while (!atEnd()) {
-                char c = text.charAt(pos);
-                if (c >= '0' && c <= '9') {
-                    pos++;
-                } else if (c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-') {
-                    integral = false;
-                    pos++;
-                } else {
-                    break;
+            if (atEnd() || !isDigit(text.charAt(pos))) {
+                throw atEnd() ? error("Unexpected end of input") : error("Unexpected character");
+            }
+            long magnitude = 0;
+            int digits = 0;
+            if (text.charAt(pos) == '0') {
+                pos++;
+                digits = 1;
+                if (!atEnd() && isDigit(text.charAt(pos))) {
+                    throw error("Leading zero in a number");
                 }
+            } else {
+                while (!atEnd() && isDigit(text.charAt(pos))) {
+                    magnitude = magnitude * 10 + (text.charAt(pos) - '0');
+                    digits++;
+                    pos++;
+                }
+            }
+            boolean integral = true;
+            if (!atEnd() && text.charAt(pos) == '.') {
+                integral = false;
+                pos++;
+                requireDigits("Expected a digit after the decimal point");
+            }
+            if (!atEnd() && (text.charAt(pos) == 'e' || text.charAt(pos) == 'E')) {
+                integral = false;
+                pos++;
+                if (!atEnd() && (text.charAt(pos) == '+' || text.charAt(pos) == '-')) {
+                    pos++;
+                }
+                requireDigits("Expected a digit in the exponent");
+            }
+            if (integral && digits <= 18) {
+                return new JsonPrimitive(negative ? -magnitude : magnitude);
             }
             String number = text.substring(start, pos);
             try {
@@ -289,8 +357,21 @@ public final class Json {
                 }
                 return new JsonPrimitive(new JsonDecimal(value, number));
             } catch (NumberFormatException e) {
-                throw error("Invalid number format: " + number);
+                throw error("Number out of range: " + number);
             }
+        }
+
+        private void requireDigits(String message) {
+            if (atEnd() || !isDigit(text.charAt(pos))) {
+                throw error(message);
+            }
+            while (!atEnd() && isDigit(text.charAt(pos))) {
+                pos++;
+            }
+        }
+
+        private static boolean isDigit(char c) {
+            return c >= '0' && c <= '9';
         }
 
         private JsonValue parseLiteral(String literal, JsonValue value) {
@@ -302,7 +383,11 @@ public final class Json {
         }
 
         void skipWhitespace() {
-            while (!atEnd() && Character.isWhitespace(text.charAt(pos))) {
+            while (!atEnd()) {
+                char c = text.charAt(pos);
+                if (c != ' ' && c != '\n' && c != '\r' && c != '\t') {
+                    return;
+                }
                 pos++;
             }
         }
