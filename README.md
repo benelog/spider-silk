@@ -16,8 +16,7 @@ Thin call stack, strong signature.
 
 Spider Silk is a web framework built on the Jakarta Servlet API.
 
-Thin here is a measurement rather than a metaphor.
-Two stack frames stand between `HttpServlet.service` and a handler, and a stack trace taken inside the handler shows both.
+Thin is a measurement: two stack frames stand between `HttpServlet.service` and a handler.
 
 ```
 java.lang.Throwable: where a handler stands
@@ -34,30 +33,26 @@ java.lang.Throwable: where a handler stands
     at java.base/java.lang.Thread.run(Thread.java)
 ```
 
-Seventeen frames of Jetty follow, and the trace shows five of them.
-Swapping in Tomcat or Undertow changes that part of the stack and not the two frames above it.
-No filter an application registers adds to them either, because each has answered, or declined to, before the handler is called.
-A filter or an exception handler stands one frame deeper, a streamed body two, and nothing the framework calls into goes deeper than four.
-The signature is the other half: a handler answers by returning a `WebResponse`, so a branch that forgets to answer is a compile error rather than a blank response.
+- Tomcat or Undertow changes only the container frames below.
+- Filters add no frames, since they finish before the handler runs.
+- Nothing the framework calls into is more than four frames deep.
+- Strong is the signature: a handler returns a `WebResponse`, so a branch that forgets to answer does not compile.
+
 Spider silk is thin and holds, which is what the name is for.
 
-Three core principles:
+Three principles:
 
-- **No reflection.**
-    * There is no annotation scanning, no proxies, and no automatic binding.
-    * What runs is what the code says, stack traces stay short, and startup stays fast.
-- **The API is intuitively simple.**
-    * A handler is a function from a request to a response: `WebResponse handle(WebRequest request)`.
-    * That signature is the whole model.
-- **Better RESTful API support than raw servlets.**
-    * Routing is per method, paths carry variables, parameters are extracted with a declared type, and exceptions map to status codes.
+- **No reflection**: no annotation scanning, no proxies, no automatic binding.
+  What runs is what the code says, and startup stays fast.
+- **One simple model**: a handler is `WebResponse handle(WebRequest request)`.
+- **Better REST support than raw servlets**: per-method routing, path variables, typed parameters, and exceptions mapped to status codes.
 
-**Full documentation: [spider-silk.benelog.net](https://spider-silk.benelog.net)**, also [in Korean](https://spider-silk.benelog.net/ko/), with every released version alongside.
+**Documentation: [spider-silk.benelog.net](https://spider-silk.benelog.net)** ([Korean](https://spider-silk.benelog.net/ko/)), for every released version.
 
 ## Quick Start
 
-Spider Silk requires Java 21 or later.
-The current version is `1.1.0`, published to Maven Central.
+Requires Java 21 or later.
+The current version on Maven Central is `1.1.0`.
 
 ### build.gradle
 
@@ -111,9 +106,8 @@ $ curl localhost:8080/hello/silk
 Hello, silk
 ```
 
-`spider-silk-core` brings embedded Jetty with it, so nothing else is needed to serve a request.
-
-Routing groups, filters, status pages, JSON codecs, SSE, templates, static files, route introspection, the test harness, and server tuning are all in the [documentation](https://spider-silk.benelog.net).
+`spider-silk-core` includes embedded Jetty, so nothing else is needed.
+Everything else is in the [documentation](https://spider-silk.benelog.net).
 
 ## Modules
 
@@ -132,7 +126,7 @@ Routing groups, filters, status pages, JSON codecs, SSE, templates, static files
 
 ## AI coding agents
 
-The repository ships an [Agent Skill](https://agentskills.io) that teaches coding agents the framework: [`skills/spider-silk/`](skills/spider-silk/SKILL.md).
+[`skills/spider-silk/`](skills/spider-silk/SKILL.md) is an [Agent Skill](https://agentskills.io) that teaches coding agents the framework.
 Claude Code installs it as a plugin:
 
 ```
@@ -140,12 +134,11 @@ Claude Code installs it as a plugin:
 /plugin install spider-silk@spider-silk
 ```
 
-Codex, Cursor, and GitHub Copilot read the same directory once it is copied into their skill locations.
-[The documentation](https://spider-silk.benelog.net/agent-skill.html) has the paths.
+Codex, Cursor, and GitHub Copilot read the same directory from their skill locations, [listed here](https://spider-silk.benelog.net/agent-skill.html).
 
 ## Further reading
 
-[notes/positioning.md](notes/positioning.md) places Spider Silk next to Javalin, Spark, Helidon SE, and Spring Boot, and states what it trades away to get there.
-[notes/decisions.md](notes/decisions.md) gives the reasoning behind each piece, item by item, together with the list of what was rejected.
-[CHANGELOG.md](CHANGELOG.md) lists what changed in each release.
-[The issue tracker](https://github.com/benelog/spider-silk/issues) records what was deliberately deferred, one issue per item, with the condition that would make it worth doing.
+- [notes/positioning.md](notes/positioning.md): Spider Silk next to Javalin, Spark, Helidon SE, and Spring Boot, and what it trades away.
+- [notes/decisions.md](notes/decisions.md): the reasoning behind each piece, and what was rejected.
+- [CHANGELOG.md](CHANGELOG.md): what changed in each release.
+- [The issue tracker](https://github.com/benelog/spider-silk/issues): what was deferred, with the condition that would make it worth doing.
