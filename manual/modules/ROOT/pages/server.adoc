@@ -44,6 +44,7 @@ A `synchronized` block around that blocking call pins the carrier thread and tak
 
 Shutdown is graceful out of the box.
 A JVM shutdown hook stops the server on Ctrl-C or SIGTERM, and `stop()` gives requests in flight five seconds to finish before dropping them.
+The application's own hook closes open SSE streams at the same time, so a stream does not hold the drain for its whole timeout.
 Idle keep-alive connections do not delay the stop.
 They are closed as soon as the drain starts, so a stop with no request in flight returns immediately.
 `stopTimeout(Duration.ZERO)` turns the drain off entirely.

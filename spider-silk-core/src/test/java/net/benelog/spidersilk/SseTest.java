@@ -10,12 +10,14 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.Test;
 
+import net.benelog.spidersilk.server.JettyServer;
 import net.benelog.spidersilk.test.WebTest;
 
 /** Server-Sent Events: framing over the response that was already there. */
@@ -155,6 +157,45 @@ class SseTest {
                     .isTrue();
             assertThat(app.openStreams).as("the registry should be empty").isEmpty();
             assertThat(millis).isLessThan(3_000);
+        } finally {
+            app.stop();
+        }
+    }
+
+    /**
+     * Ctrl-C and SIGTERM stop the server through its own hook, not through
+     * {@code app.stop()}. The JVM runs every hook at once, so the application's
+     * runs beside Jetty's and closes the stream the drain would otherwise wait
+     * out for the whole stop timeout.
+     */
+    @Test
+    void aJvmShutdownClosesTheStreamsBesideTheServersOwnHook() throws Exception {
+        CountDownLatch handlerEnded = new CountDownLatch(1);
+        App app = ticker(handlerEnded);
+        app.start(0);
+        try (Socket socket = new Socket("localhost", app.port())) {
+            socket.setSoTimeout(5_000);
+            requestEvents(socket, app.port());
+            readUntil(socket, "data: tick");
+            Thread hook = app.shutdownHookThread();
+            assertThat(hook).as("a deployed application holds a hook").isNotNull();
+
+            long startedAt = System.nanoTime();
+            // Run as a Runnable on another thread: starting the registered hook
+            // itself would leave the JVM a started thread to start again at exit.
+            CompletableFuture<Void> closing = CompletableFuture.runAsync(hook);
+            // What Jetty's setStopAtShutdown hook does: stop the server, with a drain.
+            ((JettyServer) app.runningServer()).jetty().stop();
+            closing.get(5, TimeUnit.SECONDS);
+            long millis = (System.nanoTime() - startedAt) / 1_000_000;
+
+            assertThat(handlerEnded.await(1, TimeUnit.SECONDS))
+                    .as("the handler should have ended")
+                    .isTrue();
+            assertThat(millis).as("the drain should not wait out its timeout").isLessThan(3_000);
+            assertThat(app.shutdownHookThread())
+                    .as("the hook goes when the last deployment does")
+                    .isNull();
         } finally {
             app.stop();
         }

@@ -80,6 +80,21 @@ public final class App {
     /** How many {@link AppServlet}s are initialized over this application and not yet destroyed. */
     private int deployments;
 
+    /**
+     * Closes the open SSE streams when the JVM shuts down, for as long as a
+     * deployment serves this application: registered by the first
+     * {@link #deploy()} and removed by the last {@link #undeploy()}.
+     *
+     * <p>The server's own hook — Jetty's {@code setStopAtShutdown}, or the one
+     * {@code TomcatServer} and {@code UndertowServer} register — stops the
+     * server without going through {@link #stop()}, and a stream is a request
+     * that never ends on its own, so Ctrl-C or SIGTERM would wait out the whole
+     * stop timeout. The JVM runs its hooks at once, so this one closes the
+     * streams while the server's starts to drain, and the drain then ends with
+     * them. An external container stopped by a signal gets the same.
+     */
+    private @Nullable Thread streamCloser;
+
     private WebServerFactory serverFactory = (app, port) -> new JettyServer(app).port(port);
     private @Nullable WebServer server;
 
@@ -586,6 +601,15 @@ public final class App {
     Deployment deploy() {
         synchronized (registrationLock) {
             deployments++;
+            if (streamCloser == null) {
+                Thread closer = new Thread(this::closeOpenStreams, "spider-silk-close-streams");
+                try {
+                    Runtime.getRuntime().addShutdownHook(closer);
+                    streamCloser = closer;
+                } catch (IllegalStateException e) {
+                    // The JVM is already shutting down, and nothing will be served for long.
+                }
+            }
             return new Deployment(router.copy(), requestFilters, beforeFilters, afterFilters, responseFilters, exceptionHandlers,
                     statusPages, staticFiles, requestLogger, cors, gzip, securityHeaders, bodyLimits);
         }
@@ -601,6 +625,25 @@ public final class App {
             if (deployments > 0) {
                 deployments--;
             }
+            if (deployments == 0 && streamCloser != null) {
+                try {
+                    Runtime.getRuntime().removeShutdownHook(streamCloser);
+                } catch (IllegalStateException e) {
+                    // The JVM is shutting down: the hook is running, or has run.
+                }
+                streamCloser = null;
+            }
+        }
+    }
+
+    /**
+     * The hook that closes the open streams at JVM shutdown, or null while
+     * nothing serves this application. Package-private and here for the test
+     * that runs it beside the server's own hook, as the JVM does.
+     */
+    @Nullable Thread shutdownHookThread() {
+        synchronized (registrationLock) {
+            return streamCloser;
         }
     }
 
@@ -611,6 +654,8 @@ public final class App {
      * been in flight since it started and would never finish on its own, so the
      * graceful stop would wait out its whole timeout and then report a failure
      * to drain — a stream is closed before Jetty is asked to drain anything.
+     * A JVM shutdown, which stops the server through its own hook rather than
+     * through this method, closes them through a hook of this application's.
      */
     public App stop() {
         closeOpenStreams();

@@ -44,6 +44,7 @@ app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool))
 
 종료는 기본으로 정상 종료(graceful shutdown)다.
 JVM 셧다운 훅이 Ctrl-C나 SIGTERM에서 서버를 멈추고, `stop()`은 진행 중인 요청에 5초를 주어 마치게 한 뒤 끊는다.
+애플리케이션 자체의 훅이 같은 때에 열린 SSE 스트림을 닫으므로, 스트림이 드레인을 타임아웃 내내 붙잡지 않는다.
 유휴 keep-alive 연결은 중지를 지연시키지 않는다.
 이 연결은 드레인이 시작되는 즉시 닫히므로, 진행 중인 요청이 없으면 중지는 즉시 반환된다.
 `stopTimeout(Duration.ZERO)`는 드레인을 완전히 끈다.
