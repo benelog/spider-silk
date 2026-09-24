@@ -26,6 +26,7 @@ A static file bypasses `beforeRoute` and `afterRoute`, since no route matched.
 A xref:filters-and-errors.adoc#response-filters[response filter] does run on a static file, as do CORS, compression, and the security headers.
 The file is opened only when its body is written, so a filter may replace the response or throw without leaving the file open.
 A HEAD and a 304 likewise open nothing, whether the file sits in a directory, on an exploded classpath, or inside a jar.
+Under `app.gzip()`, a HEAD that would be compressed carries no `Content-Length`, since only compressing the whole file would tell it.
 The first request for a file with a stamped time is the one exception: it reads the file once to work out the tag.
 
 == A directory on disk

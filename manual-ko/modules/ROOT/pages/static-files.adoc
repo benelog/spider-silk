@@ -26,6 +26,7 @@ app.staticFiles(new StaticFiles("/public")
 xref:filters-and-errors.adoc#response-filters[응답 필터]는 정적 파일에도 실행되며, CORS, 압축, 보안 헤더도 마찬가지다.
 파일은 본문을 쓸 때에만 열리므로, 필터가 응답을 바꾸거나 예외를 던져도 파일이 열린 채 남지 않는다.
 HEAD와 304도 마찬가지로 아무것도 열지 않으며, 파일이 디렉터리에 있든, 풀어 둔 클래스패스에 있든, jar 안에 있든 같다.
+`app.gzip()` 아래에서 압축될 HEAD는 `Content-Length`를 담지 않는데, 그 값은 파일 전체를 압축해야만 알 수 있기 때문이다.
 수정 시각이 스탬프인 파일에 대한 첫 요청만은 예외로, 태그를 구하려고 파일을 한 번 읽는다.
 
 == 디스크의 디렉터리

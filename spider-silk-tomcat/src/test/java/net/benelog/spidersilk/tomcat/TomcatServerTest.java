@@ -469,6 +469,21 @@ class TomcatServerTest {
         assertThat(response.body()).contains("data: 2");
     }
 
+    /** A HEAD that gzip would compress carries the GET's headers, and no length it cannot know. */
+    @Test
+    void aHeadForACompressedStreamCarriesNoLength() throws Exception {
+        startOnTomcat(new App().gzip().get("/big.css", req -> WebResponse.stream("text/css",
+                out -> out.write("body{color:red}".repeat(300).getBytes(StandardCharsets.UTF_8)))));
+
+        HttpResponse<Void> head = client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/big.css"))
+                .header("Accept-Encoding", "gzip")
+                .method("HEAD", HttpRequest.BodyPublishers.noBody()).build(), HttpResponse.BodyHandlers.discarding());
+
+        assertThat(head.statusCode()).isEqualTo(200);
+        assertThat(head.headers().firstValue("Content-Encoding")).hasValue("gzip");
+        assertThat(head.headers().firstValue("Content-Length")).isEmpty();
+    }
+
     /** A redirect to a path outside ASCII goes out percent-encoded, the same on every server. */
     @Test
     void aNonAsciiRedirectIsPercentEncoded() throws Exception {

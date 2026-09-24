@@ -646,6 +646,11 @@ public class AppServlet extends HttpServlet {
             if (res.getHeader("Content-Length") != null) {
                 return;
             }
+            if (Gzip.UNKNOWN_LENGTH.equals(writer)) {
+                // Committed with no length, so the container cannot fill in a 0.
+                res.flushBuffer();
+                return;
+            }
             CountingStream counted = new CountingStream();
             writer.write(counted);
             setLengthIfUnset(res, counted.written);

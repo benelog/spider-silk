@@ -8,10 +8,12 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.URI;
+import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
@@ -364,6 +366,36 @@ class GzipTest {
     }
 
     // ---- Helpers ----
+
+    /**
+     * The compressed length is known only by compressing the whole body, which
+     * for a static file meant opening and reading it for every HEAD. A HEAD
+     * now carries the GET's headers without running the writer at all.
+     */
+    @Test
+    void aHeadForACompressedStreamRunsNoWriter() {
+        AtomicInteger runs = new AtomicInteger();
+        App app = new App().gzip().get("/big.css", req -> WebResponse.stream("text/css", out -> {
+            runs.incrementAndGet();
+            out.write("body{color:red}".repeat(300).getBytes(StandardCharsets.UTF_8));
+        }));
+
+        WebTest.test(app, client -> {
+            HttpResponse<byte[]> head = client.send(request -> request
+                    .uri(URI.create(client.url("/big.css")))
+                    .header("Accept-Encoding", "gzip")
+                    .method("HEAD", HttpRequest.BodyPublishers.noBody()), HttpResponse.BodyHandlers.ofByteArray());
+
+            assertThat(head.statusCode()).isEqualTo(200);
+            assertThat(header(head, "Content-Encoding")).isEqualTo("gzip");
+            assertThat(header(head, "Vary")).contains("Accept-Encoding");
+            assertThat(head.headers().firstValue("Content-Length")).isEmpty();
+            assertThat(runs.get()).as("a HEAD opens nothing").isZero();
+
+            assertThat(inflate(gzipped(client, "/big.css").body())).isEqualTo("body{color:red}".repeat(300));
+            assertThat(runs.get()).isEqualTo(1);
+        });
+    }
 
     private static HttpResponse<byte[]> gzipped(TestClient client, String path) {
         return client.send(request -> request

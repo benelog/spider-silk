@@ -134,7 +134,9 @@ public final class Gzip {
         return switch (response.body()) {
             case WebResponse.Text text -> compressed(varying, text.content());
             case WebResponse.Bytes bytes -> compressed(varying, bytes.data());
-            case WebResponse.Streamed stream -> compressed(varying, stream.writer());
+            case WebResponse.Streamed stream -> "HEAD".equals(request.method())
+                    ? headOfCompressed(varying)
+                    : compressed(varying, stream.writer());
             case WebResponse.Empty ignored -> varying;
             case WebResponse.Template ignored -> varying;
             case WebResponse.Sse ignored -> varying;
@@ -248,6 +250,27 @@ public final class Gzip {
         return encoded(response.body(new WebResponse.Bytes(zipped)))
                 .header("Content-Length", Integer.toString(zipped.length));
     }
+
+    /**
+     * The HEAD of a body that would be compressed as it goes: the headers the
+     * GET carries, and a writer that writes nothing. The compressed length is
+     * known only by compressing the whole body, which for a static file means
+     * opening it and reading it to the end, so a HEAD goes without a
+     * {@code Content-Length}, as RFC 9110 lets it. With a writer that writes
+     * nothing there is nothing for the servlet to count either.
+     */
+    private WebResponse headOfCompressed(WebResponse response) {
+        return encoded(response.body(new WebResponse.Streamed(UNKNOWN_LENGTH)))
+                .withoutHeader("Content-Length");
+    }
+
+    /**
+     * The writer of a HEAD whose compressed length is not known. It writes
+     * nothing, and {@link AppServlet} commits the headers rather than let the
+     * container announce the {@code Content-Length: 0} of a body it never saw.
+     */
+    static final StreamWriter UNKNOWN_LENGTH = out -> {
+    };
 
     /**
      * A body written as it goes, compressed the same way. The length the
