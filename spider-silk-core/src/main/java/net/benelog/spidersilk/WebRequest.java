@@ -81,18 +81,32 @@ public final class WebRequest {
 
     /** What {@link #BODY_ATTRIBUTE} holds when it holds no text. */
     private enum BodyMarker {
-        /** The body went out as a stream or a reader. */
-        HANDED_OVER,
+        /** The body went out through {@link #bodyStream()}. */
+        STREAM("bodyStream()"),
+        /** The body went out through {@link #bodyReader()}. */
+        READER("bodyReader()"),
+        /**
+         * The body went out through {@link #bodyNdjson}, whose reader holds
+         * a chunk of it that no one else can see.
+         */
+        NDJSON("bodyNdjson()"),
         /**
          * A read was refused for size. Kept so that a handler catching the 413
          * cannot go on to read the rest of a body whose start was consumed.
          */
-        TOO_LARGE,
+        TOO_LARGE(""),
         /**
          * The body ended before it should have, or the connection failed while
          * it was read. Kept for the same reason as {@link #TOO_LARGE}.
          */
-        UNREADABLE
+        UNREADABLE("");
+
+        /** The method that took the body, for a marker that records a hand-over. */
+        private final String method;
+
+        BodyMarker(String method) {
+            this.method = method;
+        }
     }
 
     /** How much {@link #body()} reads at a time, and its buffer's floor. */
@@ -948,7 +962,8 @@ public final class WebRequest {
      * as text first. The container enforces the stream-or-reader rule on its
      * own; this adds the rule the cached text needs.
      */
-    private void handOver(String asked) {
+    private void handOver(BodyMarker taker) {
+        String asked = taker.method;
         Object read = req.getAttribute(BODY_ATTRIBUTE);
         if (read == BodyMarker.TOO_LARGE) {
             // Part of the body is already gone: handing on the rest would be a truncated body.
@@ -961,7 +976,15 @@ public final class WebRequest {
             throw new IllegalStateException("The body was already read as text by body() or bodyJson(),"
                     + " so " + asked + " has nothing left to hand over. Read the text again with body()");
         }
-        req.setAttribute(BODY_ATTRIBUTE, BodyMarker.HANDED_OVER);
+        if (read instanceof BodyMarker taken && !(taken == taker && taker != BodyMarker.NDJSON)) {
+            // The stream and the reader are the container's, so asking for the
+            // same one again answers it where the first caller left it. Anything
+            // else would read on from a body another reader has part of, and the
+            // NDJSON reader holds a chunk of it that no one else can see.
+            throw new IllegalStateException("The body already went out through " + taken.method
+                    + ", so " + asked + " cannot read it as well");
+        }
+        req.setAttribute(BODY_ATTRIBUTE, taker);
     }
 
     /**
@@ -1038,7 +1061,7 @@ public final class WebRequest {
      * {@link #formParam} with nothing to parse once the body has been read here.
      */
     public InputStream bodyStream() {
-        handOver("bodyStream()");
+        handOver(BodyMarker.STREAM);
         try {
             return req.getInputStream();
         } catch (IOException e) {
@@ -1054,7 +1077,7 @@ public final class WebRequest {
      * {@link #body()}.
      */
     public BufferedReader bodyReader() {
-        handOver("bodyReader()");
+        handOver(BodyMarker.READER);
         // Settled here rather than left to getReader(), which each container
         // fails on in its own way.
         bodyCharset();
@@ -1099,7 +1122,7 @@ public final class WebRequest {
      * handling has finished, so rejection cannot become a 400 response.
      */
     public <T> Stream<T> bodyNdjson(JsonReader<T> reader) {
-        handOver("bodyNdjson()");
+        handOver(BodyMarker.NDJSON);
         NdjsonLines lines;
         try {
             lines = new NdjsonLines(req.getInputStream(), bodyCharset(), limits.maxNdjsonLineBytes(),

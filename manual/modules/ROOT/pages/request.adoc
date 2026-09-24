@@ -257,6 +257,7 @@ app.put("/backups", req -> {
 ----
 
 The body goes out once, one way, so this handler never calls `body()` on the same request.
+A second reader of any kind after `bodyStream()`, `bodyReader()`, or `bodyNdjson(reader)` throws `IllegalStateException`, except that asking for the same stream or reader again answers it where the first caller left it.
 A 413 that `body()` already answered is not undone by a later `bodyStream()`, so the endpoint chooses the stream up front.
 Nothing bounds this copy but the handler itself and whatever proxy stands in front of the application, so a handler that must cap an upload counts the bytes it copies.
 

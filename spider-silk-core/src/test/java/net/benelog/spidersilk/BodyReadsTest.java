@@ -3,6 +3,7 @@ package net.benelog.spidersilk;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -78,6 +79,62 @@ class BodyReadsTest {
 
         assertThatIllegalStateException().isThrownBy(request::body).withMessageContaining("bodyReader()");
         assertThatIllegalStateException().isThrownBy(request::bodyJson);
+    }
+
+    /**
+     * The NDJSON reader holds a chunk of the body no one else can see, so a
+     * reader after it would start partway through. It used to answer the rest
+     * without a word, a line short.
+     */
+    @Test
+    void aBodyTheNdjsonReaderTookGoesToNoOtherReader() {
+        String body = "{\"name\":\"a\"}\n{\"name\":\"b\"}\n";
+        App app = new App()
+                .post("/stream", req -> {
+                    String first = req.bodyNdjson(NAME).findFirst().orElse("");
+                    req.bodyStream();
+                    return WebResponse.text(first);
+                })
+                .post("/twice", req -> {
+                    String first = req.bodyNdjson(NAME).findFirst().orElse("");
+                    assertThat(first).isEqualTo("a");
+                    return WebResponse.text(String.valueOf(req.bodyNdjson(NAME).count()));
+                })
+                .exception(IllegalStateException.class, (req, e) -> WebResponse.text(e.getMessage()));
+
+        WebTest.test(app, client -> {
+            assertThat(client.post("/stream", body).body())
+                    .isEqualTo("The body already went out through bodyNdjson(), so bodyStream() cannot read it as well");
+            assertThat(client.post("/twice", body).body())
+                    .isEqualTo("The body already went out through bodyNdjson(), so bodyNdjson() cannot read it as well");
+        });
+    }
+
+    /** The stream and the reader are the container's, so asking again answers the same one. */
+    @Test
+    void theSameStreamOrReaderCanBeAskedForAgain() {
+        App app = new App()
+                .post("/stream", req -> {
+                    InputStream first = req.bodyStream();
+                    return WebResponse.text(String.valueOf(req.bodyStream().equals(first)));
+                })
+                .post("/reader", req -> {
+                    BufferedReader first = req.bodyReader();
+                    return WebResponse.text(String.valueOf(req.bodyReader().equals(first)));
+                })
+                .post("/mixed", req -> {
+                    req.bodyReader();
+                    req.bodyStream();
+                    return WebResponse.text("read twice");
+                })
+                .exception(IllegalStateException.class, (req, e) -> WebResponse.text(e.getMessage()));
+
+        WebTest.test(app, client -> {
+            assertThat(client.post("/stream", "x").body()).isEqualTo("true");
+            assertThat(client.post("/reader", "x").body()).isEqualTo("true");
+            assertThat(client.post("/mixed", "x").body())
+                    .isEqualTo("The body already went out through bodyReader(), so bodyStream() cannot read it as well");
+        });
     }
 
     /** NDJSON stays lazy: taking the stream reads no line, and the text is refused all the same. */
