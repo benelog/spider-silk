@@ -239,6 +239,7 @@ An NDJSON line is refused as soon as it outgrows the limit, so a line that never
 The 413 is an `HttpException` with the status `CONTENT_TOO_LARGE`, and takes the ordinary error path through `exception(...)` and `statusPage(...)`.
 A body refused once stays refused.
 A handler that catches the exception and reads again gets another 413 from `body()`, `bodyStream()`, and `bodyReader()`, never the rest of a body whose start was already consumed.
+A body that ends before its `Content-Length`, or whose connection fails while it is read, answers 400 through `body()`, `bodyJson()`, and `bodyNdjson(reader)`, and stays refused the same way.
 
 `bodyStream()` and `bodyReader()` are not limited.
 A caller that reads a stream decides for itself how much of it to keep, so a large upload streamed to a file or to a parser needs no setting.

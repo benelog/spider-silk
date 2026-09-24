@@ -3,17 +3,24 @@ package net.benelog.spidersilk;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
+import java.io.IOException;
 import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.json.JsonReader;
+import net.benelog.spidersilk.test.TestClient;
 import net.benelog.spidersilk.test.TestRequest;
 import net.benelog.spidersilk.test.WebTest;
 
@@ -163,5 +170,67 @@ class BodyReadsTest {
 
             assertThat(response.statusCode()).isEqualTo(500);
         });
+    }
+
+    /**
+     * A client that sends less than its Content-Length and then stops is the
+     * request's fault, so every text read answers 400, as a multipart body cut
+     * short already did, and the logger does not hear of an application failure.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {"/text", "/json", "/ndjson"})
+    void aBodyCutShortIsA400ThroughEveryTextRead(String path) {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        App app = new App()
+                .requestLogger((req, completion) -> logged.add(completion))
+                .post("/text", req -> WebResponse.text(req.body()))
+                .post("/json", req -> WebResponse.text(req.bodyJson(NAME)))
+                .post("/ndjson", req -> WebResponse.text(String.join(",", req.bodyNdjson(NAME).toList())));
+
+        WebTest.test(app, client -> {
+            String response = cutShort(client, path, "{\"na");
+
+            assertThat(response).startsWith("HTTP/1.1 400");
+            assertThat(response).contains("Request body could not be read");
+        });
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(400);
+            assertThat(completion.threw()).isFalse();
+        });
+    }
+
+    /** A read after the failure refuses too, rather than answering what was left of the body. */
+    @Test
+    void aSecondReadOfABodyCutShortIsRefusedToo() {
+        App app = new App().post("/", req -> {
+            try {
+                req.body();
+            } catch (HttpException first) {
+                return WebResponse.text(first.status() + " then " + req.body());
+            }
+            return WebResponse.text("read");
+        });
+
+        WebTest.test(app, client -> assertThat(cutShort(client, "/", "hello"))
+                .startsWith("HTTP/1.1 400")
+                .contains("Request body could not be read"));
+    }
+
+    /**
+     * Announces 100 bytes, sends the few given, and half-closes the connection,
+     * which is what a client that gave up partway looks like to the server.
+     */
+    private static String cutShort(TestClient client, String path, String sent) {
+        URI base = URI.create(client.url("/"));
+        try (Socket socket = new Socket(base.getHost(), base.getPort())) {
+            String head = String.join("\r\n", "POST " + path + " HTTP/1.1", "Host: localhost",
+                    "Content-Type: application/json", "Content-Length: 100", "Connection: close") + "\r\n\r\n";
+            socket.getOutputStream().write((head + sent).getBytes(StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+            socket.shutdownOutput();
+            return new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }

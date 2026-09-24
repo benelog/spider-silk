@@ -2,12 +2,12 @@ package net.benelog.spidersilk;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.LongFunction;
 
 import org.jspecify.annotations.Nullable;
@@ -35,6 +35,7 @@ final class NdjsonLines extends Spliterators.AbstractSpliterator<String> {
     private final Charset charset;
     private final int maxLineBytes;
     private final LongFunction<RuntimeException> tooLarge;
+    private final Function<IOException, RuntimeException> unreadable;
 
     private final byte[] chunk = new byte[CHUNK];
     private int position;
@@ -50,13 +51,17 @@ final class NdjsonLines extends Spliterators.AbstractSpliterator<String> {
     /**
      * @param tooLarge what to throw for a line over the limit, given its number,
      *                 counted from 1
+     * @param unreadable what to throw for a body the container could not
+     *                   finish reading, given its failure
      */
-    NdjsonLines(InputStream in, Charset charset, int maxLineBytes, LongFunction<RuntimeException> tooLarge) {
+    NdjsonLines(InputStream in, Charset charset, int maxLineBytes, LongFunction<RuntimeException> tooLarge,
+            Function<IOException, RuntimeException> unreadable) {
         super(Long.MAX_VALUE, Spliterator.ORDERED | Spliterator.NONNULL);
         this.in = in;
         this.charset = charset;
         this.maxLineBytes = maxLineBytes;
         this.tooLarge = tooLarge;
+        this.unreadable = unreadable;
         this.line = new byte[(int) Math.min(CHUNK, maxLineBytes + 1L)];
     }
 
@@ -72,7 +77,7 @@ final class NdjsonLines extends Spliterators.AbstractSpliterator<String> {
         try {
             next = nextLine();
         } catch (IOException e) {
-            failure = new UncheckedIOException(e);
+            failure = unreadable.apply(e);
             throw failure;
         } catch (RuntimeException e) {
             failure = e;

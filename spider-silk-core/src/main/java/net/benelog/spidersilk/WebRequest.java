@@ -87,7 +87,12 @@ public final class WebRequest {
          * A read was refused for size. Kept so that a handler catching the 413
          * cannot go on to read the rest of a body whose start was consumed.
          */
-        TOO_LARGE
+        TOO_LARGE,
+        /**
+         * The body ended before it should have, or the connection failed while
+         * it was read. Kept for the same reason as {@link #TOO_LARGE}.
+         */
+        UNREADABLE
     }
 
     /** How much {@link #body()} reads at a time, and its buffer's floor. */
@@ -836,6 +841,9 @@ public final class WebRequest {
         if (read == BodyMarker.TOO_LARGE) {
             throw bodyTooLarge();
         }
+        if (read == BodyMarker.UNREADABLE) {
+            throw bodyUnreadable("");
+        }
         if (read != null) {
             // Anything but the text is the marker handOver(...) left.
             throw new IllegalStateException("The body was already handed over unread, through"
@@ -879,7 +887,7 @@ public final class WebRequest {
             }
             return bytes.toString(charset);
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw refuseUnreadable(e);
         }
     }
 
@@ -915,6 +923,21 @@ public final class WebRequest {
         return bodyTooLarge();
     }
 
+    /**
+     * A body the container could not finish reading: the client sent less than
+     * its {@code Content-Length}, or the connection failed partway. The fault
+     * is on the request's side, so it is a 400, as decision 63 has it, and the
+     * request logger does not report it as a failure of the application.
+     */
+    private HttpException refuseUnreadable(IOException failure) {
+        req.setAttribute(BODY_ATTRIBUTE, BodyMarker.UNREADABLE);
+        return bodyUnreadable(": " + deepestMessage(failure));
+    }
+
+    private static HttpException bodyUnreadable(String detail) {
+        return new HttpException(HttpStatus.BAD_REQUEST, "Request body could not be read" + detail);
+    }
+
     private HttpException bodyTooLarge() {
         return new HttpException(HttpStatus.CONTENT_TOO_LARGE,
                 "Request body is larger than the limit of %d bytes".formatted(limits.maxBytes()));
@@ -930,6 +953,9 @@ public final class WebRequest {
         if (read == BodyMarker.TOO_LARGE) {
             // Part of the body is already gone: handing on the rest would be a truncated body.
             throw bodyTooLarge();
+        }
+        if (read == BodyMarker.UNREADABLE) {
+            throw bodyUnreadable("");
         }
         if (read instanceof String) {
             throw new IllegalStateException("The body was already read as text by body() or bodyJson(),"
@@ -1077,7 +1103,7 @@ public final class WebRequest {
         NdjsonLines lines;
         try {
             lines = new NdjsonLines(req.getInputStream(), bodyCharset(), limits.maxNdjsonLineBytes(),
-                    this::refuseLine);
+                    this::refuseLine, this::refuseUnreadable);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }

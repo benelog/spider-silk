@@ -463,6 +463,22 @@ class UndertowServerTest {
         assertThat(response.body()).contains("data: 2");
     }
 
+    /** A body the client cut short is the request's fault: 400, not a 500 from the read. */
+    @Test
+    void aBodyCutShortIsA400() throws Exception {
+        startOnUndertow(new App().post("/echo", req -> WebResponse.text(req.body())));
+
+        try (Socket socket = new Socket("localhost", app.port())) {
+            socket.getOutputStream().write(("POST /echo HTTP/1.1\r\nHost: localhost\r\n"
+                    + "Content-Length: 100\r\nConnection: close\r\n\r\nhello").getBytes(StandardCharsets.UTF_8));
+            socket.shutdownOutput();
+            String response = new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+
+            assertThat(response).startsWith("HTTP/1.1 400");
+            assertThat(response).contains("Request body could not be read");
+        }
+    }
+
     /**
      * A client that stops reading leaves the handler blocked in a flush, and
      * the stop still ends within the stop timeout instead of waiting for the
