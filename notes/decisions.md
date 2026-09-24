@@ -79,6 +79,8 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 63 | A body the container or the JVM cannot read is a 4xx, never a 500 | ✅ shipped |
 | 64 | A modification time before 2000 is a build's stamp, and the tag comes from the content | ✅ shipped |
 | 65 | The application's own shutdown hook closes open SSE streams | ✅ shipped |
+| 66 | An `Error` is answered and reported as an exception is | ✅ shipped |
+| 67 | Closing an SSE stream does not wait for a blocked write | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
 The exception, 15b, is a decision rather than a gap.
@@ -1199,6 +1201,10 @@ The request carried the fault, so the answer names the client's side, whichever 
 - **A form-encoded body the container refuses is a 400 with the container's reason.**
   The servlet API defines no size signal for one, so a form over the container's limit is a 400 too.
 - **A charset the JVM cannot decode is a 415**, settled before a byte is read.
+- **A body cut short is a 400.**
+  An `IOException` while `body()` or `bodyNdjson` reads is a client that sent less than its `Content-Length` or a connection that failed.
+  The body then stays refused, as one refused for size does, so a second read cannot answer what was left of it.
+  Tomcat answers such a request with its own 400 page whatever the application returns.
 
 Rejected: parsing form bodies in core, which would move a parser and its limits out of the container for one status code.
 Rejected: telling containers apart by class or message, which ties core to each container's internals.
@@ -1233,6 +1239,39 @@ Ctrl-C and SIGTERM stop the server through its own hook, which calls the server'
 
 Rejected: a pre-stop callback on `WebServer`, which is an interface change every server module would have to follow.
 Rejected: `App.start` owning the only hook, which leaves a server started directly and an external container uncovered.
+
+## 66 · An `Error` from the application
+
+### 66. An `Error` is answered and reported as an exception is
+
+`AppServlet` catches `Throwable` wherever it caught `Exception`: in dispatch, the response filters, the exception and status-page handlers, and the write.
+
+- **The answer is the framework's 500**, through the same decoration, so it carries the security and CORS headers.
+  `exception(Type, handler)` takes an `Exception` type, so no handler sees an `Error`.
+- **The logger hears of it**, as `thrown()` or `writeFailure()`, which became a `Throwable`.
+  Left to the container, an `Error` from dispatch skipped the logger, and one from a writer was logged as a 200 that succeeded.
+- **`VirtualMachineError` is included.**
+  `StackOverflowError` is one, and the most common `Error` a handler throws; the stack has unwound by the time the servlet sees it.
+  The container would answer it with a 500 of its own anyway, only without the headers and the log.
+
+Rejected: rethrowing a `VirtualMachineError` to the container, which gives up the headers and the log for no gain.
+Rejected: `exception(...)` handlers for `Error` types, which would invite an application to recover from one.
+
+## 67 · A stream whose client stopped reading
+
+### 67. Closing an SSE stream does not wait for a blocked write
+
+A client that stops reading blocks the write in a flush until the connector gives up, which was 30 seconds on Jetty, and `close()` used to wait for it on the stream's monitor.
+
+- **The stream holds a lock `close()` only tries.**
+  A close that finds a write under way marks the stream closed, and the write closes the output on its way out.
+  The write checks the flag after unlocking, so a close cannot slip between the two.
+- **The server's stop timeout ends the blocked write**, since the drain stops waiting for the request and the connector closes its connection.
+- **`isOpen()` reads a volatile flag**, so a loop that asks it does not wait behind a write either.
+- **Tomcat's `unloadDelay` is 100ms**, since it waited two seconds more after the drain had waited the stop timeout.
+  Zero is not usable: Tomcat waits a twentieth of it at a time, and `wait(0)` never returns.
+
+Rejected: closing the servlet output from the stopping thread while another thread writes to it, which the servlet API leaves undefined.
 
 ## Rejected — decisions, with the reason
 

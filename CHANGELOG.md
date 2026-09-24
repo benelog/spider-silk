@@ -28,6 +28,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   `Guard.Error` is `Hook.StatusPage`, and `Guard.ResponseFilter` is `Hook.EveryResponse`.
 - `spider-silk-core`: `RequestCompletion.failure()` and `failed()` are `writeFailure()` and `writeFailed()`, and `exception()` is `thrown()`.
 - `spider-silk-core`: `Json.JsonValue`, `Json.JsonObject`, `Json.JsonArray`, `Json.JsonPrimitive`, and `Json.JsonException` are top-level types in `net.benelog.spidersilk.json`.
+- `spider-silk-core`: `RequestCompletion.thrown()` and `writeFailure()` are a `Throwable`, since an `Error` is reported through them too.
   `Json.obj()` and `Json.arr()` are `Json.object()` and `Json.array()`.
 - `spider-silk-core`: the `WebResponse.Stream` body is `WebResponse.Streamed`.
 - `spider-silk-core`: `app.server()`, the running server, is `app.runningServer()`.
@@ -57,6 +58,16 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 
 ### Fixed
 
+- `spider-silk-core`: `JsonValue.asLong()` and `getLong` refuse a decimal with more than 19 significant digits from its digit count.
+  A million-digit fraction, which fits in a 1MB body, used to hold the request thread for about 17 seconds before its 400.
+- `spider-silk-core`: an `Error` such as `AssertionError` or `StackOverflowError`, thrown by a handler, a filter, an exception handler, a status page, or a response writer, answers the framework's 500 with the usual headers and reaches the request logger.
+  The container used to answer it with its own page, without the security or CORS headers, and the logger heard of nothing, or of a 200 that succeeded.
+- `spider-silk-core`: `app.stop()` and the JVM shutdown hook close an SSE stream whose client stopped reading without waiting for its blocked write.
+  That write held the stop until the connector's idle timeout, about 30 seconds on Jetty and 60 on Tomcat, and it now ends with the stop timeout.
+- `spider-silk-core`: `body()`, `bodyJson()`, and `bodyNdjson(...)` answer a body that ends before its `Content-Length` with 400 instead of 500, and refuse it again on a later read.
+- `spider-silk-tomcat`: `stop()` no longer shuts down an executor passed to `executor(...)`, which refused every request after a restart.
+  It waits within the stop timeout for the requests running on it, and leaves it running.
+- `spider-silk-tomcat`: the stop no longer adds Tomcat's two-second `unloadDelay` after the drain has already waited the stop timeout.
 - `spider-silk-core`: a multipart upload the container refuses answers 413 for a size limit and 400 for a body that will not parse, through `file`, `fileOrNull`, and `files`.
   Jetty used to answer an oversized part as a missing file, null, or an empty list, and Tomcat as a 500.
 - `spider-silk-core`: `param`, `params`, and `formParam` answer a form body the container cannot parse with 400, and a multipart one as `file` does, instead of a 500.
