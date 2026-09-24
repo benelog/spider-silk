@@ -205,7 +205,7 @@ Only the parts that carry a file are counted, so the text fields of the same mul
 The limits are the servlet container's multipart configuration, set on the server: the maximum sizes, and where a large upload is buffered.
 `multipart(new MultipartConfigElement(...))` sets them on `JettyServer`, xref:tomcat.adoc[TomcatServer], and xref:undertow.adoc[UndertowServer] alike.
 The default buffers to the system temp directory with no size cap and a 1MB in-memory threshold.
-`multipart(null)` turns multipart handling off.
+`multipart(null)` turns multipart handling off, and a parameter read of a multipart request then answers from the query string alone, on every server.
 Every server also takes at most 1000 parts in one form, text fields included, and Jetty and Tomcat at most 8KB of headers per part; beyond that Jetty and Tomcat answer 413 and Undertow 400.
 
 An upload the container refuses is a failed upload, not an absent one.

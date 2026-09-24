@@ -77,6 +77,19 @@ public class AppServlet extends HttpServlet {
     /** Whether this servlet holds registration on {@link #app} closed. */
     private boolean deployed;
 
+    /**
+     * The init parameter a server sets to {@code "true"} when it registers this
+     * servlet with no multipart configuration. Tomcat and Undertow say so
+     * themselves, with a bare {@link IllegalStateException} from
+     * {@code getParts}; Jetty throws what it throws for an upload over its
+     * limits, so a parameter read of a multipart request answered 413 there.
+     * With this set, {@link WebRequest#param} reads such a request through
+     * {@code getParameter}, as it does on the other two.
+     */
+    public static final String NO_MULTIPART_PARAMETER = "net.benelog.spidersilk.noMultipart";
+
+    private boolean noMultipart;
+
     /** The application this serves. Every request is routed against it. */
     public AppServlet(App app) {
         this.app = Objects.requireNonNull(app, "app");
@@ -89,6 +102,7 @@ public class AppServlet extends HttpServlet {
     @Override
     public void init(ServletConfig config) throws ServletException {
         super.init(config);
+        noMultipart = Boolean.parseBoolean(config.getInitParameter(NO_MULTIPART_PARAMETER));
         synchronized (this) {
             if (!deployed) {
                 deployment = app.deploy();
@@ -120,6 +134,9 @@ public class AppServlet extends HttpServlet {
             req.setCharacterEncoding("UTF-8");
         }
         promoteFlash(req);
+        if (noMultipart) {
+            req.setAttribute(WebRequest.NO_MULTIPART_ATTRIBUTE, true);
+        }
 
         long startedAt = System.nanoTime();
         WebRequest arrived = new WebRequest(req, Map.of(), deployment.bodyLimits());

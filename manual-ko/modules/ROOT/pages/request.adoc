@@ -205,7 +205,7 @@ null은 파일이 없을 수 있는 모든 경우를 다룬다: 그 이름의 �
 업로드 한도는 서버에 설정하는 서블릿 컨테이너의 멀티파트 구성이다: 최대 크기와, 큰 업로드를 버퍼링할 위치.
 `multipart(new MultipartConfigElement(...))`가 `JettyServer`, xref:tomcat.adoc[TomcatServer], xref:undertow.adoc[UndertowServer]에 이 구성을 똑같이 설정한다.
 기본값은 크기 상한 없이 시스템 임시 디렉터리에 버퍼링하며, 메모리 내 임계값은 1MB다.
-`multipart(null)`은 멀티파트 처리를 끈다.
+`multipart(null)`은 멀티파트 처리를 끄며, 그러면 멀티파트 요청의 파라미터 읽기는 모든 서버에서 쿼리 문자열만으로 답한다.
 모든 서버는 또 한 폼에 텍스트 필드를 포함해 최대 1000개의 파트를 받고, Jetty와 Tomcat은 파트마다 최대 8KB의 헤더를 받으며, 이를 넘으면 Jetty와 Tomcat은 413, Undertow는 400으로 답한다.
 
 컨테이너가 거부한 업로드는 없는 업로드가 아니라 실패한 업로드다.

@@ -73,6 +73,8 @@ public final class WebRequest {
 
     static final String FLASH_ATTRIBUTE = "net.benelog.spidersilk.flash";
     static final String NEGOTIATED_ATTRIBUTE = "net.benelog.spidersilk.negotiated";
+    /** Set by {@link AppServlet} when the servlet has no multipart configuration. */
+    static final String NO_MULTIPART_ATTRIBUTE = "net.benelog.spidersilk.noMultipart";
 
     /**
      * How the body has been read so far: the text {@link #body()} read, or a
@@ -655,7 +657,10 @@ public final class WebRequest {
      * {@code getParameter} as the same {@link IllegalStateException}, and only
      * {@code getParts} tells them apart. A servlet with no multipart
      * configuration is left to {@code getParameter}, which then reads no field
-     * out of the body, as it did before.
+     * out of the body, as it did before. Jetty reports that case as it reports
+     * an upload over its limits, so {@code JettyServer} says so through
+     * {@link AppServlet#NO_MULTIPART_PARAMETER}, and {@code getParts} is not
+     * asked at all.
      *
      * <p>A form-encoded body the container will not parse — an escape that
      * will not decode, more fields or more bytes than it takes — is a 400
@@ -665,7 +670,7 @@ public final class WebRequest {
      * in a way the servlet API defines, so the status does not try to.
      */
     private <T> T formFields(Supplier<T> read) {
-        if (isMultipart()) {
+        if (isMultipart() && req.getAttribute(NO_MULTIPART_ATTRIBUTE) == null) {
             try {
                 req.getParts();
             } catch (IOException | ServletException | RuntimeException e) {

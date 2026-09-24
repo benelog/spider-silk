@@ -296,6 +296,8 @@ public final class JettyServer implements WebServer {
         holder.setInitOrder(0);
         if (multipart != null) {
             holder.getRegistration().setMultipartConfig(multipart);
+        } else {
+            holder.setInitParameter(AppServlet.NO_MULTIPART_PARAMETER, "true");
         }
         context.addServlet(holder, "/*");
 

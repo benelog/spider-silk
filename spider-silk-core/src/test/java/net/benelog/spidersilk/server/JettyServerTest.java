@@ -93,6 +93,28 @@ class JettyServerTest {
                 HttpResponse.BodyHandlers.ofString());
     }
 
+    /**
+     * With multipart turned off, a parameter read of a multipart request goes
+     * to getParameter, as on Tomcat and Undertow. Jetty reported the missing
+     * configuration the way it reports an upload over its limits, a 413.
+     */
+    @Test
+    void withMultipartOffAQueryParameterOfAMultipartRequestStillReads() throws Exception {
+        app = new App()
+                .server((a, port) -> new JettyServer(a).port(port).multipart(null))
+                .post("/up", req -> WebResponse.text(req.param("page")))
+                .start(0);
+
+        HttpResponse<String> response = client.send(HttpRequest.newBuilder(
+                        URI.create("http://localhost:" + app.port() + "/up?page=2"))
+                .header("Content-Type", "multipart/form-data; boundary=X")
+                .POST(HttpRequest.BodyPublishers.ofString(fields(1) + "--X--\r\n")).build(),
+                HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("2");
+    }
+
     private void start(App configured) {
         app = configured.start(0);
     }
