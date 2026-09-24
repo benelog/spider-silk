@@ -381,6 +381,10 @@ public final class TomcatServer implements WebServer {
      * Checking for the JDK's alone skipped the drain on the default executor,
      * and the stop fell through to Tomcat's two-second {@code unloadDelay}
      * before the request threads were interrupted.
+     *
+     * <p>Only the pool Tomcat made is shut down. One passed to
+     * {@link #executor(Executor)} belongs to the application, and is waited
+     * out without being stopped.
      */
     private void drain(@Nullable Connector connector) {
         if (connector == null || stopTimeout.isZero() || stopTimeout.isNegative()) {
@@ -388,14 +392,38 @@ public final class TomcatServer implements WebServer {
         }
         connector.pause();
         ExecutorService pool = threadPool(connector.getProtocolHandler().getExecutor());
-        if (pool != null) {
-            pool.shutdown();
-            try {
-                pool.awaitTermination(stopTimeout.toMillis(), TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+        if (pool == null) {
+            return;
         }
+        try {
+            if (executor == null) {
+                pool.shutdown();
+                pool.awaitTermination(stopTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            } else {
+                awaitIdle(pool);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    /**
+     * Waits until no thread of a pool the application passed in is running a
+     * task, or until the stop timeout. The pool is the caller's: shutting it
+     * down would refuse every request after a restart, and every other task
+     * the application runs on it, so it is watched rather than stopped.
+     */
+    private void awaitIdle(ExecutorService pool) throws InterruptedException {
+        long deadline = System.nanoTime() + stopTimeout.toNanos();
+        while (activeCount(pool) > 0 && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+        }
+    }
+
+    private static int activeCount(ExecutorService pool) {
+        return pool instanceof ThreadPoolExecutor jdk
+                ? jdk.getActiveCount()
+                : ((org.apache.tomcat.util.threads.ThreadPoolExecutor) pool).getActiveCount();
     }
 
     /**

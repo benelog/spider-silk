@@ -61,6 +61,7 @@ Everything core provides works unchanged: routing, filters, status pages, JSON, 
 
 Graceful shutdown is hand-rolled here, because Tomcat has no `stopTimeout` of its own.
 `stop()` pauses the connector and then shuts the request pool down within the timeout, which is what Spring Boot does for the same reason.
+A `ThreadPoolExecutor` passed to `executor(...)` belongs to the application, so `stop()` waits within the timeout until none of its threads runs a task, and leaves it running for a restart or for the other work on it.
 The drain therefore depends on which executor the connector runs.
 `stopTimeout(...)` only has something to wait on while the connector runs a `ThreadPoolExecutor`, which is the default but not necessarily what `executor(...)` hands it.
 With the virtual-thread executor, the drain does nothing.

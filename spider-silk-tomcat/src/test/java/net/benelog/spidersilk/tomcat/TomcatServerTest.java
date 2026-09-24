@@ -24,6 +24,8 @@ import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -665,7 +667,7 @@ class TomcatServerTest {
     /**
      * Graceful shutdown: a request already running is finished, not dropped.
      * It runs longer than Tomcat's own two-second {@code unloadDelay}, which
-     * finishes a shorter request whether the drain waits or not.
+     * would finish a shorter request whether the drain waited or not.
      */
     @Test
     void stopWaitsForARequestInFlight() throws Exception {
@@ -759,6 +761,46 @@ class TomcatServerTest {
         assertThat(base)
                 .as("the base directory should be a temporary one, but was " + base)
                 .startsWith(System.getProperty("java.io.tmpdir"));
+    }
+
+    /**
+     * An executor the application passed in is its own: the stop waits for
+     * its requests without shutting it down, so the server starts again on it,
+     * and whatever else the application runs on it keeps running.
+     */
+    @Test
+    void stopLeavesAnExecutorItWasGivenRunning() throws Exception {
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS, new LinkedBlockingQueue<>());
+        try {
+            CountDownLatch handlerEntered = new CountDownLatch(1);
+            this.app = new App()
+                    .get("/", req -> WebResponse.text("ok"))
+                    .get("/slow", req -> {
+                        handlerEntered.countDown();
+                        Thread.sleep(500);
+                        return WebResponse.text("finished");
+                    })
+                    .server((a, port) -> new TomcatServer(a).port(port).executor(pool))
+                    .start(0);
+            assertThat(get("/").statusCode()).isEqualTo(200);
+
+            String url = "http://localhost:" + app.port() + "/slow";
+            CompletableFuture<HttpResponse<String>> inFlight = client.sendAsync(
+                    HttpRequest.newBuilder(URI.create(url)).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(handlerEntered.await(2, TimeUnit.SECONDS)).as("the handler never started").isTrue();
+            app.stop();
+
+            assertThat(inFlight.get(5, TimeUnit.SECONDS).body())
+                    .as("the stop should have waited for the request on the pool")
+                    .isEqualTo("finished");
+            assertThat(pool.isShutdown()).as("the pool is the application's").isFalse();
+
+            app.start(0);
+            assertThat(get("/").statusCode()).isEqualTo(200);
+        } finally {
+            pool.shutdownNow();
+        }
     }
 
     /** The virtual-thread recipe: an executor, no API of our own. */
