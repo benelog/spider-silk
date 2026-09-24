@@ -601,9 +601,68 @@ public final class WebResponse {
         return existing + ", " + field;
     }
 
-    /** Sets Content-Disposition so the response downloads as a file. */
+    /**
+     * Sets Content-Disposition so the response downloads as a file, saved
+     * under that name.
+     *
+     * <p>A header value is ISO-8859-1 on the wire, and a quote ends the quoted
+     * name, so a name outside printable ASCII, or one holding a quote or a
+     * backslash, goes out the way RFC 6266 describes: an ASCII fallback in {@code filename}, with {@code "} and
+     * {@code \} escaped and every other character replaced by {@code _}, and
+     * the whole name in {@code filename*} as percent-encoded UTF-8. Every
+     * browser in use reads {@code filename*} first, so {@code "덱.csv"} is saved
+     * as {@code 덱.csv}.
+     *
+     * @throws IllegalArgumentException if the name holds a control character,
+     *         which no file name carries and which a header cannot
+     */
     public WebResponse attachment(String filename) {
-        return header("Content-Disposition", "attachment; filename=\"%s\"".formatted(filename));
+        return header("Content-Disposition", contentDisposition(filename));
+    }
+
+    /** The {@code attachment} value for that name: a quoted fallback, and {@code filename*} when it is needed. */
+    static String contentDisposition(String filename) {
+        Objects.requireNonNull(filename, "filename");
+        StringBuilder value = new StringBuilder("attachment; filename=\"");
+        boolean plain = true;
+        for (int i = 0; i < filename.length(); ) {
+            int c = filename.codePointAt(i);
+            i += Character.charCount(c);
+            if (c < 0x20 || c == 0x7f) {
+                throw new IllegalArgumentException(
+                        "A file name cannot hold a control character, such as a line break");
+            }
+            if (c == '"' || c == '\\') {
+                value.append('\\').append((char) c);
+                plain = false;
+            } else if (c < 0x7f) {
+                value.append((char) c);
+            } else {
+                value.append('_');
+                plain = false;
+            }
+        }
+        value.append('"');
+        if (!plain) {
+            value.append("; filename*=UTF-8''");
+            for (byte b : filename.getBytes(StandardCharsets.UTF_8)) {
+                int octet = b & 0xff;
+                if (isAttrChar(octet)) {
+                    value.append((char) octet);
+                } else {
+                    value.append('%').append(HEX[octet >> 4]).append(HEX[octet & 0xf]);
+                }
+            }
+        }
+        return value.toString();
+    }
+
+    private static final char[] HEX = "0123456789ABCDEF".toCharArray();
+
+    /** RFC 5987's attr-char: what goes into {@code filename*} as itself rather than percent-encoded. */
+    private static boolean isAttrChar(int c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+                || "!#$&+-.^_`|~".indexOf(c) >= 0;
     }
 
     /**

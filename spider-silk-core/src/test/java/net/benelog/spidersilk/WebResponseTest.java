@@ -17,6 +17,36 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class WebResponseTest {
 
     @Test
+    void aPlainAsciiFileNameIsQuotedAsItIs() {
+        assertThat(WebResponse.empty().attachment("deck.csv").header("Content-Disposition"))
+                .isEqualTo("attachment; filename=\"deck.csv\"");
+    }
+
+    /**
+     * A name a quoted string cannot carry as it is gets an ASCII fallback and
+     * RFC 6266's {@code filename*}, which every browser in use reads first.
+     */
+    @Test
+    void aFileNameOutsidePlainAsciiAlsoGoesOutAsFilenameStar() {
+        assertThat(WebResponse.empty().attachment("덱 \"final\".csv").header("Content-Disposition"))
+                .isEqualTo("attachment; filename=\"_ \\\"final\\\".csv\";"
+                        + " filename*=UTF-8''%EB%8D%B1%20%22final%22.csv");
+        assertThat(WebResponse.empty().attachment("a\\b.txt").header("Content-Disposition"))
+                .isEqualTo("attachment; filename=\"a\\\\b.txt\"; filename*=UTF-8''a%5Cb.txt");
+        assertThat(WebResponse.empty().attachment("😀.png").header("Content-Disposition"))
+                .as("one character outside the BMP is one fallback character")
+                .isEqualTo("attachment; filename=\"_.png\"; filename*=UTF-8''%F0%9F%98%80.png");
+    }
+
+    @Test
+    void aControlCharacterInAFileNameIsRefused() {
+        assertThatThrownBy(() -> WebResponse.empty().attachment("deck.csv\r\nSet-Cookie: x=1"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> WebResponse.empty().attachment("a\tb.csv"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void aTemplateWithNothingToPassInNeedsNoModel() {
         WebResponse response = WebResponse.template("about");
 
