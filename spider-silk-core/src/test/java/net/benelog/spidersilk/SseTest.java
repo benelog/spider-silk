@@ -54,6 +54,36 @@ class SseTest {
         });
     }
 
+    /**
+     * An id or an event name is one field line, so a line break in either
+     * would write fields the handler never did. It is refused before anything
+     * is written, and the stream goes on.
+     */
+    @Test
+    void aLineBreakInAnIdOrAnEventNameIsRefusedAndWritesNothing() {
+        List<String> refused = new ArrayList<>();
+        App app = new App().get("/events", req -> WebResponse.sse(stream -> {
+            List<Runnable> attempts = List.of(
+                    () -> stream.id("7\ndata: injected"),
+                    () -> stream.id("7\r"),
+                    () -> stream.id("7\0"),
+                    () -> stream.send("tick\ndata: injected", "real"));
+            for (Runnable attempt : attempts) {
+                try {
+                    attempt.run();
+                } catch (IllegalArgumentException e) {
+                    refused.add(e.getMessage());
+                }
+            }
+            stream.send("tick", "real");
+        }));
+
+        WebTest.test(app, client ->
+                assertThat(client.get("/events").body()).isEqualTo("event: tick\ndata: real\n\n"));
+
+        assertThat(refused).hasSize(4);
+    }
+
     /** The reconnection delay is a stream-level setting, so it goes out on its own. */
     @Test
     void retryWritesTheReconnectionDelayInMilliseconds() {

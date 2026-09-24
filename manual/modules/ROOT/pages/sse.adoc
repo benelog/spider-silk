@@ -26,6 +26,7 @@ data: {"count":12}
 
 `send(data)` sends an unnamed event, `send(event, data)` a named one, `id(...)` labels the event that follows so the browser can resume with `Last-Event-ID`, `retry(...)` sets the reconnection delay, and `comment(text)` sends a heartbeat no listener sees.
 Data spanning several lines becomes one `data:` line each, which the client joins back together.
+An id or an event name has no such form, so a line break in either throws `IllegalArgumentException`, and so does a NUL in an id.
 
 == Reconnection
 

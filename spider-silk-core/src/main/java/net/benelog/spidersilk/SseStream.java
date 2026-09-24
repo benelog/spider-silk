@@ -60,9 +60,18 @@ public final class SseStream {
      * The {@code id} of the next event, which the browser sends back as
      * {@code Last-Event-ID} when it reconnects. It applies to the next event
      * only, the way the protocol defines it.
+     *
+     * @throws IllegalArgumentException if the id holds a line break, which
+     *         would end the field and start another the handler never wrote,
+     *         or a NUL, for which a browser drops the id
      */
     public synchronized SseStream id(String id) {
-        this.nextId = Objects.requireNonNull(id, "id");
+        Objects.requireNonNull(id, "id");
+        requireOneLine("An event id", id);
+        if (id.indexOf('\0') >= 0) {
+            throw new IllegalArgumentException("An event id cannot hold a NUL: a browser ignores such an id");
+        }
+        this.nextId = id;
         return this;
     }
 
@@ -102,8 +111,14 @@ public final class SseStream {
      * Sends a named event, which arrives at the listener registered for that
      * name. Data spanning several lines is sent as one {@code data:} line each,
      * which the client joins back together with newlines.
+     *
+     * @throws IllegalArgumentException if the event name holds a line break,
+     *         which would end the field and start another; nothing is written
      */
     public synchronized SseStream send(@Nullable String event, String data) {
+        if (event != null) {
+            requireOneLine("An event name", event);
+        }
         StringBuilder frame = new StringBuilder();
         if (nextId != null) {
             frame.append("id: ").append(nextId).append('\n');
@@ -147,6 +162,17 @@ public final class SseStream {
             out.close();
         } catch (IOException e) {
             // The client is already gone. There is nothing left to report it to.
+        }
+    }
+
+    /**
+     * Refuses a value that has to fit on one field line. Data is split across
+     * lines instead, but an id or an event name has no such form, and a CR or
+     * an LF inside one would let text from anywhere write fields of its own.
+     */
+    private static void requireOneLine(String what, String value) {
+        if (value.indexOf('\n') >= 0 || value.indexOf('\r') >= 0) {
+            throw new IllegalArgumentException(what + " cannot hold a line break: it is one field line");
         }
     }
 
