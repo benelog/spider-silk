@@ -10,6 +10,8 @@ Inserts are the exception: `SimpleJdbcInsert` reads the table metadata and retur
 `SmartDeckRepository` still spells its parameters out, because its `SmartCondition` enum has to reach the driver as `name()` rather than as an enum.
 Row mapping goes through `DataClassRowMapper`.
 The reflection that `DataClassRowMapper` and `SimplePropertySqlParameterSource` need under a xref:native-image.adoc[native image] comes from a config the build generates from the domain package.
+`FlashcardDatabase` creates the H2 `DataSource` and applies `schema.sql` to it before handing it out.
+Its `file()` serves the running app, and its `inMemory()` gives each test a database of its own.
 
 DI::
 There is no container.
@@ -51,7 +53,7 @@ gradle :example-flashcard:run --args=--dev   # hot-reloads edited .jte files
 ----
 
 The two commands are xref:templates.adoc[jte's production and development modes]: the first renders the template classes the build compiled, the second recompiles a template whose file changed on its next render.
-The database is an H2 file (`~/db/spider-silk/flashcard`), so data survives restarts.
+The database is the H2 file `FlashcardDatabase.file()` opens (`~/db/spider-silk/flashcard`), so data survives restarts.
 
 `gradle :example-flashcard:nativeCompile` builds the same app as a xref:native-image.adoc[GraalVM native image].
 
@@ -62,5 +64,5 @@ The database is an H2 file (`~/db/spider-silk/flashcard`), so data survives rest
 gradle test
 ----
 
-Repository and service tests run against in-memory H2 without mocking.
+Repository and service tests run against the in-memory H2 that `FlashcardDatabase.inMemory()` creates, without mocking.
 The rollback test in `DeckServiceTest` shows the `TransactionTemplate` boundary actually working.

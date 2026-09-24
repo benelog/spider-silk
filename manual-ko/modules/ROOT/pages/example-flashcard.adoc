@@ -10,6 +10,8 @@ insert는 예외다: `SimpleJdbcInsert`가 테이블 메타데이터를 읽고 �
 `SmartDeckRepository`는 여전히 파라미터를 하나하나 적는데, 이 리포지토리의 `SmartCondition` enum이 enum이 아니라 `name()`으로 드라이버에 도달해야 하기 때문이다.
 행 매핑은 `DataClassRowMapper`를 거친다.
 `DataClassRowMapper`와 `SimplePropertySqlParameterSource`가 xref:native-image.adoc[네이티브 이미지]에서 필요로 하는 리플렉션 설정은 빌드가 도메인 패키지에서 생성한다.
+`FlashcardDatabase`는 H2 `DataSource`를 만들고, 내주기 전에 `schema.sql`을 적용한다.
+`file()`은 실행되는 앱에 쓰이고, `inMemory()`는 테스트마다 따로 쓸 데이터베이스를 준다.
 
 DI::
 컨테이너는 없다.
@@ -51,7 +53,7 @@ gradle :example-flashcard:run --args=--dev   # hot-reloads edited .jte files
 ----
 
 두 명령은 xref:templates.adoc[jte의 프로덕션 모드와 개발 모드]다: 첫 번째는 빌드가 컴파일한 템플릿 클래스를 렌더링하고, 두 번째는 파일이 바뀐 템플릿을 다음 렌더링 때 다시 컴파일한다.
-데이터베이스는 H2 파일(`~/db/spider-silk/flashcard`)이므로 데이터가 재시작 후에도 남는다.
+데이터베이스는 `FlashcardDatabase.file()`이 여는 H2 파일(`~/db/spider-silk/flashcard`)이므로 데이터가 재시작 후에도 남는다.
 
 `gradle :example-flashcard:nativeCompile`은 같은 앱을 xref:native-image.adoc[GraalVM 네이티브 이미지]로 빌드한다.
 
@@ -62,5 +64,5 @@ gradle :example-flashcard:run --args=--dev   # hot-reloads edited .jte files
 gradle test
 ----
 
-리포지토리와 서비스 테스트는 목 없이 인메모리 H2에 대해 실행된다.
+리포지토리와 서비스 테스트는 목 없이 `FlashcardDatabase.inMemory()`가 만드는 인메모리 H2에 대해 실행된다.
 `DeckServiceTest`의 롤백 테스트는 `TransactionTemplate` 경계가 실제로 동작하는 것을 보여 준다.
