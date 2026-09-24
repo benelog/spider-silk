@@ -1,6 +1,7 @@
 package net.benelog.spidersilk.json;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -498,6 +499,33 @@ class JsonTest {
                 .hasMessageContaining("Not a JSON integer: " + text);
         assertThatThrownBy(() -> Json.parse("{\"n\":" + text + "}").asObject().getLong("n", 0))
                 .isInstanceOf(JsonException.class);
+    }
+
+    /**
+     * A mantissa of a million digits fits in a 1MB body. It is refused from
+     * its digit count, where converting it to a BigDecimal took seconds.
+     */
+    @Test
+    @Timeout(2)
+    void asLongRefusesALongMantissaWithoutConvertingIt() {
+        String fraction = "1." + "3".repeat(1_000_000);
+        assertThatThrownBy(() -> Json.parse(fraction).asLong())
+                .isInstanceOf(JsonException.class)
+                .hasMessageStartingWith("Not a JSON integer: 1.333");
+        String whole = "4" + "7".repeat(999_999) + ".0";
+        assertThatThrownBy(() -> Json.parse(whole).asLong())
+                .isInstanceOf(JsonException.class);
+    }
+
+    /** Zeros around the significant digits cost nothing, however many there are. */
+    @Test
+    @Timeout(2)
+    void asLongReadsAWholeNumberAmongManyZeros() {
+        assertThat(Json.parse("1." + "0".repeat(1_000_000)).asLong()).isEqualTo(1L);
+        assertThat(Json.parse("0." + "0".repeat(999_990) + "5e999991").asLong())
+                .isEqualTo(5L);
+        assertThat(Json.parse("-12" + "0".repeat(17) + ".000").asLong())
+                .isEqualTo(-1_200_000_000_000_000_000L);
     }
 
     /** asDouble stays the nearest double, and a decimal serializes as it did before. */

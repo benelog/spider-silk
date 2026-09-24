@@ -1,6 +1,7 @@
 package net.benelog.spidersilk.json;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 
 /**
  * A parsed number written with a fraction or an exponent. It reads as the
@@ -30,36 +31,63 @@ final class JsonDecimal extends Number {
      * The number as a {@code long}, converted from the text rather than from
      * the double. Throws {@link ArithmeticException} when the text has a
      * fractional part or lies outside the range of a {@code long}.
+     *
+     * <p>The answer is worked out from the significant digits before anything
+     * is converted. A {@code long} has at most 19 of them, so a mantissa with
+     * more is refused without a {@link BigDecimal}, whose cost grows with the
+     * square of the digits: a million-digit fraction in a body would otherwise
+     * hold the thread for seconds. What is converted is then at most 19 digits,
+     * whatever zeros surrounded them in the text.
      */
     long exactLong() {
-        BigDecimal decimal;
-        try {
-            decimal = new BigDecimal(text);
-        } catch (NumberFormatException e) {
-            // Only an exponent past the range of an int reaches here. A large
-            // one on a nonzero mantissa was already rejected as out of range,
-            // so the number is either zero or a fraction too small to write.
-            if (value == 0.0 && zeroMantissa()) {
-                return 0L;
-            }
-            throw new ArithmeticException("Not an integer: " + text);
+        int exponentAt = Math.max(text.indexOf('e'), text.indexOf('E'));
+        String mantissa = exponentAt < 0 ? text : text.substring(0, exponentAt);
+        boolean negative = mantissa.startsWith("-");
+        int point = mantissa.indexOf('.');
+        String digits = point < 0
+                ? mantissa.substring(negative ? 1 : 0)
+                : mantissa.substring(negative ? 1 : 0, point) + mantissa.substring(point + 1);
+        long scale = point < 0 ? 0 : mantissa.length() - point - 1;
+
+        int end = digits.length();
+        while (end > 0 && digits.charAt(end - 1) == '0') {
+            end--;
+            scale--;
         }
-        // longValueExact rejects a fraction and an overflow before it scales,
-        // so an exponent such as 1e-999999999 costs nothing to refuse.
-        return decimal.longValueExact();
+        int start = 0;
+        while (start < end && digits.charAt(start) == '0') {
+            start++;
+        }
+        if (start == end) {
+            return 0L;
+        }
+        if (end - start > 19) {
+            throw notAnInteger();
+        }
+
+        if (exponentAt >= 0) {
+            String exponent = text.substring(exponentAt + 1);
+            boolean negativeExponent = exponent.startsWith("-");
+            String magnitude = exponent.replaceFirst("^[+-]", "").replaceFirst("^0+(?=.)", "");
+            if (magnitude.length() > 18) {
+                // A nonzero mantissa this far from the point is a fraction
+                // below any long, or a whole number beyond one.
+                throw notAnInteger();
+            }
+            long shift = Long.parseLong(magnitude);
+            scale += negativeExponent ? shift : -shift;
+        }
+        // The last digit is nonzero, so a positive scale leaves a fraction, and
+        // nineteen or more places to the left make it 10^19 or more.
+        if (scale > 0 || scale < -18) {
+            throw notAnInteger();
+        }
+        BigInteger unscaled = new BigInteger(digits.substring(start, end));
+        return new BigDecimal(negative ? unscaled.negate() : unscaled, (int) scale).longValueExact();
     }
 
-    private boolean zeroMantissa() {
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c == 'e' || c == 'E') {
-                return true;
-            }
-            if (c >= '1' && c <= '9') {
-                return false;
-            }
-        }
-        return true;
+    private ArithmeticException notAnInteger() {
+        return new ArithmeticException("Not an integer: " + text);
     }
 
     @Override
