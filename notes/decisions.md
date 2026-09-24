@@ -1199,12 +1199,18 @@ The request carried the fault, so the answer names the client's side, whichever 
   - Anything else from `getParts` is a body that will not parse, and answers 400.
 - **A bare `IllegalStateException` stays a 500.**
   Tomcat and Undertow throw it, with no cause and before reading anything, for a servlet with no multipart configuration, which is the deployment's fault.
-  Jetty wraps that case like a size refusal, so there it answers 413 with Jetty's message.
+  Jetty wraps that case like a size refusal, so there `file(name)` answers 413 with Jetty's message.
+  The parameter reads skip `getParts` instead when the servlet init parameter `AppServlet.NO_MULTIPART_PARAMETER` says there is no configuration, which `JettyServer.multipart(null)` sets.
+- **Undertow's part count is a 400.**
+  It refuses a form of more than 1000 parts with a `RuntimeException` around its own checked exception, with no `IllegalStateException` on the chain.
+- **Every server takes the same form**: 1000 parts, and 8KB of headers per part on Jetty and Tomcat.
+  `TomcatServer` sets them, since Tomcat's own 50 parts and 512 bytes refused an ordinary form.
 - **The parameter reads go through `getParts` first on a multipart form.**
   Tomcat and Undertow report both failures through `getParameter` as the same `IllegalStateException`, and only `getParts` tells them apart.
 - **A form-encoded body the container refuses is a 400 with the container's reason.**
   The servlet API defines no size signal for one, so a form over the container's limit is a 400 too.
 - **A charset the JVM cannot decode is a 415**, settled before a byte is read.
+- **A query string whose escapes are not UTF-8 is a 400**, from `queryParam`, `param`, and `formParam` alike, where `URLDecoder` put U+FFFD in its place.
 - **A body cut short is a 400.**
   An `IOException` while `body()` or `bodyNdjson` reads is a client that sent less than its `Content-Length` or a connection that failed.
   The body then stays refused, as one refused for size does, so a second read cannot answer what was left of it.

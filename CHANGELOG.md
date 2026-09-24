@@ -12,6 +12,8 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 
 ### Added
 
+- `spider-silk-core`: `AppServlet.NO_MULTIPART_PARAMETER`, the servlet init parameter a server sets when it registers the servlet with no multipart configuration.
+  `JettyServer.multipart(null)` sets it, and a parameter read of a multipart request then answers from the query string, as on Tomcat and Undertow.
 - `spider-silk-core`: `req.session()` answers a `WebSession`, with `get(key)`, `get(key, type)`, `set(key, value)`, `remove(key)`, and `invalidate()`.
   Asking for it starts no session.
 - `spider-silk-core`: `JsonObject.getString(key, default)`, `getLong(key, default)`, `getDouble(key, default)`, `getBoolean(key, default)`, `getObjectOrNull(key)`, and `getArrayOrNull(key)`.
@@ -58,6 +60,17 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 
 ### Fixed
 
+- `spider-silk-core`: a query string whose escapes are not UTF-8, such as `?a=%FF`, answers 400 from `queryParam`, `param`, and `formParam` on every server.
+  `queryParam` answered U+FFFD, and `param` a 400 blaming a form body on Jetty and Tomcat and U+FFFD on Undertow.
+- `spider-silk-core`: `paramLong` and `pathParamLong` take an optional sign and ASCII digits only, where full-width and other digits read as numbers.
+- `spider-silk-core`: `file(name)` and `fileOrNull(name)` find the first file past an empty file input of the same name, as `files(name)` does.
+- `spider-silk-core`: a status page that throws is reported as `completion.thrown()`, where its 500 reported nothing thrown.
+- `spider-silk-core`: under `app.gzip()`, a 304 carries the `Vary` and the weak `ETag` the compressed 200 carried.
+- `spider-silk-core`: `JsonReader.list` holds the nulls its element reader answers, where `List.copyOf` threw and answered 500; `JsonReader` takes a nullable type argument.
+- `spider-silk-tomcat`: a multipart form may carry 1000 parts and 8KB of headers per part, as on Jetty, where Tomcat's own 50 parts and 512 bytes answered 413.
+- `spider-silk-undertow`: a path with an encoded slash answers 400, as on Jetty and Tomcat, where `%2F` reached a path variable undecoded.
+- `spider-silk-undertow`: a multipart form over Undertow's 1000 parts answers 400 instead of 500.
+- `spider-silk-test`: `TestRequest` reports the charset its `Content-Type` declares, so a body in an unknown charset answers 415 as on a server, and parses a `Cookie` header into cookies.
 - `spider-silk-core`: `redirect(location)` percent-encodes as UTF-8 each character a header cannot carry, anything outside ASCII, a space, or a control character.
   Jetty replaced such a character with a space, Undertow kept its low byte, and Tomcat sent the 302 with no `Location`.
 - `spider-silk-core`: `cookie(...)` throws `IllegalArgumentException` for a value RFC 6265 does not allow, inside the handler.
