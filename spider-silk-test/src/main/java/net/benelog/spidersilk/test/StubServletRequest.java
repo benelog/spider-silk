@@ -4,7 +4,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.io.UnsupportedEncodingException;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.time.ZonedDateTime;
@@ -73,6 +73,9 @@ final class StubServletRequest implements HttpServletRequest {
     private final boolean multipart;
     private final byte[] body;
 
+    /** The charset the Content-Type declared, or one set since; null when neither said one. */
+    private @Nullable String characterEncoding;
+
     private final Map<String, Object> attributes = new LinkedHashMap<>();
     private @Nullable HttpSession session;
     private boolean secure;
@@ -97,8 +100,46 @@ final class StubServletRequest implements HttpServletRequest {
         this.cookies = cookies;
         this.parts = parts;
         this.multipart = multipart;
-        this.body = body.getBytes(StandardCharsets.UTF_8);
+        this.characterEncoding = declaredCharset(headers);
+        this.body = body.getBytes(knownOrUtf8(characterEncoding));
         this.session = session;
+    }
+
+    /**
+     * The {@code charset} parameter of the Content-Type, as a container reads
+     * it: the stub answered UTF-8 whatever was declared, so a test passed that
+     * the same request to a server answered 415, and a handler reading
+     * {@code getCharacterEncoding()} saw a charset the request never named.
+     */
+    private static @Nullable String declaredCharset(Map<String, List<String>> headers) {
+        for (Map.Entry<String, List<String>> header : headers.entrySet()) {
+            if (!header.getKey().equalsIgnoreCase("Content-Type") || header.getValue().isEmpty()) {
+                continue;
+            }
+            for (String parameter : header.getValue().get(0).split(";", -1)) {
+                String trimmed = parameter.trim();
+                if (trimmed.regionMatches(true, 0, "charset=", 0, 8)) {
+                    String value = trimmed.substring(8).trim();
+                    return value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")
+                            ? value.substring(1, value.length() - 1)
+                            : value;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The charset a string body is encoded in: the declared one when the JVM
+     * knows it, so the bytes are what the header says, and UTF-8 otherwise,
+     * which the read then refuses as a server would, over the header.
+     */
+    private static Charset knownOrUtf8(@Nullable String charset) {
+        try {
+            return charset != null && Charset.isSupported(charset) ? Charset.forName(charset) : StandardCharsets.UTF_8;
+        } catch (IllegalArgumentException e) {
+            return StandardCharsets.UTF_8;
+        }
     }
 
     // ---- What the request is ----
@@ -182,15 +223,13 @@ final class StubServletRequest implements HttpServletRequest {
     }
 
     @Override
-    public String getCharacterEncoding() {
-        return StandardCharsets.UTF_8.name();
+    public @Nullable String getCharacterEncoding() {
+        return characterEncoding;
     }
 
     @Override
-    public void setCharacterEncoding(String encoding) throws UnsupportedEncodingException {
-        if (!StandardCharsets.UTF_8.name().equalsIgnoreCase(encoding)) {
-            throw new UnsupportedEncodingException("This request is UTF-8: " + encoding);
-        }
+    public void setCharacterEncoding(String encoding) {
+        this.characterEncoding = encoding;
     }
 
     // ---- Parameters ----
@@ -277,7 +316,7 @@ final class StubServletRequest implements HttpServletRequest {
         }
         if (reader == null) {
             reader = new BufferedReader(new InputStreamReader(
-                    new ByteArrayInputStream(unread()), StandardCharsets.UTF_8));
+                    new ByteArrayInputStream(unread()), knownOrUtf8(characterEncoding)));
         }
         return reader;
     }

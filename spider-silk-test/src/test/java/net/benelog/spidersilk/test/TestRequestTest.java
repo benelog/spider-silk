@@ -438,4 +438,27 @@ class TestRequestTest {
     /** The body of a request, as the application would declare it. */
     private record NewDeck(String name) {
     }
+
+    /**
+     * The stub answered UTF-8 whatever the Content-Type said, so a body in a
+     * charset the JVM does not know read fine here and was a 415 on a server,
+     * and a declared ISO-8859-1 was reported as UTF-8.
+     */
+    @Test
+    void theDeclaredCharsetIsTheRequestsCharset() throws Exception {
+        WebRequest unknown = TestRequest.post("/x").header("Content-Type", "text/plain; charset=nope")
+                .body("hi").build();
+        assertThatExceptionOfType(HttpException.class)
+                .isThrownBy(unknown::body)
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE));
+
+        WebRequest latin = TestRequest.post("/x").header("Content-Type", "text/plain; charset=\"ISO-8859-1\"")
+                .body("café").build();
+        assertThat(latin.raw().getCharacterEncoding()).isEqualTo("ISO-8859-1");
+        assertThat(latin.body()).isEqualTo("café");
+
+        WebRequest none = TestRequest.post("/x").body("한").build();
+        assertThat(none.raw().getCharacterEncoding()).isNull();
+        assertThat(none.body()).isEqualTo("한");
+    }
 }
