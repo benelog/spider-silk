@@ -568,13 +568,17 @@ class TomcatServerTest {
                 .isEqualTo("");
     }
 
-    /** Graceful shutdown: a request already running is finished, not dropped. */
+    /**
+     * Graceful shutdown: a request already running is finished, not dropped.
+     * It runs longer than Tomcat's own two-second {@code unloadDelay}, which
+     * finishes a shorter request whether the drain waits or not.
+     */
     @Test
     void stopWaitsForARequestInFlight() throws Exception {
         CountDownLatch handlerEntered = new CountDownLatch(1);
         startOnTomcat(new App().get("/slow", req -> {
             handlerEntered.countDown();
-            Thread.sleep(300);
+            Thread.sleep(2_500);
             return WebResponse.text("finished");
         }));
 

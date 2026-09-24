@@ -12,6 +12,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -367,13 +368,20 @@ public final class TomcatServer implements WebServer {
      * running keep their threads, and shutting the pool down then waits for
      * exactly those to finish. Idle keep-alive connections hold no thread, so
      * they do not delay this.
+     *
+     * <p>Tomcat's own pool is {@code org.apache.tomcat.util.threads.ThreadPoolExecutor},
+     * a copy of the JDK's that does not extend it, so both are named here.
+     * Checking for the JDK's alone skipped the drain on the default executor,
+     * and the stop fell through to Tomcat's two-second {@code unloadDelay}
+     * before the request threads were interrupted.
      */
     private void drain(@Nullable Connector connector) {
         if (connector == null || stopTimeout.isZero() || stopTimeout.isNegative()) {
             return;
         }
         connector.pause();
-        if (connector.getProtocolHandler().getExecutor() instanceof ThreadPoolExecutor pool) {
+        ExecutorService pool = threadPool(connector.getProtocolHandler().getExecutor());
+        if (pool != null) {
             pool.shutdown();
             try {
                 pool.awaitTermination(stopTimeout.toMillis(), TimeUnit.MILLISECONDS);
@@ -381,6 +389,18 @@ public final class TomcatServer implements WebServer {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    /**
+     * The executor as a pool whose threads the drain can wait out: Tomcat's own
+     * or the JDK's thread pool. Null for anything else, such as the
+     * virtual-thread executor, which has no threads of its own to wait for.
+     */
+    private static @Nullable ExecutorService threadPool(@Nullable Executor executor) {
+        return executor instanceof ThreadPoolExecutor
+                || executor instanceof org.apache.tomcat.util.threads.ThreadPoolExecutor
+                ? (ExecutorService) executor
+                : null;
     }
 
     /**
