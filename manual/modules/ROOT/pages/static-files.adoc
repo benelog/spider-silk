@@ -3,6 +3,11 @@
 
 An `App` serves `classpath:/public/*` at the root without being asked to, and `staticFiles("/assets")` names a different directory.
 Every response carries an `ETag` and `Last-Modified` derived from the resource, so a reload comes back as a bodyless 304 instead of the file again.
+A modification time before 2000 is a stamp that a reproducible build puts on every file alike.
+Jib, for one, stamps every file of an image with 1970-01-01T00:00:01Z.
+Such a file is tagged by a CRC-32 of its content instead, and carries no `Last-Modified`.
+The content is read for that tag once per version of the file.
+A one-character edit that leaves the length unchanged therefore still reaches the browser in the next release.
 The default `Cache-Control: no-cache` means "cache it, but check with me first", which is right for a file whose name stays the same when its content changes.
 For a fingerprinted name, set a long `maxAge`:
 
@@ -21,6 +26,7 @@ A static file bypasses `beforeRoute` and `afterRoute`, since no route matched.
 A xref:filters-and-errors.adoc#response-filters[response filter] does run on a static file, as do CORS, compression, and the security headers.
 The file is opened only when its body is written, so a filter may replace the response or throw without leaving the file open.
 A HEAD and a 304 likewise open nothing, whether the file sits in a directory, on an exploded classpath, or inside a jar.
+The first request for a file with a stamped time is the one exception: it reads the file once to work out the tag.
 
 == A directory on disk
 

@@ -158,7 +158,7 @@ Any other engine is one lambda: `app.templates((template, model, out) -> mustach
 ## Static files
 
 `classpath:/public/*` is served at the root without being asked; routes are matched first, so a route can shadow a file.
-Every answer carries `ETag` and `Last-Modified` (reloads come back 304), with `Cache-Control: no-cache` by default.
+Every answer carries `ETag` and `Last-Modified` (reloads come back 304), with `Cache-Control: no-cache` by default. A file whose modification time is a build's stamp (before 2000, such as Jib's 1970-01-01T00:00:01Z) is tagged by a CRC-32 of its content and carries no `Last-Modified`.
 
 ```java
 app.staticFiles("/assets");                             // a different classpath root

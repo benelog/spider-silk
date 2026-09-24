@@ -17,10 +17,12 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
+import java.util.zip.CRC32;
 import java.util.zip.GZIPInputStream;
 
 import org.junit.jupiter.api.Assumptions;
@@ -187,6 +189,32 @@ class StaticFilesReleaseTest {
 
                 assertThat(client.get("/sub").statusCode()).isEqualTo(404);
                 assertThat(client.get("/nothing.css").statusCode()).isEqualTo(404);
+            });
+        }
+    }
+
+    /**
+     * A jar in an image carries the image's stamp, so a packaged file is tagged
+     * by the CRC-32 the jar already holds for the entry, and the jar is not read
+     * again for it.
+     */
+    @Test
+    void aStampedJarTagsAFileByTheEntrysChecksum(@TempDir Path dir) throws IOException {
+        Path jar = packagedAssets(dir);
+        Files.setLastModifiedTime(jar, FileTime.fromMillis(1_000));
+        CRC32 crc = new CRC32();
+        crc.update(CSS.getBytes(StandardCharsets.UTF_8));
+        String expectedEtag = "\"" + Long.toHexString(crc.getValue())
+                + "-" + Long.toHexString(CSS.length()) + "\"";
+
+        try (URLClassLoader loader = loaderOf(jar)) {
+            WebTest.test(new App().staticFiles(packaged(loader)), client -> {
+                HttpResponse<String> get = client.get("/packaged.css");
+                assertThat(get.body()).isEqualTo(CSS);
+                assertThat(get.headers().firstValue("ETag")).hasValue(expectedEtag);
+                assertThat(get.headers().firstValue("Last-Modified")).isEmpty();
+                assertThat(notModified(client, "/packaged.css", expectedEtag).statusCode())
+                        .isEqualTo(304);
             });
         }
     }

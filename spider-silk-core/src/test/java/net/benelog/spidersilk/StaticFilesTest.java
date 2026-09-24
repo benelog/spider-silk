@@ -285,6 +285,81 @@ class StaticFilesTest {
         });
     }
 
+    // ---- a modification time a reproducible build stamped ----
+
+    /** What Jib stamps on every file of an image: 1970-01-01T00:00:01Z. */
+    private static final FileTime JIB_STAMP = FileTime.fromMillis(1_000);
+
+    /**
+     * Two releases of an image give a file the same stamp, and a one-character
+     * edit leaves its length alone, so the tag the first release handed out
+     * must not match the second release's file.
+     */
+    @Test
+    void aStampedFileIsTaggedByItsContentAcrossReleases(@TempDir Path root) throws IOException {
+        Path css = root.resolve("style.css");
+        Files.writeString(css, "body{color:#ff0000}");
+        Files.setLastModifiedTime(css, JIB_STAMP);
+        String[] first = new String[1];
+        WebTest.test(new App().staticFiles(StaticFiles.directory(root)), client -> {
+            HttpResponse<String> response = client.get("/style.css");
+            first[0] = response.headers().firstValue("ETag").orElseThrow();
+            assertThat(response.headers().firstValue("Last-Modified"))
+                    .as("a stamp is not a time a write left")
+                    .isEmpty();
+        });
+
+        Files.writeString(css, "body{color:#00ff00}");
+        Files.setLastModifiedTime(css, JIB_STAMP);
+        WebTest.test(new App().staticFiles(StaticFiles.directory(root)), client -> {
+            HttpResponse<String> response = client.send(request -> request
+                    .uri(URI.create(client.url("/style.css")))
+                    .header("If-None-Match", first[0])
+                    .GET());
+
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("body{color:#00ff00}");
+            assertThat(response.headers().firstValue("ETag")).isPresent().get().isNotEqualTo(first[0]);
+        });
+    }
+
+    @Test
+    void aStampedFileStillRevalidatesToNotModified(@TempDir Path root) throws IOException {
+        Path css = root.resolve("style.css");
+        Files.writeString(css, CSS);
+        Files.setLastModifiedTime(css, JIB_STAMP);
+
+        WebTest.test(new App().staticFiles(StaticFiles.directory(root)), client -> {
+            String etag = client.get("/style.css").headers().firstValue("ETag").orElseThrow();
+
+            HttpResponse<String> response = client.send(request -> request
+                    .uri(URI.create(client.url("/style.css")))
+                    .header("If-None-Match", etag)
+                    .GET());
+
+            assertThat(response.statusCode()).isEqualTo(304);
+            assertThat(response.body()).isEmpty();
+        });
+    }
+
+    /** A stamp is earlier than any date a client sends, so comparing against it answers 304 for anything. */
+    @Test
+    void anIfModifiedSinceIsNotComparedWithAStamp(@TempDir Path root) throws IOException {
+        Path css = root.resolve("style.css");
+        Files.writeString(css, CSS);
+        Files.setLastModifiedTime(css, JIB_STAMP);
+
+        WebTest.test(new App().staticFiles(StaticFiles.directory(root)), client -> {
+            HttpResponse<String> response = client.send(request -> request
+                    .uri(URI.create(client.url("/style.css")))
+                    .header("If-Modified-Since", "Tue, 01 Jan 2019 00:00:00 GMT")
+                    .GET());
+
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo(CSS);
+        });
+    }
+
     @Test
     void nestedFilesInADirectoryAreServedAndTheDirectoryItselfIsNot(@TempDir Path root)
             throws IOException {

@@ -16,9 +16,12 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.jar.JarEntry;
+import java.util.zip.CRC32;
 
 import jakarta.servlet.http.HttpServletRequest;
 
@@ -45,7 +48,11 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Every response carries an {@code ETag} and {@code Last-Modified} derived
  * from the resource itself, so a conditional request comes back as a bodyless
- * 304. The default {@code Cache-Control} is {@code no-cache}, which means
+ * 304. A file whose modification time a reproducible build stamped — Jib
+ * stamps every file in an image with the same one — gets a tag derived from
+ * its content instead, and no {@code Last-Modified}, since that time would
+ * call a changed file unchanged. The default {@code Cache-Control} is
+ * {@code no-cache}, which means
  * "cache it, but check with me first" — correct for files whose name never
  * changes. {@link #maxAge(Duration)} is for the other kind, where the name
  * carries a content hash and the file at that name can never change.
@@ -71,6 +78,15 @@ public final class StaticFiles {
             DateTimeFormatter.ofPattern("EEE, dd MMM yyyy HH:mm:ss 'GMT'", Locale.US);
 
     /**
+     * The earliest modification time taken to be one a write left. Before it,
+     * the time is a stamp a reproducible build put on every file alike: Jib and
+     * Nix stamp 1970-01-01T00:00:01Z, Cloud Native Buildpacks
+     * 1980-01-01T00:00:01Z, and a zip entry holds nothing earlier than 1980. No
+     * file an application serves was last written before 2000.
+     */
+    private static final long WRITTEN_SINCE = Instant.parse("2000-01-01T00:00:00Z").toEpochMilli();
+
+    /**
      * The encodings a sibling can carry, in the order they are preferred: brotli
      * first, being the smaller of the two and the one nothing else can produce.
      * The name on the left is the {@code Accept-Encoding} token, the one on the
@@ -81,6 +97,16 @@ public final class StaticFiles {
             List.of(new Encoding("br", ".br"), new Encoding("gzip", ".gz"));
 
     private final Source source;
+
+    /**
+     * The content checksums worked out for files whose modification time is a
+     * stamp, by path, time, and length. A file changes neither time nor length
+     * within a deployment of an image, so each is read for its checksum once
+     * rather than on every request, and a file rewritten while the application
+     * runs gets a new time and is read again.
+     */
+    private final Map<ChecksumKey, Long> checksums = new ConcurrentHashMap<>();
+
     private String hostedPath = "";
     private String cacheControl = REVALIDATE;
     private boolean precompressed;
@@ -182,7 +208,9 @@ public final class StaticFiles {
      * <p>Nothing is held open once this returns. The metadata is read off the
      * resource here, and the file is opened only by the body writer, so a
      * response a filter replaces, one a filter throws over, a HEAD, and a 304
-     * leave nothing behind to release.
+     * leave nothing behind to release. The one read here is the checksum of a
+     * file whose modification time is a stamp, once per version of the file,
+     * and that stream is closed before this returns.
      */
     @Nullable WebResponse resolve(String path, HttpServletRequest req) throws IOException {
         String relative = relativePath(path);
@@ -202,13 +230,16 @@ public final class StaticFiles {
         if (precompressed) {
             response = response.vary("Accept-Encoding");
         }
-        if (lastModified > 0) {
-            String etag = etag(lastModified, length);
-            response = response.header("ETag", encoded == null ? etag : "W/" + etag)
-                    .header("Last-Modified", httpDate(lastModified));
-            if (isUnchanged(req, etag, lastModified)) {
-                return response.status(HttpStatus.NOT_MODIFIED);
-            }
+        boolean written = isWriteTime(lastModified);
+        String etag = written
+                ? etag(lastModified, length)
+                : contentTag(relative, resource, lastModified, length);
+        response = response.header("ETag", encoded == null ? etag : "W/" + etag);
+        if (written) {
+            response = response.header("Last-Modified", httpDate(lastModified));
+        }
+        if (isUnchanged(req, etag, written ? lastModified : -1)) {
+            return response.status(HttpStatus.NOT_MODIFIED);
         }
 
         Resource body = encoded == null ? resource : encoded.resource();
@@ -296,6 +327,42 @@ public final class StaticFiles {
         return "\"" + Long.toHexString(lastModified) + "-" + Long.toHexString(length) + "\"";
     }
 
+    /**
+     * Whether a modification time is one a write left, and so tells one version
+     * of a file from the next. A stamp is the same for every version, and so is
+     * no time at all.
+     */
+    private static boolean isWriteTime(long lastModified) {
+        return lastModified >= WRITTEN_SINCE;
+    }
+
+    /**
+     * The tag of a file whose modification time is a stamp: the CRC-32 of its
+     * content and its length. Two releases of an image give a stylesheet the
+     * same time and, after a one-character edit, the same length, so only the
+     * content can tell them apart.
+     */
+    private String contentTag(String relative, Resource resource, long lastModified, long length)
+            throws IOException {
+        ChecksumKey key = new ChecksumKey(relative, lastModified, length);
+        Long checksum = checksums.get(key);
+        if (checksum == null) {
+            checksum = resource.checksum();
+            checksums.put(key, checksum);
+        }
+        return "\"" + Long.toHexString(checksum) + "-" + Long.toHexString(length) + "\"";
+    }
+
+    /** What a content checksum is kept under: a path, and the time and length it had. */
+    private record ChecksumKey(String relative, long lastModified, long length) {
+    }
+
+    /**
+     * Whether the client already holds this version. {@code If-None-Match}
+     * decides when it is there, and {@code If-Modified-Since} is read only
+     * against a time a write left, which a negative {@code lastModified} says
+     * this is not.
+     */
     private boolean isUnchanged(HttpServletRequest req, String etag, long lastModified) {
         String ifNoneMatch = req.getHeader("If-None-Match");
         if (ifNoneMatch != null) {
@@ -305,6 +372,9 @@ public final class StaticFiles {
                     return true;
                 }
             }
+            return false;
+        }
+        if (lastModified < 0) {
             return false;
         }
         long ifModifiedSince = ifModifiedSince(req);
@@ -357,6 +427,18 @@ public final class StaticFiles {
         long length();
 
         InputStream open() throws IOException;
+
+        /** The CRC-32 of the content, read through {@link #open()} unless the source already holds it. */
+        default long checksum() throws IOException {
+            CRC32 crc = new CRC32();
+            try (InputStream in = open()) {
+                byte[] chunk = new byte[8192];
+                for (int read = in.read(chunk); read >= 0; read = in.read(chunk)) {
+                    crc.update(chunk, 0, read);
+                }
+            }
+            return crc.getValue();
+        }
     }
 
     private record ClasspathSource(String root, Function<String, @Nullable URL> lookup)
@@ -410,8 +492,13 @@ public final class StaticFiles {
      * which closing the entry's stream never releases. The time asked for
      * instead is the same one: the jar file's own, since a reproducible build
      * stamps every entry with one fixed date.
+     *
+     * <p>A jar entry's CRC-32 is in the jar's central directory, so it is kept
+     * too, and a stamped jar is not read again for a checksum it already holds.
+     * Anything but a jar entry keeps -1 there.
      */
-    private record UrlResource(URL url, long lastModified, long length) implements Resource {
+    private record UrlResource(URL url, long lastModified, long length, long crc)
+            implements Resource {
 
         static @Nullable UrlResource of(URL url) throws IOException {
             URLConnection connection = url.openConnection();
@@ -420,10 +507,11 @@ public final class StaticFiles {
                     JarEntry entry = jar.getJarEntry();
                     return entry.isDirectory()
                             ? null
-                            : new UrlResource(url, jarModified(jar, entry), entry.getSize());
+                            : new UrlResource(url, jarModified(jar, entry), entry.getSize(),
+                                    entry.getCrc());
                 }
                 return new UrlResource(url,
-                        connection.getLastModified(), connection.getContentLengthLong());
+                        connection.getLastModified(), connection.getContentLengthLong(), -1);
             } finally {
                 release(connection);
             }
@@ -453,6 +541,11 @@ public final class StaticFiles {
         @Override
         public InputStream open() throws IOException {
             return url.openStream();
+        }
+
+        @Override
+        public long checksum() throws IOException {
+            return crc >= 0 ? crc : Resource.super.checksum();
         }
     }
 
