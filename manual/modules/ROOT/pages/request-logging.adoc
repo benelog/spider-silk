@@ -26,7 +26,7 @@ An application exception handled during dispatch is represented by its response 
 Normal SSE closure is not a transmission failure.
 A completion does not confirm that the remote client received the entire body.
 
-`thrown()` is what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did.
+`thrown()` is what a handler, a filter, a template, or a status page threw, whether an exception handler answered it or the framework's 500 did.
 `threw()` reports whether that exception is present.
 It is null when nothing threw, and for an `HttpException`, which is a status the handler chose rather than a failure.
 An `Error` such as an `AssertionError` or a `StackOverflowError` is reported as an exception is, so `thrown()` and `writeFailure()` are a `Throwable`.

@@ -582,6 +582,15 @@ public class AppServlet extends HttpServlet {
                         answered.hasStatus() ? answered.status() : status);
             } catch (Throwable e) {
                 log("Error handler failed for status " + status, e);
+                // Reported as a handler's failure is: a 404 page that throws is a
+                // 500, and the logger would otherwise hear of a 500 nothing threw.
+                // An exception the request was already answered for stays first.
+                Throwable earlier = request.thrown();
+                if (earlier == null) {
+                    request.thrown(e);
+                } else if (!earlier.equals(e)) {
+                    earlier.addSuppressed(e);
+                }
                 return WebResponse.text("Internal Server Error")
                         .status(HttpStatus.INTERNAL_SERVER_ERROR);
             }

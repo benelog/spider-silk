@@ -32,7 +32,7 @@ import org.jspecify.annotations.Nullable;
  * @param writeFailure an exception during decoration or writing, or null when the
  *                     response was written; an application exception handled
  *                     during dispatch is represented by its response, not here
- * @param thrown what a handler, a filter, or a template threw, whether an
+ * @param thrown what a handler, a filter, a template, or a status page threw, whether an
  *               exception handler answered it or the framework's 500 did; null
  *               when nothing threw, and for an {@link HttpException}, which is
  *               a status the handler chose rather than a failure

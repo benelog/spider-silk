@@ -26,7 +26,7 @@ app.requestLogger((req, completion) -> logger.info("{} {} -> {} ({}ms)",
 SSE의 정상 종료는 전송 실패가 아니다.
 완료는 원격 클라이언트가 본문 전체를 받았음을 확인하지 않는다.
 
-`thrown()`은 핸들러, 필터, 템플릿이 던진 예외이며, 예외 핸들러가 답했든 프레임워크의 500이 답했든 마찬가지다.
+`thrown()`은 핸들러, 필터, 템플릿, 상태 페이지가 던진 예외이며, 예외 핸들러가 답했든 프레임워크의 500이 답했든 마찬가지다.
 `threw()`는 그 예외가 있는지 보고한다.
 아무것도 던지지 않았을 때, 그리고 실패가 아니라 핸들러가 선택한 상태인 `HttpException`일 때 null이다.
 `AssertionError`나 `StackOverflowError` 같은 `Error`도 예외와 같이 보고되므로, `thrown()`과 `writeFailure()`는 `Throwable`이다.

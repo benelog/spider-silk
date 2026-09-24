@@ -209,6 +209,48 @@ class RequestLoggerTest {
         });
     }
 
+    /** A status page that throws turns a 404 into a 500, and the logger hears what threw. */
+    @Test
+    void aStatusPageThatThrowsIsReported() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        IllegalStateException broken = new IllegalStateException("broken page");
+        App app = new App()
+                .requestLogger((req, completion) -> logged.add(completion))
+                .statusPage(HttpStatus.NOT_FOUND, req -> {
+                    throw broken;
+                });
+
+        WebTest.test(app, client -> assertThat(client.get("/missing").statusCode()).isEqualTo(500));
+
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.threw()).isTrue();
+            assertThat(completion.thrown()).isSameAs(broken);
+        });
+    }
+
+    /** When the 500 page itself throws, the handler's exception stays the one reported, with the page's beside it. */
+    @Test
+    void aFiveHundredPageThatThrowsKeepsTheHandlersExceptionFirst() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        IllegalStateException first = new IllegalStateException("handler broke");
+        IllegalStateException page = new IllegalStateException("page broke");
+        App app = new App()
+                .requestLogger((req, completion) -> logged.add(completion))
+                .statusPage(HttpStatus.INTERNAL_SERVER_ERROR, req -> {
+                    throw page;
+                })
+                .get("/", req -> {
+                    throw first;
+                });
+
+        WebTest.test(app, client -> assertThat(client.get("/").statusCode()).isEqualTo(500));
+
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.thrown()).isSameAs(first);
+            assertThat(completion.thrown().getSuppressed()).containsExactly(page);
+        });
+    }
+
     /** An exception a handler mapped is reported too, with the status it was mapped to: the logger decides what counts. */
     @Test
     void anExceptionAnExceptionHandlerAnsweredIsReportedWithItsStatus() {
