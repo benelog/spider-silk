@@ -175,6 +175,7 @@ app.post("/decks/{deckId}/import", req -> {
 ----
 
 `UploadedFile`은 `fileName()`, `contentType()`, `size()`를 제공하고, 내용은 네 가지 방식으로 건넨다.
+`fileName()`은 클라이언트가 보낸 이름을 검사 없이 그대로 돌려주므로 `../`나 클라이언트가 고른 경로를 담을 수 있으며, 표시용일 뿐이고 디스크에 쓰는 파일은 아래 예처럼 애플리케이션이 만든 이름 아래에 둔다.
 `bytes()`와 `asText()`는 내용을 각각 바이트 배열과 UTF-8 텍스트로 메모리에 담는다.
 `inputStream()`과 `writeTo(path)`는 그렇지 않으므로, 어떤 크기의 업로드든 중간에 바이트 배열 없이 파서나 파일에 도달한다:
 

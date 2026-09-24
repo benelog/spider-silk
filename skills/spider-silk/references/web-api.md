@@ -106,6 +106,7 @@ List<UploadedFile> pages = req.files("pages");              // one field, severa
 // all three: over the multipart limit -> 413, a body that will not parse -> 400
 // UploadedFile: fileName(), contentType(), size(), bytes(), asText(),
 //               inputStream(), writeTo(path)               // the last two hold nothing in memory
+// fileName() is the client's text, unchecked: write to dir.resolve(UUID.randomUUID() + ext), never dir.resolve(fileName())
 ```
 
 Content negotiation reads `Accept` for you and answers one of the offered strings (406 when the caller takes none, first candidate when no `Accept` was sent), adding `Vary: Accept` automatically:

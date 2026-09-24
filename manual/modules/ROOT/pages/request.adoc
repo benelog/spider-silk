@@ -175,6 +175,7 @@ app.post("/decks/{deckId}/import", req -> {
 ----
 
 `UploadedFile` answers `fileName()`, `contentType()`, and `size()`, and hands over the content four ways.
+`fileName()` is the name the client sent, unchecked, so it can hold `../` or a path of the client's choosing; it is for display, and a file written to disk goes under a name the application makes, as in the example below.
 `bytes()` and `asText()` hold it in memory, as one byte array or as UTF-8 text.
 `inputStream()` and `writeTo(path)` do not, so an upload of any size reaches a parser or a file with no byte array in between:
 

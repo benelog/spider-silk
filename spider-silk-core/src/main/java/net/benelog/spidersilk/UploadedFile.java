@@ -26,6 +26,14 @@ public final class UploadedFile {
         this.part = part;
     }
 
+    /**
+     * The file name the client sent, as it sent it. Nothing checks it, so it
+     * can hold {@code ../}, a separator, or a whole path of the client's
+     * choosing. It is for display and for record-keeping: a file written to
+     * disk goes under a name the application makes, such as a random UUID, and
+     * never under {@code directory.resolve(fileName())}, which an upload named
+     * {@code ../../evil.txt} would write outside the directory.
+     */
     public String fileName() {
         return part.getSubmittedFileName();
     }

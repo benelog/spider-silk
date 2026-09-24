@@ -1165,7 +1165,7 @@ public final class WebRequest {
      *
      * <pre>{@code
      * for (UploadedFile page : req.files("pages")) {
-     *     page.writeTo(scans.resolve(page.fileName()));
+     *     page.writeTo(scans.resolve(UUID.randomUUID() + ".pdf"));
      * }
      * }</pre>
      *
