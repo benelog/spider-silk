@@ -528,6 +528,22 @@ class JsonTest {
                 .isEqualTo(-1_200_000_000_000_000_000L);
     }
 
+    /**
+     * The parser accepts an escaped lone surrogate, and writing it back as
+     * itself put a character UTF-8 cannot encode on the wire, where it became
+     * a question mark. It is escaped again instead, and a valid pair is not.
+     */
+    @Test
+    void aLoneSurrogateIsWrittenEscapedAndAPairAsItIs() {
+        JsonValue parsed = Json.parse("{\"s\":\"a\\ud800b\"}");
+
+        assertThat(parsed.toJson()).isEqualTo("{\"s\":\"a\\ud800b\"}");
+        assertThat(Json.parse(parsed.toJson()).asObject().getString("s")).isEqualTo("a\ud800b");
+        assertThat(Json.array().add("\udc00").toJson()).isEqualTo("[\"\\udc00\"]");
+        assertThat(Json.array().add("smile \uD83D\uDE00").toJson()).isEqualTo("[\"smile \uD83D\uDE00\"]");
+        assertThat(Json.array().add("\uDE00\uD83D").toJson()).isEqualTo("[\"\\ude00\\ud83d\"]");
+    }
+
     /** asDouble stays the nearest double, and a decimal serializes as it did before. */
     @Test
     void aDecimalTokenStillReadsAndWritesAsADouble() {

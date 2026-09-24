@@ -72,6 +72,13 @@ public final class Json {
         return value;
     }
 
+    /**
+     * A string as a JSON string literal. A surrogate without its pair is
+     * written as an escape of its code unit, which RFC 8259 allows: UTF-8 has
+     * no form for it, so written as itself it reached the client as {@code ?},
+     * and the value read back differed from the one written. A valid pair is
+     * written as it is.
+     */
     static void writeString(StringBuilder sb, String s) {
         sb.append('"');
         for (int i = 0; i < s.length(); i++) {
@@ -86,6 +93,11 @@ public final class Json {
                 case '\f' -> sb.append("\\f");
                 default -> {
                     if (c < 0x20) {
+                        sb.append("\\u%04x".formatted((int) c));
+                    } else if (Character.isHighSurrogate(c) && i + 1 < s.length()
+                            && Character.isLowSurrogate(s.charAt(i + 1))) {
+                        sb.append(c).append(s.charAt(++i));
+                    } else if (Character.isSurrogate(c)) {
                         sb.append("\\u%04x".formatted((int) c));
                     } else {
                         sb.append(c);
