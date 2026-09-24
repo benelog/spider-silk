@@ -816,6 +816,38 @@ class UndertowServerTest {
     }
 
     /**
+     * A customizer that throws fails the start after the deployment is up. The
+     * deployment used to stay up, so the App refused every registration after
+     * it, as though it were still being served.
+     */
+    @Test
+    void aStartThatFailsAfterDeployingOpensRegistrationAgain() {
+        App app = new App();
+        UndertowServer failing = new UndertowServer(app).port(0)
+                .customizeBuilder(builder -> {
+                    throw new IllegalArgumentException("bad setting");
+                });
+
+        assertThatThrownBy(failing::start)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Failed to start Undertow")
+                .hasRootCauseMessage("bad setting");
+        assertThatCode(() -> app.get("/", req -> WebResponse.text("registered")))
+                .as("the failed start undeployed, so registration is open again")
+                .doesNotThrowAnyException();
+    }
+
+    /** Jetty and Tomcat take "" as the root, and Undertow's path handler refused it. */
+    @Test
+    void anEmptyContextPathIsTheRoot() throws Exception {
+        this.app = new App().get("/hello", req -> WebResponse.text("root"))
+                .server((a, port) -> new UndertowServer(a).port(port).contextPath(""))
+                .start(0);
+
+        assertThat(get("/hello").body()).isEqualTo("root");
+    }
+
+    /**
      * A start that fails leaves nothing behind. Were the half-started Undertow
      * left as it is, it would still hold the port when the retry came, so this
      * asserts a third server binds the port the second one could not.

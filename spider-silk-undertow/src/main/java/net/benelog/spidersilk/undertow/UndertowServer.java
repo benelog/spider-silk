@@ -103,9 +103,14 @@ public final class UndertowServer implements WebServer {
         return this;
     }
 
-    /** The context path the app is mounted under. Defaults to "/". */
+    /**
+     * The context path the app is mounted under. Defaults to "/", and {@code ""}
+     * is the root as well, as Jetty and Tomcat take it; Undertow's own path
+     * handler refuses an empty prefix.
+     */
     public UndertowServer contextPath(String contextPath) {
-        this.contextPath = Objects.requireNonNull(contextPath, "contextPath");
+        Objects.requireNonNull(contextPath, "contextPath");
+        this.contextPath = contextPath.isEmpty() ? "/" : contextPath;
         return this;
     }
 
@@ -193,27 +198,29 @@ public final class UndertowServer implements WebServer {
             throw new IllegalStateException("Undertow is already running on port " + port());
         }
         DeploymentManager manager = Servlets.newContainer().addDeployment(createDeployment());
-        manager.deploy();
+        // Everything from the deployment on runs under one guard. Starting the
+        // deployment initializes AppServlet, which closes the App's registration
+        // and registers its SSE hook, and only undeploying opens them again: a
+        // failure left outside the guard kept the App closed for good.
+        Undertow candidate = null;
         try {
+            manager.deploy();
             graceful = Handlers.gracefulShutdown(
                     Handlers.path().addPrefixPath(contextPath, manager.start()));
-        } catch (ServletException e) {
-            undeployQuietly(manager);
-            throw new IllegalStateException("Failed to deploy the app on Undertow", e);
-        }
 
-        Undertow.Builder builder = Undertow.builder()
-                .addHttpListener(port, host != null ? host : DEFAULT_HOST)
-                .setHandler(graceful);
-        builderCustomizers.forEach(customizer -> customizer.accept(builder));
+            Undertow.Builder builder = Undertow.builder()
+                    .addHttpListener(port, host != null ? host : DEFAULT_HOST)
+                    .setHandler(graceful);
+            builderCustomizers.forEach(customizer -> customizer.accept(builder));
 
-        Undertow candidate = builder.build();
-        try {
+            candidate = builder.build();
             candidate.start();
-        } catch (RuntimeException e) {
+        } catch (ServletException | RuntimeException e) {
             IllegalStateException failure =
                     new IllegalStateException("Failed to start Undertow on port " + port, e);
-            stopQuietly(candidate, failure);
+            if (candidate != null) {
+                stopQuietly(candidate, failure);
+            }
             undeployQuietly(manager);
             graceful = null;
             throw failure;
