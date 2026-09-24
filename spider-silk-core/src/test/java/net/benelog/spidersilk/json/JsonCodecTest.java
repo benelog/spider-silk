@@ -2,6 +2,7 @@ package net.benelog.spidersilk.json;
 
 import java.util.List;
 
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,5 +55,20 @@ class JsonCodecTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> JsonReader.list(DECK_IN).read(Json.parse("{}")))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /**
+     * An element reader may answer null for a JSON null. The list used to be
+     * built with List.copyOf, which threw a NullPointerException, and a body
+     * holding a null answered 500.
+     */
+    @Test
+    void aListHoldsTheNullsItsElementReaderAnswered() {
+        JsonReader<@Nullable String> name = json -> json.isNull() ? null : json.asString();
+
+        List<@Nullable String> names = JsonReader.list(name).read(Json.parse("[\"a\", null]"));
+
+        assertThat(names).containsExactly("a", null);
+        assertThatThrownBy(() -> names.add("b")).isInstanceOf(UnsupportedOperationException.class);
     }
 }

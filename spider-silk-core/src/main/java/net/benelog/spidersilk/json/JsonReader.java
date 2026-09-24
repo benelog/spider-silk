@@ -1,7 +1,10 @@
 package net.benelog.spidersilk.json;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+
+import org.jspecify.annotations.Nullable;
 
 /**
  * Builds a value out of parsed JSON. Like {@link JsonWriter}, the mapping is
@@ -21,19 +24,25 @@ import java.util.List;
  * }</pre>
  */
 @FunctionalInterface
-public interface JsonReader<T> {
+public interface JsonReader<T extends @Nullable Object> {
 
     T read(JsonValue json);
 
-    /** A reader for a list, built from the reader for one element. */
-    static <T> JsonReader<List<T>> list(JsonReader<T> element) {
+    /**
+     * A reader for a list, built from the reader for one element. The list
+     * cannot be changed, and holds a null wherever the element reader answered
+     * one: {@code JsonReader<@Nullable String>} reads {@code ["a", null]} as it
+     * stands, where {@code List.copyOf} threw a NullPointerException that
+     * answered the request with 500.
+     */
+    static <T extends @Nullable Object> JsonReader<List<T>> list(JsonReader<T> element) {
         return json -> {
             JsonArray array = json.asArray();
             List<T> values = new ArrayList<>(array.size());
             for (JsonValue value : array) {
                 values.add(element.read(value));
             }
-            return List.copyOf(values);
+            return Collections.unmodifiableList(values);
         };
     }
 }
