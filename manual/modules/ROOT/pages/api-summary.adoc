@@ -46,7 +46,7 @@ Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that
 * Cookies the client sent: `cookie(name)`, `cookies()`
 * Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects, 413 on a body over the limit).
   The text is read once and kept, so every call returns the whole body
-* Multipart uploads: `file(name)` (400 when absent), `fileOrNull(name)` (null when absent), `files(name)` for a field that carries several.
+* Multipart uploads: `file(name)` (400 when absent), `fileOrNull(name)` (null when absent), `files(name)` for a field that carries several, and 413 or 400 from all three for an upload the container refuses.
   `UploadedFile` answers `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, and `writeTo(path)`
 * Body, unread: `bodyStream()` and `bodyReader()` hand it over for a parser from another library, and neither mixes with the kept text: whichever goes second throws `IllegalStateException`.
   `bodyNdjson(reader)` reads newline-delimited JSON lazily, and answers 400 naming the line, or 413 for a line over the limit; see xref:large-json.adoc[Large JSON and NDJSON] and xref:json-interop.adoc[External JSON Binding]

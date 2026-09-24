@@ -101,8 +101,9 @@ Stream<Card> cards = req.bodyNdjson(CARD_READER);           // lazy; a bad line 
 InputStream in = req.bodyStream();                          // unread bytes, for another library's parser; no size limit
 BufferedReader r = req.bodyReader();                        // unread characters; never mixed with body() or each other
 UploadedFile file = req.file("file");                       // missing part or not multipart -> 400
-UploadedFile avatar = req.fileOrNull("avatar");             // optional upload; null when absent
+UploadedFile avatar = req.fileOrNull("avatar");             // optional upload; null when absent, never when refused
 List<UploadedFile> pages = req.files("pages");              // one field, several files; empty when none
+// all three: over the multipart limit -> 413, a body that will not parse -> 400
 // UploadedFile: fileName(), contentType(), size(), bytes(), asText(),
 //               inputStream(), writeTo(path)               // the last two hold nothing in memory
 ```

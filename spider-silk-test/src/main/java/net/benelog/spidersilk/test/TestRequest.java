@@ -60,6 +60,14 @@ public final class TestRequest {
 
     private static final String FORM_CONTENT_TYPE = "application/x-www-form-urlencoded";
 
+    /**
+     * What a browser declares for a form carrying a file. WebRequest decides
+     * whether a request is multipart by this header, as it does behind a
+     * container; the boundary is never read, since the parts are handed over
+     * whole rather than parsed out of a body.
+     */
+    private static final String MULTIPART_CONTENT_TYPE = "multipart/form-data; boundary=spider-silk-test";
+
     private final String method;
     private final String path;
 
@@ -287,6 +295,9 @@ public final class TestRequest {
             }
             wholeBody = urlEncoded(formParams);
             headerCopy.putIfAbsent("Content-Type", List.of(FORM_CONTENT_TYPE));
+        }
+        if (!parts.isEmpty()) {
+            headerCopy.putIfAbsent("Content-Type", List.of(MULTIPART_CONTENT_TYPE));
         }
         StubServletRequest raw = new StubServletRequest(method, path, headerCopy,
                 copyOf(queryParams), copyOf(formParams), List.copyOf(cookies), List.copyOf(parts),

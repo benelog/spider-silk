@@ -27,6 +27,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPInputStream;
 
+import jakarta.servlet.MultipartConfigElement;
+
 import org.apache.catalina.Context;
 import org.apache.catalina.startup.Tomcat;
 import org.junit.jupiter.api.AfterEach;
@@ -246,6 +248,47 @@ class TomcatServerTest {
 
         assertThat(response.body()).isEqualTo("2 one.csv");
         assertThat(Files.readString(saved)).isEqualTo("hola,hello");
+    }
+
+    /**
+     * An upload the container will not take is a failed upload, not a missing
+     * file: a part over {@code maxFileSize} is a 413, and a body cut off before
+     * its closing boundary is a 400, whichever of the three reads asks. Each
+     * container reports the two in its own way, so this is the claim that core
+     * reads them alike.
+     */
+    @Test
+    void anUploadTheContainerRefusesIsNotAMissingFile() throws Exception {
+        MultipartConfigElement tenBytes =
+                new MultipartConfigElement(System.getProperty("java.io.tmpdir"), 10, 100_000, 0);
+        app = new App()
+                .post("/file", req -> WebResponse.text(req.file("csv").fileName()))
+                .post("/fileOrNull", req -> WebResponse.text(req.fileOrNull("csv") == null ? "none" : "one"))
+                .post("/files", req -> WebResponse.text(req.files("csv").size() + " files"))
+                .server((a, port) -> new TomcatServer(a).port(port).multipart(tenBytes))
+                .start(0);
+
+        for (String path : List.of("/file", "/fileOrNull", "/files")) {
+            assertThat(multipart(path, "front,back is more than ten bytes\r\n--spidersilkboundary--\r\n")
+                    .statusCode())
+                    .as("a part over maxFileSize, through " + path)
+                    .isEqualTo(413);
+            assertThat(multipart(path, "front,back").statusCode())
+                    .as("a body cut off before its closing boundary, through " + path)
+                    .isEqualTo(400);
+        }
+    }
+
+    /** One file part named "csv", followed by whatever the test wants to end the body with. */
+    private HttpResponse<String> multipart(String path, String rest) throws Exception {
+        String body = "--spidersilkboundary\r\n"
+                + "Content-Disposition: form-data; name=\"csv\"; filename=\"deck.csv\"\r\n"
+                + "Content-Type: text/csv\r\n\r\n"
+                + rest;
+        return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + path))
+                .header("Content-Type", "multipart/form-data; boundary=spidersilkboundary")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(), HttpResponse.BodyHandlers.ofString());
     }
 
     /** Two files under one field name, the shape {@code files("csv")} reads. */

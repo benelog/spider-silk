@@ -201,6 +201,11 @@ The limits are the servlet container's multipart configuration, set on the serve
 The default buffers to the system temp directory with no size cap and a 1MB in-memory threshold.
 `multipart(null)` turns multipart handling off.
 
+An upload the container refuses is a failed upload, not an absent one.
+A part or a body over those limits answers 413, and a multipart body that will not parse, such as one cut off before its closing boundary, answers 400.
+`file(name)`, `fileOrNull(name)`, and `files(name)` answer both alike, so a handler never reads a failed upload as a form with nothing chosen.
+The `Content-Type` decides whether a request is multipart at all: only `multipart/form-data` is.
+
 [#body-limits]
 == Body size limits
 

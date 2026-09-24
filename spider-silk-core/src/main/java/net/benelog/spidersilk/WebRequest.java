@@ -95,6 +95,9 @@ public final class WebRequest {
     /** The largest buffer a Content-Length header may reserve up front: 1MB. */
     private static final int MAX_BODY_CAPACITY = 1024 * 1024;
 
+    /** The media type {@code getPart} and {@code getParts} parse. */
+    private static final String MULTIPART_FORM_DATA = "multipart/form-data";
+
     /** The limits a request built outside {@link AppServlet} reads under; never handed out. */
     private static final BodyLimits DEFAULT_LIMITS = BodyLimits.defaults();
 
@@ -1051,20 +1054,21 @@ public final class WebRequest {
      * part carrying no file name, and a request that is not multipart at all.
      * {@link #fileOrNull(String)} answers null for the same three, for an upload
      * a handler does not require.
+     *
+     * <p>A multipart body the container will not take is not a missing file.
+     * One refused for its size — a part over {@code maxFileSize}, a body over
+     * {@code maxRequestSize} — answers 413, and one that will not parse, such as
+     * a body cut off before its closing boundary, answers 400.
      */
     public UploadedFile file(String name) {
-        Part part;
-        try {
-            part = req.getPart(name);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        } catch (ServletException e) {
+        if (!isMultipart()) {
             throw new HttpException(HttpStatus.BAD_REQUEST, "Not a multipart request");
         }
-        if (!isFile(part)) {
+        UploadedFile file = upload(name);
+        if (file == null) {
             throw new HttpException(HttpStatus.BAD_REQUEST, "Missing uploaded file: " + name);
         }
-        return new UploadedFile(part);
+        return file;
     }
 
     /**
@@ -1084,17 +1088,14 @@ public final class WebRequest {
      * request that is not multipart at all. A handler that declared the upload
      * optional has already said what to do about all three, which is why none
      * of them is the 400 {@link #file(String)} answers.
+     *
+     * <p>Null never stands for an upload that failed. A multipart body the
+     * container refuses for its size answers 413, and one it cannot parse
+     * answers 400, as they do for {@link #file(String)}: a handler that carried
+     * on as if nothing had been chosen would lose the upload without a word.
      */
     public @Nullable UploadedFile fileOrNull(String name) {
-        Part part;
-        try {
-            part = req.getPart(name);
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        } catch (ServletException e) {
-            return null;
-        }
-        return isFile(part) ? new UploadedFile(part) : null;
+        return isMultipart() ? upload(name) : null;
     }
 
     /**
@@ -1111,15 +1112,20 @@ public final class WebRequest {
      *
      * <p>Only the parts that carry a file are counted. The text fields of the
      * same form are parts too, and they are read with {@link #param(String)}.
+     *
+     * <p>An empty list never stands for an upload that failed: a multipart body
+     * the container refuses for its size answers 413, and one it cannot parse
+     * answers 400, as they do for {@link #file(String)}.
      */
     public List<UploadedFile> files(String name) {
+        if (!isMultipart()) {
+            return List.of();
+        }
         Collection<Part> parts;
         try {
             parts = req.getParts();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        } catch (ServletException e) {
-            return List.of();
+        } catch (IOException | ServletException | IllegalStateException e) {
+            throw refusedMultipart(e);
         }
         List<UploadedFile> files = new ArrayList<>();
         for (Part part : parts) {
@@ -1128,6 +1134,68 @@ public final class WebRequest {
             }
         }
         return List.copyOf(files);
+    }
+
+    /**
+     * Whether the request declares a multipart form. Decided by the header, not
+     * by what the container throws: the servlet API throws the same
+     * {@code ServletException} for a request that is not multipart as Jetty
+     * does for one that is and will not parse, and telling those two apart is
+     * the difference between "no file" and a failed upload.
+     */
+    private boolean isMultipart() {
+        String type = req.getContentType();
+        if (type == null) {
+            return false;
+        }
+        int semicolon = type.indexOf(';');
+        return (semicolon < 0 ? type : type.substring(0, semicolon)).trim()
+                .equalsIgnoreCase(MULTIPART_FORM_DATA);
+    }
+
+    /** The file under that name, or null when the multipart form carries none. */
+    private @Nullable UploadedFile upload(String name) {
+        Part part;
+        try {
+            part = req.getPart(name);
+        } catch (IOException | ServletException | IllegalStateException e) {
+            throw refusedMultipart(e);
+        }
+        return isFile(part) ? new UploadedFile(part) : null;
+    }
+
+    /**
+     * What a multipart body the container would not hand over answers. The
+     * servlet API names {@link IllegalStateException} for a part or a body over
+     * its limit, and each of the three containers puts one on the cause chain
+     * when a limit refused the upload: Tomcat's and Undertow's carry the size
+     * exception as their cause, and Jetty wraps its own in a
+     * {@link ServletException}. That is 413. Anything else — Jetty's
+     * {@code ServletException} over an EOF, Tomcat's and Undertow's
+     * {@link IOException} for a body cut short — is a body that will not parse,
+     * and 400.
+     *
+     * <p>The API names the same exception for a servlet with no multipart
+     * configuration at all. Tomcat and Undertow throw that one bare, with no
+     * cause, before reading anything, and it is the deployment's fault rather
+     * than the request's, so it goes on as the 500 it was. Jetty wraps that
+     * case like the others, so there it answers 413 with Jetty's own message.
+     */
+    private RuntimeException refusedMultipart(Exception failure) {
+        if (failure instanceof IllegalStateException bare && bare.getCause() == null) {
+            return bare;
+        }
+        String detail = "";
+        boolean tooLarge = false;
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            tooLarge |= cause instanceof IllegalStateException;
+            if (cause.getMessage() != null) {
+                detail = cause.getMessage();
+            }
+        }
+        return tooLarge
+                ? new HttpException(HttpStatus.CONTENT_TOO_LARGE, "Multipart upload refused: " + detail)
+                : new HttpException(HttpStatus.BAD_REQUEST, "Multipart body could not be read: " + detail);
     }
 
     /**

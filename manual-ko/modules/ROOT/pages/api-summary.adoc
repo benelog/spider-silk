@@ -46,7 +46,7 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 * 클라이언트가 보낸 쿠키: `cookie(name)`, `cookies()`
 * 본문: `body()`, `bodyJson()`, `bodyJson(reader)`(리더가 거부하는 본문에는 400, 한도를 넘는 본문에는 413).
   텍스트는 한 번 읽어 보관하므로 모든 호출이 본문 전체를 반환한다
-* 멀티파트 업로드: `file(name)`(없으면 400), `fileOrNull(name)`(없으면 null), 여러 파일을 담은 필드를 위한 `files(name)`.
+* 멀티파트 업로드: `file(name)`(없으면 400), `fileOrNull(name)`(없으면 null), 여러 파일을 담은 필드를 위한 `files(name)`, 그리고 컨테이너가 거부한 업로드에는 셋 모두 413이나 400.
   `UploadedFile`은 `fileName()`, `contentType()`, `size()`, `bytes()`, `asText()`, `inputStream()`, `writeTo(path)`를 제공한다
 * 읽지 않은 본문: `bodyStream()`과 `bodyReader()`는 다른 라이브러리의 파서를 위해 본문을 넘겨주며, 둘 다 보관된 텍스트와 섞이지 않는다: 나중에 호출된 쪽이 `IllegalStateException`을 던진다.
   `bodyNdjson(reader)`는 줄 단위로 구분된 JSON을 지연 읽기하고, 줄 번호를 밝히며 400으로 응답하거나, 한도를 넘는 줄에는 413으로 응답한다; xref:large-json.adoc[대용량 JSON과 NDJSON]과 xref:json-interop.adoc[외부 JSON 바인딩]을 참고한다
