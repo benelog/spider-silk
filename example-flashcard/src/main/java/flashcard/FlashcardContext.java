@@ -1,15 +1,20 @@
 package flashcard;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
 import javax.sql.DataSource;
 
+import gg.jte.ContentType;
+import gg.jte.TemplateEngine;
+import gg.jte.resolve.DirectoryCodeResolver;
 import jakarta.servlet.MultipartConfigElement;
 
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.Cors;
 import net.benelog.spidersilk.HttpStatus;
+import net.benelog.spidersilk.JteTemplates;
 import net.benelog.spidersilk.Route;
 import net.benelog.spidersilk.SecurityHeaders;
 import net.benelog.spidersilk.TemplateRenderer;
@@ -43,8 +48,8 @@ import flashcard.web.StudyController;
  * wires the whole object graph by calling constructors directly, without a
  * DI container. The dependency graph is visible right here in the code, and
  * so is the App those handlers are served by: its configuration, its route
- * table, and the server it runs on. FlashcardApp picks the database and the
- * templates and hands them in.
+ * table, the templates it renders with, and the server it runs on.
+ * FlashcardApp picks the database and whether to run in dev mode.
  */
 public class FlashcardContext {
 
@@ -56,16 +61,15 @@ public class FlashcardContext {
     private final SmartDeckController smartDeckController;
     private final StatsAction statsAction;
     private final ApiController apiController;
-    // Null leaves the App on its default, jte over classpath:/jte.
-    private final TemplateRenderer templates;
+    private final boolean devMode;
 
-    /** A context on the default templates, as the tests run it. */
+    /** A context on the precompiled templates, as production and the tests run it. */
     public FlashcardContext(DataSource dataSource) {
-        this(dataSource, null);
+        this(dataSource, false);
     }
 
-    public FlashcardContext(DataSource dataSource, TemplateRenderer templates) {
-        this.templates = templates;
+    public FlashcardContext(DataSource dataSource, boolean devMode) {
+        this.devMode = devMode;
         Transactions tx = new Transactions(dataSource);
 
         CardRepository cardRepository = new CardRepository(dataSource);
@@ -99,15 +103,32 @@ public class FlashcardContext {
     }
 
     /**
+     * jte's two modes, chosen at startup.
+     *
+     * <p>Production renders the classes the build's {@code generateJte} task
+     * compiled from the templates, so the jar and the native image carry no
+     * template sources and need no JDK. Dev mode reads the .jte files straight
+     * from the source tree instead: a template whose file changed is recompiled
+     * on its next render, so an edit shows up on browser refresh. Run it as
+     * {@code ./gradlew :example-flashcard:run --args=--dev}, whose working
+     * directory makes the relative path below resolve.
+     */
+    private TemplateRenderer templates() {
+        if (devMode) {
+            return new JteTemplates(
+                new DirectoryCodeResolver(Path.of("src/main/resources/jte")));
+        }
+        return new JteTemplates(TemplateEngine.createPrecompiled(ContentType.Html));
+    }
+
+    /**
      * The App with its response-wide concerns, exception handlers, and routes.
      * Tests take it as it is; {@link #start(int)} adds the server that main runs.
      */
     App createApp() {
         // Static files are left at their default, classpath:/public served at the root.
         App app = new App();
-        if (templates != null) {
-            app.templates(templates);
-        }
+        app.templates(templates());
 
         // The three response-wide concerns, each a value App is handed. Nothing
         // registers itself and nothing is on until it is named here.

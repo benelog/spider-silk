@@ -6,13 +6,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.util.UUID;
-
-import javax.sql.DataSource;
 
 import jakarta.servlet.MultipartConfigElement;
 
-import org.h2.jdbcx.JdbcConnectionPool;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -61,7 +57,7 @@ class ServerCompatibilityTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("servers")
     void theExampleAppRunsOn(String name, WebServerFactory factory) throws Exception {
-        app = new FlashcardContext(freshDatabase()).createApp().server(factory).start(0);
+        app = new FlashcardContext(FlashcardDatabase.inMemory()).createApp().server(factory).start(0);
 
         // A jte template, rendered.
         HttpResponse<String> home = get("/");
@@ -116,13 +112,6 @@ class ServerCompatibilityTest {
 
     private static String deckId(String deckPath) {
         return deckPath.substring(deckPath.lastIndexOf('/') + 1);
-    }
-
-    private static DataSource freshDatabase() throws Exception {
-        DataSource dataSource = JdbcConnectionPool.create(
-                "jdbc:h2:mem:" + UUID.randomUUID() + ";DB_CLOSE_DELAY=-1", "sa", "");
-        FlashcardApp.initSchema(dataSource);
-        return dataSource;
     }
 
     /** The same limits {@code FlashcardContext.start} sets, so this covers that path too. */
