@@ -24,6 +24,7 @@ import org.apache.catalina.Context;
 import org.apache.catalina.LifecycleException;
 import org.apache.catalina.Wrapper;
 import org.apache.catalina.connector.Connector;
+import org.apache.catalina.core.StandardContext;
 import org.apache.catalina.startup.Tomcat;
 import org.apache.coyote.AbstractProtocol;
 import org.apache.coyote.ProtocolHandler;
@@ -314,6 +315,12 @@ public final class TomcatServer implements WebServer {
         }
 
         Context context = tomcat.addContext(path, docBase.toString());
+        if (context instanceof StandardContext standard) {
+            // The drain has already waited the stop timeout for requests in flight,
+            // so Tomcat's own two-second wait for them on unload would only add to it.
+            // Not zero: Tomcat waits a twentieth of it at a time, and wait(0) is forever.
+            standard.setUnloadDelay(100);
+        }
         Wrapper wrapper = Tomcat.addServlet(context, SERVLET_NAME, new AppServlet(app));
         // Loaded while the context starts rather than on the first request,
         // which is when AppServlet takes the routes and closes registration.

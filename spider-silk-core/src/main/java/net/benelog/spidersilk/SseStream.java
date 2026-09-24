@@ -5,6 +5,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Objects;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.regex.Pattern;
 
 import jakarta.servlet.http.HttpServletResponse;
@@ -26,9 +27,13 @@ import org.jspecify.annotations.Nullable;
  * }</pre>
  *
  * <p>Every method writes one complete event and flushes it, so an event is on
- * the wire when the call returns. The methods are synchronized on the stream
- * itself: {@link App#stop()} closes the stream from another thread, and a frame
- * must not be cut in half by that.
+ * the wire when the call returns. The writes hold a lock on the stream:
+ * {@link App#stop()} closes the stream from another thread, and a frame must not
+ * be cut in half by that. Closing does not wait for a write that is blocked,
+ * though. A client that stops reading holds the flush until the connector gives
+ * up on it, so a close that waited would hold {@code App.stop()} as long. It
+ * marks the stream closed instead, and the write closes the output when it
+ * returns, or when the server's stop timeout ends it.
  *
  * <p>Once the stream is closed — because the client went away, or because the
  * server is stopping — every further write throws {@link Closed}, which
@@ -48,8 +53,11 @@ public final class SseStream {
     private static final Pattern LINE_BREAK = Pattern.compile("\\r\\n|\\r|\\n");
 
     private final OutputStream out;
+    private final ReentrantLock lock = new ReentrantLock();
 
-    private boolean open = true;
+    /** Read without the lock, so that neither isOpen nor close waits behind a blocked write. */
+    private volatile boolean open = true;
+    private boolean outputClosed;
     private @Nullable String nextId;
 
     SseStream(HttpServletResponse res) throws IOException {
@@ -65,13 +73,18 @@ public final class SseStream {
      *         would end the field and start another the handler never wrote,
      *         or a NUL, for which a browser drops the id
      */
-    public synchronized SseStream id(String id) {
+    public SseStream id(String id) {
         Objects.requireNonNull(id, "id");
         requireOneLine("An event id", id);
         if (id.indexOf('\0') >= 0) {
             throw new IllegalArgumentException("An event id cannot hold a NUL: a browser ignores such an id");
         }
-        this.nextId = id;
+        lock.lock();
+        try {
+            this.nextId = id;
+        } finally {
+            lock.unlock();
+        }
         return this;
     }
 
@@ -93,7 +106,7 @@ public final class SseStream {
      * @throws IllegalArgumentException if the delay is negative, which the
      *         protocol has no meaning for and a browser silently ignores
      */
-    public synchronized SseStream retry(Duration delay) {
+    public SseStream retry(Duration delay) {
         Objects.requireNonNull(delay, "delay");
         if (delay.isNegative()) {
             throw new IllegalArgumentException("A reconnection delay cannot be negative: " + delay);
@@ -115,20 +128,26 @@ public final class SseStream {
      * @throws IllegalArgumentException if the event name holds a line break,
      *         which would end the field and start another; nothing is written
      */
-    public synchronized SseStream send(@Nullable String event, String data) {
+    public SseStream send(@Nullable String event, String data) {
         if (event != null) {
             requireOneLine("An event name", event);
         }
         StringBuilder frame = new StringBuilder();
-        if (nextId != null) {
-            frame.append("id: ").append(nextId).append('\n');
-        }
         if (event != null) {
             frame.append("event: ").append(event).append('\n');
         }
         appendLines(frame, "data: ", data);
-        write(frame.append('\n').toString());
-        nextId = null;
+        frame.append('\n');
+        lock.lock();
+        try {
+            if (nextId != null) {
+                frame.insert(0, "id: " + nextId + "\n");
+            }
+            write(frame.toString());
+            nextId = null;
+        } finally {
+            lock.unlock();
+        }
         return this;
     }
 
@@ -137,7 +156,7 @@ public final class SseStream {
      * or a connector idle timeout cuts a stream that has been quiet, and a
      * comment costs a handful of bytes to keep it from counting as quiet.
      */
-    public synchronized SseStream comment(String text) {
+    public SseStream comment(String text) {
         StringBuilder frame = new StringBuilder();
         appendLines(frame, ": ", text);
         write(frame.append('\n').toString());
@@ -145,7 +164,7 @@ public final class SseStream {
     }
 
     /** Whether the stream can still be written to. */
-    public synchronized boolean isOpen() {
+    public boolean isOpen() {
         return open;
     }
 
@@ -153,15 +172,30 @@ public final class SseStream {
      * Ends the stream. Called for you when the writer returns, and by
      * {@link App#stop()} for every stream still open; doing it twice is a no-op.
      */
-    public synchronized void close() {
-        if (!open) {
+    public void close() {
+        open = false;
+        closeOutputIfFree();
+    }
+
+    /**
+     * Closes the output once, unless a write holds the lock. That write may be
+     * blocked on a client that stopped reading, and it closes the output itself
+     * when it returns, so there is no waiting here.
+     */
+    private void closeOutputIfFree() {
+        if (!lock.tryLock()) {
             return;
         }
-        open = false;
         try {
+            if (outputClosed) {
+                return;
+            }
+            outputClosed = true;
             out.close();
         } catch (IOException e) {
             // The client is already gone. There is nothing left to report it to.
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -188,15 +222,26 @@ public final class SseStream {
     }
 
     private void write(String frame) {
-        if (!open) {
-            throw new Closed("The SSE stream is closed");
-        }
+        lock.lock();
         try {
-            out.write(frame.getBytes(StandardCharsets.UTF_8));
-            out.flush();
-        } catch (IOException e) {
-            open = false;
-            throw new Closed("The SSE client disconnected");
+            if (!open) {
+                throw new Closed("The SSE stream is closed");
+            }
+            try {
+                out.write(frame.getBytes(StandardCharsets.UTF_8));
+                out.flush();
+            } catch (IOException e) {
+                open = false;
+                throw new Closed("The SSE client disconnected");
+            }
+        } finally {
+            lock.unlock();
+            // A close that came while this write was under way left the output
+            // to it. Checked after the unlock, so that a close either sees the
+            // lock free or has already cleared the flag this reads.
+            if (!open) {
+                closeOutputIfFree();
+            }
         }
     }
 

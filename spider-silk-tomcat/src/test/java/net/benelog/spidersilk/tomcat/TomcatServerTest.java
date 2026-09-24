@@ -9,6 +9,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -24,6 +25,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPInputStream;
 
@@ -463,6 +465,43 @@ class TomcatServerTest {
         assertThat(response.body()).contains("event: tick");
         assertThat(response.body()).contains("data: 1");
         assertThat(response.body()).contains("data: 2");
+    }
+
+    /**
+     * A client that stops reading leaves the handler blocked in a flush, and
+     * the stop still ends within the stop timeout instead of waiting for the
+     * connector to give up on the write.
+     */
+    @Test
+    void aClientThatStopsReadingDelaysTheStopNoLongerThanTheStopTimeout() throws Exception {
+        AtomicInteger sent = new AtomicInteger();
+        String event = "x".repeat(64 * 1024);
+        this.app = new App()
+                .server((a, port) -> new TomcatServer(a).port(port).stopTimeout(Duration.ofSeconds(1)))
+                .get("/events", req -> WebResponse.sse(stream -> {
+                    while (stream.isOpen()) {
+                        stream.send(event);
+                        sent.incrementAndGet();
+                    }
+                }))
+                .start(0);
+        try (Socket socket = new Socket()) {
+            socket.setReceiveBufferSize(4096);
+            socket.connect(new InetSocketAddress("localhost", app.port()));
+            socket.getOutputStream().write("GET /events HTTP/1.1\r\nHost: localhost\r\n\r\n"
+                    .getBytes(StandardCharsets.UTF_8));
+            int last = -1;
+            while (sent.get() == 0 || sent.get() != last) {
+                last = sent.get();
+                Thread.sleep(300);
+            }
+
+            long startedAt = System.nanoTime();
+            app.stop();
+            long millis = (System.nanoTime() - startedAt) / 1_000_000;
+
+            assertThat(millis).as("the stop should end with its one-second timeout").isLessThan(3_000);
+        }
     }
 
     /** Static files are read off the classpath by core, so they travel too. */

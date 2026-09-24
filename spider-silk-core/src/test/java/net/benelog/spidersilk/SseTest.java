@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -14,6 +15,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
@@ -229,6 +231,64 @@ class SseTest {
         } finally {
             app.stop();
         }
+    }
+
+    /**
+     * A client that stops reading leaves the handler blocked in a flush. Closing
+     * the stream used to wait for that flush, which lasts until the connector's
+     * idle timeout, so the stop took about thirty seconds. The stream is now
+     * marked closed without waiting, and the drain's own timeout ends the write.
+     */
+    @Test
+    void aClientThatStopsReadingDelaysTheStopNoLongerThanTheStopTimeout() throws Exception {
+        AtomicInteger sent = new AtomicInteger();
+        CountDownLatch handlerEnded = new CountDownLatch(1);
+        String event = "x".repeat(64 * 1024);
+        App app = new App()
+                .server((a, port) -> new JettyServer(a).port(port).stopTimeout(Duration.ofSeconds(1)))
+                .get("/events", req -> WebResponse.sse(stream -> {
+                    try {
+                        while (stream.isOpen()) {
+                            stream.send(event);
+                            sent.incrementAndGet();
+                        }
+                    } finally {
+                        handlerEnded.countDown();
+                    }
+                }));
+        app.start(0);
+        try (Socket socket = new Socket()) {
+            socket.setReceiveBufferSize(4096);
+            socket.connect(new InetSocketAddress("localhost", app.port()));
+            requestEvents(socket, app.port());
+            awaitBlocked(sent);
+
+            long startedAt = System.nanoTime();
+            app.stop();
+            long millis = (System.nanoTime() - startedAt) / 1_000_000;
+
+            assertThat(millis).as("the stop should end with its one-second timeout").isLessThan(3_000);
+            assertThat(handlerEnded.await(5, TimeUnit.SECONDS))
+                    .as("the handler should have ended")
+                    .isTrue();
+        } finally {
+            app.stop();
+        }
+    }
+
+    /** Waits until the handler has sent nothing for a while, which a client that reads nothing brings about. */
+    private void awaitBlocked(AtomicInteger sent) throws InterruptedException {
+        int last = -1;
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            Thread.sleep(300);
+            int now = sent.get();
+            if (now > 0 && now == last) {
+                return;
+            }
+            last = now;
+        }
+        throw new AssertionError("The handler never blocked; it sent " + sent.get() + " events");
     }
 
     /** A client that navigated away is not an error: the next write ends the handler. */

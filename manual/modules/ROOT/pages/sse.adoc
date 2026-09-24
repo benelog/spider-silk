@@ -68,6 +68,7 @@ A stream ends in one of three ways, and none of them is an error:
 * the client goes away: the write that discovers it throws `SseStream.Closed`, which ends the handler where it stands,
 * `app.stop()` closes every stream still open, before Jetty is asked to drain, because a stream is a request in flight that would otherwise never finish.
   A JVM shutdown on Ctrl-C or SIGTERM closes them as well, beside the server's own shutdown hook.
+  A stream whose client has stopped reading is blocked in a write, which nothing can close from outside; it is marked closed without waiting for that write, and the server's stop timeout ends it.
 
 A stream quieter than Jetty's 30-second connector idle timeout is closed by the server.
 Sending `stream.comment("ping")` on a timer keeps the stream alive, and a proxy in front of the server usually needs the same heartbeat.
