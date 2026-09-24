@@ -461,4 +461,20 @@ class TestRequestTest {
         assertThat(none.raw().getCharacterEncoding()).isNull();
         assertThat(none.body()).isEqualTo("한");
     }
+
+    /** A container parses the Cookie header, so the stub does too, after the cookies added by name. */
+    @Test
+    void aCookieHeaderIsReadAsCookies() {
+        WebRequest request = TestRequest.get("/x")
+                .cookie("theme", "dark")
+                .header("Cookie", "a=1; b=two words")
+                .header("cookie", "c=3")
+                .build();
+
+        assertThat(request.cookie("theme")).isEqualTo("dark");
+        assertThat(request.cookie("a")).isEqualTo("1");
+        assertThat(request.cookie("b")).isEqualTo("two words");
+        assertThat(request.cookie("c")).isEqualTo("3");
+        assertThat(TestRequest.get("/x").build().cookie("a")).isNull();
+    }
 }

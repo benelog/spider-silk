@@ -425,10 +425,36 @@ final class StubServletRequest implements HttpServletRequest {
 
     // ---- Cookies ----
 
-    /** Null rather than an empty array when none were sent, as a container does. */
+    /**
+     * Null rather than an empty array when none were sent, as a container does.
+     * The cookies added through {@code cookie(name, value)} come first, then
+     * those of any {@code Cookie} header, which a container parses the same
+     * way; a test that set the cookie as a header used to read none of it.
+     */
     @Override
     public Cookie @Nullable [] getCookies() {
-        return cookies.isEmpty() ? null : cookies.toArray(new Cookie[0]);
+        List<Cookie> all = new ArrayList<>(cookies);
+        for (Map.Entry<String, List<String>> header : headers.entrySet()) {
+            if (header.getKey().equalsIgnoreCase("Cookie")) {
+                header.getValue().forEach(line -> parseCookies(line, all));
+            }
+        }
+        return all.isEmpty() ? null : all.toArray(new Cookie[0]);
+    }
+
+    /** {@code name=value} pairs separated by semicolons, the form RFC 6265 gives the header. */
+    private static void parseCookies(String line, List<Cookie> into) {
+        for (String pair : line.split(";", -1)) {
+            int equals = pair.indexOf('=');
+            if (equals <= 0) {
+                continue;
+            }
+            try {
+                into.add(new Cookie(pair.substring(0, equals).trim(), pair.substring(equals + 1).trim()));
+            } catch (IllegalArgumentException e) {
+                // A name no container would take is left out, as a container leaves it out.
+            }
+        }
     }
 
     // ---- Session ----
