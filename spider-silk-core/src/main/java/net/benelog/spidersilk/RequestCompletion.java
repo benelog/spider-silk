@@ -21,6 +21,10 @@ import org.jspecify.annotations.Nullable;
  * exception mapped to a 400 is the caller's mistake and one answered with a 500
  * is the application's.
  *
+ * <p>Both are a {@link Throwable}, because an {@link Error} such as an
+ * {@link AssertionError} or a {@link StackOverflowError} is answered and
+ * reported the way an exception is.
+ *
  * @param response the response definition, after decoration; a raw writer or a
  *                 write failure may change what the servlet actually sends
  * @param statusCode the final status reported by the servlet response
@@ -34,7 +38,7 @@ import org.jspecify.annotations.Nullable;
  *               a status the handler chose rather than a failure
  */
 public record RequestCompletion(WebResponse response, int statusCode, Duration took,
-        @Nullable Exception writeFailure, @Nullable Exception thrown) {
+        @Nullable Throwable writeFailure, @Nullable Throwable thrown) {
 
     public RequestCompletion {
         Objects.requireNonNull(response, "response");
@@ -43,7 +47,7 @@ public record RequestCompletion(WebResponse response, int statusCode, Duration t
 
     /** A completion of a request nothing threw in. */
     public RequestCompletion(WebResponse response, int statusCode, Duration took,
-            @Nullable Exception writeFailure) {
+            @Nullable Throwable writeFailure) {
         this(response, statusCode, took, writeFailure, null);
     }
 

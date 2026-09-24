@@ -29,6 +29,7 @@ A completion does not confirm that the remote client received the entire body.
 `thrown()` is what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did.
 `threw()` reports whether that exception is present.
 It is null when nothing threw, and for an `HttpException`, which is a status the handler chose rather than a failure.
+An `Error` such as an `AssertionError` or a `StackOverflowError` is reported as an exception is, so `thrown()` and `writeFailure()` are a `Throwable`.
 Read it together with `statusCode()`: an exception mapped to a 400 is the caller's mistake, and one answered with a 500 is the application's.
 A logger that records failures on a tracing span or in an error list reads it here, instead of registering a catch-all `exception(...)` handler that would also have to answer the request:
 

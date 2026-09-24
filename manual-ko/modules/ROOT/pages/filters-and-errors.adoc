@@ -114,6 +114,7 @@ app.exception(JsonException.class,
 이 예외는 자신의 상태와 메시지로 답하고 본문을 얻기 위해 `statusPage(status, ...)`로 가며, `RuntimeException` 같은 더 넓은 타입으로 등록된 핸들러는 이를 결코 보지 못한다.
 `HttpException` 자체나 그 하위 타입으로 등록된 핸들러는 본다.
 어떤 핸들러도 다루지 않는 다른 예외는 모두 500으로 답하고 로깅된다.
+`AssertionError` 같은 `Error`도 모든 응답이 싣는 헤더와 함께 같은 500으로 답하는데, `exception(Type, handler)`는 `Exception` 타입만 받기 때문이다.
 예외 핸들러가 답했든 프레임워크의 500이 답했든 예외는 xref:request-logging.adoc[요청 로거]에 `completion.thrown()`으로 보고되므로, 실패를 기록하는 데 포괄 핸들러가 필요하지 않다.
 렌더링에 실패한 템플릿은 핸들러 자신의 디스패치 안에서 예외를 던지므로, 역시 이 핸들러들에 도달한다.
 

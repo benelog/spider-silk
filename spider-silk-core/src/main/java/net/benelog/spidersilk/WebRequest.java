@@ -110,7 +110,7 @@ public final class WebRequest {
     private @Nullable Map<String, List<String>> parsedQuery;
     private @Nullable String path;
     private @Nullable String errorMessage;
-    private @Nullable Exception thrown;
+    private @Nullable Throwable thrown;
 
     /**
      * Wraps a servlet request, with the path variables the router resolved.
@@ -1410,11 +1410,11 @@ public final class WebRequest {
      * handler answered it or the framework's 500 did. Null when nothing threw,
      * and for an {@link HttpException}, which is a status rather than a failure.
      */
-    @Nullable Exception thrown() {
+    @Nullable Throwable thrown() {
         return thrown;
     }
 
-    void thrown(@Nullable Exception thrown) {
+    void thrown(@Nullable Throwable thrown) {
         this.thrown = thrown;
     }
 

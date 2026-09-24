@@ -129,11 +129,11 @@ public class AppServlet extends HttpServlet {
         Answer answer = dispatch(arrived, segments);
         WebRequest request = answer.request();
         WebResponse response = answer.response();
-        Exception failure = null;
+        Throwable failure = null;
         try {
             response = decorate(response, request, segments);
             write(response, req, res, "HEAD".equals(req.getMethod()));
-        } catch (Exception e) {
+        } catch (Throwable e) {
             failure = e;
             writeFailed(e, res);
         } finally {
@@ -182,7 +182,7 @@ public class AppServlet extends HttpServlet {
 
     /** Reports the finished request, with the response it was finally answered with. */
     private void logRequest(WebRequest request, WebResponse response, int statusCode,
-            long startedAt, @Nullable Exception failure) {
+            long startedAt, @Nullable Throwable failure) {
         if (deployment.requestLogger() == null) {
             return;
         }
@@ -199,6 +199,13 @@ public class AppServlet extends HttpServlet {
     /**
      * Never throws and never returns null: every path here ends in a response,
      * and every response goes through the response filters on the way out.
+     *
+     * <p>What it catches is a {@link Throwable}, not only an {@link Exception}.
+     * An {@link Error} such as an {@link AssertionError} or a
+     * {@link StackOverflowError} is answered as an exception is, with the
+     * framework's 500 and the headers every answer carries, and reported to the
+     * request logger. Left to the container, it went out as the container's own
+     * page, and the logger never heard of the request.
      */
     private Answer dispatch(WebRequest request, String[] segments) {
         HttpServletRequest req = request.raw();
@@ -232,7 +239,7 @@ public class AppServlet extends HttpServlet {
                 response = noRoute(current, method, path, segments);
             }
             response = renderTemplate(response);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             response = handleException(e, current);
         }
         return new Answer(current, filterResponse(completeErrorResponse(response, current), current));
@@ -258,7 +265,7 @@ public class AppServlet extends HttpServlet {
                         request.method(), request.path());
             }
             return renderTemplate(current);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             // The message of an error answered earlier does not describe this one.
             request.errorMessage(null);
             return completeErrorResponse(handleException(e, request), request);
@@ -483,16 +490,19 @@ public class AppServlet extends HttpServlet {
      * goes to the most specific handler registered for it, or to a 500, and is
      * kept on the request for the request logger to report either way.
      */
-    private WebResponse handleException(Exception e, WebRequest request) {
+    private WebResponse handleException(Throwable e, WebRequest request) {
         if (!(e instanceof HttpException)) {
             request.thrown(e);
         }
-        ExceptionHandler<Exception> handler = exceptionHandlerFor(e);
+        // An exception handler is registered for an Exception type, so an Error
+        // goes straight to the 500.
+        ExceptionHandler<Exception> handler = e instanceof Exception exception
+                ? exceptionHandlerFor(exception) : null;
         if (handler != null) {
             try {
-                return renderTemplate(required(handler.handle(request, e),
+                return renderTemplate(required(handler.handle(request, (Exception) e),
                         "Exception handler", request.method(), request.path()));
-            } catch (Exception handlerFailure) {
+            } catch (Throwable handlerFailure) {
                 return internalError(handlerFailure, request);
             }
         }
@@ -532,7 +542,7 @@ public class AppServlet extends HttpServlet {
         return (ExceptionHandler<Exception>) best;
     }
 
-    private WebResponse internalError(Exception e, WebRequest request) {
+    private WebResponse internalError(Throwable e, WebRequest request) {
         log("Error while handling request", e);
         return fail(request, HttpStatus.INTERNAL_SERVER_ERROR, "Internal Server Error");
     }
@@ -569,7 +579,7 @@ public class AppServlet extends HttpServlet {
                         "Error handler", request.method(), request.path()));
                 return answered.over(response).status(
                         answered.hasStatus() ? answered.status() : status);
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 log("Error handler failed for status " + status, e);
                 return WebResponse.text("Internal Server Error")
                         .status(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -695,7 +705,7 @@ public class AppServlet extends HttpServlet {
      * that looks complete. The failure is logged here either way, since how
      * loudly a container reports what it was handed differs from one to the next.
      */
-    private void writeFailed(Exception e, HttpServletResponse res)
+    private void writeFailed(Throwable e, HttpServletResponse res)
             throws IOException, ServletException {
         log("Failed while writing the response", e);
         if (res.isCommitted()) {
@@ -704,6 +714,9 @@ public class AppServlet extends HttpServlet {
             }
             if (e instanceof RuntimeException unchecked) {
                 throw unchecked;
+            }
+            if (e instanceof Error error) {
+                throw error;
             }
             throw new ServletException("Failed while writing the response", e);
         }

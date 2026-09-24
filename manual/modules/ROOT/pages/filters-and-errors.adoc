@@ -114,6 +114,7 @@ An `HttpException` is a status the handler chose, not a failure.
 It answers with its status and message and goes to `statusPage(status, ...)` for its body, and a handler registered for a broader type such as `RuntimeException` never sees it.
 A handler registered for `HttpException` itself, or for a subtype of it, does.
 Any other exception that no handler covers answers 500 and is logged.
+An `Error` such as an `AssertionError` answers the same 500, with the headers every answer carries, since `exception(Type, handler)` takes an `Exception` type only.
 Whether an exception handler or the framework's 500 answered it, the exception is reported to the xref:request-logging.adoc[request logger] as `completion.thrown()`, so recording failures does not take a catch-all handler.
 A template that fails to render throws inside the handler's own dispatch, so it reaches these handlers too.
 

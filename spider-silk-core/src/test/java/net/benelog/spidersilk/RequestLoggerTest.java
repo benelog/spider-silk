@@ -142,6 +142,73 @@ class RequestLoggerTest {
         });
     }
 
+    /**
+     * An Error is answered and reported the way an exception is. Left to the
+     * container, it went out as the container's page without the security
+     * headers, and the logger was never called.
+     */
+    @Test
+    void anErrorFromAHandlerIsAnsweredAndReportedAsAnExceptionIs() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        AssertionError thrown = new AssertionError("invariant broken");
+        App app = new App()
+                .requestLogger((req, completion) -> logged.add(completion))
+                .securityHeaders()
+                .get("/assert", req -> {
+                    throw thrown;
+                });
+
+        WebTest.test(app, client -> {
+            var response = client.get("/assert");
+            assertThat(response.statusCode()).isEqualTo(500);
+            assertThat(response.body()).isEqualTo("Internal Server Error");
+            assertThat(response.headers().firstValue("X-Content-Type-Options")).hasValue("nosniff");
+        });
+
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(500);
+            assertThat(completion.thrown()).isSameAs(thrown);
+            assertThat(completion.writeFailed()).isFalse();
+        });
+    }
+
+    /** An Error from an exception handler ends in the framework's 500, as an exception from one does. */
+    @Test
+    void anErrorFromAnExceptionHandlerAnswers500() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        IllegalStateException thrown = new IllegalStateException("first");
+        App app = new App()
+                .requestLogger((req, completion) -> logged.add(completion))
+                .exception(IllegalStateException.class, (req, e) -> {
+                    throw new StackOverflowError();
+                })
+                .get("/", req -> {
+                    throw thrown;
+                });
+
+        WebTest.test(app, client -> assertThat(client.get("/").statusCode()).isEqualTo(500));
+
+        assertThat(logged).singleElement().satisfies(completion ->
+                assertThat(completion.thrown()).isSameAs(thrown));
+    }
+
+    /** An Error while writing is a write failure, where the logger used to hear of a 200 that succeeded. */
+    @Test
+    void anErrorWhileWritingIsReportedAsAWriteFailure() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        StackOverflowError failure = new StackOverflowError();
+        App app = new App().requestLogger((req, completion) -> logged.add(completion))
+                .get("/", req -> WebResponse.stream("text/plain", out -> { throw failure; }));
+
+        WebTest.test(app, client -> assertThat(client.get("/").statusCode()).isEqualTo(500));
+
+        assertThat(logged).singleElement().satisfies(completion -> {
+            assertThat(completion.statusCode()).isEqualTo(500);
+            assertThat(completion.writeFailed()).isTrue();
+            assertThat(completion.writeFailure()).isSameAs(failure);
+        });
+    }
+
     /** An exception a handler mapped is reported too, with the status it was mapped to: the logger decides what counts. */
     @Test
     void anExceptionAnExceptionHandlerAnsweredIsReportedWithItsStatus() {

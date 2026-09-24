@@ -259,6 +259,7 @@ app.requestLogger((req, completion) -> logger.info("{} {} -> {} ({}ms)",
 `took()` is the elapsed Duration, and `writeFailure()` / `writeFailed()` record an exception during decoration or writing independently of status.
 A write failure can leave a 200 after commitment or cause a 500 before commitment.
 `thrown()` / `threw()` report what a handler, a filter, or a template threw, whether an exception handler answered it or the framework's 500 did; null for an `HttpException`, which is a status rather than a failure.
+An `Error` such as `AssertionError` is answered with the framework's 500 and reported the same way, so `thrown()` and `writeFailure()` are a `Throwable`.
 Read it with `statusCode()`: a 400 is the caller's mistake, a 500 the application's.
 `req.route()` there is the route that answered (null for a static file, 404, 405, OPTIONS), so a metric or a span groups by `req.route().path()`.
 `req.body()` there answers the text a filter or handler already read.
