@@ -4,6 +4,7 @@
 `spider-silk-openapi` turns xref:route-introspection.adoc[`app.routes()`] into an OpenAPI 3.1 document.
 It is a reader over that list and nothing else.
 Core hands the routes out as plain data and needs no change for this module: `PathPattern`'s `\{deckId}` already _is_ OpenAPI's path template, so there is nothing to translate and nothing to reflect over.
+A path is written the way the router reads it, with a leading `/` and no trailing one, so `get("decks", ...)` and `post("/decks/", ...)` share the one item `/decks`.
 
 The export is a module rather than a method on `App` for a second reason.
 A spec format is not the web tier, and a version this framework does not own should not be pinned inside the one artifact every application depends on.

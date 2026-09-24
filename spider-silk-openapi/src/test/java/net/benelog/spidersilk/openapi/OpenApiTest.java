@@ -77,6 +77,24 @@ class OpenApiTest {
         assertThat(paths.getObject("/api/decks").getObject("get").has("parameters")).isFalse();
     }
 
+    /**
+     * The router reads "decks" and "/decks/" as "/decks", so the document does
+     * too: every key starts with a slash, as OpenAPI requires, and one path is
+     * one item whatever spelling each method was registered under.
+     */
+    @Test
+    void writesEveryPathTheWayTheRouterReadsIt() {
+        App app = new App()
+                .get("decks", req -> WebResponse.text("list"))
+                .post("/decks/", req -> WebResponse.text("created"))
+                .get("", req -> WebResponse.text("home"));
+        JsonObject paths = OpenApi.document("Flashcard API", "1.0.0", app.routes())
+                .asObject().getObject("paths");
+
+        assertThat(paths.keys()).containsExactly("/decks", "/");
+        assertThat(paths.getObject("/decks").keys()).containsExactly("get", "post");
+    }
+
     /** A bare wildcard has no path template, and a document quietly missing it would lie. */
     @Test
     void refusesAWildcardRouteInsteadOfDroppingIt() {

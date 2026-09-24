@@ -82,12 +82,12 @@ public final class OpenApi {
         Objects.requireNonNull(version, "version");
         JsonObject paths = Json.object();
         for (Route route : Objects.requireNonNull(routes, "routes")) {
-            String pattern = route.path();
+            String pattern = normalized(route.path());
             String path = template(pattern);
             if (path.contains("*")) {
                 throw new IllegalArgumentException(
                         "A wildcard route has no OpenAPI path template: " + route.method() + " "
-                                + pattern + ". Name the tail as {name*}, or leave the route out of"
+                                + route.path() + ". Name the tail as {name*}, or leave the route out of"
                                 + " the list passed here.");
             }
             JsonObject operations = paths.has(path) ? paths.getObject(path) : Json.object();
@@ -98,6 +98,21 @@ public final class OpenApi {
                 .put("openapi", OPENAPI_VERSION)
                 .put("info", Json.object().put("title", title).put("version", version))
                 .put("paths", paths);
+    }
+
+    /**
+     * The pattern as OpenAPI spells a path: a leading {@code /}, and no trailing
+     * one except on the root. The router reads {@code "decks"} and
+     * {@code "/decks/"} as {@code "/decks"}, and {@link Route#path()} keeps the
+     * spelling it was registered under, so without this one path could come out
+     * as a key OpenAPI refuses, or as two items.
+     */
+    private static String normalized(String pattern) {
+        String path = pattern.startsWith("/") ? pattern.substring(1) : pattern;
+        if (path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        return "/" + path;
     }
 
     /**
