@@ -20,6 +20,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -544,11 +545,12 @@ public final class WebRequest {
      * therefore answers 400 here, as it does for {@link #queryParam(String)},
      * rather than reaching the container's parser, which fails on it in a way
      * of its own and differently on each server. Only the query string is read
-     * first: the body is still read by the container, when and as it was.
+     * first: the body is still read by the container, when and as it was, and
+     * {@link #formFields} turns what it throws into a 4xx.
      */
     private @Nullable String parameter(String name) {
         parsedQuery();
-        return req.getParameter(name);
+        return formFields(() -> req.getParameter(name));
     }
 
     private static long parseLong(String name, String value) {
@@ -589,8 +591,46 @@ public final class WebRequest {
     public List<String> params(String name) {
         // The query string is checked first, for the reason parameter(name) gives.
         parsedQuery();
-        String[] values = req.getParameterValues(name);
+        String[] values = formFields(() -> req.getParameterValues(name));
         return values == null ? List.of() : List.of(values);
+    }
+
+    /**
+     * A read of the container's parameters, with a body it cannot parse
+     * answered as the client's fault rather than as a 500.
+     *
+     * <p>A multipart form goes through {@code getParts} first, so its failures
+     * answer as they do for {@link #file(String)}: 413 for a size limit, 400
+     * for a body that will not parse. Tomcat and Undertow report both through
+     * {@code getParameter} as the same {@link IllegalStateException}, and only
+     * {@code getParts} tells them apart. A servlet with no multipart
+     * configuration is left to {@code getParameter}, which then reads no field
+     * out of the body, as it did before.
+     *
+     * <p>A form-encoded body the container will not parse — an escape that
+     * will not decode, more fields or more bytes than it takes — is a 400
+     * carrying the container's reason. Jetty throws its {@code BadMessageException},
+     * Tomcat an {@code IllegalStateException}, and Undertow either ignores the
+     * field or refuses the body itself, and none of them names a size refusal
+     * in a way the servlet API defines, so the status does not try to.
+     */
+    private <T> T formFields(Supplier<T> read) {
+        if (isMultipart()) {
+            try {
+                req.getParts();
+            } catch (IOException | ServletException | IllegalStateException e) {
+                RuntimeException refused = refusedMultipart(e);
+                if (refused instanceof HttpException) {
+                    throw refused;
+                }
+            }
+        }
+        try {
+            return read.get();
+        } catch (RuntimeException e) {
+            throw new HttpException(HttpStatus.BAD_REQUEST,
+                    "Form body could not be read: " + deepestMessage(e));
+        }
     }
 
     /**
@@ -1185,17 +1225,29 @@ public final class WebRequest {
         if (failure instanceof IllegalStateException bare && bare.getCause() == null) {
             return bare;
         }
-        String detail = "";
         boolean tooLarge = false;
         for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             tooLarge |= cause instanceof IllegalStateException;
+        }
+        String detail = deepestMessage(failure);
+        return tooLarge
+                ? new HttpException(HttpStatus.CONTENT_TOO_LARGE, "Multipart upload refused: " + detail)
+                : new HttpException(HttpStatus.BAD_REQUEST, "Multipart body could not be read: " + detail);
+    }
+
+    /**
+     * The message nearest the root of a container's failure, which is the one
+     * that says what was wrong with the body; the wrappers above it repeat it
+     * or name only themselves. Empty when nothing on the chain has one.
+     */
+    private static String deepestMessage(Throwable failure) {
+        String detail = "";
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
             if (cause.getMessage() != null) {
                 detail = cause.getMessage();
             }
         }
-        return tooLarge
-                ? new HttpException(HttpStatus.CONTENT_TOO_LARGE, "Multipart upload refused: " + detail)
-                : new HttpException(HttpStatus.BAD_REQUEST, "Multipart body could not be read: " + detail);
+        return detail;
     }
 
     /**

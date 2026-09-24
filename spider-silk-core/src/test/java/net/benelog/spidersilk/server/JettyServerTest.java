@@ -334,6 +334,49 @@ class JettyServerTest {
     }
 
     /**
+     * A body the container will not parse is the client's fault, whichever
+     * parameter read reaches it. A multipart body is refused as it is for
+     * {@code file(name)}: 413 for a part over {@code maxFileSize}, 400 for one
+     * cut off before its closing boundary. A form body is refused with a 400.
+     */
+    @Test
+    void aBodyTheContainerCannotParseIsA4xxThroughTheParameterReads() throws Exception {
+        MultipartConfigElement tenBytes =
+                new MultipartConfigElement(System.getProperty("java.io.tmpdir"), 10, 100_000, 0);
+        app = new App()
+                .post("/param", req -> WebResponse.text(req.param("a")))
+                .post("/params", req -> WebResponse.text(req.params("a").toString()))
+                .post("/formParam", req -> WebResponse.text(req.formParam("a")))
+                .server((a, port) -> new JettyServer(a).port(port).multipart(tenBytes))
+                .start(0);
+
+        for (String path : List.of("/param", "/params", "/formParam")) {
+            assertThat(form(path, "a=%zz").statusCode())
+                    .as("a form field whose escape will not decode, through " + path)
+                    .isEqualTo(400);
+            assertThat(multipart(path, "front,back is more than ten bytes\r\n--spidersilkboundary--\r\n")
+                    .statusCode())
+                    .as("a part over maxFileSize, through " + path)
+                    .isEqualTo(413);
+            assertThat(multipart(path, "front,back").statusCode())
+                    .as("a multipart body cut off before its closing boundary, through " + path)
+                    .isEqualTo(400);
+        }
+
+        // Jetty takes 200,000 bytes of form, and names no size refusal the servlet API defines.
+        assertThat(form("/param", "a=" + "x".repeat(300_000)).statusCode())
+                .as("a form body over the container's limit")
+                .isEqualTo(400);
+    }
+
+    private HttpResponse<String> form(String path, String body) throws IOException, InterruptedException {
+        return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + path))
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .POST(HttpRequest.BodyPublishers.ofString(body))
+                .build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    /**
      * Sends a GET the java.net.http client cannot build, since {@link URI}
      * refuses a percent-escape that is not two hex digits. The whole response
      * is returned as text.

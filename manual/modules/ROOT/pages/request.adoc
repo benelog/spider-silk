@@ -122,6 +122,10 @@ A name the other source carries does not count, so `formParam("page", parser)` a
 There is no `(name, defaultString)` form, since `queryParamOrNull(name)` already covers the optional string without overlapping the parser overload.
 
 A query string that will not decode, such as `?q=%zz`, answers 400 through `param`, `queryParam`, and `formParam` in every form, whichever name is read.
+A form body the container will not parse answers 400 through `param`, `params`, and `formParam` in every form, with the container's reason as the message.
+That covers an escape that will not decode and a body over the container's own form limit.
+A multipart form answers as `file(name)` does: 413 for a part or a body over the multipart limits, and 400 for one that will not parse.
+Undertow drops a field whose escape will not decode, and refuses a form over its own limit with 413 before the application runs.
 
 == Content negotiation
 
