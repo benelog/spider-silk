@@ -2,14 +2,15 @@ package net.benelog.spidersilk;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.URISyntaxException;
 import java.net.JarURLConnection;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -19,6 +20,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.jar.JarEntry;
 import java.util.zip.CRC32;
@@ -100,10 +102,15 @@ public final class StaticFiles {
 
     /**
      * The content checksums worked out for files whose modification time is a
-     * stamp, by path, time, and length. A file changes neither time nor length
-     * within a deployment of an image, so each is read for its checksum once
-     * rather than on every request, and a file rewritten while the application
-     * runs gets a new time and is read again.
+     * stamp, by path, time, length, and the file's change time. A file changes
+     * none of them within a deployment of an image, so each is read for its
+     * checksum once rather than on every request.
+     *
+     * <p>The change time is what catches a file rewritten while the application
+     * runs. A copy that keeps the stamp, such as {@code cp -a}, {@code tar}, or
+     * {@code rsync -a} into a {@code directory(...)}, keeps the modification
+     * time, and a small edit can keep the length; the change time is the file
+     * system's own, and no copy can set it.
      */
     private final Map<ChecksumKey, Long> checksums = new ConcurrentHashMap<>();
 
@@ -344,7 +351,12 @@ public final class StaticFiles {
      */
     private String contentTag(String relative, Resource resource, long lastModified, long length)
             throws IOException {
-        ChecksumKey key = new ChecksumKey(relative, lastModified, length);
+        long changed = resource.changeTime();
+        if (changed < 0) {
+            // Nothing tells a rewrite apart from the file already read, so read it each time.
+            return "\"" + Long.toHexString(resource.checksum()) + "-" + Long.toHexString(length) + "\"";
+        }
+        ChecksumKey key = new ChecksumKey(relative, lastModified, length, changed);
         Long checksum = checksums.get(key);
         if (checksum == null) {
             checksum = resource.checksum();
@@ -353,8 +365,8 @@ public final class StaticFiles {
         return "\"" + Long.toHexString(checksum) + "-" + Long.toHexString(length) + "\"";
     }
 
-    /** What a content checksum is kept under: a path, and the time and length it had. */
-    private record ChecksumKey(String relative, long lastModified, long length) {
+    /** What a content checksum is kept under: a path, and the times and length it had. */
+    private record ChecksumKey(String relative, long lastModified, long length, long changed) {
     }
 
     /**
@@ -427,6 +439,15 @@ public final class StaticFiles {
         long length();
 
         InputStream open() throws IOException;
+
+        /**
+         * A time that changes whenever the content does, and that nothing can
+         * set back, or -1 when the source has none. A resource that cannot
+         * change while the application runs answers 0.
+         */
+        default long changeTime() {
+            return 0;
+        }
 
         /** The CRC-32 of the content, read through {@link #open()} unless the source already holds it. */
         default long checksum() throws IOException {
@@ -597,6 +618,21 @@ public final class StaticFiles {
         @Override
         public InputStream open() throws IOException {
             return Files.newInputStream(path);
+        }
+
+        /**
+         * The POSIX change time, which every write moves and which no copy can
+         * set. Read only for a stamped file, so a file with a real modification
+         * time costs nothing more. -1 on a file system without one, such as
+         * Windows, where the checksum is read on every request instead.
+         */
+        @Override
+        public long changeTime() {
+            try {
+                return ((FileTime) Files.getAttribute(path, "unix:ctime")).to(TimeUnit.NANOSECONDS);
+            } catch (UnsupportedOperationException | IllegalArgumentException | IOException e) {
+                return -1;
+            }
         }
     }
 }

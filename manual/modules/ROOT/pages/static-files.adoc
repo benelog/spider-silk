@@ -6,7 +6,7 @@ Every response carries an `ETag` and `Last-Modified` derived from the resource, 
 A modification time before 2000 is a stamp that a reproducible build puts on every file alike.
 Jib, for one, stamps every file of an image with 1970-01-01T00:00:01Z.
 Such a file is tagged by a CRC-32 of its content instead, and carries no `Last-Modified`.
-The content is read for that tag once per version of the file.
+The content is read for that tag once per version of the file, which a directory root tells by the file's change time as well, since a copy such as `cp -a` or `rsync -a` keeps the stamp but cannot keep the change time.
 A one-character edit that leaves the length unchanged therefore still reaches the browser in the next release.
 The default `Cache-Control: no-cache` means "cache it, but check with me first", which is right for a file whose name stays the same when its content changes.
 For a fingerprinted name, set a long `maxAge`:

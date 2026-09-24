@@ -323,6 +323,42 @@ class StaticFilesTest {
         });
     }
 
+    /**
+     * A directory can be written into while the application runs, by a copy
+     * that keeps the stamp and a length that happens to match. The checksum
+     * kept for the old content must not tag the new one.
+     */
+    @Test
+    void aStampedFileRewrittenWhileServedGetsANewTag(@TempDir Path root) throws IOException {
+        Path css = root.resolve("style.css");
+        Files.writeString(css, "body{color:#ff0000}");
+        Files.setLastModifiedTime(css, JIB_STAMP);
+
+        WebTest.test(new App().staticFiles(StaticFiles.directory(root)), client -> {
+            String first = client.get("/style.css").headers().firstValue("ETag").orElseThrow();
+
+            rewriteKeepingTheStamp(css, "body{color:#00ff00}");
+            HttpResponse<String> response = client.send(request -> request
+                    .uri(URI.create(client.url("/style.css")))
+                    .header("If-None-Match", first)
+                    .GET());
+
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("body{color:#00ff00}");
+            assertThat(response.headers().firstValue("ETag")).isPresent().get().isNotEqualTo(first);
+        });
+    }
+
+    /** What {@code cp -a} or {@code rsync -a} does with a stamped build output. */
+    private static void rewriteKeepingTheStamp(Path file, String content) {
+        try {
+            Files.writeString(file, content);
+            Files.setLastModifiedTime(file, JIB_STAMP);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
     @Test
     void aStampedFileStillRevalidatesToNotModified(@TempDir Path root) throws IOException {
         Path css = root.resolve("style.css");
