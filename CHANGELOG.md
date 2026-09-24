@@ -41,7 +41,12 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   The later value used to overwrite the earlier one; the check covers routes, route-group prefixes, filter paths, and `Cors.forPath`.
 - `spider-silk-core`: `Json.parse`, and so `bodyJson`, accepts only RFC 8259 syntax.
   The numbers `01`, `+1`, `.5`, and `1.`, raw control characters inside strings, whitespace other than space, tab, LF, and CR, and non-ASCII hex digits in `\u` escapes are a `JsonException`, which `bodyJson` answers with 400.
-  An integer too large for a long is reported as "Number out of range".
+- `spider-silk-core`: `Json.parse` reads an integer outside the range of a long as a number, which `asDouble` answers and `asLong` rejects.
+  It used to be a `JsonException` reporting "Number out of range".
+- `spider-silk-core`: `attachment(name)` writes a name outside printable ASCII, or one holding a quote or a backslash, as RFC 6266's `filename*` beside an escaped ASCII fallback.
+  A control character in the name throws `IllegalArgumentException`.
+- `spider-silk-core`: `SseStream.id(...)` and `send(event, data)` throw `IllegalArgumentException` for a line break in the id or the event name, and `id(...)` for a NUL, before anything is written.
+- `spider-silk-core`: with named origins, `Cors` adds `Vary: Origin` to every answer on a covered path, whether the request carried an allowed `Origin`, another one, or none.
 - `spider-silk-undertow`: `UndertowServer` installs a servlet exception handler that closes the connection when a failure arrives after the response has started.
   Replacing it through `customizeDeployment(...)` gives up that behavior.
 
@@ -52,6 +57,16 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 
 ### Fixed
 
+- `spider-silk-core`: a multipart upload the container refuses answers 413 for a size limit and 400 for a body that will not parse, through `file`, `fileOrNull`, and `files`.
+  Jetty used to answer an oversized part as a missing file, null, or an empty list, and Tomcat as a 500.
+- `spider-silk-core`: `param`, `params`, and `formParam` answer a form body the container cannot parse with 400, and a multipart one as `file` does, instead of a 500.
+- `spider-silk-core`: `body()`, `bodyJson()`, `bodyReader()`, and `bodyNdjson(...)` answer a charset the JVM cannot decode with 415, before a byte is read, instead of a 500.
+- `spider-silk-core`: `JsonArray.get(index)` throws `JsonException` for an index outside the array, so a reader given a short array answers 400 instead of 500.
+- `spider-silk-core`: a static file whose modification time is a reproducible build's stamp, one before 2000 such as the 1970-01-01T00:00:01Z Jib writes, is tagged by a CRC-32 of its content and carries no `Last-Modified`.
+  A same-length edit used to keep its `ETag` across releases, and browsers kept the old file on a 304.
+- `spider-silk-core`: a JVM shutdown closes open SSE streams through a hook of the application's own, so Ctrl-C and SIGTERM no longer wait out the stop timeout for them.
+- `spider-silk-tomcat`: `stopTimeout` drains requests in flight on Tomcat's own thread pool, which the drain used to skip, dropping a request after Tomcat's two-second `unloadDelay`.
+- `spider-silk-openapi`: a path key gets a leading slash and loses a trailing one, the way the router reads the pattern, so `get("decks")` beside `post("/decks/")` is the one item `/decks`.
 - `spider-silk-core`: `JsonValue.asLong()` and `getLong` convert a decimal or exponent number from its digits rather than the nearest double.
   `9007199254740993.0` reads exactly, and `1.0000000000000001` is rejected as a fraction.
 - `spider-silk-core`: a gzip-compressed stream whose writer fails before writing anything answers 500, not a 200 with an empty gzip body.

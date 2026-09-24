@@ -76,6 +76,9 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 60 | `body()` and each `bodyNdjson` line bounded in bytes, 1MB by default | ✅ shipped |
 | 61 | A body that fails after commit aborts the transfer | ✅ shipped |
 | 62 | Strict RFC 8259 parsing, whole numbers read from the token's digits | ✅ shipped |
+| 63 | A body the container or the JVM cannot read is a 4xx, never a 500 | ✅ shipped |
+| 64 | A modification time before 2000 is a build's stamp, and the tag comes from the content | ✅ shipped |
+| 65 | The application's own shutdown hook closes open SSE streams | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
 The exception, 15b, is a decision rather than a gap.
@@ -1170,9 +1173,66 @@ Rejected: a core-side abort API, which the servlet API has no way to carry out.
   Number syntax, raw control characters in strings, JSON whitespace, and hex digits are checked by the parser, because `Double.parseDouble`, `Character.isWhitespace`, and `Character.digit` accept more than JSON does.
 - **A decimal token keeps its text beside the double.**
   `asLong` converts the text exactly with `BigDecimal.longValueExact`, and `asDouble` stays the approximate reading.
+- **An integer past the range of a long is kept the same way.**
+  It is still a number, so `asDouble` reads it and only `asLong` refuses it.
 
 Rejected: a lenient mode, because a body another JSON implementation rejects should not reach a handler.
 Rejected: storing every decimal as a `BigDecimal`, which makes every parse and every `asDouble` pay for what only `asLong` needs.
+
+## 63 · A body core cannot read
+
+### 63. A body the container or the JVM cannot read is a 4xx, never a 500
+
+The request carried the fault, so the answer names the client's side, whichever container parsed the body.
+
+- **Multipart is decided by `Content-Type`, not by the exception.**
+  The servlet API throws the same `ServletException` for "not multipart" as Jetty does for a multipart body that will not parse.
+- **A size refusal is an `IllegalStateException` on the cause chain, and answers 413.**
+  - The servlet API names it for a part over `maxFileSize` and a body over `maxRequestSize`.
+  - Tomcat and Undertow carry the size exception as its cause, and Jetty wraps its own in a `ServletException`.
+  - Anything else from `getParts` is a body that will not parse, and answers 400.
+- **A bare `IllegalStateException` stays a 500.**
+  Tomcat and Undertow throw it, with no cause and before reading anything, for a servlet with no multipart configuration, which is the deployment's fault.
+  Jetty wraps that case like a size refusal, so there it answers 413 with Jetty's message.
+- **The parameter reads go through `getParts` first on a multipart form.**
+  Tomcat and Undertow report both failures through `getParameter` as the same `IllegalStateException`, and only `getParts` tells them apart.
+- **A form-encoded body the container refuses is a 400 with the container's reason.**
+  The servlet API defines no size signal for one, so a form over the container's limit is a 400 too.
+- **A charset the JVM cannot decode is a 415**, settled before a byte is read.
+
+Rejected: parsing form bodies in core, which would move a parser and its limits out of the container for one status code.
+Rejected: telling containers apart by class or message, which ties core to each container's internals.
+
+## 64 · Validators for a file a build stamped
+
+### 64. A modification time before 2000 is a build's stamp, and the tag comes from the content
+
+Jib stamps every file of an image with 1970-01-01T00:00:01Z, so a time-and-length `ETag` stayed the same across releases for a same-length edit.
+
+- **The cutoff is 2000.**
+  - Jib and Nix stamp 1970-01-01T00:00:01Z, Cloud Native Buildpacks 1980-01-01T00:00:01Z, and a zip entry holds nothing earlier than 1980.
+  - No file an application serves was last written before 2000.
+- **Such a file is tagged by a CRC-32 of its content and its length.**
+  - It is worked out once per path, time, and length, because a file in an image does not change within a deployment.
+  - A jar entry's CRC is in the jar's central directory, so a stamped jar is not read for it.
+- **A stamp is not sent as `Last-Modified`, and `If-Modified-Since` is not compared against it.**
+- A file with a real time keeps the time-and-length tag, so a directory of uploads is never read for a checksum.
+
+Rejected: a content tag for every file, which reads every large upload once for nothing.
+Rejected: `USE_CURRENT_TIMESTAMP` in the Gradle plugin, which gives every build's layers a new digest.
+
+## 65 · SSE streams at JVM shutdown
+
+### 65. The application's own shutdown hook closes open SSE streams
+
+Ctrl-C and SIGTERM stop the server through its own hook, which calls the server's stop rather than `App.stop()`.
+
+- **The first `deploy()` registers the hook, and the last `undeploy()` removes it.**
+  It covers every server and an external container alike, and a suite starting a server per test accumulates none.
+- **The JVM runs its hooks at once**, so the streams close while the server drains, and the drain ends with them.
+
+Rejected: a pre-stop callback on `WebServer`, which is an interface change every server module would have to follow.
+Rejected: `App.start` owning the only hook, which leaves a server started directly and an external container uncovered.
 
 ## Rejected — decisions, with the reason
 
