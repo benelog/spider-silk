@@ -21,7 +21,7 @@ class NdjsonApiTest extends RepositoryTestSupport {
 
     @Test
     void aDeckExportsAsOneCardPerLine() {
-        WebTest.test(FlashcardApp.createApp(dataSource), client -> {
+        WebTest.test(new FlashcardContext(dataSource).createApp(), client -> {
             long deckId = createDeck(client, "French");
             client.post("/api/decks/%d/cards.ndjson".formatted(deckId), """
                     {"text":"pomme","meaning":"apple","tags":"fruit"}
@@ -48,7 +48,7 @@ class NdjsonApiTest extends RepositoryTestSupport {
      */
     @Test
     void aRejectedLineIsA400OverHttpAndImportsNothing() {
-        WebTest.test(FlashcardApp.createApp(dataSource), client -> {
+        WebTest.test(new FlashcardContext(dataSource).createApp(), client -> {
             long deckId = createDeck(client, "French");
 
             HttpResponse<String> response =
@@ -66,7 +66,7 @@ class NdjsonApiTest extends RepositoryTestSupport {
     /** A missing deck is answered before the stream starts, while a status can still change. */
     @Test
     void anExportOfAMissingDeckIsA404() {
-        WebTest.test(FlashcardApp.createApp(dataSource), client ->
+        WebTest.test(new FlashcardContext(dataSource).createApp(), client ->
                 assertThat(client.get("/api/decks/9999/cards.ndjson").statusCode())
                         .isEqualTo(404));
     }

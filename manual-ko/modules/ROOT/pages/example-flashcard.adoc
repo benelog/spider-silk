@@ -30,7 +30,7 @@ ch07-jdbc-plus의 기능에 더해, 프레임워크의 REST 지원을 보여 주
 그 라우트들은 설명을 붙여 등록한 유일한 라우트이기도 하며, `/_routes`는 설명을 별도 열에 보여 주고 `/openapi.json`은 각 오퍼레이션의 `summary`에 담는다.
 
 모든 응답::
-`FlashcardApp.createApp`은 실제 애플리케이션처럼 xref:cors-compression-and-security-headers.adoc[응답 전반의 관심사] 세 가지를 모두 설정한다.
+`FlashcardContext.createApp`은 실제 애플리케이션처럼 xref:cors-compression-and-security-headers.adoc[응답 전반의 관심사] 세 가지를 모두 설정한다.
 `securityHeaders(...)`는 기본값에 이 앱이 돌아갈 수 있는 정책을 더해 받는다: `default-src 'self'`가 앱이 로드하는 모든 것을 포괄하고, `style-src`는 인라인도 허용하는데 `stats.jte`가 차트 막대의 크기를 style 속성으로 정하기 때문이며, 이는 스타일시트로는 할 수 없는 일이다.
 HSTS는 의도적으로 뺐는데, `main`이 앱을 `http://localhost`로 제공하기 때문이다.
 `gzip()`은 페이지, 스타일시트, JSON, CSV 익스포트를 똑같이 포괄한다.
@@ -39,7 +39,7 @@ HSTS는 의도적으로 뺐는데, `main`이 앱을 `http://localhost`로 제공
 
 라우팅::
 `Controller` 인터페이스는 없다.
-`FlashcardApp.registerRoutes`가 테이블 전체이고, 핸들러는 `Action` 클래스, public 메서드 참조, 또는 람다로 도착한다.
+`FlashcardContext.registerRoutes`가 테이블 전체이고, 핸들러는 `Action` 클래스, public 메서드 참조, 또는 람다로 도착한다.
 
 == 실행
 

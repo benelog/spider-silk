@@ -40,7 +40,7 @@ public class StatsAction implements Handler {
 
 [source,java]
 ----
-app.get("/stats", context.statsAction());
+app.get("/stats", statsAction);
 ----
 
 `Action`은 ADR(Action-Domain-Responder) 패턴의 A다: 정확히 하나의 요청에 답하는 웹 계층 클래스.
@@ -64,9 +64,8 @@ public class DeckController {
 
 [source,java]
 ----
-DeckController decks = context.deckController();
-app.get("/decks/{deckId}", decks::showDeck);
-app.post("/decks/{deckId}/rename", decks::renameDeck);
+app.get("/decks/{deckId}", deckController::showDeck);
+app.post("/decks/{deckId}/rename", deckController::renameDeck);
 ----
 
 메서드가 `public`인 이유는 등록이 의도적으로 클래스 바깥에서 일어나기 때문이다.

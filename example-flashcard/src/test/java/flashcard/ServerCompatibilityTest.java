@@ -61,7 +61,7 @@ class ServerCompatibilityTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("servers")
     void theExampleAppRunsOn(String name, WebServerFactory factory) throws Exception {
-        app = FlashcardApp.createApp(freshDatabase()).server(factory).start(0);
+        app = new FlashcardContext(freshDatabase()).createApp().server(factory).start(0);
 
         // A jte template, rendered.
         HttpResponse<String> home = get("/");
@@ -125,7 +125,7 @@ class ServerCompatibilityTest {
         return dataSource;
     }
 
-    /** The same limits {@code FlashcardApp.main} sets, so this covers that path too. */
+    /** The same limits {@code FlashcardContext.start} sets, so this covers that path too. */
     private static MultipartConfigElement uploadLimits() {
         return new MultipartConfigElement(
                 System.getProperty("java.io.tmpdir"), 10 * 1024 * 1024L, 10 * 1024 * 1024L,

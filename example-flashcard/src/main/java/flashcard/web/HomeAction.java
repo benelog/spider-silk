@@ -14,7 +14,7 @@ import flashcard.service.StudyService;
 
 /**
  * One route, so the class is the handler: it implements {@link Handler} and is
- * registered as itself, {@code app.get("/", context.homeAction())}.
+ * registered as itself, {@code app.get("/", homeAction)}.
  * A class that answers several routes keeps them as public methods instead —
  * {@link DeckController} is the other shape.
  */

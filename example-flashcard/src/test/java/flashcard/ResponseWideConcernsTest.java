@@ -22,7 +22,7 @@ import flashcard.repository.RepositoryTestSupport;
  * security headers, compression, and CORS on the one document meant to be read
  * from somewhere else.
  *
- * <p>These are the configuration choices {@code FlashcardApp.createApp} makes,
+ * <p>These are the configuration choices {@code FlashcardContext.createApp} makes,
  * not the framework features themselves — core's own tests cover those. What is
  * asserted here is that this app's policy is the one that goes out, including on
  * the answers no filter would have reached.
@@ -31,7 +31,7 @@ class ResponseWideConcernsTest extends RepositoryTestSupport {
 
     @Test
     void everyPageCarriesTheSecurityHeaders() {
-        WebTest.test(FlashcardApp.createApp(dataSource), client -> {
+        WebTest.test(new FlashcardContext(dataSource).createApp(), client -> {
             HttpResponse<String> home = client.get("/");
 
             assertThat(home.statusCode()).isEqualTo(200);
@@ -49,7 +49,7 @@ class ResponseWideConcernsTest extends RepositoryTestSupport {
      */
     @Test
     void theContentSecurityPolicyAllowsWhatTheStatsChartNeedsAndNoMore() {
-        WebTest.test(FlashcardApp.createApp(dataSource), client ->
+        WebTest.test(new FlashcardContext(dataSource).createApp(), client ->
                 assertThat(header(client.get("/"), "Content-Security-Policy"))
                         .isEqualTo("default-src 'self'; style-src 'self' 'unsafe-inline'"));
     }
@@ -57,7 +57,7 @@ class ResponseWideConcernsTest extends RepositoryTestSupport {
     /** This app is served over http://localhost, so it must not claim otherwise. */
     @Test
     void thereIsNoHsts() {
-        WebTest.test(FlashcardApp.createApp(dataSource), client ->
+        WebTest.test(new FlashcardContext(dataSource).createApp(), client ->
                 assertThat(client.get("/").headers()
                         .firstValue("Strict-Transport-Security")).isEmpty());
     }
@@ -65,7 +65,7 @@ class ResponseWideConcernsTest extends RepositoryTestSupport {
     /** Neither a 404 nor a static file reaches an after-filter, and both are pages. */
     @Test
     void soDoTheAnswersNoFilterWouldHaveReached() {
-        WebTest.test(FlashcardApp.createApp(dataSource), client -> {
+        WebTest.test(new FlashcardContext(dataSource).createApp(), client -> {
             assertThat(client.get("/nope").statusCode()).isEqualTo(404);
             assertThat(header(client.get("/nope"), "X-Frame-Options")).isEqualTo("DENY");
             assertThat(header(client.get("/style.css"), "X-Content-Type-Options"))
@@ -75,7 +75,7 @@ class ResponseWideConcernsTest extends RepositoryTestSupport {
 
     @Test
     void pagesAndTheStylesheetAreCompressed() {
-        WebTest.test(FlashcardApp.createApp(dataSource), client -> {
+        WebTest.test(new FlashcardContext(dataSource).createApp(), client -> {
             HttpResponse<byte[]> home = gzipped(client, "/");
             assertThat(header(home, "Content-Encoding")).isEqualTo("gzip");
             assertThat(inflate(home.body())).contains("<html");
@@ -93,7 +93,7 @@ class ResponseWideConcernsTest extends RepositoryTestSupport {
      */
     @Test
     void theOpenApiDocumentIsReadableFromAnotherSite() {
-        WebTest.test(FlashcardApp.createApp(dataSource), client -> {
+        WebTest.test(new FlashcardContext(dataSource).createApp(), client -> {
             HttpResponse<String> document = client.send(request -> request
                     .uri(URI.create(client.url("/openapi.json")))
                     .header("Origin", "https://editor.swagger.io")
@@ -107,7 +107,7 @@ class ResponseWideConcernsTest extends RepositoryTestSupport {
     /** And it is the only one: /api/decks creates decks, so no origin gets it. */
     @Test
     void theRestOfTheApiIsNot() {
-        WebTest.test(FlashcardApp.createApp(dataSource), client -> {
+        WebTest.test(new FlashcardContext(dataSource).createApp(), client -> {
             HttpResponse<String> decks = client.send(request -> request
                     .uri(URI.create(client.url("/api/decks")))
                     .header("Origin", "https://editor.swagger.io")

@@ -48,14 +48,14 @@ public class StatsAction implements Handler {               // one class, one ro
         return WebResponse.template("stats", Map.of("stats", stats.overview()));
     }
 }
-app.get("/stats", context.statsAction());
+app.get("/stats", statsAction);
 
 public class DeckController {                               // one class, several routes
     public WebResponse showDeck(WebRequest req) { ... }     // public: registered from outside
     public WebResponse renameDeck(WebRequest req) { ... }
 }
-app.get("/decks/{deckId}", decks::showDeck);
-app.post("/decks/{deckId}/rename", decks::renameDeck);
+app.get("/decks/{deckId}", deckController::showDeck);
+app.post("/decks/{deckId}/rename", deckController::renameDeck);
 ```
 
 Never invent a `Controller` interface or a `register(App)` method: the whole routing table stays one visible list.

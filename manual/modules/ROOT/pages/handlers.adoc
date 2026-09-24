@@ -40,7 +40,7 @@ public class StatsAction implements Handler {
 
 [source,java]
 ----
-app.get("/stats", context.statsAction());
+app.get("/stats", statsAction);
 ----
 
 `Action` is the A of the ADR (Action-Domain-Responder) pattern: a web-tier class that answers exactly one request.
@@ -64,9 +64,8 @@ public class DeckController {
 
 [source,java]
 ----
-DeckController decks = context.deckController();
-app.get("/decks/{deckId}", decks::showDeck);
-app.post("/decks/{deckId}/rename", decks::renameDeck);
+app.get("/decks/{deckId}", deckController::showDeck);
+app.post("/decks/{deckId}/rename", deckController::renameDeck);
 ----
 
 The methods are `public` because registration deliberately happens outside the class.

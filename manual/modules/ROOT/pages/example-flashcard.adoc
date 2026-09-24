@@ -30,7 +30,7 @@ The document goes through xref:openapi.adoc[`spider-silk-openapi`], and the app 
 Those are also the only routes registered with a description, which `/_routes` shows in a column of its own and `/openapi.json` carries as each operation's `summary`.
 
 Every response::
-`FlashcardApp.createApp` configures all three of xref:cors-compression-and-security-headers.adoc[the response-wide concerns], as a real application would.
+`FlashcardContext.createApp` configures all three of xref:cors-compression-and-security-headers.adoc[the response-wide concerns], as a real application would.
 `securityHeaders(...)` takes the defaults plus a policy this app can run under: `default-src 'self'` covers everything it loads, and `style-src` also allows inline because `stats.jte` sizes its chart bars with a style attribute, which no stylesheet can do.
 HSTS is deliberately absent, since `main` serves the app over `http://localhost`.
 `gzip()` covers the pages, the stylesheet, the JSON, and the CSV export alike.
@@ -39,7 +39,7 @@ That document is the only resource here meant for a client other than this appli
 
 Routing::
 There is no `Controller` interface.
-`FlashcardApp.registerRoutes` is the whole table, and handlers arrive as an `Action` class, a public method reference, or a lambda.
+`FlashcardContext.registerRoutes` is the whole table, and handlers arrive as an `Action` class, a public method reference, or a lambda.
 
 == Run
 

@@ -33,6 +33,7 @@ import net.benelog.spidersilk.test.TestRequest;
 
 import flashcard.web.ApiController;
 import flashcard.web.DeckController;
+import flashcard.web.StatsAction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -53,7 +54,8 @@ class ReadmeSnippets {
     private Map<String, Object> model = Map.of();
     private ApiController api;
     private ApiController controller;
-    private FlashcardContext context;
+    private StatsAction statsAction;
+    private DeckController deckController;
     private Logger logger;
     private DeckLike deckService;
     private DueService service;
@@ -154,11 +156,10 @@ class ReadmeSnippets {
         app.get("/openapi.json", req -> WebResponse.json(
                 OpenApi.document("Flashcard API", "1.0.0", app.routes())));
 
-        app.get("/stats", context.statsAction());
+        app.get("/stats", statsAction);
 
-        DeckController decks = context.deckController();
-        app.get("/decks/{deckId}", decks::showDeck);
-        app.post("/decks/{deckId}/rename", decks::renameDeck);
+        app.get("/decks/{deckId}", deckController::showDeck);
+        app.post("/decks/{deckId}/rename", deckController::renameDeck);
     }
 
     // ---- blocks 8, 9: filters ----
