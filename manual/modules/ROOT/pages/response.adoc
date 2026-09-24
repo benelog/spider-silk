@@ -129,7 +129,8 @@ A status is an `HttpStatus` constant, so a code that does not exist cannot be wr
 
 == Redirects
 
-`redirect(location)` answers **302 Found**, and the `Location` header goes out as given.
+`redirect(location)` answers **302 Found**, with the location in the `Location` header.
+A character a header cannot carry, anything outside ASCII, a space, or a control character, is percent-encoded as UTF-8, as a browser encodes an `href`, and the rest goes out as given: `redirect("/decks/한국어")` sends `/decks/%ED%95%9C%EA%B5%AD%EC%96%B4`.
 A path like `/decks/3` is what an application normally wants, and is what HTTP allows.
 
 [source,java]

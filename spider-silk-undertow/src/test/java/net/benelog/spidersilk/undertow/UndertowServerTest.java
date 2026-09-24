@@ -463,6 +463,15 @@ class UndertowServerTest {
         assertThat(response.body()).contains("data: 2");
     }
 
+    /** A redirect to a path outside ASCII goes out percent-encoded, the same on every server. */
+    @Test
+    void aNonAsciiRedirectIsPercentEncoded() throws Exception {
+        startOnUndertow(new App().get("/go", req -> WebResponse.redirect("/decks/한국어")));
+
+        assertThat(get("/go").headers().firstValue("Location"))
+                .hasValue("/decks/%ED%95%9C%EA%B5%AD%EC%96%B4");
+    }
+
     /** A body the client cut short is the request's fault: 400, not a 500 from the read. */
     @Test
     void aBodyCutShortIsA400() throws Exception {

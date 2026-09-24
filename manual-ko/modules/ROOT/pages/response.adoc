@@ -129,7 +129,8 @@ return WebResponse.raw((req, res) -> {
 
 == 리다이렉트
 
-`redirect(location)`은 **302 Found**로 답하며, `Location` 헤더는 주어진 그대로 나간다.
+`redirect(location)`은 **302 Found**로 답하며, 위치를 `Location` 헤더에 담는다.
+헤더가 담을 수 없는 문자, 즉 ASCII 밖의 문자, 공백, 제어 문자는 브라우저가 `href`를 인코딩하듯 UTF-8로 퍼센트 인코딩되고, 나머지는 주어진 그대로 나간다: `redirect("/decks/한국어")`는 `/decks/%ED%95%9C%EA%B5%AD%EC%96%B4`를 보낸다.
 애플리케이션이 보통 원하는 것은 `/decks/3` 같은 경로이며, HTTP도 이를 허용한다.
 
 [source,java]

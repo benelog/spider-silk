@@ -426,6 +426,14 @@ public final class WebResponse {
     /**
      * A redirect at the status you name.
      *
+     * <p>A character a header cannot carry is percent-encoded as UTF-8, which
+     * is what a browser does with the same text in an {@code href}: anything
+     * outside ASCII, a space, and a control character. Everything else goes out
+     * as given, so an escape already in the location stays one escape, and
+     * {@code redirect("/decks/한국어")} sends {@code /decks/%ED%95%9C%EA%B5%AD%EC%96%B4}.
+     * Left as it was, each container mangled such a character differently, and
+     * Tomcat dropped the header altogether.
+     *
      * @throws IllegalArgumentException if the status is not a 3xx, since a
      *         {@code Location} header on anything else is not a redirect
      */
@@ -435,7 +443,33 @@ public final class WebResponse {
         if (status.code() < 300 || status.code() > 399) {
             throw new IllegalArgumentException("A redirect needs a 3xx status, not " + status);
         }
-        return empty(status).header("Location", location);
+        return empty(status).header("Location", headerSafe(location));
+    }
+
+    /** The location with each character a header cannot carry percent-encoded as UTF-8. */
+    private static String headerSafe(String location) {
+        StringBuilder safe = null;
+        for (int i = 0; i < location.length(); ) {
+            int codePoint = location.codePointAt(i);
+            int next = i + Character.charCount(codePoint);
+            if (codePoint > 0x20 && codePoint < 0x7F) {
+                if (safe != null) {
+                    safe.append((char) codePoint);
+                }
+            } else {
+                if (safe == null) {
+                    safe = new StringBuilder(location.length() + 16).append(location, 0, i);
+                }
+                // A lone surrogate has no UTF-8 form, so it goes out as U+FFFD.
+                String character = Character.isSurrogate((char) codePoint)
+                        ? "\uFFFD" : location.substring(i, next);
+                for (byte b : character.getBytes(StandardCharsets.UTF_8)) {
+                    safe.append('%').append(HEX[(b >> 4) & 0xF]).append(HEX[b & 0xF]);
+                }
+            }
+            i = next;
+        }
+        return safe == null ? location : safe.toString();
     }
 
     /** No body, and no status of its own — 200 unless something sets one. */

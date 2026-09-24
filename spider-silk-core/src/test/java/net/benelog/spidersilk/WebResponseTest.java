@@ -197,6 +197,32 @@ class WebResponseTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    /**
+     * A header is bytes, and each container turned a character outside ASCII
+     * into something different: a space on Jetty, its low byte on Undertow, and
+     * no header at all on Tomcat. It is percent-encoded as UTF-8 instead, as a
+     * browser encodes an href, and an escape already there is left alone.
+     */
+    @Test
+    void aRedirectPercentEncodesWhatAHeaderCannotCarry() {
+        assertThat(WebResponse.redirect("/decks/한국어").header("Location"))
+                .isEqualTo("/decks/%ED%95%9C%EA%B5%AD%EC%96%B4");
+        assertThat(WebResponse.redirect("/search?q=a%20b&x=/y#top").header("Location"))
+                .isEqualTo("/search?q=a%20b&x=/y#top");
+        assertThat(WebResponse.redirect("/a b\r\nSet-Cookie: x").header("Location"))
+                .isEqualTo("/a%20b%0D%0ASet-Cookie:%20x");
+        assertThat(WebResponse.redirect("/\uD83D\uDE00").header("Location")).isEqualTo("/%F0%9F%98%80");
+        assertThat(WebResponse.redirect("/\uD800").header("Location")).isEqualTo("/%EF%BF%BD");
+    }
+
+    @Test
+    void anEncodedRedirectArrivesIntact() {
+        App app = new App().get("/go", req -> WebResponse.redirect("/decks/한국어"));
+
+        WebTest.test(app, client -> assertThat(client.get("/go").headers().firstValue("Location"))
+                .hasValue("/decks/%ED%95%9C%EA%B5%AD%EC%96%B4"));
+    }
+
     /** Two things keying the same cached answer on two different request headers. */
     @Test
     void varyCollectsFieldsRatherThanReplacingThem() {
