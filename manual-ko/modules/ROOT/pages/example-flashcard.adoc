@@ -53,6 +53,7 @@ gradle :example-flashcard:run --args=--dev   # hot-reloads edited .jte files
 ----
 
 두 명령은 xref:templates.adoc[jte의 프로덕션 모드와 개발 모드]다: 첫 번째는 빌드가 컴파일한 템플릿 클래스를 렌더링하고, 두 번째는 파일이 바뀐 템플릿을 다음 렌더링 때 다시 컴파일한다.
+`FlashcardApp`은 `--dev`를 `FlashcardContext`의 `devMode` 플래그로 넘기고, `FlashcardContext`는 그 플래그로 `TemplateRenderer`를 고른다.
 데이터베이스는 `FlashcardDatabase.file()`이 여는 H2 파일(`~/db/spider-silk/flashcard`)이므로 데이터가 재시작 후에도 남는다.
 
 `gradle :example-flashcard:nativeCompile`은 같은 앱을 xref:native-image.adoc[GraalVM 네이티브 이미지]로 빌드한다.

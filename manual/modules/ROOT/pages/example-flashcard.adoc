@@ -53,6 +53,7 @@ gradle :example-flashcard:run --args=--dev   # hot-reloads edited .jte files
 ----
 
 The two commands are xref:templates.adoc[jte's production and development modes]: the first renders the template classes the build compiled, the second recompiles a template whose file changed on its next render.
+`FlashcardApp` turns `--dev` into the `devMode` flag of `FlashcardContext`, and `FlashcardContext` picks the `TemplateRenderer` from that flag.
 The database is the H2 file `FlashcardDatabase.file()` opens (`~/db/spider-silk/flashcard`), so data survives restarts.
 
 `gradle :example-flashcard:nativeCompile` builds the same app as a xref:native-image.adoc[GraalVM native image].
