@@ -339,6 +339,38 @@ class GzipTest {
         });
     }
 
+    /**
+     * RFC 9110 has a 304 carry the ETag and Vary the 200 would have. It used to
+     * carry the strong tag and no Vary, which a strict cache cannot match to
+     * the weak-tagged entry it stored.
+     */
+    @Test
+    void aNotModifiedCarriesTheValidatorsTheCompressedAnswerHad() {
+        WebTest.test(new App().gzip(), client -> {
+            HttpResponse<byte[]> first = gzipped(client, "/style.css");
+            String etag = header(first, "ETag");
+
+            HttpResponse<byte[]> revalidated = client.send(request -> request
+                    .uri(URI.create(client.url("/style.css")))
+                    .header("Accept-Encoding", "gzip")
+                    .header("If-None-Match", etag)
+                    .GET(), HttpResponse.BodyHandlers.ofByteArray());
+            assertThat(revalidated.statusCode()).isEqualTo(304);
+            assertThat(header(revalidated, "ETag")).isEqualTo(etag);
+            assertThat(header(revalidated, "Vary")).contains("Accept-Encoding");
+            assertThat(revalidated.headers().firstValue("Content-Encoding")).isEmpty();
+
+            String strong = header(client.get("/style.css"), "ETag");
+            HttpResponse<String> plain = client.send(request -> request
+                    .uri(URI.create(client.url("/style.css")))
+                    .header("If-None-Match", strong)
+                    .GET());
+            assertThat(plain.statusCode()).isEqualTo(304);
+            assertThat(header(plain, "ETag")).isEqualTo(strong);
+            assertThat(header(plain, "Vary")).contains("Accept-Encoding");
+        });
+    }
+
     @Test
     void anUncompressedFileKeepsItsStrongETag() {
         WebTest.test(new App().gzip(), client ->

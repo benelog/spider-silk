@@ -100,6 +100,9 @@ public final class StaticFiles {
 
     private final Source source;
 
+    /** The content type of a file answered with 304, for {@link Gzip} to read. */
+    static final String NOT_MODIFIED_TYPE_ATTRIBUTE = "net.benelog.spidersilk.notModifiedType";
+
     /**
      * The content checksums worked out for files whose modification time is a
      * stamp, by path, time, length, and the file's change time. A file changes
@@ -246,6 +249,11 @@ public final class StaticFiles {
             response = response.header("Last-Modified", httpDate(lastModified));
         }
         if (isUnchanged(req, etag, written ? lastModified : -1)) {
+            if (encoded == null) {
+                // The 304 carries no Content-Type, and gzip needs the type to
+                // give it the tag and the Vary the 200 would have carried.
+                req.setAttribute(NOT_MODIFIED_TYPE_ATTRIBUTE, ContentTypes.byPath(relative));
+            }
             return response.status(HttpStatus.NOT_MODIFIED);
         }
 

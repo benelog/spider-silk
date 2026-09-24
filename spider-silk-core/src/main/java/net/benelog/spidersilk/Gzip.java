@@ -122,6 +122,9 @@ public final class Gzip {
      * too small to bother with, or one that came out no smaller.
      */
     WebResponse apply(WebResponse response, WebRequest request) {
+        if (response.status() == HttpStatus.NOT_MODIFIED) {
+            return notModified(response, request);
+        }
         if (!isCompressible(response)) {
             return response;
         }
@@ -294,16 +297,41 @@ public final class Gzip {
         }))).withoutHeader("Content-Length");
     }
 
+    /**
+     * A 304 carries the {@code ETag} and {@code Vary} the 200 would have, as
+     * RFC 9110 requires, so it gets the {@code Vary} and the weak tag gzip would
+     * have given the 200, without the {@code Content-Encoding} of a body it has
+     * not got. The type comes from the response, or from {@link StaticFiles},
+     * whose 304 carries none.
+     */
+    private WebResponse notModified(WebResponse response, WebRequest request) {
+        if (response.header("Content-Encoding") != null) {
+            return response;
+        }
+        String type = response.header("Content-Type");
+        if (type == null && request.raw().getAttribute(StaticFiles.NOT_MODIFIED_TYPE_ATTRIBUTE) instanceof String file) {
+            type = file;
+        }
+        if (!isCompressibleType(type)) {
+            return response;
+        }
+        WebResponse varying = response.vary("Accept-Encoding");
+        return acceptsGzip(request) ? weakened(varying) : varying;
+    }
+
     /** What every compressed answer says about itself. */
     private static WebResponse encoded(WebResponse response) {
-        WebResponse encoded = response.header("Content-Encoding", "gzip");
-        String etag = encoded.header("ETag");
+        return weakened(response.header("Content-Encoding", "gzip"));
+    }
+
+    private static WebResponse weakened(WebResponse response) {
+        String etag = response.header("ETag");
         if (etag == null || etag.startsWith("W/")) {
-            return encoded;
+            return response;
         }
         // Same representation, different bytes: that is what a weak tag means,
         // and StaticFiles accepts the weak form back on the next request.
-        return encoded.header("ETag", "W/" + etag);
+        return response.header("ETag", "W/" + etag);
     }
 
     private static byte[] deflate(byte[] raw) {
