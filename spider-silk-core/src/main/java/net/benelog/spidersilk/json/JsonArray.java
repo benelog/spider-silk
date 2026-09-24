@@ -45,7 +45,18 @@ public final class JsonArray implements JsonValue, Iterable<JsonValue> {
         return values.size();
     }
 
+    /**
+     * The element at that index.
+     *
+     * @throws JsonException if the array has no element there, the way
+     *         {@link JsonObject#get(String)} throws for a missing key, so that a
+     *         reader given a short array is answered with a 400 rather than a 500
+     */
     public JsonValue get(int index) {
+        if (index < 0 || index >= values.size()) {
+            throw new JsonException("Index %d is out of bounds for a JSON array of %d elements"
+                    .formatted(index, values.size()));
+        }
         return values.get(index);
     }
 

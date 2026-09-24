@@ -28,6 +28,19 @@ class JsonTest {
                 + "\"deletedAt\":null,\"tags\":[\"toeic\",\"basic\"]}");
     }
 
+    /** A missing element is a JsonException, as a missing key is, and not the List's own exception. */
+    @Test
+    void anIndexOutsideTheArrayIsAJsonException() {
+        JsonArray array = Json.array().add("only");
+
+        assertThat(array.get(0).asString()).isEqualTo("only");
+        assertThatThrownBy(() -> array.get(1))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Index 1");
+        assertThatThrownBy(() -> array.get(-1)).isInstanceOf(JsonException.class);
+        assertThatThrownBy(() -> Json.array().get(0)).isInstanceOf(JsonException.class);
+    }
+
     @Test
     void escapesStrings() {
         assertThat(Json.object().put("text", "a\"b\\c\n").toJson())

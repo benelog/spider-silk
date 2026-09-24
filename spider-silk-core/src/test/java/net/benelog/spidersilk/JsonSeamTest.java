@@ -60,6 +60,18 @@ class JsonSeamTest {
         });
     }
 
+    /** An element the array does not have is a missing value, as a missing key is. */
+    @Test
+    void aReaderGivenAShortArrayIsA400() {
+        App app = new App().post("/first", req ->
+                WebResponse.text(req.bodyJson(json -> json.asArray().get(0).asString())));
+
+        WebTest.test(app, client -> {
+            assertThat(client.postJson("/first", "[]").statusCode()).isEqualTo(400);
+            assertThat(client.postJson("/first", "[\"a\"]").body()).isEqualTo("a");
+        });
+    }
+
     /** Text outside RFC 8259 that a lenient parser would read is a 400 as well. */
     @Test
     void aBodyOutsideTheJsonGrammarIsA400() {

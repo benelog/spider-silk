@@ -39,6 +39,7 @@ The mapping is code you wrote, so renaming a Java field changes the wire format 
 == Reading values
 
 `getString` throws `JsonException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400.
+`JsonArray.get(index)` throws it for an index outside the array as well, so a short array is a 400 too.
 A handler gets a whole value or none, the same contract as `pathParamLong`.
 `JsonException` is an `IllegalArgumentException`, so a reader that throws a plain `IllegalArgumentException` for a validation rule of its own also gets a 400.
 `DateTimeException` from a reader, such as a failed `LocalDate.parse`, also becomes a 400.
