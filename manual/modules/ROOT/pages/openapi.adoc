@@ -62,6 +62,10 @@ A xref:routing.adoc[named tail] is written out rather than refused.
 OpenAPI has no wildcard in a path template, so the star stays behind as core's syntax and only the variable crosses over.
 Dropping the star is the only translation this module does.
 
+Two routes that OpenAPI would read as one path throw `IllegalArgumentException` too, naming both.
+OpenAPI tells templated paths apart by their segments alone, so `/decks/\{deckId}` and `/decks/\{id}` are one path, which a document may list only once.
+`/files/\{name}` and `/files/\{name*}` answer different requests, but share one template, under which one operation would quietly replace the other.
+
 == What the document contains
 
 Every route becomes an operation under its path, keyed by the lowercased method, in registration order.

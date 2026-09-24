@@ -1,7 +1,9 @@
 package net.benelog.spidersilk.openapi;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 import net.benelog.spidersilk.Route;
@@ -75,12 +77,22 @@ public final class OpenApi {
      * dropping it quietly would publish a document that claims the application
      * answers less than it does.
      *
-     * @throws IllegalArgumentException if a route's path contains a bare wildcard
+     * <p>Two routes whose templates OpenAPI would read as one path throw as
+     * well, naming both. OpenAPI identifies a templated path by its hierarchy
+     * alone, so {@code /decks/{deckId}} and {@code /decks/{id}} are the same
+     * path and MUST NOT both appear, and {@code /files/{name}} and
+     * {@code /files/{name*}}, which the router tells apart, have one template
+     * between them, under which one operation would quietly replace the other.
+     *
+     * @throws IllegalArgumentException if a route's path contains a bare
+     *         wildcard, or two routes come out as one OpenAPI path under
+     *         different variable names or router shapes
      */
     public static JsonValue document(String title, String version, List<Route> routes) {
         Objects.requireNonNull(title, "title");
         Objects.requireNonNull(version, "version");
         JsonObject paths = Json.object();
+        Map<String, Route> firstByIdentity = new HashMap<>();
         for (Route route : Objects.requireNonNull(routes, "routes")) {
             String pattern = normalized(route.path());
             String path = template(pattern);
@@ -89,6 +101,17 @@ public final class OpenApi {
                         "A wildcard route has no OpenAPI path template: " + route.method() + " "
                                 + route.path() + ". Name the tail as {name*}, or leave the route out of"
                                 + " the list passed here.");
+            }
+            Route first = firstByIdentity.putIfAbsent(unnamed(path), route);
+            if (first != null) {
+                String firstPattern = normalized(first.path());
+                if (!firstPattern.equals(pattern)) {
+                    throw new IllegalArgumentException("Two routes come out as one OpenAPI path: "
+                            + first.method() + " " + first.path() + " and " + route.method() + " "
+                            + route.path() + ". OpenAPI tells templated paths apart by their segments"
+                            + " alone, so give the variables one name, or leave one route out of the"
+                            + " list passed here.");
+                }
             }
             JsonObject operations = paths.has(path) ? paths.getObject(path) : Json.object();
             paths.put(path, operations.put(route.method().toLowerCase(Locale.ROOT),
@@ -124,6 +147,15 @@ public final class OpenApi {
         return isTail(lastSegment(pattern))
                 ? pattern.substring(0, pattern.length() - 2) + "}"
                 : pattern;
+    }
+
+    /**
+     * The path with every variable's name left out, which is how OpenAPI tells
+     * two templated paths apart: {@code /decks/{deckId}} and {@code /decks/{id}}
+     * are both {@code /decks/{}}.
+     */
+    private static String unnamed(String path) {
+        return path.replaceAll("\\{[^/}]*}", "{}");
     }
 
     private static String lastSegment(String pattern) {

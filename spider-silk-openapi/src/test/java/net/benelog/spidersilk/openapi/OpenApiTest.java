@@ -105,6 +105,41 @@ class OpenApiTest {
                 .hasMessageContaining("GET /api/*");
     }
 
+    /**
+     * The router tells a single segment from a tail, and the template does not:
+     * one of the two operations would replace the other without a word.
+     */
+    @Test
+    void refusesAVariableAndATailThatShareATemplate() {
+        List<Route> routes = List.of(new Route("GET", "/files/{name}", "one file"),
+                new Route("GET", "/files/{name*}", "the tail"));
+
+        assertThatThrownBy(() -> OpenApi.document("Flashcard API", "1.0.0", routes))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GET /files/{name}")
+                .hasMessageContaining("GET /files/{name*}");
+    }
+
+    /** OpenAPI reads two templates that differ only in a variable's name as one path, which may appear once. */
+    @Test
+    void refusesOnePathUnderTwoVariableNames() {
+        List<Route> routes = List.of(new Route("GET", "/decks/{deckId}"), new Route("DELETE", "/decks/{id}"));
+
+        assertThatThrownBy(() -> OpenApi.document("Flashcard API", "1.0.0", routes))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GET /decks/{deckId}")
+                .hasMessageContaining("DELETE /decks/{id}");
+    }
+
+    @Test
+    void oneNameOnOnePathSharesOnePathItem() {
+        List<Route> routes = List.of(new Route("GET", "/decks/{deckId}"), new Route("DELETE", "/decks/{deckId}/"));
+        JsonObject paths = OpenApi.document("Flashcard API", "1.0.0", routes).asObject().getObject("paths");
+
+        assertThat(paths.keys()).containsExactly("/decks/{deckId}");
+        assertThat(paths.getObject("/decks/{deckId}").keys()).containsExactly("get", "delete");
+    }
+
     /** A named tail has a template: the star is core's syntax, the variable is OpenAPI's. */
     @Test
     void writesANamedTailAsAPathVariable() {
