@@ -478,6 +478,20 @@ class UndertowServerTest {
         assertThat(head.headers().firstValue("Content-Length")).isEmpty();
     }
 
+    /**
+     * Jetty and Tomcat refuse an encoded slash, and Undertow handed it to the
+     * path variable undecoded, where it read the same as an encoded "%2F".
+     */
+    @Test
+    void anEncodedSlashIsA400AndAnEncodedPercentStillDecodes() throws Exception {
+        startOnUndertow(new App().get("/v/{v}", req -> WebResponse.text(req.pathParam("v"))));
+
+        assertThat(get("/v/a%2Fb").statusCode()).isEqualTo(400);
+        assertThat(get("/v/a%2fb").statusCode()).isEqualTo(400);
+        assertThat(get("/v/a%252Fb").body()).isEqualTo("a%2Fb");
+        assertThat(get("/v/a%20b").body()).isEqualTo("a b");
+    }
+
     /** A redirect to a path outside ASCII goes out percent-encoded, the same on every server. */
     @Test
     void aNonAsciiRedirectIsPercentEncoded() throws Exception {

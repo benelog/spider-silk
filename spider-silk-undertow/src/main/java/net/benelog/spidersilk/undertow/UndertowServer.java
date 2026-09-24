@@ -210,7 +210,7 @@ public final class UndertowServer implements WebServer {
 
             Undertow.Builder builder = Undertow.builder()
                     .addHttpListener(port, host != null ? host : DEFAULT_HOST)
-                    .setHandler(graceful);
+                    .setHandler(refusingEncodedSlashes(graceful));
             builderCustomizers.forEach(customizer -> customizer.accept(builder));
 
             candidate = builder.build();
@@ -391,6 +391,24 @@ public final class UndertowServer implements WebServer {
             // The hook is running: the JVM is already shutting down.
         }
         hook = null;
+    }
+
+    /**
+     * Answers 400 for a path that carries an encoded slash, as Jetty and Tomcat
+     * do. Undertow decodes every other escape but leaves {@code %2F} as it is,
+     * so {@code /v/a%2Fb} reached a path variable as {@code a%2Fb}, the same
+     * value {@code /v/a%252Fb} decodes to: two requests read as one.
+     */
+    private static HttpHandler refusingEncodedSlashes(HttpHandler next) {
+        return exchange -> {
+            String path = exchange.getRequestURI();
+            if (path.contains("%2F") || path.contains("%2f")) {
+                exchange.setStatusCode(400);
+                exchange.endExchange();
+                return;
+            }
+            next.handleRequest(exchange);
+        };
     }
 
     /**
