@@ -40,6 +40,10 @@ public final class Json {
      * large for a {@code double} to hold, which would otherwise read back as an
      * infinity and serialize as text no JSON parser accepts.
      *
+     * <p>An integer outside the range of a {@code long} is still a number, and
+     * is kept the way a fraction is: {@link JsonValue#asDouble()} reads it, and
+     * {@link JsonValue#asLong()} refuses it rather than answer another number.
+     *
      * <p>The syntax is RFC 8259's, with no extension: a number such as
      * {@code 01}, {@code +1}, {@code .5}, or {@code 1.} is rejected, and so is
      * a control character written into a string without an escape.
@@ -347,18 +351,24 @@ public final class Json {
                 return new JsonPrimitive(negative ? -magnitude : magnitude);
             }
             String number = text.substring(start, pos);
-            try {
-                if (integral) {
+            if (integral) {
+                try {
                     return new JsonPrimitive(Long.parseLong(number));
+                } catch (NumberFormatException e) {
+                    // Past the range of a long, and still a number: it is kept the
+                    // way a fraction is, its text beside the nearest double.
                 }
-                double value = Double.parseDouble(number);
-                if (!Double.isFinite(value)) {
-                    throw error("Number out of range: " + number);
-                }
-                return new JsonPrimitive(new JsonDecimal(value, number));
+            }
+            double value;
+            try {
+                value = Double.parseDouble(number);
             } catch (NumberFormatException e) {
                 throw error("Number out of range: " + number);
             }
+            if (!Double.isFinite(value)) {
+                throw error("Number out of range: " + number);
+            }
+            return new JsonPrimitive(new JsonDecimal(value, number));
         }
 
         private void requireDigits(String message) {

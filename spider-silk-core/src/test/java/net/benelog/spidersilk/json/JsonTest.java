@@ -261,12 +261,28 @@ class JsonTest {
         assertThat(Json.parse("-0").asLong()).isZero();
         assertThat(Json.parse("[0,-12,345]").toJson()).isEqualTo("[0,-12,345]");
 
-        assertThatThrownBy(() -> Json.parse("9223372036854775808"))
+    }
+
+    /**
+     * An integer past the range of a long is still a number, read as the
+     * nearest double. Only asLong refuses it, as it refuses 1e19.
+     */
+    @ParameterizedTest
+    @CsvSource(delimiter = '|', value = {
+            "9223372036854775808   | 9.223372036854775808E18",
+            "-9223372036854775809  | -9.223372036854775809E18",
+            "12345678901234567890  | 1.2345678901234567E19",
+            "123456789012345678901234567890 | 1.2345678901234568E29",
+    })
+    void anIntegerPastTheRangeOfALongIsANumberThatAsLongRefuses(String text, double expected) {
+        JsonValue value = Json.parse(text);
+
+        assertThat(value.isNumber()).isTrue();
+        assertThat(value.asDouble()).isEqualTo(expected);
+        assertThatThrownBy(value::asLong)
                 .isInstanceOf(JsonException.class)
-                .hasMessageContaining("Number out of range");
-        assertThatThrownBy(() -> Json.parse("-9223372036854775809"))
-                .isInstanceOf(JsonException.class)
-                .hasMessageContaining("Number out of range");
+                .hasMessageContaining("Not a JSON integer: " + text);
+        assertThat(Json.parse("{\"n\":" + text + "}").asObject().getDouble("n")).isEqualTo(expected);
     }
 
     /**
