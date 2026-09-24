@@ -147,6 +147,7 @@ Two edges are worth stating, because they are the ones every hand-written parser
 * A request with no `Accept` at all means the caller has no preference, not that it will take nothing.
   The first candidate wins, so the list is written in the order the handler prefers.
 * A caller that will take none of them is answered `406 Not Acceptable`, the same way `param(name)` answers 400 rather than returning null.
+* An `Accept` sent on several lines is read as the lines joined with commas, as RFC 9110 reads a list field, and so is the `Accept-Encoding` that `app.gzip()` and pre-compressed static files read.
 
 A handler therefore never has a null branch to write.
 

@@ -147,6 +147,7 @@ app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
 * `Accept`가 전혀 없는 요청은 호출자에게 선호가 없다는 뜻이지, 아무것도 받지 않겠다는 뜻이 아니다.
   첫 후보가 이기므로, 목록은 핸들러가 선호하는 순서로 쓴다.
 * 어느 것도 받지 않겠다는 호출자에게는 `406 Not Acceptable`로 답하며, 이는 `param(name)`이 null을 반환하는 대신 400으로 답하는 것과 같은 방식이다.
+* 여러 줄로 보낸 `Accept`는 RFC 9110이 목록 필드를 읽듯 줄들을 쉼표로 이은 것으로 읽으며, `app.gzip()`과 사전 압축된 정적 파일이 읽는 `Accept-Encoding`도 마찬가지다.
 
 따라서 핸들러는 null 분기를 쓸 일이 없다.
 

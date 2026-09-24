@@ -228,7 +228,7 @@ public final class Cors {
                 fields.put("Access-Control-Allow-Headers", String.join(", ", headers));
             }
         } else {
-            String asked = request.header("Access-Control-Request-Headers");
+            String asked = request.listHeader("Access-Control-Request-Headers");
             if (asked != null) {
                 fields.put("Access-Control-Allow-Headers", asked);
             }

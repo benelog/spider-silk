@@ -13,10 +13,12 @@ import java.time.DateTimeException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.StringJoiner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
@@ -201,6 +203,33 @@ public final class WebRequest {
     }
 
     /**
+     * A list field, such as {@code Accept}, as one value: its lines joined
+     * with commas, which is how RFC 9110 reads a list field sent on several
+     * lines. {@link #header(String)} answers the first line alone, and a
+     * negotiation that read it would miss what the others offer. Null when the
+     * request did not send the field.
+     */
+    @Nullable String listHeader(String name) {
+        return listHeader(req, name);
+    }
+
+    static @Nullable String listHeader(HttpServletRequest req, String name) {
+        Enumeration<String> lines = req.getHeaders(name);
+        if (lines == null || !lines.hasMoreElements()) {
+            return null;
+        }
+        String first = lines.nextElement();
+        if (!lines.hasMoreElements()) {
+            return first;
+        }
+        StringJoiner joined = new StringJoiner(", ").add(first);
+        while (lines.hasMoreElements()) {
+            joined.add(lines.nextElement());
+        }
+        return joined.toString();
+    }
+
+    /**
      * Every header the request carried, by name, each with all of its values —
      * what a request logger or a signature over the headers reads. The names come
      * back as the request spelled them, and a lookup through them is therefore
@@ -301,7 +330,7 @@ public final class WebRequest {
             throw new IllegalArgumentException("accepts() needs at least one media type to offer");
         }
         negotiated();
-        String best = AcceptHeader.best(header("Accept"), List.of(candidates));
+        String best = AcceptHeader.best(listHeader("Accept"), List.of(candidates));
         if (best == null) {
             throw new HttpException(HttpStatus.NOT_ACCEPTABLE,
                     "Not Acceptable: this endpoint answers " + String.join(", ", candidates));
@@ -318,7 +347,7 @@ public final class WebRequest {
      */
     public List<String> acceptedTypes() {
         negotiated();
-        return AcceptHeader.preferences(header("Accept"));
+        return AcceptHeader.preferences(listHeader("Accept"));
     }
 
     /** Records that this answer depends on {@code Accept}, for {@link AppServlet} to declare. */

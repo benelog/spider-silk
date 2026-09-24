@@ -275,7 +275,7 @@ public final class StaticFiles {
      */
     private @Nullable Encoded sibling(String relative, long lastModified, HttpServletRequest req)
             throws IOException {
-        String accepted = req.getHeader("Accept-Encoding");
+        String accepted = WebRequest.listHeader(req, "Accept-Encoding");
         for (Encoding encoding : ENCODINGS) {
             if (!AcceptHeader.accepts(accepted, encoding.token())) {
                 continue;

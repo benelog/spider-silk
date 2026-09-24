@@ -182,7 +182,7 @@ public final class Gzip {
      * {@code Accept}, so both go through {@link AcceptHeader}.
      */
     private static boolean acceptsGzip(WebRequest request) {
-        return AcceptHeader.accepts(request.header("Accept-Encoding"), "gzip");
+        return AcceptHeader.accepts(request.listHeader("Accept-Encoding"), "gzip");
     }
 
     /**

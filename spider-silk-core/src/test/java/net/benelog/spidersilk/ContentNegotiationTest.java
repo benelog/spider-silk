@@ -2,12 +2,18 @@ package net.benelog.spidersilk;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.Socket;
 import java.net.URI;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
 
 import org.junit.jupiter.api.Test;
 
 import net.benelog.spidersilk.test.TestClient;
+import net.benelog.spidersilk.test.TestRequest;
 import net.benelog.spidersilk.test.WebTest;
 
 /** The Accept header read for the handler, so no application parses one itself. */
@@ -128,5 +134,47 @@ class ContentNegotiationTest {
 
     private static String header(HttpResponse<String> response, String name) {
         return response.headers().firstValue(name).orElse("");
+    }
+
+    /**
+     * RFC 9110 reads a list field sent on two lines as the lines joined with a
+     * comma. The negotiation read the first line alone, and answered 406 to a
+     * caller that had offered JSON on the second.
+     */
+    @Test
+    void anAcceptSentOnTwoLinesIsReadWhole() {
+        WebRequest request = TestRequest.get("/decks")
+                .header("Accept", "text/plain")
+                .header("Accept", "application/json;q=0.9")
+                .build();
+
+        assertThat(request.accepts("text/html", "application/json")).isEqualTo("application/json");
+        assertThat(request.acceptedTypes()).containsExactly("text/plain", "application/json");
+    }
+
+    /** The same on the wire, and for gzip, which reads Accept-Encoding the same way. */
+    @Test
+    void anAcceptEncodingSentOnTwoLinesIsReadWhole() {
+        App app = new App().gzip().get("/page", req -> WebResponse.html("<p>" + "spider silk ".repeat(200) + "</p>"));
+
+        WebTest.test(app, client -> {
+            String response = raw(client, "GET /page HTTP/1.1", "Host: localhost",
+                    "Accept-Encoding: identity", "Accept-Encoding: gzip", "Connection: close");
+
+            assertThat(response).startsWith("HTTP/1.1 200");
+            assertThat(response.toLowerCase(Locale.ROOT)).contains("content-encoding: gzip");
+        });
+    }
+
+    /** Header lines the java.net.http client would fold into one, sent by hand; the whole response as text. */
+    private static String raw(TestClient client, String... requestLines) {
+        URI base = URI.create(client.url("/"));
+        try (Socket socket = new Socket(base.getHost(), base.getPort())) {
+            socket.getOutputStream().write((String.join("\r\n", requestLines) + "\r\n\r\n")
+                    .getBytes(StandardCharsets.US_ASCII));
+            return new String(socket.getInputStream().readAllBytes(), StandardCharsets.ISO_8859_1);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }
