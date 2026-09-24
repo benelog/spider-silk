@@ -428,7 +428,7 @@ public final class WebRequest {
     public long pathParamLong(String name) {
         String value = pathParam(name);
         try {
-            return Long.parseLong(value);
+            return asciiLong(value);
         } catch (NumberFormatException e) {
             throw new HttpException(HttpStatus.BAD_REQUEST,
                     "Path variable {%s} is not a number: %s".formatted(name, value));
@@ -607,11 +607,31 @@ public final class WebRequest {
 
     private static long parseLong(String name, String value) {
         try {
-            return Long.parseLong(value);
+            return asciiLong(value);
         } catch (NumberFormatException e) {
             throw new HttpException(HttpStatus.BAD_REQUEST,
                     "Parameter %s is not a number: %s".formatted(name, value));
         }
+    }
+
+    /**
+     * An optional sign and ASCII digits as a {@code long}. {@link Long#parseLong}
+     * takes every digit {@link Character#digit} knows, so {@code ?n=１２} in
+     * full-width digits read as 12 and {@code /decks/١} in Arabic-Indic as deck
+     * 1: two spellings of one resource that nothing else in the URL agrees on.
+     */
+    private static long asciiLong(String value) {
+        int start = !value.isEmpty() && (value.charAt(0) == '-' || value.charAt(0) == '+') ? 1 : 0;
+        if (start == value.length()) {
+            throw new NumberFormatException(value);
+        }
+        for (int i = start; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c < '0' || c > '9') {
+                throw new NumberFormatException(value);
+            }
+        }
+        return Long.parseLong(value);
     }
 
     private static boolean parseBoolean(String name, String value) {

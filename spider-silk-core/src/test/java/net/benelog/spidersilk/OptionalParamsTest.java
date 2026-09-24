@@ -59,6 +59,35 @@ class OptionalParamsTest {
         assertThat(request.paramOrNull("q")).isEmpty();
     }
 
+    /**
+     * Long.parseLong takes any digit Character.digit knows, so full-width and
+     * Arabic-Indic digits read as numbers, and /decks/１ was deck 1. Only an
+     * optional sign and ASCII digits are a number here.
+     */
+    @Test
+    void digitsOutsideAsciiAreNotANumber() {
+        WebRequest request = TestRequest.get("/decks/\uFF11")
+                .pathParam("deckId", "\uFF11")
+                .queryParam("n", "\uFF11\uFF12")
+                .queryParam("m", "\u0661")
+                .queryParam("negative", "-12")
+                .queryParam("sign", "+7")
+                .queryParam("bare", "-")
+                .build();
+
+        for (Runnable read : new Runnable[] {
+                () -> request.pathParamLong("deckId"),
+                () -> request.paramLong("n"),
+                () -> request.paramLong("m", 0),
+                () -> request.paramLong("bare")}) {
+            assertThatExceptionOfType(HttpException.class)
+                    .isThrownBy(read::run)
+                    .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+        }
+        assertThat(request.paramLong("negative")).isEqualTo(-12L);
+        assertThat(request.paramLong("sign")).isEqualTo(7L);
+    }
+
     /** The default covers absence only: a value that is there but wrong is a 400. */
     @Test
     void anUnparseableValueIsStillA400RatherThanTheDefault() {
