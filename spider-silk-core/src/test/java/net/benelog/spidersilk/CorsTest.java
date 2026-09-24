@@ -3,10 +3,12 @@ package net.benelog.spidersilk;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -223,6 +225,36 @@ class CorsTest {
     @Test
     void atLeastOneOriginIsRequired() {
         assertThatThrownBy(Cors::allowOrigin).isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /**
+     * A response that fails while it is written, before anything is sent, is
+     * reset to a 500. The reset used to take the CORS and security headers
+     * with it, and a browser then reported a CORS failure instead of the 500.
+     */
+    @Test
+    void theFiveHundredForAFailedWriteCarriesTheCorsAndSecurityHeaders() {
+        App app = new App()
+                .cors(Cors.allowOrigin(ORIGIN))
+                .securityHeaders()
+                .get("/export", req -> WebResponse.stream("text/csv", out -> {
+                    throw new IOException("export failed");
+                }))
+                .get("/cookie", req -> WebResponse.raw((request, response) -> {
+                    throw new IllegalStateException("raw writer failed");
+                }));
+
+        WebTest.test(app, client -> {
+            for (String path : List.of("/export", "/cookie")) {
+                HttpResponse<String> response = get(client, path, ORIGIN);
+
+                assertThat(response.statusCode()).isEqualTo(500);
+                assertThat(response.body()).isEqualTo("Internal Server Error");
+                assertThat(header(response, "Access-Control-Allow-Origin")).isEqualTo(ORIGIN);
+                assertThat(header(response, "Vary")).contains("Origin");
+                assertThat(header(response, "X-Content-Type-Options")).isEqualTo("nosniff");
+            }
+        });
     }
 
     // ---- Helpers ----

@@ -130,12 +130,13 @@ public class AppServlet extends HttpServlet {
         WebRequest request = answer.request();
         WebResponse response = answer.response();
         Throwable failure = null;
+        boolean head = "HEAD".equals(req.getMethod());
         try {
             response = decorate(response, request, segments);
-            write(response, req, res, "HEAD".equals(req.getMethod()));
+            write(response, req, res, head);
         } catch (Throwable e) {
             failure = e;
-            writeFailed(e, res);
+            writeFailed(e, req, res, request, segments, head);
         } finally {
             logRequest(request, response, res.getStatus(), startedAt, failure);
         }
@@ -710,7 +711,8 @@ public class AppServlet extends HttpServlet {
      * that looks complete. The failure is logged here either way, since how
      * loudly a container reports what it was handed differs from one to the next.
      */
-    private void writeFailed(Throwable e, HttpServletResponse res)
+    private void writeFailed(Throwable e, HttpServletRequest req, HttpServletResponse res,
+            WebRequest request, String[] segments, boolean head)
             throws IOException, ServletException {
         log("Failed while writing the response", e);
         if (res.isCommitted()) {
@@ -726,9 +728,20 @@ public class AppServlet extends HttpServlet {
             throw new ServletException("Failed while writing the response", e);
         }
         res.reset();
-        res.setStatus(500);
-        res.setContentType("text/plain; charset=UTF-8");
-        res.getWriter().write("Internal Server Error");
+        // The reset took the CORS and security headers with it, so the 500 is
+        // decorated as any other answer is: without them a browser reports a
+        // CORS failure in place of the 500. Should that fail as well, the 500
+        // goes out bare.
+        try {
+            write(decorate(WebResponse.text("Internal Server Error").status(HttpStatus.INTERNAL_SERVER_ERROR),
+                    request, segments), req, res, head);
+        } catch (Throwable again) {
+            e.addSuppressed(again);
+            res.reset();
+            res.setStatus(500);
+            res.setContentType("text/plain; charset=UTF-8");
+            res.getWriter().write("Internal Server Error");
+        }
     }
 
     /**

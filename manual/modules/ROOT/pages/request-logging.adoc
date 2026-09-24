@@ -18,7 +18,7 @@ Its status and headers may differ from what a raw writer sent.
 
 `writeFailure()` is the exception from decoration or writing, or null when neither failed.
 `writeFailed()` reports whether that exception is present.
-A failure before the response is committed can produce a 500.
+A failure before the response is committed can produce a 500, which carries the CORS and security headers as any other answer does.
 A failure after it is committed leaves the status at 200 and aborts the transfer.
 The client then sees a chunked body with no last chunk, or fewer bytes than `Content-Length` announced, rather than a partial body that looks complete.
 Check `writeFailed()` rather than inferring a failure from the status code.
