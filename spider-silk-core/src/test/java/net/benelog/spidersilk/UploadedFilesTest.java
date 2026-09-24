@@ -155,6 +155,22 @@ class UploadedFilesTest {
         });
     }
 
+    /**
+     * Two inputs of one name, the first left empty: file(name) is the first
+     * file, the one files(name) puts first. It used to read the empty part
+     * alone and answer that nothing was uploaded.
+     */
+    @Test
+    void theFirstFileIsFoundPastAnEmptyInputOfTheSameName() throws Exception {
+        App app = new App().post("/scan", req -> WebResponse.text(req.files("f").size() + " "
+                + req.fileOrNull("f").fileName() + " " + req.file("f").asText()));
+
+        WebTest.test(app, client -> assertThat(post(client, "/scan",
+                file("f", "", "application/octet-stream", ""),
+                file("f", "scan.txt", "text/plain", "page one")).body())
+                .isEqualTo("1 scan.txt page one"));
+    }
+
     // ---- Building a multipart body by hand, since the client has no form for one ----
 
     private static HttpResponse<String> post(TestClient client, String path, String... parts) {

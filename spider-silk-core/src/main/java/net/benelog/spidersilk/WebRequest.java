@@ -1348,15 +1348,16 @@ public final class WebRequest {
                 .equalsIgnoreCase(MULTIPART_FORM_DATA);
     }
 
-    /** The file under that name, or null when the multipart form carries none. */
+    /**
+     * The first file under that name, or null when the multipart form carries
+     * none: the one {@link #files(String)} puts first. {@code getPart(name)}
+     * answers the first part of the name whatever it holds, and a browser sends
+     * an untouched file input as an empty part, so a form whose first input of
+     * the name was left empty read as carrying no file at all.
+     */
     private @Nullable UploadedFile upload(String name) {
-        Part part;
-        try {
-            part = req.getPart(name);
-        } catch (IOException | ServletException | RuntimeException e) {
-            throw refusedMultipart(e);
-        }
-        return isFile(part) ? new UploadedFile(part) : null;
+        List<UploadedFile> files = files(name);
+        return files.isEmpty() ? null : files.get(0);
     }
 
     /**
