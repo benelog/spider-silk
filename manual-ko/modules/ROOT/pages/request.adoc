@@ -121,7 +121,7 @@ int page = req.queryParam("page", Integer::parseInt, 1);      // default covers 
 다른 출처가 담은 이름은 인정되지 않으므로, `formParam("page", parser)`는 유일한 `page`가 URL에 있는 요청에 400으로 답한다.
 `(name, defaultString)` 형태는 없는데, `queryParamOrNull(name)`이 이미 파서 오버로드와 겹치지 않고 선택적 문자열을 다루기 때문이다.
 
-`?q=%zz`처럼 디코딩되지 않는 쿼리 문자열은 어떤 이름을 읽든 `param`, `queryParam`, `formParam`의 모든 형태에서 400으로 답한다.
+`?q=%zz`나 바이트가 UTF-8이 아닌 `?q=%FF`처럼 디코딩되지 않는 쿼리 문자열은 어떤 이름을 읽든 `param`, `queryParam`, `formParam`의 모든 형태에서 400으로 답한다.
 컨테이너가 파싱하지 못하는 폼 본문은 `param`, `params`, `formParam`의 모든 형태에서 400으로 답하며, 컨테이너가 밝힌 이유를 메시지로 담는다.
 디코딩되지 않는 이스케이프와 컨테이너 자체의 폼 한도를 넘는 본문이 여기에 해당한다.
 멀티파트 폼은 `file(name)`과 똑같이 답한다: 멀티파트 한도를 넘는 파트나 본문은 413, 파싱되지 않는 본문은 400이다.

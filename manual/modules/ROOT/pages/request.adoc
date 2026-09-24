@@ -121,7 +121,7 @@ A default makes the parser form optional, and a value the parser rejects is a 40
 A name the other source carries does not count, so `formParam("page", parser)` answers 400 on a request whose only `page` is in the URL.
 There is no `(name, defaultString)` form, since `queryParamOrNull(name)` already covers the optional string without overlapping the parser overload.
 
-A query string that will not decode, such as `?q=%zz`, answers 400 through `param`, `queryParam`, and `formParam` in every form, whichever name is read.
+A query string that will not decode, such as `?q=%zz` or `?q=%FF`, whose byte is not UTF-8, answers 400 through `param`, `queryParam`, and `formParam` in every form, whichever name is read.
 A form body the container will not parse answers 400 through `param`, `params`, and `formParam` in every form, with the container's reason as the message.
 That covers an escape that will not decode and a body over the container's own form limit.
 A multipart form answers as `file(name)` does: 413 for a part or a body over the multipart limits, and 400 for one that will not parse.

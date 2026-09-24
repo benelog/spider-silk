@@ -523,6 +523,21 @@ class UndertowServerTest {
                 HttpResponse.BodyHandlers.ofString());
     }
 
+    /** A query string that is not UTF-8 is the same 400 from a query read and a param read. */
+    @Test
+    void aQueryStringThatIsNotUtf8IsA400() throws Exception {
+        startOnUndertow(new App()
+                .get("/query", req -> WebResponse.text(String.valueOf(req.queryParamOrNull("a"))))
+                .get("/param", req -> WebResponse.text(String.valueOf(req.paramOrNull("a")))));
+
+        for (String path : List.of("/query?a=%FF", "/param?a=%FF")) {
+            HttpResponse<String> response = get(path);
+            assertThat(response.statusCode()).isEqualTo(400);
+            assertThat(response.body()).startsWith("Query string is not UTF-8");
+        }
+        assertThat(get("/param?a=%ED%95%9C").body()).isEqualTo("한");
+    }
+
     /** A redirect to a path outside ASCII goes out percent-encoded, the same on every server. */
     @Test
     void aNonAsciiRedirectIsPercentEncoded() throws Exception {

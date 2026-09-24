@@ -6,8 +6,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.io.UnsupportedEncodingException;
-import java.net.URLDecoder;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.time.DateTimeException;
 import java.util.ArrayList;
@@ -826,6 +828,8 @@ public final class WebRequest {
                 String value = equals < 0 ? "" : decode(pair.substring(equals + 1));
                 parsed.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
             }
+        } catch (CharacterCodingException e) {
+            throw new HttpException(HttpStatus.BAD_REQUEST, "Query string is not UTF-8: " + query);
         } catch (IllegalArgumentException e) {
             // A stray %, or one not followed by two hex digits. That is the URL
             // the caller sent, so it is a 400 like every other bad input here,
@@ -840,8 +844,57 @@ public final class WebRequest {
         return Collections.unmodifiableMap(parsed);
     }
 
-    private static String decode(String value) {
-        return URLDecoder.decode(value, StandardCharsets.UTF_8);
+    /**
+     * One name or value of the query string, decoded as UTF-8. Bytes that are
+     * not UTF-8, such as {@code %FF}, are refused rather than replaced with
+     * U+FFFD, which {@link java.net.URLDecoder} does without a word: a value
+     * the caller never sent would reach the handler, while {@code param} read
+     * through the container answered 400 on Jetty and Tomcat and U+FFFD on
+     * Undertow.
+     *
+     * @throws IllegalArgumentException for a {@code %} not followed by two hex digits
+     * @throws CharacterCodingException for bytes that are not UTF-8
+     */
+    private static String decode(String value) throws CharacterCodingException {
+        if (value.indexOf('%') < 0 && value.indexOf('+') < 0) {
+            return value;
+        }
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c == '+') {
+                bytes.write(' ');
+            } else if (c == '%') {
+                int high = i + 2 < value.length() ? hexDigit(value.charAt(i + 1)) : -1;
+                int low = high < 0 ? -1 : hexDigit(value.charAt(i + 2));
+                if (low < 0) {
+                    throw new IllegalArgumentException("Not a percent-escape at " + i + ": " + value);
+                }
+                bytes.write(high << 4 | low);
+                i += 2;
+            } else {
+                bytes.writeBytes(String.valueOf(c).getBytes(StandardCharsets.UTF_8));
+            }
+        }
+        return StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT)
+                .decode(ByteBuffer.wrap(bytes.toByteArray()))
+                .toString();
+    }
+
+    /** An ASCII hex digit's value, or -1: {@link Character#digit} takes full-width digits too. */
+    private static int hexDigit(char c) {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'a' && c <= 'f') {
+            return c - 'a' + 10;
+        }
+        if (c >= 'A' && c <= 'F') {
+            return c - 'A' + 10;
+        }
+        return -1;
     }
 
     // ---- Body ----

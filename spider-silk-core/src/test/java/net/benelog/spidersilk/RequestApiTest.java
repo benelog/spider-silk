@@ -123,6 +123,28 @@ class RequestApiTest {
         });
     }
 
+    /**
+     * An escape of bytes that are not UTF-8 is bad input too. The query read
+     * used to hand the handler U+FFFD for it, while a param read through the
+     * container answered 400 blaming a form body the request did not have.
+     */
+    @Test
+    void aQueryStringThatIsNotUtf8IsA400FromEveryRead() {
+        App app = new App()
+                .get("/query", req -> WebResponse.text(String.valueOf(req.queryParamOrNull("a"))))
+                .get("/param", req -> WebResponse.text(String.valueOf(req.paramOrNull("a"))));
+
+        WebTest.test(app, client -> {
+            for (String path : List.of("/query?a=%FF", "/param?a=%FF", "/query?a=%C3%28")) {
+                var response = client.get(path);
+                assertThat(response.statusCode()).isEqualTo(400);
+                assertThat(response.body()).startsWith("Query string is not UTF-8");
+            }
+            assertThat(client.get("/query?a=%ED%95%9C+%2B%20x").body()).isEqualTo("한 + x");
+            assertThat(client.get("/param?a=%ed%95%9c").body()).isEqualTo("한");
+        });
+    }
+
     /** A form read consults the query string to tell the two apart, so it answers 400 too. */
     @Test
     void aFormReadBehindAMalformedQueryStringIsAlsoA400() {
