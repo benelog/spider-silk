@@ -58,6 +58,20 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 
 ### Fixed
 
+- `spider-silk-core`: `redirect(location)` percent-encodes as UTF-8 each character a header cannot carry, anything outside ASCII, a space, or a control character.
+  Jetty replaced such a character with a space, Undertow kept its low byte, and Tomcat sent the 302 with no `Location`.
+- `spider-silk-core`: `cookie(...)` throws `IllegalArgumentException` for a value RFC 6265 does not allow, inside the handler.
+  The container refused it only while writing, a bare 500 that no exception handler saw.
+- `spider-silk-core`: the 500 that replaces a response which failed while written carries the CORS and security headers, so a browser no longer reports a CORS failure in its place.
+- `spider-silk-core`: `Accept`, `Accept-Encoding`, and `Access-Control-Request-Headers` sent on several lines are read as the lines joined, as RFC 9110 reads a list field, where only the first line was read.
+- `spider-silk-core`: after `bodyNdjson` or `bodyReader()`, any other reader of the body throws `IllegalStateException`, as the `bodyStream()` javadoc said.
+  `bodyStream()` after `bodyNdjson` answered the rest of the body without the part the NDJSON reader had buffered.
+- `spider-silk-core`: under `app.gzip()`, a HEAD for a streamed body, such as a static file, runs no writer and carries no `Content-Length`, where it opened and compressed the whole file.
+- `spider-silk-core`: a stamped static file in a directory root rewritten while served, at the same length with the stamp kept, gets a new `ETag`, where it kept the old one and answered the old one with 304.
+- `spider-silk-core`: `Json` writes a lone surrogate as an escape, where it reached the client as `?`.
+- `spider-silk-undertow`: a failed `start()` undeploys the app, so the `App` accepts registrations again, and `contextPath("")` is the root, as on Jetty and Tomcat.
+- `spider-silk-freemarker`: `?url` works, with UTF-8 as the charset, where it threw for every template.
+- `spider-silk-openapi`: two routes that OpenAPI would read as one path throw `IllegalArgumentException`, where one operation was silently dropped or the document named one path twice.
 - `spider-silk-core`: `JsonValue.asLong()` and `getLong` refuse a decimal with more than 19 significant digits from its digit count.
   A million-digit fraction, which fits in a 1MB body, used to hold the request thread for about 17 seconds before its 400.
 - `spider-silk-core`: an `Error` such as `AssertionError` or `StackOverflowError`, thrown by a handler, a filter, an exception handler, a status page, or a response writer, answers the framework's 500 with the usual headers and reaches the request logger.

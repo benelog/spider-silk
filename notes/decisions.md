@@ -81,6 +81,8 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 65 | The application's own shutdown hook closes open SSE streams | ✅ shipped |
 | 66 | An `Error` is answered and reported as an exception is | ✅ shipped |
 | 67 | Closing an SSE stream does not wait for a blocked write | ✅ shipped |
+| 68 | A header value core writes is made valid, or refused, where it is set | ✅ shipped |
+| 69 | A body goes to one reader, and a HEAD under gzip carries no length | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
 The exception, 15b, is a decision rather than a gap.
@@ -488,6 +490,8 @@ The export moved from the example into a module, as 15c did for a server, becaus
   - Title and version are required by OpenAPI and are not the module's to name.
 - **A wildcard throws**, where the example silently dropped `*` routes.
   A missing route understates the API, and throwing moves the filter to the call site, like `HttpStatus.of`.
+- **Two routes OpenAPI would read as one path throw too**, for the same reason.
+  OpenAPI tells templated paths apart by their segments alone, so `/decks/{deckId}` beside `/decks/{id}` is an invalid document, and `/files/{name}` beside `/files/{name*}` loses an operation.
 - **Omitted**: request and response schemas, servers, security schemes, none of which a route can supply.
   That is the door 13's deferred description parameter came through, and decision 30 opened it one line wide.
 
@@ -1272,6 +1276,34 @@ A client that stops reading blocks the write in a flush until the connector give
   Zero is not usable: Tomcat waits a twentieth of it at a time, and `wait(0)` never returns.
 
 Rejected: closing the servlet output from the stopping thread while another thread writes to it, which the servlet API leaves undefined.
+
+## 68 · A header value the container would refuse
+
+### 68. A header value core writes is made valid, or refused, where it is set
+
+A container checks a header value only while the response is written, after the handler has returned, and each one fails in its own way: Jetty replaced a character, Undertow kept its low byte, and Tomcat dropped the header or threw.
+
+- **A redirect location is percent-encoded**, since a browser encodes the same text in an `href` the same way.
+  Only what a header cannot carry is encoded: anything outside ASCII, a space, and a control character, so an escape already there stays one escape.
+- **A cookie value is refused**, with `IllegalArgumentException` at `cookie(...)`, inside the handler, where `exception(...)` sees it.
+  A cookie has no encoding every reader agrees on, so choosing one is the application's call.
+
+Rejected: refusing a non-ASCII redirect, since `redirect("/decks/" + name)` is ordinary code and the encoding is not in doubt.
+Rejected: URL-encoding a cookie value, which the reading side would have to know to decode.
+
+## 69 · Readers of one body, and a HEAD whose length is unknown
+
+### 69. A body goes to one reader, and a HEAD under gzip carries no length
+
+- **One reader takes the body.**
+  After `bodyStream()`, `bodyReader()`, or `bodyNdjson`, any other reader throws `IllegalStateException`.
+  Asking for the same stream or reader again answers it, because it is the container's.
+  `bodyNdjson` twice throws, since the first one's buffer holds part of the body.
+- **A HEAD that gzip would compress runs no writer.**
+  The compressed length is known only by compressing the whole body, which for a static file means reading it.
+  The HEAD carries the GET's `Content-Encoding` and `Vary` and no `Content-Length`, and the headers are committed so the container cannot announce a length of 0.
+
+Rejected: compressing on HEAD to report the exact length, which is what decision 9's "a HEAD opens nothing" rules out.
 
 ## Rejected — decisions, with the reason
 
