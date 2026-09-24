@@ -124,13 +124,31 @@ class CorsTest {
         });
     }
 
+    /**
+     * A same-origin request gains no access, but its answer still varies by
+     * {@code Origin}: a shared cache that stored it without saying so would hand
+     * an allowed origin an answer with no {@code Access-Control-Allow-Origin}.
+     */
     @Test
-    void aSameOriginRequestGainsNothing() {
+    void aSameOriginRequestGainsNoAccessButStillVaries() {
         WebTest.test(api().cors(Cors.allowOrigin(ORIGIN)), client -> {
             HttpResponse<String> response = client.get("/api/decks");
 
             assertThat(response.headers().firstValue("Access-Control-Allow-Origin")).isEmpty();
-            assertThat(response.headers().firstValue("Vary")).isEmpty();
+            assertThat(header(response, "Vary")).isEqualTo("Origin");
+        });
+    }
+
+    /** The same holds for an origin that is not allowed. */
+    @Test
+    void anUnknownOriginGainsNoAccessButStillVaries() {
+        WebTest.test(api().gzip().cors(Cors.allowOrigin(ORIGIN)), client -> {
+            HttpResponse<String> response = get(client, "/api/decks", "https://evil.example.com");
+
+            assertThat(response.headers().firstValue("Access-Control-Allow-Origin")).isEmpty();
+            assertThat(header(response, "Vary"))
+                    .as("the field Gzip adds is kept beside it")
+                    .isEqualTo("Origin, Accept-Encoding");
         });
     }
 
@@ -182,6 +200,7 @@ class CorsTest {
                     .isEqualTo(ORIGIN);
             assertThat(get(client, "/admin", ORIGIN).headers()
                     .firstValue("Access-Control-Allow-Origin")).isEmpty();
+            assertThat(get(client, "/admin", ORIGIN).headers().firstValue("Vary")).isEmpty();
         });
     }
 

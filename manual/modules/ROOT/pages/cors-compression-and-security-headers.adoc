@@ -45,7 +45,8 @@ app.cors(Cors.allowOrigin("https://app.example.com", "https://admin.example.com"
 ----
 
 Two things then happen.
-Every response to a request carrying an `Origin` the `Cors` value allows gains `Access-Control-Allow-Origin`, plus `Vary: Origin` so a shared cache does not hand one origin's answer to another.
+Every response to a request carrying an `Origin` the `Cors` value allows gains `Access-Control-Allow-Origin`.
+With named origins, every response on a covered path also gains `Vary: Origin`, whether the request carried an allowed `Origin`, another one, or none, so a shared cache does not hand one origin's answer to another.
 A preflight, an `OPTIONS` carrying `Access-Control-Request-Method`, is answered on the spot.
 `Access-Control-Allow-Methods` comes from the `Allow` header the router already works out for the path.
 Name the methods yourself with `allowMethods(...)` when the answer should not follow the routing table.

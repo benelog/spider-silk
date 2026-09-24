@@ -164,33 +164,41 @@ public final class Cors {
 
     /**
      * The headers every cross-origin answer carries. A request with no
-     * {@code Origin} is same-origin and gains nothing; an {@code Origin} that is
-     * not allowed also gains nothing, and the browser is the one that turns that
-     * silence into a failure.
+     * {@code Origin} is same-origin and gains no access; an {@code Origin} that
+     * is not allowed gains none either, and the browser is the one that turns
+     * that silence into a failure.
+     *
+     * <p>With named origins, every answer on a covered path varies by
+     * {@code Origin}, those two included. The same URL answers an allowed
+     * origin with {@code Access-Control-Allow-Origin} and anyone else without
+     * it, so a shared cache that stored the answer to a request with no
+     * {@code Origin} would otherwise hand it to an allowed origin, whose
+     * browser would then refuse it. {@link #anyOrigin()} answers everyone
+     * alike and varies by nothing.
      */
     WebResponse apply(WebResponse response, WebRequest request, String[] segments) {
+        if (!covers(segments)) {
+            return response;
+        }
         String origin = request.header("Origin");
-        if (origin == null || !covers(segments)) {
-            return response;
-        }
-        String allowed = allowedOrigin(origin);
-        if (allowed == null) {
-            return response;
-        }
+        String allowed = origin == null ? null : allowedOrigin(origin);
         Map<String, String> fields = new LinkedHashMap<>();
-        fields.put("Access-Control-Allow-Origin", allowed);
+        if (allowed != null) {
+            fields.put("Access-Control-Allow-Origin", allowed);
+        }
         if (!origins.isEmpty()) {
-            // The answer differs per origin, so a shared cache must key on it.
             String vary = WebResponse.varyValue(response.header("Vary"), "Origin");
             if (vary != null) {
                 fields.put("Vary", vary);
             }
         }
-        if (credentials) {
-            fields.put("Access-Control-Allow-Credentials", "true");
-        }
-        if (!exposed.isEmpty()) {
-            fields.put("Access-Control-Expose-Headers", String.join(", ", exposed));
+        if (allowed != null) {
+            if (credentials) {
+                fields.put("Access-Control-Allow-Credentials", "true");
+            }
+            if (!exposed.isEmpty()) {
+                fields.put("Access-Control-Expose-Headers", String.join(", ", exposed));
+            }
         }
         return response.withHeaders(fields);
     }

@@ -45,7 +45,8 @@ app.cors(Cors.allowOrigin("https://app.example.com", "https://admin.example.com"
 ----
 
 그러면 두 가지가 일어난다.
-`Cors` 값이 허용한 `Origin`을 실은 요청에 대한 모든 응답은 `Access-Control-Allow-Origin`을 얻고, 공유 캐시가 한 출처의 답을 다른 출처에 건네지 않도록 `Vary: Origin`도 얻는다.
+`Cors` 값이 허용한 `Origin`을 실은 요청에 대한 모든 응답은 `Access-Control-Allow-Origin`을 얻는다.
+출처를 지정했다면, 적용 경로의 모든 응답은 요청이 허용된 `Origin`을 실었든, 다른 `Origin`을 실었든, 아무것도 싣지 않았든 `Vary: Origin`도 얻으므로, 공유 캐시가 한 출처의 답을 다른 출처에 건네지 않는다.
 프리플라이트, 즉 `Access-Control-Request-Method`를 실은 `OPTIONS`는 그 자리에서 답해진다.
 `Access-Control-Allow-Methods`는 라우터가 그 경로에 대해 이미 정해 둔 `Allow` 헤더에서 온다.
 답이 라우팅 테이블을 따르지 않아야 할 때는 `allowMethods(...)`로 메서드를 직접 지정한다.
