@@ -744,7 +744,40 @@ public final class WebResponse {
      * after this call does not change what the response sends.
      */
     public WebResponse cookie(Cookie cookie) {
-        return withCookie((Cookie) Objects.requireNonNull(cookie, "cookie").clone());
+        Objects.requireNonNull(cookie, "cookie");
+        requireCookieValue(cookie.getName(), cookie.getValue());
+        return withCookie((Cookie) cookie.clone());
+    }
+
+    /**
+     * Refuses a value RFC 6265 does not allow in a cookie: a space, a comma, a
+     * semicolon, a backslash, a quote inside the value, a control character,
+     * or anything outside ASCII. The container refused such a value only while
+     * the response was being written, after the handler had returned, so it
+     * became a bare 500 that no exception handler saw; here it is thrown
+     * inside the handler. A value that has to carry such characters is encoded
+     * first, with {@code Base64.getUrlEncoder()} for instance.
+     */
+    private static @Nullable String requireCookieValue(String name, @Nullable String value) {
+        if (value == null) {
+            return null;
+        }
+        String inner = value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")
+                ? value.substring(1, value.length() - 1)
+                : value;
+        for (int i = 0; i < inner.length(); i++) {
+            char c = inner.charAt(i);
+            if (c <= 0x20 || c >= 0x7F || c == '"' || c == ',' || c == ';' || c == '\\') {
+                throw new IllegalArgumentException("Cookie " + name + " has a value RFC 6265 does not allow: "
+                        + "character " + describe(c) + " at " + i + ". Encode the value first, with"
+                        + " Base64.getUrlEncoder() for instance");
+            }
+        }
+        return value;
+    }
+
+    private static String describe(char c) {
+        return c > 0x20 && c < 0x7F ? "'" + c + "'" : "U+%04X".formatted((int) c);
     }
 
     /** Expires a cookie that was set with the defaults. */
@@ -831,7 +864,7 @@ public final class WebResponse {
     }
 
     private static Cookie defaultCookie(String name, String value) {
-        Cookie cookie = new Cookie(name, value);
+        Cookie cookie = new Cookie(name, requireCookieValue(name, value));
         cookie.setPath("/");
         cookie.setHttpOnly(true);
         cookie.setAttribute("SameSite", "Lax");

@@ -20,6 +20,38 @@ class CookiesAndParamsTest {
 
     // ---- Cookies ----
 
+    /**
+     * The container refused a value outside RFC 6265 only while writing, after
+     * the handler had returned, so it was a bare 500 no exception handler saw.
+     * It is refused where it is set instead.
+     */
+    @Test
+    void aCookieValueOutsideRfc6265IsRefusedWhereItIsSet() {
+        App app = new App()
+                .exception(IllegalArgumentException.class,
+                        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST))
+                .get("/space", req -> WebResponse.text("ok").cookie("name", "hello world; x"))
+                .get("/hangul", req -> WebResponse.text("ok").cookie("name", "한글"))
+                .get("/built", req -> WebResponse.text("ok").cookie(new Cookie("name", "a,b")))
+                .get("/fine", req -> WebResponse.text("ok")
+                        .cookie("plain", "abc-123_=+/")
+                        .cookie("quoted", "\"abc\""));
+
+        WebTest.test(app, client -> {
+            HttpResponse<String> space = client.get("/space");
+            assertThat(space.statusCode()).isEqualTo(400);
+            assertThat(space.body()).contains("Cookie name has a value RFC 6265 does not allow: character U+0020 at 5");
+            assertThat(client.get("/hangul").body()).contains("U+D55C at 0");
+            assertThat(client.get("/built").body()).contains("character ',' at 1");
+
+            HttpResponse<String> fine = client.get("/fine");
+            assertThat(fine.statusCode()).isEqualTo(200);
+            assertThat(fine.headers().allValues("Set-Cookie"))
+                    .anySatisfy(header -> assertThat(header).startsWith("plain=abc-123_=+/"))
+                    .anySatisfy(header -> assertThat(header).startsWith("quoted=\"abc\""));
+        });
+    }
+
     @Test
     void aCookieSetOnOneRequestComesBackOnTheNext() {
         App app = new App()

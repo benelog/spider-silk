@@ -169,6 +169,8 @@ return WebResponse.html(page)
 The two-argument form sets `Path=/`, `HttpOnly`, and `SameSite=Lax`, which is what a cookie holding anything worth stealing should have.
 `cookie(Cookie)` takes a hand-built `jakarta.servlet.http.Cookie` for `Secure`, a `Domain`, or `SameSite=None`.
 The response keeps a copy of it, attributes included.
+A value RFC 6265 does not allow, one with a space, a comma, a semicolon, a backslash, a quote, or anything outside ASCII, throws `IllegalArgumentException` where the cookie is set, so it reaches `exception(...)` like any other failure of the handler.
+A value that has to carry such characters is encoded first, with `Base64.getUrlEncoder()` for instance.
 xref:request.adoc[The Request] covers reading the cookies the client sent.
 
 == The lambda families

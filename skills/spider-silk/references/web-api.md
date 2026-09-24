@@ -150,6 +150,7 @@ response.status(HttpStatus.CREATED).header("Location", "/api/decks/1")
         .cookie("token", value, Duration.ofDays(7))
         .removeCookie("stale");
 // cookie(jakarta.servlet.http.Cookie) for Secure, Domain, SameSite=None
+// a value with a space, ; , \ " or non-ASCII throws IllegalArgumentException: Base64.getUrlEncoder() it first
 
 // Reading back (assertions, filters); cookies() hands out copies
 response.status(); response.header(name); response.headers(); response.cookies(); response.body();

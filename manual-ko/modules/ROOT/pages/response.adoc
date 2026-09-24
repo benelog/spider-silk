@@ -169,6 +169,8 @@ return WebResponse.html(page)
 두 인자 형태는 `Path=/`, `HttpOnly`, `SameSite=Lax`를 설정하며, 이는 훔칠 가치가 있는 것을 담은 쿠키라면 갖춰야 할 속성이다.
 `cookie(Cookie)`는 `Secure`, `Domain`, `SameSite=None`을 위해 직접 만든 `jakarta.servlet.http.Cookie`를 받는다.
 응답은 속성까지 포함한 그 쿠키의 복사본을 보관한다.
+공백, 쉼표, 세미콜론, 백슬래시, 따옴표, ASCII 밖의 문자처럼 RFC 6265가 허용하지 않는 값은 쿠키를 설정하는 자리에서 `IllegalArgumentException`을 던지므로, 핸들러의 다른 실패처럼 `exception(...)`에 도달한다.
+그런 문자를 담아야 하는 값은 예컨대 `Base64.getUrlEncoder()`로 먼저 인코딩한다.
 클라이언트가 보낸 쿠키를 읽는 것은 xref:request.adoc[요청]에서 다룬다.
 
 == 람다 계열
