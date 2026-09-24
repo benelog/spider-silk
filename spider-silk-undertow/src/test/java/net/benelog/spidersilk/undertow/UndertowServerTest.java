@@ -286,10 +286,22 @@ class UndertowServerTest {
                 + "Content-Disposition: form-data; name=\"csv\"; filename=\"deck.csv\"\r\n"
                 + "Content-Type: text/csv\r\n\r\n"
                 + rest;
-        return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + path))
+        return sendOnItsOwnConnection(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + path))
                 .header("Content-Type", "multipart/form-data; boundary=spidersilkboundary")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
+                .build());
+    }
+
+    /**
+     * A request a refused body came before must not reuse that connection. The
+     * container answers without reading the rest of the body and then closes the
+     * connection, and a POST that the client's pool puts on it meanwhile fails
+     * with an EOF, which the client does not retry for a POST.
+     */
+    private static HttpResponse<String> sendOnItsOwnConnection(HttpRequest request) throws Exception {
+        try (HttpClient fresh = HttpClient.newHttpClient()) {
+            return fresh.send(request, HttpResponse.BodyHandlers.ofString());
+        }
     }
 
     /** Two files under one field name, the shape {@code files("csv")} reads. */
@@ -547,11 +559,11 @@ class UndertowServerTest {
                 .isEqualTo(413);
     }
 
-    private HttpResponse<String> form(String path, String body) throws IOException, InterruptedException {
-        return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + path))
+    private HttpResponse<String> form(String path, String body) throws Exception {
+        return sendOnItsOwnConnection(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + path))
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .POST(HttpRequest.BodyPublishers.ofString(body))
-                .build(), HttpResponse.BodyHandlers.ofString());
+                .build());
     }
 
     /**
