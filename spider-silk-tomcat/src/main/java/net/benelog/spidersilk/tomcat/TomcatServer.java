@@ -71,6 +71,12 @@ public final class TomcatServer implements WebServer {
 
     private static final String SERVLET_NAME = "spider-silk";
 
+    /** The parts one multipart request may carry, as on Jetty and Undertow. */
+    private static final int MAX_PARTS = 1000;
+
+    /** The bytes of headers one part may carry, as on Jetty. */
+    private static final int MAX_PART_HEADER_BYTES = 8192;
+
     private final App app;
     private final List<Consumer<Tomcat>> tomcatCustomizers = new ArrayList<>();
     private final List<Consumer<Context>> contextCustomizers = new ArrayList<>();
@@ -237,6 +243,11 @@ public final class TomcatServer implements WebServer {
             newConnector.setThrowOnFailure(true);
             applyHost(newConnector);
             applyExecutor(newConnector);
+            // Tomcat's own defaults are 50 parts, text fields included, and 512
+            // bytes of headers per part, which a form with many fields or a file
+            // with a long name outgrows. These are Jetty's, and Undertow's count.
+            newConnector.setMaxPartCount(MAX_PARTS);
+            newConnector.setMaxPartHeaderSize(MAX_PART_HEADER_BYTES);
             connectorCustomizers.forEach(customizer -> customizer.accept(newConnector));
 
             createContext(candidate, base);

@@ -206,6 +206,7 @@ The limits are the servlet container's multipart configuration, set on the serve
 `multipart(new MultipartConfigElement(...))` sets them on `JettyServer`, xref:tomcat.adoc[TomcatServer], and xref:undertow.adoc[UndertowServer] alike.
 The default buffers to the system temp directory with no size cap and a 1MB in-memory threshold.
 `multipart(null)` turns multipart handling off.
+Every server also takes at most 1000 parts in one form, text fields included, and Jetty and Tomcat at most 8KB of headers per part; beyond that Jetty and Tomcat answer 413 and Undertow 400.
 
 An upload the container refuses is a failed upload, not an absent one.
 A part or a body over those limits answers 413, and a multipart body that will not parse, such as one cut off before its closing boundary, answers 400.

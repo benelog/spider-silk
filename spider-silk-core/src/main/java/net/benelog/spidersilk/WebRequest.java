@@ -666,7 +666,7 @@ public final class WebRequest {
         if (isMultipart()) {
             try {
                 req.getParts();
-            } catch (IOException | ServletException | IllegalStateException e) {
+            } catch (IOException | ServletException | RuntimeException e) {
                 RuntimeException refused = refusedMultipart(e);
                 if (refused instanceof HttpException) {
                     throw refused;
@@ -1261,7 +1261,7 @@ public final class WebRequest {
         Collection<Part> parts;
         try {
             parts = req.getParts();
-        } catch (IOException | ServletException | IllegalStateException e) {
+        } catch (IOException | ServletException | RuntimeException e) {
             throw refusedMultipart(e);
         }
         List<UploadedFile> files = new ArrayList<>();
@@ -1295,7 +1295,7 @@ public final class WebRequest {
         Part part;
         try {
             part = req.getPart(name);
-        } catch (IOException | ServletException | IllegalStateException e) {
+        } catch (IOException | ServletException | RuntimeException e) {
             throw refusedMultipart(e);
         }
         return isFile(part) ? new UploadedFile(part) : null;
@@ -1311,6 +1311,10 @@ public final class WebRequest {
      * {@code ServletException} over an EOF, Tomcat's and Undertow's
      * {@link IOException} for a body cut short — is a body that will not parse,
      * and 400.
+     *
+     * <p>Undertow refuses a form of more than 1000 parts with a
+     * {@code RuntimeException} around its own checked exception, which names
+     * no size either, so that is a 400 as well: a request refused, not a 500.
      *
      * <p>The API names the same exception for a servlet with no multipart
      * configuration at all. Tomcat and Undertow throw that one bare, with no

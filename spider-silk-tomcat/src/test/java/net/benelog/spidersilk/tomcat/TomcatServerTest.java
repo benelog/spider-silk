@@ -484,6 +484,37 @@ class TomcatServerTest {
         assertThat(head.headers().firstValue("Content-Length")).isEmpty();
     }
 
+    /**
+     * The same form limits on every server: a thousand parts, text fields
+     * included, and 8KB of headers per part. Tomcat's own defaults were 50
+     * parts and 512 bytes, and refused an ordinary form with a meaningless 413.
+     */
+    @Test
+    void aFormOfManyFieldsOrALongFileNameIsTakenAsOnEveryServer() throws Exception {
+        startOnTomcat(new App().post("/up", req ->
+                WebResponse.text(req.params("f").size() + " " + req.files("file").size())));
+
+        assertThat(multipart(fields(60) + file("a.txt")).body()).isEqualTo("60 1");
+        assertThat(multipart(file("n".repeat(600) + ".txt")).body()).isEqualTo("0 1");
+        assertThat(multipart(fields(1001)).statusCode()).isEqualTo(413);
+    }
+
+    private static String fields(int count) {
+        return "--X\r\nContent-Disposition: form-data; name=\"f\"\r\n\r\nv\r\n".repeat(count);
+    }
+
+    private static String file(String name) {
+        return "--X\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" + name
+                + "\"\r\nContent-Type: text/plain\r\n\r\nhi\r\n";
+    }
+
+    private HttpResponse<String> multipart(String parts) throws IOException, InterruptedException {
+        return client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/up"))
+                .header("Content-Type", "multipart/form-data; boundary=X")
+                .POST(HttpRequest.BodyPublishers.ofString(parts + "--X--\r\n")).build(),
+                HttpResponse.BodyHandlers.ofString());
+    }
+
     /** A redirect to a path outside ASCII goes out percent-encoded, the same on every server. */
     @Test
     void aNonAsciiRedirectIsPercentEncoded() throws Exception {
