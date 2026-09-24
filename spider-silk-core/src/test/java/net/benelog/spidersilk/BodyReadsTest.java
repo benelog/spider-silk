@@ -108,6 +108,44 @@ class BodyReadsTest {
         assertThat(signed).containsExactly("{\"name\":\"Spanish\"}", "{\"name\":\"Spanish\"}");
     }
 
+    /** A charset this JVM cannot decode is the client's to fix: 415, whichever read meets it. */
+    @Test
+    void anUnknownCharsetIsA415ThroughEveryTextRead() {
+        App app = new App()
+                .post("/body", req -> WebResponse.text(req.body()))
+                .post("/json", req -> WebResponse.json(req.bodyJson()))
+                .post("/reader", req -> WebResponse.text(String.valueOf(req.bodyReader().readLine())))
+                .post("/ndjson", req -> WebResponse.text(req.bodyNdjson(json -> json).count() + " lines"));
+
+        WebTest.test(app, client -> {
+            for (String path : List.of("/body", "/json", "/reader", "/ndjson")) {
+                var response = client.send(builder -> builder
+                        .uri(URI.create(client.url(path)))
+                        .header("Content-Type", "application/json; charset=no-such-charset")
+                        .POST(HttpRequest.BodyPublishers.ofString("{}")));
+
+                assertThat(response.statusCode()).as(path).isEqualTo(415);
+                assertThat(response.body()).as(path).contains("no-such-charset");
+            }
+        });
+    }
+
+    /** A charset the JVM knows is the one the text is decoded in. */
+    @Test
+    void aDeclaredCharsetIsTheOneTheTextIsDecodedIn() {
+        App app = new App().post("/body", req -> WebResponse.text(req.body()));
+
+        WebTest.test(app, client -> {
+            var response = client.send(builder -> builder
+                    .uri(URI.create(client.url("/body")))
+                    .header("Content-Type", "text/plain; charset=ISO-8859-1")
+                    .POST(HttpRequest.BodyPublishers.ofByteArray(
+                            "café".getBytes(StandardCharsets.ISO_8859_1))));
+
+            assertThat(response.body()).isEqualTo("café");
+        });
+    }
+
     /** Behind a container too: bytes after text is the framework's refusal, answered as a 500. */
     @Test
     void aStreamAfterTheTextIsAServerErrorBehindAContainer() {

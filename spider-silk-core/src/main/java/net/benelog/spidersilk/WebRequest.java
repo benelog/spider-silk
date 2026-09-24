@@ -818,6 +818,10 @@ public final class WebRequest {
      * than it sends, is refused at the first byte past it. Every later read of
      * the body answers 413 as well, rather than the part nobody checked.
      *
+     * <p>A {@code Content-Type} naming a charset this JVM cannot decode answers
+     * 415 before a byte is read, and so do {@link #bodyJson()},
+     * {@link #bodyReader()}, and {@link #bodyNdjson}.
+     *
      * <p>A form-encoded POST is spent by its first {@link #param} read, because
      * the container parses the form by reading the body to its end, and this
      * then answers {@code ""}. The reverse order leaves the form with nothing to
@@ -847,7 +851,8 @@ public final class WebRequest {
      * the reader would have used. Counting bytes rather than characters is what
      * bounds memory for every charset alike, and is what Content-Length counts.
      * At most one byte past the limit is read, which is how a body one byte over
-     * is told apart from one exactly at it.
+     * is told apart from one exactly at it. The charset is settled before any
+     * of it, so a body in one this JVM cannot decode is refused unread.
      */
     private String readBody() {
         int max = limits.maxBytes();
@@ -855,6 +860,7 @@ public final class WebRequest {
             // Refused on the header alone: nothing is read that would be thrown away.
             throw refuseBody();
         }
+        Charset charset = bodyCharset();
         try {
             InputStream in = req.getInputStream();
             ByteArrayOutputStream bytes = new ByteArrayOutputStream(bodyCapacity(max));
@@ -871,7 +877,7 @@ public final class WebRequest {
                 }
                 bytes.write(chunk, 0, read);
             }
-            return bytes.toString(bodyCharset());
+            return bytes.toString(charset);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
@@ -881,8 +887,12 @@ public final class WebRequest {
      * The charset the request declared. {@link AppServlet} sets UTF-8 on a
      * request that declared none, so the fallback here is for a request built
      * outside it.
+     *
+     * <p>A charset this JVM does not know, or a name that is not a charset name
+     * at all, is the client's to fix, so it answers 415 rather than the 500 an
+     * {@link UnsupportedEncodingException} would become.
      */
-    private Charset bodyCharset() throws IOException {
+    private Charset bodyCharset() {
         String declared = req.getCharacterEncoding();
         if (declared == null) {
             return StandardCharsets.UTF_8;
@@ -890,9 +900,13 @@ public final class WebRequest {
         try {
             return Charset.forName(declared);
         } catch (IllegalArgumentException e) {
-            // What getReader() throws for the same name.
-            throw new UnsupportedEncodingException(declared);
+            throw unsupportedCharset(declared);
         }
+    }
+
+    private static HttpException unsupportedCharset(String declared) {
+        return new HttpException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "Unsupported charset in Content-Type: " + declared);
     }
 
     /** Marks the body refused for size, so no later read answers the rest of it, and says so. */
@@ -1010,9 +1024,14 @@ public final class WebRequest {
      * The body as characters, unread, decoded with the charset the request
      * declared. The counterpart of {@link #bodyStream()} for a library that
      * reads text, subject to the same one-way rule, and likewise not limited.
+     * A charset this JVM cannot decode answers 415, as it does for
+     * {@link #body()}.
      */
     public BufferedReader bodyReader() {
         handOver("bodyReader()");
+        // Settled here rather than left to getReader(), which each container
+        // fails on in its own way.
+        bodyCharset();
         try {
             return req.getReader();
         } catch (IOException e) {
