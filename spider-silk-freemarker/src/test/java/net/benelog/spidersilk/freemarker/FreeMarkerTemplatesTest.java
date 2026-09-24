@@ -43,6 +43,19 @@ class FreeMarkerTemplatesTest {
                 assertThat(client.get("/hello").body()).isEqualTo("<p>Hello, &lt;script&gt;!</p>\n"));
     }
 
+    /**
+     * {@code ?url} needs a charset to encode in, and FreeMarker has none until
+     * one is set; the adapter left it unset, so every link built this way was a 500.
+     */
+    @Test
+    void theUrlBuiltInEncodesInUtf8() {
+        StringWriter out = new StringWriter();
+
+        new FreeMarkerTemplates("freemarker").render("link", Map.of("q", "a b&한"), out);
+
+        assertThat(out.toString()).isEqualTo("<a href=\"/search?q=a%20b%26%ED%95%9C\">search</a>\n");
+    }
+
     /** The escaping survives a suffix that no longer says "html" to FreeMarker. */
     @Test
     void aRootAndSuffixOfItsOwnReplaceTheDefaults() {

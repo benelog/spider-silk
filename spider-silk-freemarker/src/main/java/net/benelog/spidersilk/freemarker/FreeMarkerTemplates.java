@@ -103,6 +103,10 @@ public final class FreeMarkerTemplates implements TemplateRenderer {
         Configuration configuration = new Configuration(Configuration.VERSION_2_3_34);
         configuration.setTemplateLoader(new ClassTemplateLoader(classLoader(), classpathRoot));
         configuration.setDefaultEncoding("UTF-8");
+        // Every response is UTF-8. Without these FreeMarker has no charset for
+        // ?url to encode in, and throws for every template that builds a link.
+        configuration.setOutputEncoding("UTF-8");
+        configuration.setURLEscapingCharset("UTF-8");
         configuration.setOutputFormat(HTMLOutputFormat.INSTANCE);
 
         // Rethrow, so a broken template reaches app.exception(...) instead of
