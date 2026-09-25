@@ -114,9 +114,14 @@ public final class TomcatServer implements WebServer {
         return this;
     }
 
-    /** The context path the app is mounted under. Defaults to "/". */
+    /**
+     * The context path the app is mounted under. Defaults to "/". A path
+     * without its leading slash, {@code "app"}, is mounted at {@code /app}, as
+     * on every server: Jetty took it as given and answered 404 to everything.
+     */
     public TomcatServer contextPath(String contextPath) {
-        this.contextPath = Objects.requireNonNull(contextPath, "contextPath");
+        Objects.requireNonNull(contextPath, "contextPath");
+        this.contextPath = contextPath.isEmpty() || contextPath.startsWith("/") ? contextPath : "/" + contextPath;
         return this;
     }
 

@@ -113,11 +113,12 @@ public final class UndertowServer implements WebServer {
     /**
      * The context path the app is mounted under. Defaults to "/", and {@code ""}
      * is the root as well, as Jetty and Tomcat take it; Undertow's own path
-     * handler refuses an empty prefix.
+     * handler refuses an empty prefix. A path without its leading slash,
+     * {@code "app"}, is mounted at {@code /app}, as on every server.
      */
     public UndertowServer contextPath(String contextPath) {
         Objects.requireNonNull(contextPath, "contextPath");
-        this.contextPath = contextPath.isEmpty() ? "/" : contextPath;
+        this.contextPath = contextPath.isEmpty() ? "/" : contextPath.startsWith("/") ? contextPath : "/" + contextPath;
         return this;
     }
 

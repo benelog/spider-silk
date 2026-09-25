@@ -1223,4 +1223,16 @@ class TomcatServerTest {
                 cookie -> assertThat(cookie).contains("SameSite=None").containsIgnoringCase("Secure")
                         .contains("Partitioned"));
     }
+
+    /** A context path given without its leading slash is mounted as if it had one, on every server. */
+    @Test
+    void aContextPathWithoutItsLeadingSlashIsMountedUnderIt() throws Exception {
+        app = new App()
+                .get("/", req -> WebResponse.text("root"))
+                .server((a, port) -> new TomcatServer(a).port(port).contextPath("app"))
+                .start(0);
+
+        assertThat(get("/app/").body()).isEqualTo("root");
+        assertThat(get("/").statusCode()).isEqualTo(404);
+    }
 }
