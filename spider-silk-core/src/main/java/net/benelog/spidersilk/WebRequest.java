@@ -20,6 +20,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -124,6 +125,7 @@ public final class WebRequest {
     /** The media type {@code getPart} and {@code getParts} parse. */
     private static final String MULTIPART_FORM_DATA = "multipart/form-data";
     private static final String FORM_URLENCODED = "application/x-www-form-urlencoded";
+    private static final Set<String> FORM_METHODS = Set.of("POST", "PUT", "PATCH");
 
     /** The limits a request built outside {@link AppServlet} reads under; never handed out. */
     private static final BodyLimits DEFAULT_LIMITS = BodyLimits.defaults();
@@ -1425,9 +1427,13 @@ public final class WebRequest {
         return MULTIPART_FORM_DATA.equalsIgnoreCase(mediaType());
     }
 
-    /** Whether the container reads parameters out of this request's body: a form-encoded or multipart one. */
+    /**
+     * Whether the container reads parameters out of this request's body: a
+     * form-encoded or multipart one on POST, PUT, or PATCH. Each container
+     * gates the form by method, and every server is set to these three.
+     */
     private boolean carriesForm() {
-        return isMultipart() || isFormEncoded();
+        return FORM_METHODS.contains(req.getMethod()) && (isMultipart() || isFormEncoded());
     }
 
     /** Whether the request declares a form-encoded body, the other kind a container parses into fields. */

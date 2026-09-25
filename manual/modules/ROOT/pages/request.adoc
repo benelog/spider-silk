@@ -106,6 +106,9 @@ String name = req.formParam("name");            // form body only, 400 when abse
 List<String> tags = req.formParams("tag");
 ----
 
+A form body is read on POST, PUT, and PATCH, form-encoded or multipart, the same on every server.
+On any other method its fields are not read, and `formParam` answers as it does for a request with no form.
+
 A parser reads a named source into a type, with the contract `param(name, parser)` has:
 
 [source,java]
@@ -122,7 +125,7 @@ A name the other source carries does not count, so `formParam("page", parser)` a
 There is no `(name, defaultString)` form, since `queryParamOrNull(name)` already covers the optional string without overlapping the parser overload.
 
 A query string that will not decode, such as `?q=%zz` or `?q=%FF`, whose byte is not UTF-8, answers 400 through `param`, `queryParam`, and `formParam` in every form, whichever name is read.
-A request with no form body, one neither form-encoded nor multipart, answers `param` and `params` from the query string alone, so the container's parser never sees it.
+A request with no form body, neither form-encoded nor multipart or on another method, answers `param` and `params` from the query string alone, so the container's parser never sees it.
 A form body the container will not parse answers 400 through `param`, `params`, and `formParam` in every form, with the container's reason as the message.
 That covers an escape that will not decode and a body over the container's own form limit.
 A multipart form answers as `file(name)` does: 413 for a part or a body over the multipart limits, and 400 for one that will not parse.

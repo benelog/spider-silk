@@ -248,6 +248,9 @@ public final class TomcatServer implements WebServer {
             // with a long name outgrows. These are Jetty's, and Undertow's count.
             newConnector.setMaxPartCount(MAX_PARTS);
             newConnector.setMaxPartHeaderSize(MAX_PART_HEADER_BYTES);
+            // Tomcat reads a form body on POST alone. POST, PUT, and PATCH are
+            // what Undertow reads and Jetty is set to, so a form on each reads alike.
+            newConnector.setParseBodyMethods("POST,PUT,PATCH");
             connectorCustomizers.forEach(customizer -> customizer.accept(newConnector));
 
             createContext(candidate, base);

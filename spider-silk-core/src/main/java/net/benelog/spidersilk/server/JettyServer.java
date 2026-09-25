@@ -270,6 +270,9 @@ public final class JettyServer implements WebServer {
 
     private ServerConnector createConnector(Server server) {
         HttpConfiguration httpConfiguration = new HttpConfiguration();
+        // Jetty reads a form body on POST and PUT; Tomcat and Undertow are set
+        // to the same three methods, so a PATCH form reads alike on each.
+        httpConfiguration.addFormEncodedMethod("PATCH");
         httpConfigurationCustomizers.forEach(customizer -> customizer.accept(httpConfiguration));
 
         ServerConnector connector =

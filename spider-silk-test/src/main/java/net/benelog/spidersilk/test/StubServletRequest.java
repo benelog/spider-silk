@@ -63,6 +63,9 @@ import org.jspecify.annotations.Nullable;
  */
 final class StubServletRequest implements HttpServletRequest {
 
+    /** The methods whose form body the servers read, each set to the same three. */
+    private static final Set<String> FORM_METHODS = Set.of("POST", "PUT", "PATCH");
+
     private final String method;
     private final String path;
     private final Map<String, List<String>> headers;
@@ -281,8 +284,14 @@ final class StubServletRequest implements HttpServletRequest {
      * taken, and all three containers once a byte of it was read. The fields of
      * a multipart form are parts rather than this body, so they stay outside the
      * rule.
+     *
+     * <p>A method other than POST, PUT, and PATCH carries no form, as none of
+     * the servers reads one for it.
      */
     private Map<String, List<String>> form() {
+        if (!FORM_METHODS.contains(method)) {
+            return Map.of();
+        }
         if (formParsed || formParams.isEmpty() || multipart) {
             return formParams;
         }

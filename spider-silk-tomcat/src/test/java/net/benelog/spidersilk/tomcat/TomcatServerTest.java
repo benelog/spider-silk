@@ -41,6 +41,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.BodyLimits;
+import net.benelog.spidersilk.Handler;
 import net.benelog.spidersilk.HttpException;
 import net.benelog.spidersilk.StaticFiles;
 import net.benelog.spidersilk.WebResponse;
@@ -1073,5 +1074,31 @@ class TomcatServerTest {
         assertThat(get("/query?=a&a=b=c").body()).isEqualTo("q=[b=c] p=[b=c] one=b=c form=[]");
         String posted = rawPost("/query?=a&a=b=c", "application/x-www-form-urlencoded", "a=d");
         assertThat(posted).doesNotContain("Form body");
+    }
+
+    /**
+     * A form body reads on POST, PUT, and PATCH, form-encoded or multipart, on
+     * every server, and a form on DELETE is left unread on every server. Each
+     * container gated the form by a set of methods of its own.
+     */
+    @Test
+    void aFormBodyReadsOnPostPutAndPatchAlike() throws Exception {
+        Handler echo = req -> WebResponse.text("a=" + req.paramOrNull("a") + " form=" + req.formParamOrNull("a"));
+        startOnTomcat(new App().post("/form", echo).put("/form", echo).patch("/form", echo).delete("/form", echo));
+
+        for (String method : List.of("POST", "PUT", "PATCH")) {
+            assertThat(rawForm(method, "application/x-www-form-urlencoded", "a=1")).as(method)
+                    .startsWith("HTTP/1.1 200").endsWith("a=1 form=1");
+            assertThat(rawForm(method, "multipart/form-data; boundary=X",
+                    "--X\r\nContent-Disposition: form-data; name=\"a\"\r\n\r\n1\r\n--X--\r\n")).as(method)
+                    .startsWith("HTTP/1.1 200").endsWith("a=1 form=1");
+        }
+        assertThat(rawForm("DELETE", "application/x-www-form-urlencoded", "a=1"))
+                .startsWith("HTTP/1.1 200").endsWith("a=null form=null");
+    }
+
+    private String rawForm(String method, String contentType, String body) {
+        return raw(method + " /form HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: "
+                + contentType + "\r\nContent-Length: " + body.length() + "\r\n\r\n" + body);
     }
 }

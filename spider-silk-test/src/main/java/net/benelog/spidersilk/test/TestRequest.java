@@ -151,6 +151,9 @@ public final class TestRequest {
      * {@code Content-Type} header says otherwise. A form is one body, so it
      * cannot be combined with {@link #body}. On a request with a {@link #file},
      * the fields are the text fields of the multipart form instead.
+     *
+     * <p>The fields are read on POST, PUT, and PATCH, as every server reads a
+     * form for those three methods and no other.
      */
     public TestRequest formParam(String name, String value) {
         formParams.computeIfAbsent(name, key -> new ArrayList<>()).add(value);

@@ -477,4 +477,20 @@ class TestRequestTest {
         assertThat(request.cookie("c")).isEqualTo("3");
         assertThat(TestRequest.get("/x").build().cookie("a")).isNull();
     }
+
+    /** A form body reads on POST, PUT, and PATCH, as on every server, and on no other method. */
+    @Test
+    void aFormBodyReadsForExactlyTheMethodsTheServersRead() {
+        for (TestRequest request : List.of(TestRequest.post("/x"), TestRequest.put("/x"), TestRequest.patch("/x"))) {
+            WebRequest req = request.formParam("a", "1").build();
+            assertThat(req.formParamOrNull("a")).isEqualTo("1");
+            assertThat(req.paramOrNull("a")).isEqualTo("1");
+        }
+        for (TestRequest request : List.of(TestRequest.get("/x"), TestRequest.delete("/x"))) {
+            WebRequest req = request.formParam("a", "1").queryParam("q", "2").build();
+            assertThat(req.formParamOrNull("a")).isNull();
+            assertThat(req.paramOrNull("a")).isNull();
+            assertThat(req.param("q")).isEqualTo("2");
+        }
+    }
 }
