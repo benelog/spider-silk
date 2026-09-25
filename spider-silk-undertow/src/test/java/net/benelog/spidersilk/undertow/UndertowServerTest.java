@@ -1063,4 +1063,21 @@ class UndertowServerTest {
                 .contains("Unsupported charset in Content-Type");
         assertThat(rawPost("/body", "text/plain; charset=\"ISO-8859-1\"", "hi")).startsWith("HTTP/1.1 200");
     }
+
+    /**
+     * A query string this parser takes answers the parameter reads alike on
+     * every server. Tomcat parsed it again for them, refused the empty name,
+     * and blamed a form body on a request that had none.
+     */
+    @Test
+    void aQueryStringWithAnEmptyNameReadsAlikeThroughEveryParameterRead() throws Exception {
+        startOnUndertow(new App()
+                .get("/query", req -> WebResponse.text("q=" + req.queryParams("a") + " p=" + req.params("a")
+                        + " one=" + req.paramOrNull("a") + " form=" + req.formParams("a")))
+                .post("/query", req -> WebResponse.text("q=" + req.queryParams("a") + " p=" + req.params("a"))));
+
+        assertThat(get("/query?=a&a=b=c").body()).isEqualTo("q=[b=c] p=[b=c] one=b=c form=[]");
+        String posted = rawPost("/query?=a&a=b=c", "application/x-www-form-urlencoded", "a=d");
+        assertThat(posted).doesNotContain("Form body");
+    }
 }

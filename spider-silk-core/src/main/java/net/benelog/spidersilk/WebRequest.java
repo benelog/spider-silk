@@ -604,9 +604,17 @@ public final class WebRequest {
      * of its own and differently on each server. Only the query string is read
      * first: the body is still read by the container, when and as it was, and
      * {@link #formFields} turns what it throws into a 4xx.
+     *
+     * <p>A request that carries no form answers from the query string alone.
+     * The container would read the same values, but Tomcat parses the query
+     * string again for it and refuses one this parser takes, such as an empty
+     * name in {@code ?=a}, as a form body that could not be read.
      */
     private @Nullable String parameter(String name) {
-        parsedQuery();
+        List<String> fromQuery = queryParams(name);
+        if (!carriesForm()) {
+            return fromQuery.isEmpty() ? null : fromQuery.get(0);
+        }
         return formFields(() -> req.getParameter(name));
     }
 
@@ -666,8 +674,12 @@ public final class WebRequest {
      * {@link #param(String)} returns the first of these.
      */
     public List<String> params(String name) {
-        // The query string is checked first, for the reason parameter(name) gives.
-        parsedQuery();
+        // The query string is checked first, and alone without a form, for the
+        // reasons parameter(name) gives.
+        List<String> fromQuery = queryParams(name);
+        if (!carriesForm()) {
+            return fromQuery;
+        }
         String[] values = formFields(() -> req.getParameterValues(name));
         return values == null ? List.of() : List.of(values);
     }
@@ -698,12 +710,10 @@ public final class WebRequest {
      * in a way the servlet API defines, so the status does not try to.
      */
     private <T> T formFields(Supplier<T> read) {
-        if (isMultipart() || isFormEncoded()) {
-            // The container decodes the fields in the declared charset, and
-            // Jetty throws for one it does not know where Tomcat and Undertow
-            // fall back to their own: 415 on each, as body() answers.
-            bodyCharset();
-        }
+        // The container decodes the fields in the declared charset, and Jetty
+        // throws for one it does not know where Tomcat and Undertow fall back
+        // to their own: 415 on each, as body() answers.
+        bodyCharset();
         if (isMultipart() && req.getAttribute(NO_MULTIPART_ATTRIBUTE) == null) {
             try {
                 req.getParts();
@@ -717,8 +727,12 @@ public final class WebRequest {
         try {
             return read.get();
         } catch (RuntimeException e) {
+            // Tomcat parses the query string again with the body and refuses
+            // either through the same exception, so with a query string the
+            // message cannot say which of the two it was.
+            String what = req.getQueryString() == null ? "Form body" : "Parameters";
             throw new HttpException(HttpStatus.BAD_REQUEST,
-                    "Form body could not be read: " + deepestMessage(e));
+                    what + " could not be read: " + deepestMessage(e));
         }
     }
 
@@ -1409,6 +1423,11 @@ public final class WebRequest {
      */
     private boolean isMultipart() {
         return MULTIPART_FORM_DATA.equalsIgnoreCase(mediaType());
+    }
+
+    /** Whether the container reads parameters out of this request's body: a form-encoded or multipart one. */
+    private boolean carriesForm() {
+        return isMultipart() || isFormEncoded();
     }
 
     /** Whether the request declares a form-encoded body, the other kind a container parses into fields. */
