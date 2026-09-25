@@ -302,9 +302,15 @@ public final class WebRequest {
      * built by hand — a development server on 8080, a second instance on 8081.
      * The container answers both halves, so a proxy's {@code X-Forwarded-Host} is
      * applied here on the same terms as {@link #scheme()}.
+     *
+     * <p>An IPv6 literal keeps its brackets, {@code [::1]:8080}: Undertow
+     * answers the server name without them, which a port would run into.
      */
     public String host() {
-        String name = req.getServerName();
+        String serverName = req.getServerName();
+        String name = serverName.indexOf(':') >= 0 && !serverName.startsWith("[")
+                ? "[" + serverName + "]"
+                : serverName;
         int port = req.getServerPort();
         return port == defaultPort(req.getScheme()) ? name : name + ":" + port;
     }

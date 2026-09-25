@@ -1157,4 +1157,13 @@ class TomcatServerTest {
         assertThat(rawGet("/hello/a%C3")).startsWith("HTTP/1.1 400");
         assertThat(get("/hello/sp%C3%A4der").body()).isEqualTo("Hello späder");
     }
+
+    /** An IPv6 literal in the Host header keeps its brackets in host(), so an absolute URL built from it is valid. */
+    @Test
+    void anIpv6HostKeepsItsBrackets() throws Exception {
+        startOnTomcat(new App().get("/host", req -> WebResponse.text(req.host())));
+
+        assertThat(raw("GET /host HTTP/1.1\r\nHost: [::1]:9\r\nConnection: close\r\n\r\n")).endsWith("\r\n[::1]:9");
+        assertThat(raw("GET /host HTTP/1.1\r\nHost: [::1]\r\nConnection: close\r\n\r\n")).endsWith("\r\n[::1]");
+    }
 }
