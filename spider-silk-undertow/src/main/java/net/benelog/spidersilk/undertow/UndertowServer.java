@@ -1,7 +1,12 @@
 package net.benelog.spidersilk.undertow;
 
+import java.io.ByteArrayOutputStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -210,7 +215,7 @@ public final class UndertowServer implements WebServer {
 
             Undertow.Builder builder = Undertow.builder()
                     .addHttpListener(port, host != null ? host : DEFAULT_HOST)
-                    .setHandler(refusingEncodedSlashes(graceful));
+                    .setHandler(checkingRequestTarget(graceful));
             builderCustomizers.forEach(customizer -> customizer.accept(builder));
 
             candidate = builder.build();
@@ -394,21 +399,72 @@ public final class UndertowServer implements WebServer {
     }
 
     /**
-     * Answers 400 for a path that carries an encoded slash, as Jetty and Tomcat
-     * do. Undertow decodes every other escape but leaves {@code %2F} as it is,
-     * so {@code /v/a%2Fb} reached a path variable as {@code a%2Fb}, the same
-     * value {@code /v/a%252Fb} decodes to: two requests read as one.
+     * The request-targets Jetty and Tomcat refuse before the servlet runs, and
+     * Undertow does not.
+     *
+     * <ul>
+     *   <li>A target that is not a path, the {@code *} of {@code OPTIONS *},
+     *       answers 404, as on Jetty. Undertow's servlet path matcher threw for
+     *       it, which answered a bare 500 and logged a stack trace at ERROR.</li>
+     *   <li>An encoded slash answers 400. Undertow decodes every other escape
+     *       but leaves {@code %2F} as it is, so {@code /v/a%2Fb} reached a path
+     *       variable as {@code a%2Fb}, the same value {@code /v/a%252Fb} decodes
+     *       to: two requests read as one.</li>
+     *   <li>An escape whose bytes are not UTF-8 answers 400. Undertow decoded
+     *       {@code a%FF} as {@code a\uFFFD}, a value the client never sent, and
+     *       the same one {@code a%EF%BF%BD} decodes to.</li>
+     * </ul>
      */
-    private static HttpHandler refusingEncodedSlashes(HttpHandler next) {
+    private static HttpHandler checkingRequestTarget(HttpHandler next) {
         return exchange -> {
-            String path = exchange.getRequestURI();
-            if (path.contains("%2F") || path.contains("%2f")) {
+            if (!exchange.getRequestPath().startsWith("/")) {
+                exchange.setStatusCode(404);
+                exchange.endExchange();
+                return;
+            }
+            String uri = exchange.getRequestURI();
+            if (uri.contains("%2F") || uri.contains("%2f") || !escapesAreUtf8(uri)) {
                 exchange.setStatusCode(400);
                 exchange.endExchange();
                 return;
             }
             next.handleRequest(exchange);
         };
+    }
+
+    /**
+     * Whether the percent-escapes of a request URI decode as UTF-8, strictly,
+     * as the query string is decoded. An escape that is not two hex digits is
+     * left to Undertow, which refuses it on its own.
+     */
+    private static boolean escapesAreUtf8(String uri) {
+        if (uri.indexOf('%') < 0) {
+            return true;
+        }
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        int start = 0;
+        for (int i = 0; i + 2 < uri.length(); i++) {
+            if (uri.charAt(i) == '%') {
+                int high = Character.digit(uri.charAt(i + 1), 16);
+                int low = Character.digit(uri.charAt(i + 2), 16);
+                if (high >= 0 && low >= 0) {
+                    bytes.writeBytes(uri.substring(start, i).getBytes(StandardCharsets.UTF_8));
+                    bytes.write(high << 4 | low);
+                    i += 2;
+                    start = i + 1;
+                }
+            }
+        }
+        bytes.writeBytes(uri.substring(start).getBytes(StandardCharsets.UTF_8));
+        try {
+            StandardCharsets.UTF_8.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes.toByteArray()));
+            return true;
+        } catch (CharacterCodingException e) {
+            return false;
+        }
     }
 
     /**

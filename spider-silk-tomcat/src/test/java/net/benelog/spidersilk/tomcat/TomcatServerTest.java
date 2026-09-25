@@ -1147,4 +1147,14 @@ class TomcatServerTest {
         assertThat(rawGet("/files/a/b.txt")).endsWith("tail=[a/b.txt]");
         assertThat(rawGet("/files/..a/.b")).endsWith("tail=[..a/.b]");
     }
+
+    /** A path escape whose bytes are not UTF-8 is a 400 on every server, and a UTF-8 one still decodes. */
+    @Test
+    void aPathEscapeThatIsNotUtf8IsA400() throws Exception {
+        startOnTomcat(new App().get("/hello/{name}", req -> WebResponse.text("Hello " + req.pathParam("name"))));
+
+        assertThat(rawGet("/hello/a%FF")).startsWith("HTTP/1.1 400");
+        assertThat(rawGet("/hello/a%C3")).startsWith("HTTP/1.1 400");
+        assertThat(get("/hello/sp%C3%A4der").body()).isEqualTo("Hello späder");
+    }
 }
