@@ -51,6 +51,7 @@ A body in a charset this JVM cannot decode answers 415 instead, since its text n
 A number such as `01`, `+1`, `.5`, or `1.` is invalid syntax, and so is a control character written into a string without an escape.
 `asLong` and `getLong` reject a number with a fractional part rather than truncating it: `1.5` is not a long, while `2.0` and `1e3` are whole and read as one.
 The conversion reads the number's own digits rather than the nearest `double`, so `9007199254740993.0` reads as exactly that long and `1.0000000000000001` is rejected as a fraction.
+A parsed number is written back as the same digits, so a tree passed through unchanged, as in `WebResponse.json(req.bodyJson())`, sends the numbers it received.
 `asDouble` and `getDouble` answer the nearest `double`, which is approximate by nature.
 An integer outside the range of a long, such as `12345678901234567890`, parses as a number that `asDouble` reads and `asLong` rejects.
 For a key that is allowed to be absent, `getString(key, defaultValue)`, `getLong`, `getDouble`, and `getBoolean` with a default answer the default instead, for a missing key and for an explicit JSON `null` alike.

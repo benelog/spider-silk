@@ -130,6 +130,16 @@ class JsonStreamingTest {
         });
     }
 
+    /** A parsed body passed through unchanged answers the numbers it received. */
+    @Test
+    void aParsedBodyPassedThroughKeepsItsNumbers() {
+        App app = new App().post("/echo", req -> WebResponse.json(req.bodyJson()));
+
+        WebTest.test(app, client -> assertThat(client.post("/echo",
+                "{\"id\":12345678901234567890,\"x\":1.10,\"big\":9007199254740993.0}").body())
+                .isEqualTo("{\"id\":12345678901234567890,\"x\":1.10,\"big\":9007199254740993.0}"));
+    }
+
     /** The line number is the point: a large body says where it went wrong. */
     @Test
     void aRejectedLineIsA400NamingTheLine() {

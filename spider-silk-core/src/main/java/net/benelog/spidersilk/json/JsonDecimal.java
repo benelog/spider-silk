@@ -10,6 +10,10 @@ import java.math.BigInteger;
  * the digits that decide whether the number is a {@code long}:
  * {@code 9007199254740993.0} rounds to an even double, and
  * {@code 1.0000000000000001} rounds to a whole one.
+ *
+ * <p>It is written back as that text too, so a parsed tree passed through
+ * unchanged sends the number it received: the text passed RFC 8259's grammar
+ * in the parser and is finite, so it is always a valid JSON number.
  */
 final class JsonDecimal extends Number {
 
@@ -110,9 +114,13 @@ final class JsonDecimal extends Number {
         return value;
     }
 
-    /** Serialized as the double it reads as, the way a parsed decimal always was. */
+    /**
+     * Serialized as the text it was parsed from. The double it reads as wrote
+     * {@code 9007199254740993.0} back as {@code 9.007199254740992E15}, a number
+     * {@link JsonValue#asLong()} then read as a different long.
+     */
     @Override
     public String toString() {
-        return Double.toString(value);
+        return text;
     }
 }

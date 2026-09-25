@@ -7,6 +7,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,6 +55,14 @@ class JsonTest {
                 + "\"nums\":[1,2.5,-3],\"nested\":{\"a\":\"b\"}}";
         JsonValue value = Json.parse(source);
         assertThat(value.toJson()).isEqualTo(source);
+
+        // A parsed number is written back as its text, so its digits survive the trip.
+        for (String number : List.of("9007199254740993.0", "12345678901234567890", "1.10", "1E+2", "1e-400")) {
+            assertThat(Json.parse(number).toJson()).isEqualTo(number);
+        }
+        assertThat(Json.parse(Json.parse("9007199254740993.0").toJson()).asLong()).isEqualTo(9007199254740993L);
+        // A number built from a double is written as it always was.
+        assertThat(Json.object().put("x", 1.10).toJson()).isEqualTo("{\"x\":1.1}");
     }
 
     @Test
@@ -544,12 +553,12 @@ class JsonTest {
         assertThat(Json.array().add("\uDE00\uD83D").toJson()).isEqualTo("[\"\\ude00\\ud83d\"]");
     }
 
-    /** asDouble stays the nearest double, and a decimal serializes as it did before. */
+    /** asDouble stays the nearest double, and a decimal serializes as the text it was parsed from. */
     @Test
-    void aDecimalTokenStillReadsAndWritesAsADouble() {
+    void aDecimalTokenReadsAsADoubleAndWritesAsItsText() {
         assertThat(Json.parse("9007199254740993.0").asDouble()).isEqualTo(9007199254740992.0);
         assertThat(Json.parse("1.0000000000000001").asDouble()).isEqualTo(1.0);
-        assertThat(Json.parse("1e3").toJson()).isEqualTo("1000.0");
+        assertThat(Json.parse("1e3").toJson()).isEqualTo("1e3");
         assertThat(Json.parse("[2.5,-0.5]").toJson()).isEqualTo("[2.5,-0.5]");
         assertThat(Json.parse("2.5").isNumber()).isTrue();
     }

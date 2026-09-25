@@ -89,7 +89,7 @@ class JsonSeamTest {
 
             var accepted = client.postJson("/raw", "{\"n\":[-1,0.5,1e2],\"s\":\"a\\nb\\u0009\"}");
             assertThat(accepted.statusCode()).isEqualTo(200);
-            assertThat(accepted.body()).isEqualTo("{\"n\":[-1,0.5,100.0],\"s\":\"a\\nb\\t\"}");
+            assertThat(accepted.body()).isEqualTo("{\"n\":[-1,0.5,1e2],\"s\":\"a\\nb\\t\"}");
         });
     }
 
