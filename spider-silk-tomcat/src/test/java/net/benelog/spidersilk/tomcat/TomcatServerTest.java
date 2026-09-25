@@ -1235,4 +1235,20 @@ class TomcatServerTest {
         assertThat(get("/app/").body()).isEqualTo("root");
         assertThat(get("/").statusCode()).isEqualTo(404);
     }
+
+    /** An Error thrown by the request logger leaves the finished answer as it was, not the container's 500. */
+    @Test
+    void anErrorFromTheRequestLoggerLeavesTheAnswer() throws Exception {
+        startOnTomcat(new App()
+                .requestLogger((req, completion) -> {
+                    throw new AssertionError("logger assertion");
+                })
+                .get("/", req -> WebResponse.text("ok"))
+                .get("/redirect", req -> WebResponse.redirect("/")));
+
+        HttpResponse<String> response = get("/");
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).isEqualTo("ok");
+        assertThat(rawGet("/redirect")).startsWith("HTTP/1.1 302").containsIgnoringCase("Location: /\r\n");
+    }
 }

@@ -46,4 +46,4 @@ app.requestLogger((req, completion) -> {
 It is null for a static file, a 404, a 405, and the automatic OPTIONS answer.
 xref:route-introspection.adoc#matched-route[Route Introspection] has the rules.
 `req.body()` reads the text a filter or handler already read, since the text is kept for the whole request.
-An exception the logger throws is written to the servlet log and leaves the response alone.
+An exception or an `Error` the logger throws is written to the servlet log and leaves the response alone.

@@ -212,7 +212,13 @@ public class AppServlet extends HttpServlet {
         return decorated;
     }
 
-    /** Reports the finished request, with the response it was finally answered with. */
+    /**
+     * Reports the finished request, with the response it was finally answered
+     * with. What the logger throws, an {@link Error} included, is reported to
+     * the servlet log and goes no further: from the {@code finally} of
+     * {@link #service} it reached the container, which threw away the answer
+     * still in its buffer and sent its own 500.
+     */
     private void logRequest(WebRequest request, WebResponse response, int statusCode,
             long startedAt, @Nullable Throwable failure) {
         if (deployment.requestLogger() == null) {
@@ -221,7 +227,7 @@ public class AppServlet extends HttpServlet {
         try {
             deployment.requestLogger().log(request, new RequestCompletion(response, statusCode,
                     Duration.ofNanos(System.nanoTime() - startedAt), failure, request.thrown()));
-        } catch (Exception e) {
+        } catch (Throwable e) {
             log("Request logger failed", e);
         }
     }

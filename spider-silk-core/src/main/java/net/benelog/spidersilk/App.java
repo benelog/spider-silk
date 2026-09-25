@@ -382,9 +382,9 @@ public final class App {
      *         req.method(), req.path(), completion.statusCode(), completion.took().toMillis()));
      * }</pre>
      *
-     * One lambda, and no logging framework in core. A logger that throws is
-     * reported to the servlet log and does not affect the response, which has
-     * already been sent by then.
+     * One lambda, and no logging framework in core. A logger that throws, an
+     * {@link Error} included, is reported to the servlet log and does not
+     * affect the response, which has been answered by then.
      */
     public App requestLogger(RequestLogger logger) {
         register(() -> this.requestLogger = Objects.requireNonNull(logger, "logger"));

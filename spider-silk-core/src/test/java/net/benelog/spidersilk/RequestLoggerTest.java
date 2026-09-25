@@ -360,4 +360,24 @@ class RequestLoggerTest {
             assertThat(response.body()).isEqualTo("ok");
         });
     }
+
+    /** An Error from the logger leaves the answer as the handler gave it, a redirect included. */
+    @Test
+    void aLoggerThatThrowsAnErrorDoesNotAffectTheResponse() {
+        App app = new App()
+                .requestLogger((req, completion) -> {
+                    throw new AssertionError("logger assertion");
+                })
+                .get("/", req -> WebResponse.text("ok"))
+                .get("/redirect", req -> WebResponse.redirect("/"));
+
+        WebTest.test(app, client -> {
+            var response = client.get("/");
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.body()).isEqualTo("ok");
+            var redirect = client.get("/redirect");
+            assertThat(redirect.statusCode()).isEqualTo(302);
+            assertThat(redirect.headers().firstValue("Location")).hasValue("/");
+        });
+    }
 }
