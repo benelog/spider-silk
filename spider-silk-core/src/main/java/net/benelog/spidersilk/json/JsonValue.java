@@ -21,21 +21,21 @@ public sealed interface JsonValue permits JsonObject, JsonArray, JsonPrimitive {
         if (this instanceof JsonObject object) {
             return object;
         }
-        throw new JsonException("Not a JSON object: " + toJson());
+        throw new JsonException("Not a JSON object: " + found(this));
     }
 
     default JsonArray asArray() {
         if (this instanceof JsonArray array) {
             return array;
         }
-        throw new JsonException("Not a JSON array: " + toJson());
+        throw new JsonException("Not a JSON array: " + found(this));
     }
 
     default String asString() {
         if (this instanceof JsonPrimitive primitive && primitive.value() instanceof String s) {
             return s;
         }
-        throw new JsonException("Not a JSON string: " + toJson());
+        throw new JsonException("Not a JSON string: " + found(this));
     }
 
     /**
@@ -55,30 +55,30 @@ public sealed interface JsonValue permits JsonObject, JsonArray, JsonPrimitive {
                 try {
                     return decimal.exactLong();
                 } catch (ArithmeticException e) {
-                    throw new JsonException("Not a JSON integer: " + decimal.text());
+                    throw new JsonException("Not a JSON integer: " + found(this));
                 }
             }
             double d = n.doubleValue();
             if (d == Math.rint(d) && d >= -0x1p63 && d < 0x1p63) {
                 return (long) d;
             }
-            throw new JsonException("Not a JSON integer: " + toJson());
+            throw new JsonException("Not a JSON integer: " + found(this));
         }
-        throw new JsonException("Not a JSON number: " + toJson());
+        throw new JsonException("Not a JSON number: " + found(this));
     }
 
     default double asDouble() {
         if (this instanceof JsonPrimitive primitive && primitive.value() instanceof Number n) {
             return n.doubleValue();
         }
-        throw new JsonException("Not a JSON number: " + toJson());
+        throw new JsonException("Not a JSON number: " + found(this));
     }
 
     default boolean asBoolean() {
         if (this instanceof JsonPrimitive primitive && primitive.value() instanceof Boolean b) {
             return b;
         }
-        throw new JsonException("Not a JSON boolean: " + toJson());
+        throw new JsonException("Not a JSON boolean: " + found(this));
     }
 
     default boolean isNull() {
@@ -98,5 +98,27 @@ public sealed interface JsonValue permits JsonObject, JsonArray, JsonPrimitive {
     /** True for {@code true} and for {@code false}. */
     default boolean isBoolean() {
         return this instanceof JsonPrimitive primitive && primitive.value() instanceof Boolean;
+    }
+
+    /**
+     * What a type mismatch says it found: the kind of an object or an array,
+     * a scalar as written when it is short, and the kind of a long string or
+     * the start of a long number otherwise. {@code bodyJson(reader)} sends
+     * the message back as the body of its 400, so it never quotes more than a
+     * few dozen characters of what the client sent: a whole array of records,
+     * or an object holding a password, went back in the response.
+     */
+    private static String found(JsonValue value) {
+        if (value instanceof JsonObject) {
+            return "an object";
+        }
+        if (value instanceof JsonArray) {
+            return "an array";
+        }
+        String json = value.toJson();
+        if (json.length() <= 32) {
+            return json;
+        }
+        return value.isString() ? "a string" : json.substring(0, 32) + "...";
     }
 }

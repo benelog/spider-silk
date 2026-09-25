@@ -431,6 +431,21 @@ class JsonTest {
                 .isInstanceOf(JsonException.class);
         assertThatThrownBy(() -> Json.parse("{\"a\":}")).isInstanceOf(JsonException.class);
         assertThat(Json.parse("null").isNull()).isTrue();
+
+        // A mismatch names the kind it found, never the contents of an object or an array.
+        assertThatThrownBy(() -> Json.parse("[\"secret\",1]").asObject())
+                .hasMessage("Not a JSON object: an array");
+        assertThatThrownBy(() -> Json.parse("{\"password\":\"hunter2\"}").asString())
+                .hasMessage("Not a JSON string: an object");
+        assertThatThrownBy(() -> Json.parse("{\"a\":1}").asArray()).hasMessage("Not a JSON array: an object");
+        // A short scalar is still named as written, and a long one by its kind.
+        assertThatThrownBy(() -> Json.parse("\"5\"").asLong()).hasMessage("Not a JSON number: \"5\"");
+        assertThatThrownBy(() -> Json.parse("1.5").asLong()).hasMessage("Not a JSON integer: 1.5");
+        assertThatThrownBy(() -> Json.parse("true").asDouble()).hasMessage("Not a JSON number: true");
+        assertThatThrownBy(() -> Json.parse("\"" + "x".repeat(100) + "\"").asBoolean())
+                .hasMessage("Not a JSON boolean: a string");
+        assertThatThrownBy(() -> Json.parse("0." + "1".repeat(100)).asLong())
+                .hasMessage("Not a JSON integer: 0." + "1".repeat(30) + "...");
     }
 
     /** A number with a fractional part is not a long, and is rejected rather than truncated. */

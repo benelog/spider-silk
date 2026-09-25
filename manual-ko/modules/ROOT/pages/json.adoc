@@ -39,6 +39,7 @@ app.post("/api/decks", req -> {
 == 값 읽기
 
 `getString`은 키가 없거나 값의 타입이 틀리면 `JsonException`을 던지고, `req.bodyJson(reader)`는 이를 400으로 바꾼다.
+메시지는 `Not a JSON object: an array`처럼 찾은 것의 종류를 밝히며, 본문에서는 짧은 스칼라 이상을 클라이언트에게 되돌려 인용하지 않는다.
 `JsonArray.get(index)`도 배열 밖의 인덱스에 이 예외를 던지므로, 짧은 배열도 400이다.
 핸들러는 값 전체를 받거나 아무것도 받지 않으며, 이는 `pathParamLong`과 같은 계약이다.
 `JsonException`은 `IllegalArgumentException`이므로, 자체 검증 규칙 때문에 일반 `IllegalArgumentException`을 던지는 리더도 400이 된다.

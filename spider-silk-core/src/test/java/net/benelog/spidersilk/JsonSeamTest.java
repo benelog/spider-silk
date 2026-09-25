@@ -93,6 +93,22 @@ class JsonSeamTest {
         });
     }
 
+    /** A 400 for the wrong type names what it found, and never echoes the body back. */
+    @Test
+    void aTypeMismatchDoesNotEchoTheBody() {
+        App app = new App().post("/name", req -> WebResponse.text(req.bodyJson(json -> json.asObject().getString("name"))));
+
+        WebTest.test(app, client -> {
+            var array = client.postJson("/name", "[" + "\"secret\",".repeat(100) + "1]");
+            assertThat(array.statusCode()).isEqualTo(400);
+            assertThat(array.body()).doesNotContain("secret").hasSizeLessThan(100);
+
+            var nested = client.postJson("/name", "{\"name\":{\"password\":\"hunter2\"}}");
+            assertThat(nested.statusCode()).isEqualTo(400);
+            assertThat(nested.body()).doesNotContain("hunter2").contains("Not a JSON string: an object");
+        });
+    }
+
     static final JsonReader<Long> DECK_ID = json -> json.asObject().getLong("id");
 
     /**
