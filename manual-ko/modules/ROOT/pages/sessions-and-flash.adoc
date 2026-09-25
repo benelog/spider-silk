@@ -19,6 +19,7 @@ req.session().remove("user");                       // creates no session to rem
 `session()`도 읽기도 세션을 만들지 않으므로, 로그인하지 않은 방문자에게는 세션 객체 비용이 들지 않는다.
 쓰기는 필요할 때 세션을 만든다.
 값은 어떤 객체든 될 수 있고 서버에 머무른다: 컨테이너의 세션 쿠키만 오간다.
+그 쿠키는 Jetty, Tomcat, Undertow에서 똑같이 `HttpOnly`이므로, 페이지의 스크립트는 그것을 읽지 못한다.
 
 타입을 넘기면 잘못된 타입이 그 값을 읽는 줄에서 실패한다.
 `get(key, User.class)`는 `Class.cast`로 캐스팅하며 그 줄에서 `IllegalStateException`으로 실패하고, 키, 발견된 타입, 요청한 타입을 알려준다.

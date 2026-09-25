@@ -31,6 +31,7 @@ import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.servlet.api.LoggingExceptionHandler;
 import io.undertow.servlet.api.ServletInfo;
+import io.undertow.servlet.api.ServletSessionConfig;
 import io.undertow.servlet.util.ImmediateInstanceFactory;
 
 import org.jspecify.annotations.Nullable;
@@ -313,6 +314,9 @@ public final class UndertowServer implements WebServer {
                 // root or directory alike, so Undertow is never asked for one.
                 .setResourceManager(ResourceManager.EMPTY_RESOURCE_MANAGER)
                 .setExceptionHandler(UndertowServer::abortStartedResponse)
+                // Undertow leaves the session cookie readable by a script, where
+                // Tomcat marks it HttpOnly.
+                .setServletSessionConfig(new ServletSessionConfig().setHttpOnly(true))
                 .addServlet(servlet);
         if (executor != null) {
             info.setExecutor(executor);

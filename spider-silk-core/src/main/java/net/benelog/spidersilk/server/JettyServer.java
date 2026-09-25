@@ -292,6 +292,11 @@ public final class JettyServer implements WebServer {
         ServletContextHandler context = new ServletContextHandler(
                 sessions ? ServletContextHandler.SESSIONS : 0);
         context.setContextPath(contextPath);
+        if (sessions) {
+            // Jetty's default outside a webapp's webdefault.xml leaves the
+            // session cookie readable by a script; Tomcat marks it HttpOnly.
+            context.getSessionHandler().setHttpOnly(true);
+        }
 
         ServletHolder holder = new ServletHolder(new AppServlet(app));
         // Initialized while the server starts rather than on the first request,

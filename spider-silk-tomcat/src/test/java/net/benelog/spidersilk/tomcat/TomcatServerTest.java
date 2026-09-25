@@ -1166,4 +1166,32 @@ class TomcatServerTest {
         assertThat(raw("GET /host HTTP/1.1\r\nHost: [::1]:9\r\nConnection: close\r\n\r\n")).endsWith("\r\n[::1]:9");
         assertThat(raw("GET /host HTTP/1.1\r\nHost: [::1]\r\nConnection: close\r\n\r\n")).endsWith("\r\n[::1]");
     }
+
+    /** The session cookie is HttpOnly on every server, at the root and under a context path. */
+    @Test
+    void theSessionCookieIsHttpOnly() throws Exception {
+        startOnTomcat(new App().get("/session", req -> {
+            req.session().set("k", "v");
+            return WebResponse.text("set");
+        }));
+
+        assertThat(get("/session").headers().allValues("Set-Cookie"))
+                .anySatisfy(cookie -> assertThat(cookie).startsWith("JSESSIONID=").containsIgnoringCase("; HttpOnly"));
+    }
+
+    /** The session cookie under a context path is HttpOnly as well, with the context as its path. */
+    @Test
+    void theSessionCookieUnderAContextPathIsHttpOnly() throws Exception {
+        app = new App()
+                .get("/session", req -> {
+                    req.session().set("k", "v");
+                    return WebResponse.text("set");
+                })
+                .server((a, port) -> new TomcatServer(a).port(port).contextPath("/app"))
+                .start(0);
+
+        assertThat(get("/app/session").headers().allValues("Set-Cookie"))
+                .anySatisfy(cookie -> assertThat(cookie).startsWith("JSESSIONID=")
+                        .containsIgnoringCase("; Path=/app").containsIgnoringCase("; HttpOnly"));
+    }
 }

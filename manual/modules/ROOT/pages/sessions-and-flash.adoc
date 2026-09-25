@@ -19,6 +19,7 @@ req.session().remove("user");                       // creates no session to rem
 Neither `session()` nor a read creates a session, so a visitor who has not signed in costs no session object.
 Writing creates one on demand.
 The value is any object and stays on the server: only the container's session cookie travels.
+That cookie is `HttpOnly` on Jetty, Tomcat, and Undertow alike, so a script on the page cannot read it.
 
 Passing the type makes a wrong type fail on the line that reads it.
 `get(key, User.class)` casts with `Class.cast` and fails on that line with an `IllegalStateException` naming the key, the type found, and the type asked for.
