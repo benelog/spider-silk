@@ -21,7 +21,8 @@ import net.benelog.spidersilk.App;
  *
  * <p>The port is 0, so tests never collide and never need one configured. The
  * client keeps cookies, so a login in one call is still in effect for the next.
- * The server is stopped even when the body throws.
+ * The server is stopped even when the body throws, and even when it leaves a
+ * streamed response open, such as an SSE stream it read one event from.
  */
 public final class WebTest {
 
@@ -31,11 +32,19 @@ public final class WebTest {
     /** Starts the app, runs the body against it, and stops it again. */
     public static void test(App app, Consumer<TestClient> body) {
         app.start(0);
-        try (HttpClient httpClient =
-                HttpClient.newBuilder().cookieHandler(new CookieManager()).build()) {
+        HttpClient httpClient = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
+        try {
             body.accept(new TestClient(httpClient, "http://localhost:" + app.port()));
         } finally {
-            app.stop();
+            // The app first: closing the client waits for every response to
+            // complete, and a stream the body left open ends only when the app
+            // stops, so closing it first waited for good.
+            try {
+                app.stop();
+            } finally {
+                httpClient.shutdownNow();
+                httpClient.close();
+            }
         }
     }
 }

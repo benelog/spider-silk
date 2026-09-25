@@ -1,12 +1,18 @@
 package net.benelog.spidersilk;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.net.URI;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -18,6 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 import net.benelog.spidersilk.server.JettyServer;
 import net.benelog.spidersilk.test.WebTest;
@@ -345,5 +352,38 @@ class SseTest {
             }
             received.append(new String(buffer, 0, read, StandardCharsets.UTF_8));
         }
+    }
+
+    /**
+     * WebTest returns, and rethrows, when the body leaves an event stream open:
+     * closing the client waited for the stream, which only stopping the app ends.
+     */
+    @Test
+    @Timeout(30)
+    void webTestReturnsWithAStreamLeftOpen() {
+        App app = new App().get("/events", req -> WebResponse.sse(stream -> {
+            while (true) {
+                stream.send("tick", "data");
+                Thread.sleep(100);
+            }
+        }));
+
+        WebTest.test(app, client -> {
+            HttpResponse<InputStream> response = client.send(
+                    request -> request.uri(URI.create(client.url("/events"))).GET(),
+                    HttpResponse.BodyHandlers.ofInputStream());
+            try {
+                assertThat(new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))
+                        .readLine()).isEqualTo("event: tick");
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        });
+
+        assertThatThrownBy(() -> WebTest.test(app, client -> {
+            client.send(request -> request.uri(URI.create(client.url("/events"))).GET(),
+                    HttpResponse.BodyHandlers.ofInputStream());
+            throw new IllegalStateException("the body failed");
+        })).hasMessage("the body failed");
     }
 }
