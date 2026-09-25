@@ -1409,7 +1409,9 @@ public final class WebRequest {
         }
         List<UploadedFile> files = new ArrayList<>();
         for (Part part : parts) {
-            if (part.getName().equals(name) && isFile(part)) {
+            // Undertow answers a null name for a part whose Content-Disposition
+            // carries none. It is no field's part, and Tomcat skips it too.
+            if (name.equals(part.getName()) && isFile(part)) {
                 files.add(new UploadedFile(part));
             }
         }

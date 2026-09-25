@@ -1107,4 +1107,28 @@ class UndertowServerTest {
         return raw(method + " /form HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: "
                 + contentType + "\r\nContent-Length: " + body.length() + "\r\n\r\n" + body);
     }
+
+    /**
+     * A multipart part whose Content-Disposition names no field is skipped by
+     * the file reads. Undertow answers a null name for it, which was a 500.
+     */
+    @Test
+    void aPartWithNoNameIsSkippedByTheFileReads() throws Exception {
+        startOnUndertow(new App()
+                .post("/files", req -> WebResponse.text("files=" + req.files("f").size()))
+                .post("/fileOrNull", req -> WebResponse.text("file=" + (req.fileOrNull("f") != null)))
+                .post("/file", req -> WebResponse.text("file=" + req.file("f").fileName())));
+
+        String parts = "--B\r\nContent-Disposition: form-data\r\n\r\nnoname\r\n"
+                + "--B\r\nContent-Disposition: form-data; name=\"t\"\r\n\r\nv\r\n";
+        String type = "multipart/form-data; boundary=B";
+        String withFile = parts + "--B\r\nContent-Disposition: form-data; name=\"f\"; filename=\"a.txt\"\r\n"
+                + "Content-Type: text/plain\r\n\r\nhi\r\n--B--\r\n";
+
+        assertThat(rawPost("/files", type, parts + "--B--\r\n")).startsWith("HTTP/1.1 200").endsWith("files=0");
+        assertThat(rawPost("/fileOrNull", type, parts + "--B--\r\n")).startsWith("HTTP/1.1 200").endsWith("file=false");
+        assertThat(rawPost("/file", type, parts + "--B--\r\n")).startsWith("HTTP/1.1 400");
+        assertThat(rawPost("/files", type, withFile)).startsWith("HTTP/1.1 200").endsWith("files=1");
+        assertThat(rawPost("/file", type, withFile)).startsWith("HTTP/1.1 200").endsWith("file=a.txt");
+    }
 }
