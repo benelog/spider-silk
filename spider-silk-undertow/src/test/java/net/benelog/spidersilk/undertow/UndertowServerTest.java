@@ -1271,4 +1271,36 @@ class UndertowServerTest {
         assertThat(response.body()).isEqualTo("ok");
         assertThat(rawGet("/redirect")).startsWith("HTTP/1.1 302").containsIgnoringCase("Location: /\r\n");
     }
+
+    /** Under gzip, what a streamed writer flushed reaches the client, decodable, before the writer returns. */
+    @Test
+    void aFlushUnderGzipDeliversWhatWasWritten() throws Exception {
+        CountDownLatch release = new CountDownLatch(1);
+        startOnUndertow(new App().gzip().get("/log", req -> WebResponse.stream("text/plain; charset=UTF-8", out -> {
+            out.write("first chunk\n".getBytes(StandardCharsets.UTF_8));
+            out.flush();
+            release.await(5, TimeUnit.SECONDS);
+            out.write("second chunk\n".getBytes(StandardCharsets.UTF_8));
+        })));
+
+        HttpResponse<InputStream> response = client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/log"))
+                        .header("Accept-Encoding", "gzip").build(),
+                HttpResponse.BodyHandlers.ofInputStream());
+        assertThat(response.headers().firstValue("Content-Encoding")).hasValue("gzip");
+        try (InputStream body = new GZIPInputStream(response.body())) {
+            byte[] first = CompletableFuture.supplyAsync(() -> {
+                try {
+                    return body.readNBytes("first chunk\n".length());
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }).get(3, TimeUnit.SECONDS);
+            assertThat(new String(first, StandardCharsets.UTF_8)).isEqualTo("first chunk\n");
+            release.countDown();
+            assertThat(new String(body.readAllBytes(), StandardCharsets.UTF_8)).isEqualTo("second chunk\n");
+        } finally {
+            release.countDown();
+        }
+    }
 }

@@ -79,6 +79,7 @@ app.gzip(Gzip.defaults()
 Compression is a transform over the `WebResponse`, not a wrapper around the servlet response.
 A body already in memory (`text`, `html`, `json`, `bytes`, or a rendered template) is compressed there and then, so the length it announces is the length it sends.
 A `stream` body is compressed as it is written, so a large file or a `stream(...)` download never sits in memory whole.
+A `flush()` from the writer reaches the client compressed and decodable, at a few bytes a flush, so a progressive body does not wait for the writer to return.
 Its size is not known beforehand, so `minBytes` does not apply to one and its `Content-Length` is dropped.
 The gzip trailer is written only when the writer returns, so a writer that fails before anything is sent still gets a 500.
 A writer that fails after the response is committed aborts the transfer, as any other stream does (see xref:request-logging.adoc[Request Logging]).

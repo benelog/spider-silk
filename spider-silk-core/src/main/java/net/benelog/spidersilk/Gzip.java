@@ -350,11 +350,16 @@ public final class Gzip {
      * it writes the trailer, ends the Deflater, and flushes. {@link #abandon()}
      * ends the Deflater's native memory without writing another byte, which is
      * what a writer that failed halfway leaves behind.
+     *
+     * <p>A {@code flush()} from the writer is a sync flush, so what it wrote so
+     * far reaches the client decodable, at a few bytes a flush. Without it the
+     * flush passed on only the gzip header, and a progressive body, a log tail
+     * or NDJSON a client polls, sat in the Deflater until the writer returned.
      */
     private static final class Deflating extends GZIPOutputStream {
 
         Deflating(OutputStream out) throws IOException {
-            super(out);
+            super(out, true);
         }
 
         void abandon() {
