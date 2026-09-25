@@ -129,7 +129,7 @@ public class AppServlet extends HttpServlet {
         if (deployment == null) {
             throw new IllegalStateException("AppServlet has not been initialized: the container calls init() first");
         }
-        if (req.getCharacterEncoding() == null) {
+        if (declaresNoCharset(req)) {
             // The request declared no charset. One that did is read as it said.
             req.setCharacterEncoding("UTF-8");
         }
@@ -156,6 +156,20 @@ public class AppServlet extends HttpServlet {
             writeFailed(e, req, res, request, segments, head);
         } finally {
             logRequest(request, response, res.getStatus(), startedAt, failure);
+        }
+    }
+
+    /**
+     * Whether the container holds no charset for the request. Undertow throws
+     * for a Content-Type of {@code charset=}, before any framework code could
+     * answer it, so a charset it cannot parse counts as declared: the body
+     * reads then answer 415 for it, with the usual headers.
+     */
+    private static boolean declaresNoCharset(HttpServletRequest req) {
+        try {
+            return req.getCharacterEncoding() == null;
+        } catch (RuntimeException e) {
+            return false;
         }
     }
 

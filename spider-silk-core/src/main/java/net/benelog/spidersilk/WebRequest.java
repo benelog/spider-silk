@@ -123,6 +123,7 @@ public final class WebRequest {
 
     /** The media type {@code getPart} and {@code getParts} parse. */
     private static final String MULTIPART_FORM_DATA = "multipart/form-data";
+    private static final String FORM_URLENCODED = "application/x-www-form-urlencoded";
 
     /** The limits a request built outside {@link AppServlet} reads under; never handed out. */
     private static final BodyLimits DEFAULT_LIMITS = BodyLimits.defaults();
@@ -252,9 +253,13 @@ public final class WebRequest {
         return Collections.unmodifiableMap(byName);
     }
 
-    /** The declared media type of the body, or null when the request sent none. */
+    /**
+     * The declared media type of the body, or null when the request sent none.
+     * This is the header as sent: Jetty's {@code getContentType()} resolves the
+     * charset parameter on the way, and throws for one this JVM does not know.
+     */
     public @Nullable String contentType() {
-        return req.getContentType();
+        return req.getHeader("Content-Type");
     }
 
     /**
@@ -682,6 +687,9 @@ public final class WebRequest {
      * {@link AppServlet#NO_MULTIPART_PARAMETER}, and {@code getParts} is not
      * asked at all.
      *
+     * <p>A form whose charset this JVM does not know answers 415 before the
+     * container is asked, as {@link #body()} does.
+     *
      * <p>A form-encoded body the container will not parse — an escape that
      * will not decode, more fields or more bytes than it takes — is a 400
      * carrying the container's reason. Jetty throws its {@code BadMessageException},
@@ -690,6 +698,12 @@ public final class WebRequest {
      * in a way the servlet API defines, so the status does not try to.
      */
     private <T> T formFields(Supplier<T> read) {
+        if (isMultipart() || isFormEncoded()) {
+            // The container decodes the fields in the declared charset, and
+            // Jetty throws for one it does not know where Tomcat and Undertow
+            // fall back to their own: 415 on each, as body() answers.
+            bodyCharset();
+        }
         if (isMultipart() && req.getAttribute(NO_MULTIPART_ATTRIBUTE) == null) {
             try {
                 req.getParts();
@@ -1022,7 +1036,10 @@ public final class WebRequest {
      * {@link UnsupportedEncodingException} would become.
      */
     private Charset bodyCharset() {
-        String declared = req.getCharacterEncoding();
+        String declared = charsetParameter(contentType());
+        if (declared == null) {
+            declared = containerCharset();
+        }
         if (declared == null) {
             return StandardCharsets.UTF_8;
         }
@@ -1030,6 +1047,37 @@ public final class WebRequest {
             return Charset.forName(declared);
         } catch (IllegalArgumentException e) {
             throw unsupportedCharset(declared);
+        }
+    }
+
+    /**
+     * The {@code charset} parameter of a Content-Type, unquoted, or null when it
+     * names none. Read here rather than through {@code getCharacterEncoding()},
+     * since each container parses it its own way: for {@code charset=} Jetty
+     * answers no charset, Tomcat the empty name, and Undertow throws.
+     */
+    private static @Nullable String charsetParameter(@Nullable String contentType) {
+        if (contentType == null) {
+            return null;
+        }
+        for (String parameter : contentType.split(";", -1)) {
+            String trimmed = parameter.trim();
+            if (trimmed.regionMatches(true, 0, "charset=", 0, 8)) {
+                String value = trimmed.substring(8).trim();
+                return value.length() >= 2 && value.startsWith("\"") && value.endsWith("\"")
+                        ? value.substring(1, value.length() - 1)
+                        : value;
+            }
+        }
+        return null;
+    }
+
+    /** The charset the container holds for a request whose header named none: UTF-8, as {@link AppServlet} sets it. */
+    private @Nullable String containerCharset() {
+        try {
+            return req.getCharacterEncoding();
+        } catch (RuntimeException e) {
+            return null;
         }
     }
 
@@ -1336,6 +1384,7 @@ public final class WebRequest {
         if (!isMultipart()) {
             return List.of();
         }
+        bodyCharset();
         Collection<Part> parts;
         try {
             parts = req.getParts();
@@ -1359,13 +1408,22 @@ public final class WebRequest {
      * the difference between "no file" and a failed upload.
      */
     private boolean isMultipart() {
-        String type = req.getContentType();
+        return MULTIPART_FORM_DATA.equalsIgnoreCase(mediaType());
+    }
+
+    /** Whether the request declares a form-encoded body, the other kind a container parses into fields. */
+    private boolean isFormEncoded() {
+        return FORM_URLENCODED.equalsIgnoreCase(mediaType());
+    }
+
+    /** The Content-Type without its parameters, or null when the request sent none. */
+    private @Nullable String mediaType() {
+        String type = contentType();
         if (type == null) {
-            return false;
+            return null;
         }
         int semicolon = type.indexOf(';');
-        return (semicolon < 0 ? type : type.substring(0, semicolon)).trim()
-                .equalsIgnoreCase(MULTIPART_FORM_DATA);
+        return (semicolon < 0 ? type : type.substring(0, semicolon)).trim();
     }
 
     /**

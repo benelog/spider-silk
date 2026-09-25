@@ -26,7 +26,7 @@ public BufferedReader bodyReader()               // the characters, unparsed
 텍스트를 읽은 요청은 `bodyStream()`, `bodyReader()`, `bodyNdjson()`에서 `IllegalStateException`을 던지는데, 그 아래의 리더가 이미 끝에 도달했기 때문이다.
 읽지 않은 채로 넘겨준 본문은 `body()`와 `bodyJson()`에서 `IllegalStateException`을 던지는데, 얼마나 소비되었는지 아무도 말할 수 없기 때문이다.
 스트림과 리더도 서로 배타적인데, 이는 서블릿 API 자체의 규칙이다.
-이 JVM이 디코딩하지 못하는 charset을 지정한 `Content-Type`에는 `body()`, `bodyJson()`, `bodyReader()`, `bodyNdjson()`이 본문을 한 바이트도 읽기 전에 415로 답한다.
+이 JVM이 디코딩하지 못하는 charset을 지정한 `Content-Type`에는, 빈 `charset=`도 포함해, `body()`, `bodyJson()`, `bodyReader()`, `bodyNdjson()`이 본문을 한 바이트도 읽기 전에 415로 답한다.
 핸들러가 `raw()`를 통해 읽는 것은 이 기록을 거치지 않는다.
 폼 인코딩된 POST도 첫 `param()` 읽기로 소진되는데, 컨테이너가 본문을 끝까지 읽어 폼을 파싱하기 때문이다.
 그 뒤 `bodyStream()`은 예외를 던지는 대신 빈 스트림을 답하고, 바이트로 먼저 읽은 본문은 `formParam()`에 아무 필드도 남기지 않는다.

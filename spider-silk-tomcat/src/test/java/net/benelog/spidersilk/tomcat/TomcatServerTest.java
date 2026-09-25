@@ -1007,4 +1007,54 @@ class TomcatServerTest {
                         "net.benelog.spidersilk.AppServlet.service");
     }
 
+    /** Sends a POST as written, with the headers given, and answers the whole response as text. */
+    private String rawPost(String path, String contentType, String body) {
+        return raw("POST " + path + " HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\nContent-Type: "
+                + contentType + "\r\nContent-Length: " + body.getBytes(StandardCharsets.UTF_8).length
+                + "\r\n\r\n" + body);
+    }
+
+    /** Sends a request exactly as written, which must close the connection, and answers the whole response as text. */
+    private String raw(String request) {
+        try (Socket socket = new Socket("localhost", app.port())) {
+            socket.getOutputStream().write(request.getBytes(StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+            return new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * A charset this JVM cannot decode, the empty one among them, is a 415 from
+     * every read of the body, parameters and files included, and never a 500
+     * or the container's own page. The header itself still reads.
+     */
+    @Test
+    void aCharsetTheJvmCannotDecodeIsA415FromEveryRead() throws Exception {
+        startOnTomcat(new App()
+                .post("/contentType", req -> WebResponse.text(String.valueOf(req.contentType())))
+                .post("/param", req -> WebResponse.text(String.valueOf(req.paramOrNull("a"))))
+                .post("/params", req -> WebResponse.text(req.params("a").toString()))
+                .post("/formParam", req -> WebResponse.text(String.valueOf(req.formParamOrNull("a"))))
+                .post("/file", req -> WebResponse.text(String.valueOf(req.fileOrNull("f") != null)))
+                .post("/files", req -> WebResponse.text(String.valueOf(req.files("f").size())))
+                .post("/body", req -> WebResponse.text(req.body())));
+
+        String form = "application/x-www-form-urlencoded; charset=nope";
+        assertThat(rawPost("/contentType", form, "a=1")).startsWith("HTTP/1.1 200").endsWith(form);
+        for (String path : List.of("/param", "/params", "/formParam", "/body")) {
+            assertThat(rawPost(path, form, "a=1")).as(path).startsWith("HTTP/1.1 415")
+                    .contains("Unsupported charset in Content-Type: nope");
+            assertThat(rawPost(path, "application/x-www-form-urlencoded; charset=", "a=1")).as(path)
+                    .startsWith("HTTP/1.1 415");
+        }
+        for (String path : List.of("/param", "/file", "/files")) {
+            assertThat(rawPost(path, "multipart/form-data; boundary=X; charset=nope", "--X--\r\n")).as(path)
+                    .startsWith("HTTP/1.1 415");
+        }
+        assertThat(rawPost("/body", "text/plain; charset=", "hi")).startsWith("HTTP/1.1 415")
+                .contains("Unsupported charset in Content-Type");
+        assertThat(rawPost("/body", "text/plain; charset=\"ISO-8859-1\"", "hi")).startsWith("HTTP/1.1 200");
+    }
 }
