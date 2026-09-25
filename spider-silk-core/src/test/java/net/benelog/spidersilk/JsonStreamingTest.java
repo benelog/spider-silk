@@ -110,6 +110,26 @@ class JsonStreamingTest {
                 """).body()).isEqualTo("{\"imported\":2}"));
     }
 
+    /**
+     * Blank is JSON's whitespace: a line of spaces, tabs, or a lone CR is
+     * skipped, and a line of a form feed or an em space is a 400 naming it.
+     */
+    @Test
+    void aLineOfWhitespaceJsonDoesNotAllowIsA400() {
+        App app = new App().post("/cards", req ->
+                WebResponse.json(Json.object().put("imported", req.bodyNdjson(READ_CARD).count())));
+
+        WebTest.test(app, client -> {
+            assertThat(client.post("/cards", "{\"id\":1,\"text\":\"one\"}\n \t \n\r\n\n{\"id\":2,\"text\":\"two\"}\n")
+                    .body()).isEqualTo("{\"imported\":2}");
+            for (String blank : List.of("\f", "\u2003", "\u000B")) {
+                var response = client.post("/cards", "{\"id\":1,\"text\":\"one\"}\n" + blank + "\n{\"id\":2,\"text\":\"two\"}\n");
+                assertThat(response.statusCode()).as(blank).isEqualTo(400);
+                assertThat(response.body()).as(blank).contains("Line 2");
+            }
+        });
+    }
+
     /** The line number is the point: a large body says where it went wrong. */
     @Test
     void aRejectedLineIsA400NamingTheLine() {

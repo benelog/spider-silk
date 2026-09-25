@@ -70,7 +70,8 @@ app.post("/api/decks/{deckId}/cards.ndjson", req -> {
 });
 ----
 
-Blank lines are skipped.
+Blank lines are skipped: an empty line, and one of spaces, tabs, and CRs, the whitespace JSON allows.
+A line of any other whitespace, such as a form feed, is a line that is not valid JSON.
 A line that is not valid JSON, or that the reader rejects with `IllegalArgumentException` or `DateTimeException`, answers 400 naming the line.
 That is the other reason to read NDJSON rather than one large array: the report says where the body went wrong, not just that it did.
 A line over 1MB answers 413 naming the line, and is refused as soon as it outgrows the limit.

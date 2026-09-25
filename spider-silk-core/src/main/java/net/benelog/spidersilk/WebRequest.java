@@ -1310,10 +1310,25 @@ public final class WebRequest {
         AtomicLong line = new AtomicLong();
         return StreamSupport.stream(lines, false).<T>mapMulti((text, values) -> {
             long number = line.incrementAndGet();
-            if (!text.isBlank()) {
+            if (!isJsonBlank(text)) {
                 values.accept(readLine(text, number, reader));
             }
         });
+    }
+
+    /**
+     * Whether a line holds only the whitespace JSON allows: space, tab, CR, and
+     * LF. {@link String#isBlank()} is Java's whitespace, so a line of a form
+     * feed or an em space was skipped where the parser refuses the character.
+     */
+    private static boolean isJsonBlank(String text) {
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+                return false;
+            }
+        }
+        return true;
     }
 
     private HttpException refuseLine(long number) {
