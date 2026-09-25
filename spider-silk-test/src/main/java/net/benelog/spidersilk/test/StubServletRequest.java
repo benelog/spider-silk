@@ -4,6 +4,7 @@ import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.net.URLDecoder;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
@@ -57,8 +58,9 @@ import org.jspecify.annotations.Nullable;
  * <p>Parameters are part of that rule when the body is a form. A container
  * parses a form body by reading it to its end, so the first parameter read
  * leaves the reader and the stream nothing, and a body already taken as a
- * reader or a stream is not parsed at all. The stub keeps the fields in a map
- * rather than parsing them out of the bytes, but it answers both orders the
+ * reader or a stream is not parsed at all. The stub keeps the fields given as
+ * {@code formParam} in a map rather than parsing them out of the bytes, and
+ * parses a form-encoded body given as text, but it answers both orders the
  * way Jetty, Tomcat, and Undertow do.
  */
 final class StubServletRequest implements HttpServletRequest {
@@ -90,6 +92,9 @@ final class StubServletRequest implements HttpServletRequest {
 
     /** Whether a parameter read has parsed the form body, which leaves none of it to read. */
     private boolean formParsed;
+
+    /** The fields a raw form body held, once a parameter read has parsed them out of it. */
+    private @Nullable Map<String, List<String>> bodyFields;
 
     StubServletRequest(String method, String path, Map<String, List<String>> headers,
             Map<String, List<String>> queryParams, Map<String, List<String>> formParams,
@@ -292,14 +297,55 @@ final class StubServletRequest implements HttpServletRequest {
         if (!FORM_METHODS.contains(method)) {
             return Map.of();
         }
-        if (formParsed || formParams.isEmpty() || multipart) {
+        if (multipart) {
+            return formParams;
+        }
+        if (formParsed) {
+            return bodyFields != null ? bodyFields : formParams;
+        }
+        boolean rawForm = formParams.isEmpty() && body.length > 0 && formEncoded();
+        if (formParams.isEmpty() && !rawForm) {
             return formParams;
         }
         if (reader != null || inputStream != null) {
             return Map.of();
         }
+        if (rawForm) {
+            bodyFields = parseForm(new String(body, knownOrUtf8(characterEncoding)), knownOrUtf8(characterEncoding));
+        }
         formParsed = true;
-        return formParams;
+        return bodyFields != null ? bodyFields : formParams;
+    }
+
+    /** Whether the Content-Type declares a form-encoded body, which a container parses into fields. */
+    private boolean formEncoded() {
+        String type = getContentType();
+        if (type == null) {
+            return false;
+        }
+        int semicolon = type.indexOf(';');
+        return (semicolon < 0 ? type : type.substring(0, semicolon)).trim()
+                .equalsIgnoreCase("application/x-www-form-urlencoded");
+    }
+
+    /**
+     * The fields of a form body given as text, decoded as the container would.
+     * An escape that will not decode throws {@link IllegalArgumentException},
+     * which {@code WebRequest} answers with the 400 a container's refusal gets.
+     */
+    private static Map<String, List<String>> parseForm(String text, Charset charset) {
+        Map<String, List<String>> fields = new LinkedHashMap<>();
+        for (String pair : text.split("&", -1)) {
+            if (pair.isEmpty()) {
+                continue;
+            }
+            int equals = pair.indexOf('=');
+            String name = URLDecoder.decode(equals < 0 ? pair : pair.substring(0, equals), charset);
+            String value = equals < 0 ? "" : URLDecoder.decode(pair.substring(equals + 1), charset);
+            fields.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
+        }
+        fields.replaceAll((name, values) -> List.copyOf(values));
+        return fields;
     }
 
     @Override

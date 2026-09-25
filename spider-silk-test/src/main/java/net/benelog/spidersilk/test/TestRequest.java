@@ -203,7 +203,12 @@ public final class TestRequest {
 
     // ---- Body ----
 
-    /** A raw body, read back by {@code req.body()}. */
+    /**
+     * A raw body, read back by {@code req.body()}. Under a form-encoded
+     * {@code Content-Type} it is also the form, read back by
+     * {@code req.formParam(name)} as a container parses it: the shape a captured
+     * request is ported in, where {@link #formParam} is the one to write by hand.
+     */
     public TestRequest body(String body) {
         this.body = body;
         return this;

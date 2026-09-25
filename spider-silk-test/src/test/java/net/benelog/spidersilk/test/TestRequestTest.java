@@ -493,4 +493,38 @@ class TestRequestTest {
             assertThat(req.param("q")).isEqualTo("2");
         }
     }
+
+    /** A form body given as text under a form Content-Type is parsed, as a container parses it. */
+    @Test
+    void aRawFormBodyIsParsedIntoFields() {
+        WebRequest req = TestRequest.post("/x")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body("a=1&b=two+words&a=%ED%95%9C")
+                .queryParam("a", "0")
+                .build();
+
+        assertThat(req.formParams("a")).containsExactly("1", "한");
+        assertThat(req.formParam("b")).isEqualTo("two words");
+        assertThat(req.params("a")).containsExactly("0", "1", "한");
+
+        WebRequest latin = TestRequest.post("/x")
+                .header("Content-Type", "application/x-www-form-urlencoded; charset=ISO-8859-1")
+                .body("a=%E9")
+                .build();
+        assertThat(latin.formParam("a")).isEqualTo("é");
+
+        WebRequest bad = TestRequest.post("/x")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body("a=%zz")
+                .build();
+        assertThatExceptionOfType(HttpException.class).isThrownBy(() -> bad.formParam("a"))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        WebRequest readFirst = TestRequest.post("/x")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body("a=1")
+                .build();
+        assertThat(readFirst.body()).isEqualTo("a=1");
+        assertThat(readFirst.formParamOrNull("a")).isNull();
+    }
 }
