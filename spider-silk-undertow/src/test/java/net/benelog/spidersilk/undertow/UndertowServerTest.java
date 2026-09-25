@@ -1131,4 +1131,26 @@ class UndertowServerTest {
         assertThat(rawPost("/files", type, withFile)).startsWith("HTTP/1.1 200").endsWith("files=1");
         assertThat(rawPost("/file", type, withFile)).startsWith("HTTP/1.1 200").endsWith("file=a.txt");
     }
+
+    /**
+     * An empty, {@code .}, or {@code ..} segment in a request path, literal or
+     * percent-encoded, is a 400 on every server and never reaches a variable.
+     * Undertow bound {@code /a//b} to {@code ""} and {@code /files/../secret} to
+     * a tail of {@code ../secret}, and Tomcat collapsed and resolved them.
+     */
+    @Test
+    void anEmptyOrDotSegmentInThePathIsA400() throws Exception {
+        startOnUndertow(new App()
+                .get("/files/{path*}", req -> WebResponse.text("tail=[" + req.pathParam("path") + "]"))
+                .get("/a/{x}/b", req -> WebResponse.text("x=[" + req.pathParam("x") + "]"))
+                .get("/decks/{id}", req -> WebResponse.text("deck=[" + req.pathParam("id") + "]")));
+
+        for (String path : List.of("/files//etc/passwd", "/a//b", "/files/../secret", "/files/%2e%2e/secret",
+                "/a/./b", "/decks/.", "//decks/1", "/files/a/..")) {
+            assertThat(rawGet(path)).as(path).startsWith("HTTP/1.1 400");
+        }
+        assertThat(rawGet("/decks/1/")).endsWith("deck=[1]");
+        assertThat(rawGet("/files/a/b.txt")).endsWith("tail=[a/b.txt]");
+        assertThat(rawGet("/files/..a/.b")).endsWith("tail=[..a/.b]");
+    }
 }

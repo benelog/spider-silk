@@ -22,6 +22,8 @@ Patterns are compared segment by segment.
 There are no regular expressions.
 A `\{name}` segment matches exactly one segment and never a slash, so `/decks/\{deckId}` matches `/decks/3` but not `/decks` or `/decks/3/cards`.
 A trailing slash on the request is ignored: `/decks/` and `/decks` are the same path.
+A request path with an empty segment inside it, or a `.` or `..` segment, literal or percent-encoded, answers 400 on every server before routing.
+`/a//b` and `/files/../secret` therefore never bind a variable to `""` or a tail to `../secret`.
 
 A final `*` matches the rest of the path, including nothing at all.
 `/admin/*` therefore covers `/admin`, `/admin/users`, and `/admin/users/7`, which is what a filter path usually means: the prefix itself and everything under it.

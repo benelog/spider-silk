@@ -246,6 +246,9 @@ public class AppServlet extends HttpServlet {
         WebRequest current = request;
         WebResponse response;
         try {
+            if (hasEmptyOrDotSegment(req.getRequestURI())) {
+                throw new HttpException(HttpStatus.BAD_REQUEST, "Path has an empty or a dot segment");
+            }
             WebResponse early = runBefore(deployment.requestFilters(), segments, current);
             if (early != null) {
                 return new Answer(current,
@@ -275,6 +278,40 @@ public class AppServlet extends HttpServlet {
             response = handleException(e, current);
         }
         return new Answer(current, filterResponse(completeErrorResponse(response, current), current));
+    }
+
+    /**
+     * Whether the path as the client sent it has an empty segment inside it, or
+     * a {@code .} or {@code ..} segment, literal or percent-encoded. Each
+     * container normalises such a path its own way before the servlet sees it:
+     * Jetty refuses {@code //} and {@code %2e} and resolves a literal
+     * {@code ..}, Tomcat collapses and resolves all of them, and Undertow hands
+     * them on as they came, so {@code /a//b} bound a variable to {@code ""} and
+     * {@code /files/../secret} a tail to {@code ../secret}. The raw URI is what
+     * every container reports alike, and refusing these paths there makes the
+     * answer a 400 on each. A trailing slash is an empty last segment, and stays.
+     */
+    private static boolean hasEmptyOrDotSegment(String requestUri) {
+        String path = requestUri;
+        int scheme = path.indexOf("://");
+        if (!path.startsWith("/") && scheme >= 0) {
+            int slash = path.indexOf('/', scheme + 3);
+            path = slash < 0 ? "/" : path.substring(slash);
+        }
+        String[] segments = path.split("/", -1);
+        for (int i = 1; i < segments.length; i++) {
+            String segment = segments[i];
+            int semicolon = segment.indexOf(';');
+            if (semicolon >= 0) {
+                // A path parameter such as ;jsessionid is not part of the segment.
+                segment = segment.substring(0, semicolon);
+            }
+            segment = segment.replace("%2e", ".").replace("%2E", ".");
+            if ((segment.isEmpty() && i < segments.length - 1) || segment.equals(".") || segment.equals("..")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
