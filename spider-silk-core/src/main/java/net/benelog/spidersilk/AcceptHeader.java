@@ -122,9 +122,9 @@ final class AcceptHeader {
             return List.of();
         }
         List<Entry> entries = new ArrayList<>();
-        for (String element : header.split(",", -1)) {
-            String[] parts = element.split(";");
-            String value = strip(parts[0]);
+        for (String element : splitOutsideQuotes(header, ',')) {
+            List<String> parts = splitOutsideQuotes(element, ';');
+            String value = strip(parts.get(0));
             if (value.isEmpty()) {
                 continue;
             }
@@ -133,10 +133,36 @@ final class AcceptHeader {
         return entries;
     }
 
+    /**
+     * The text split at each separator that is not inside a quoted string. A
+     * parameter value may be one, RFC 9110 says, and a comma or a semicolon
+     * inside it split one entry into two: {@code x="a,text/html"} gave a
+     * {@code text/html"} entry the client never listed. A backslash inside the
+     * quotes escapes the character after it.
+     */
+    private static List<String> splitOutsideQuotes(String text, char separator) {
+        List<String> pieces = new ArrayList<>();
+        boolean quoted = false;
+        int start = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (quoted && c == '\\') {
+                i++;
+            } else if (c == '"') {
+                quoted = !quoted;
+            } else if (c == separator && !quoted) {
+                pieces.add(text.substring(start, i));
+                start = i + 1;
+            }
+        }
+        pieces.add(text.substring(start));
+        return pieces;
+    }
+
     /** The {@code q=} weight of one entry. Anything unreadable counts as full weight. */
-    private static double quality(String[] parts) {
-        for (int i = 1; i < parts.length; i++) {
-            String parameter = parts[i].trim();
+    private static double quality(List<String> parts) {
+        for (int i = 1; i < parts.size(); i++) {
+            String parameter = parts.get(i).trim();
             if (!parameter.regionMatches(true, 0, "q=", 0, 2)) {
                 continue;
             }

@@ -177,4 +177,21 @@ class ContentNegotiationTest {
             throw new UncheckedIOException(e);
         }
     }
+
+    /** A comma or a semicolon inside a quoted parameter value is part of the value, not a separator. */
+    @Test
+    void aQuotedParameterValueDoesNotSplitTheEntry() {
+        WebRequest req = TestRequest.get("/")
+                .header("Accept", "application/json;x=\"a,text/html\";q=0.1, text/html;q=0.9")
+                .build();
+
+        assertThat(req.accepts("text/html", "application/json")).isEqualTo("text/html");
+        assertThat(req.acceptedTypes()).containsExactly("text/html", "application/json");
+
+        WebRequest escaped = TestRequest.get("/")
+                .header("Accept", "application/json;x=\"a\\\";b,c\";q=0.2, text/html;q=0.8")
+                .build();
+        assertThat(escaped.accepts("text/html", "application/json")).isEqualTo("text/html");
+        assertThat(escaped.acceptedTypes()).noneMatch(type -> type.contains("\""));
+    }
 }
