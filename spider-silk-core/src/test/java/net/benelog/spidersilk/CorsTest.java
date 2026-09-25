@@ -7,10 +7,13 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import net.benelog.spidersilk.test.TestClient;
 import net.benelog.spidersilk.test.WebTest;
@@ -176,6 +179,33 @@ class CorsTest {
 
             assertThat(header(response, "Access-Control-Allow-Origin")).isEqualTo("*");
             assertThat(response.headers().firstValue("Vary")).isEmpty();
+
+            // The same answer without an Origin, so a cache that stored it serves a cross-origin caller rightly.
+            HttpResponse<String> without = client.get("/api/decks");
+            assertThat(header(without, "Access-Control-Allow-Origin")).isEqualTo("*");
+            assertThat(without.headers().firstValue("Vary")).isEmpty();
+        });
+    }
+
+    /** Under anyOrigin, a 404 and a static file on a covered path carry the wildcard too, and a path outside it nothing. */
+    @Test
+    void anyOriginCoversEveryAnswerOnItsPathWithOrWithoutAnOrigin(@TempDir Path root) throws Exception {
+        Files.writeString(root.resolve("a.txt"), "a");
+        App app = api()
+                .get("/admin", req -> WebResponse.text("admin"))
+                .cors(Cors.anyOrigin().forPath("/api/*"));
+        App covered = api()
+                .staticFiles(StaticFiles.directory(root).hostedPath("/files"))
+                .cors(Cors.anyOrigin());
+
+        WebTest.test(app, client -> {
+            assertThat(header(client.get("/api/missing"), "Access-Control-Allow-Origin")).isEqualTo("*");
+            assertThat(client.get("/admin").headers().firstValue("Access-Control-Allow-Origin")).isEmpty();
+        });
+        WebTest.test(covered, client -> {
+            HttpResponse<String> file = client.get("/files/a.txt");
+            assertThat(file.statusCode()).isEqualTo(200);
+            assertThat(header(file, "Access-Control-Allow-Origin")).isEqualTo("*");
         });
     }
 

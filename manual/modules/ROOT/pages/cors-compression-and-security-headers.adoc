@@ -52,6 +52,7 @@ A preflight, an `OPTIONS` carrying `Access-Control-Request-Method`, is answered 
 Name the methods yourself with `allowMethods(...)` when the answer should not follow the routing table.
 
 `Cors.anyOrigin()` answers `*`, which is right for a public read-only API.
+It puts `*` on every response on a covered path, whether the request carried an `Origin` or not, and adds no `Vary: Origin`, since the answer is the same for every caller.
 It cannot be combined with `allowCredentials()`.
 The specification forbids a wildcard plus cookies outright, so the combination throws where it is written rather than failing silently in a browser.
 

@@ -163,8 +163,8 @@ public final class Cors {
     }
 
     /**
-     * The headers every cross-origin answer carries. A request with no
-     * {@code Origin} is same-origin and gains no access; an {@code Origin} that
+     * The headers every cross-origin answer carries. With named origins, a
+     * request with no {@code Origin} is same-origin and gains no access; an {@code Origin} that
      * is not allowed gains none either, and the browser is the one that turns
      * that silence into a failure.
      *
@@ -174,14 +174,17 @@ public final class Cors {
      * it, so a shared cache that stored the answer to a request with no
      * {@code Origin} would otherwise hand it to an allowed origin, whose
      * browser would then refuse it. {@link #anyOrigin()} answers everyone
-     * alike and varies by nothing.
+     * alike, with or without an {@code Origin}, and varies by nothing: the
+     * wildcard does not depend on who asked, and an answer without it, stored
+     * from a request with no {@code Origin}, would be handed to a
+     * cross-origin caller whose browser then refused it.
      */
     WebResponse apply(WebResponse response, WebRequest request, String[] segments) {
         if (!covers(segments)) {
             return response;
         }
         String origin = request.header("Origin");
-        String allowed = origin == null ? null : allowedOrigin(origin);
+        String allowed = origins.isEmpty() ? "*" : origin == null ? null : allowedOrigin(origin);
         Map<String, String> fields = new LinkedHashMap<>();
         if (allowed != null) {
             fields.put("Access-Control-Allow-Origin", allowed);

@@ -52,6 +52,7 @@ app.cors(Cors.allowOrigin("https://app.example.com", "https://admin.example.com"
 답이 라우팅 테이블을 따르지 않아야 할 때는 `allowMethods(...)`로 메서드를 직접 지정한다.
 
 `Cors.anyOrigin()`은 `*`로 답하며, 이는 공개 읽기 전용 API에 알맞다.
+요청이 `Origin`을 실었든 아니든 적용 경로의 모든 응답에 `*`를 붙이며, 답이 모든 호출자에게 같으므로 `Vary: Origin`은 붙이지 않는다.
 이 설정은 `allowCredentials()`와 함께 쓸 수 없다.
 명세는 와일드카드와 쿠키의 조합을 명백히 금지하므로, 이 조합은 브라우저에서 조용히 실패하는 대신 조합을 쓴 바로 그 자리에서 예외를 던진다.
 
