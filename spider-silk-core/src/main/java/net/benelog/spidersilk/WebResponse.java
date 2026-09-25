@@ -84,8 +84,16 @@ public final class WebResponse {
     public record Empty() implements Body {
     }
 
-    /** Text written as UTF-8. HTML, plain text, and JSON all arrive here. */
+    /**
+     * Text written as UTF-8. HTML, plain text, and JSON all arrive here. A null
+     * is refused where it is passed, inside the handler, where an exception
+     * handler sees it; while the body was written it was a bare 500.
+     */
     public record Text(String content) implements Body {
+
+        public Text {
+            Objects.requireNonNull(content, "content");
+        }
     }
 
     /**
@@ -97,6 +105,10 @@ public final class WebResponse {
      */
     @SuppressWarnings("ArrayRecordComponent")
     public record Bytes(byte[] data) implements Body {
+
+        public Bytes {
+            Objects.requireNonNull(data, "data");
+        }
     }
 
     /**

@@ -3,6 +3,7 @@ package net.benelog.spidersilk;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import jakarta.servlet.http.Cookie;
 
@@ -314,5 +315,40 @@ class WebResponseTest {
         assertThat(template.model()).containsEntry("message", null);
         assertThatThrownBy(() -> template.model().put("c", 3))
                 .isInstanceOf(UnsupportedOperationException.class);
+    }
+
+    /** A null body is refused where it is passed, not while it is written. */
+    @Test
+    void aNullBodyIsRefusedAtTheCall() {
+        assertThatThrownBy(() -> WebResponse.text(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> WebResponse.html(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> WebResponse.rawJson(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> WebResponse.bytes("application/octet-stream", null))
+                .isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new WebResponse.Text(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> new WebResponse.Bytes(null)).isInstanceOf(NullPointerException.class);
+    }
+
+    /** Thrown from a handler, a null body reaches the exception handlers and the logger as what was thrown. */
+    @Test
+    void aNullBodyFromAHandlerReachesTheExceptionHandlers() {
+        List<RequestCompletion> logged = new CopyOnWriteArrayList<>();
+        App app = new App()
+                .requestLogger((req, completion) -> logged.add(completion))
+                .exception(NullPointerException.class, (req, e) ->
+                        WebResponse.text("caught").status(HttpStatus.BAD_REQUEST))
+                .get("/", req -> WebResponse.text(null))
+                .get("/unhandled", req -> WebResponse.bytes("application/octet-stream", null));
+
+        WebTest.test(app, client -> {
+            var response = client.get("/");
+            assertThat(response.statusCode()).isEqualTo(400);
+            assertThat(response.body()).isEqualTo("caught");
+            assertThat(client.get("/unhandled").statusCode()).isEqualTo(400);
+        });
+        assertThat(logged).allSatisfy(completion -> {
+            assertThat(completion.thrown()).isInstanceOf(NullPointerException.class);
+            assertThat(completion.writeFailure()).isNull();
+        });
     }
 }
