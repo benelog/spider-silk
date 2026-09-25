@@ -1194,4 +1194,33 @@ class TomcatServerTest {
                 .anySatisfy(cookie -> assertThat(cookie).startsWith("JSESSIONID=")
                         .containsIgnoringCase("; Path=/app").containsIgnoringCase("; HttpOnly"));
     }
+
+    /**
+     * A cookie carries its SameSite attribute on every server: Lax by default,
+     * and None when the cookie says so. Undertow dropped the attribute.
+     */
+    @Test
+    void aCookieCarriesItsSameSiteAttribute() throws Exception {
+        startOnTomcat(new App()
+                .get("/default", req -> WebResponse.text("ok").cookie("a", "b"))
+                .get("/timed", req -> WebResponse.text("ok").cookie("a", "b", Duration.ofMinutes(5)))
+                .get("/remove", req -> WebResponse.text("ok").removeCookie("a"))
+                .get("/none", req -> {
+                    jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("x", "y");
+                    cookie.setPath("/");
+                    cookie.setSecure(true);
+                    cookie.setHttpOnly(true);
+                    cookie.setAttribute("SameSite", "None");
+                    cookie.setAttribute("Partitioned", "");
+                    return WebResponse.text("ok").cookie(cookie);
+                }));
+
+        for (String path : List.of("/default", "/timed", "/remove")) {
+            assertThat(get(path).headers().firstValue("Set-Cookie")).as(path).hasValueSatisfying(
+                    cookie -> assertThat(cookie).containsIgnoringCase("; HttpOnly").contains("SameSite=Lax"));
+        }
+        assertThat(get("/none").headers().firstValue("Set-Cookie")).hasValueSatisfying(
+                cookie -> assertThat(cookie).contains("SameSite=None").containsIgnoringCase("Secure")
+                        .contains("Partitioned"));
+    }
 }

@@ -24,6 +24,7 @@ import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
+import io.undertow.server.handlers.Cookie;
 import io.undertow.server.handlers.GracefulShutdownHandler;
 import io.undertow.server.handlers.resource.ResourceManager;
 import io.undertow.servlet.Servlets;
@@ -216,7 +217,7 @@ public final class UndertowServer implements WebServer {
 
             Undertow.Builder builder = Undertow.builder()
                     .addHttpListener(port, host != null ? host : DEFAULT_HOST)
-                    .setHandler(checkingRequestTarget(graceful));
+                    .setHandler(checkingRequestTarget(keepingSameSite(graceful)));
             builderCustomizers.forEach(customizer -> customizer.accept(builder));
 
             candidate = builder.build();
@@ -432,6 +433,29 @@ public final class UndertowServer implements WebServer {
                 exchange.endExchange();
                 return;
             }
+            next.handleRequest(exchange);
+        };
+    }
+
+    /**
+     * Sends the {@code SameSite} attribute a servlet cookie carries. Undertow's
+     * servlet adaptor answers the attribute as the cookie's mode but reports the
+     * cookie as having none, and its serialiser then leaves the attribute out,
+     * so {@code cookie(name, value)} went out without the {@code SameSite=Lax}
+     * it promises, and a cookie set to {@code SameSite=None} without that either.
+     * The cookies are marked just before the headers are written, when every
+     * one of them has been added.
+     */
+    private static HttpHandler keepingSameSite(HttpHandler next) {
+        return exchange -> {
+            exchange.addResponseCommitListener(committing -> {
+                for (Cookie cookie : committing.responseCookies()) {
+                    String mode = cookie.getSameSiteMode();
+                    if (!cookie.isSameSite() && mode != null && !mode.isEmpty()) {
+                        cookie.setSameSite(true);
+                    }
+                }
+            });
             next.handleRequest(exchange);
         };
     }
