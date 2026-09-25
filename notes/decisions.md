@@ -1181,6 +1181,11 @@ Rejected: a core-side abort API, which the servlet API has no way to carry out.
   `asLong` converts the text exactly with `BigDecimal.longValueExact`, and `asDouble` stays the approximate reading.
 - **An integer past the range of a long is kept the same way.**
   It is still a number, so `asDouble` reads it and only `asLong` refuses it.
+- **A parsed number is written back as its text.**
+  The parser already held the text to the grammar, and the double lost the digits `asLong` reads, so a tree passed through unchanged sends what it received.
+- **A type mismatch names the kind it found, not the value.**
+  `bodyJson(reader)` sends the message as the 400's body, so quoting an object or an array echoed the client's data back.
+  A short scalar is still quoted, a long string is named by its kind, and a long number by its first 32 characters.
 
 Rejected: a lenient mode, because a body another JSON implementation rejects should not reach a handler.
 Rejected: storing every decimal as a `BigDecimal`, which makes every parse and every `asDouble` pay for what only `asLong` needs.
@@ -1210,6 +1215,11 @@ The request carried the fault, so the answer names the client's side, whichever 
 - **A form-encoded body the container refuses is a 400 with the container's reason.**
   The servlet API defines no size signal for one, so a form over the container's limit is a 400 too.
 - **A charset the JVM cannot decode is a 415**, settled before a byte is read.
+  - The parameter and file reads of a form answer it too, where Jetty's `getContentType()` threw and answered 500.
+  - The charset is read from the header, since each container parses it its own way: for `charset=`, Jetty reads none, Tomcat the empty name, and Undertow throws.
+- **A form is a form-encoded or multipart body on POST, PUT, or PATCH**, the same on every server.
+  - Each container gated it by a set of methods of its own, so Tomcat and Jetty are set to the three Undertow reads.
+  - Any other request answers `param` and `params` from the query string alone, where Tomcat parsed the query string again and blamed a form body for what it refused.
 - **A query string whose escapes are not UTF-8 is a 400**, from `queryParam`, `param`, and `formParam` alike, where `URLDecoder` put U+FFFD in its place.
 - **A body cut short is a 400.**
   An `IOException` while `body()` or `bodyNdjson` reads is a client that sent less than its `Content-Length` or a connection that failed.
@@ -1310,6 +1320,26 @@ Rejected: URL-encoding a cookie value, which the reading side would have to know
   The HEAD carries the GET's `Content-Encoding` and `Vary` and no `Content-Length`, and the headers are committed so the container cannot announce a length of 0.
 
 Rejected: compressing on HEAD to report the exact length, which is what decision 9's "a HEAD opens nothing" rules out.
+
+## 70 · A request path each container reads its own way
+
+### 70. A path is refused alike on every server, and a server module makes up for what its container leaves out
+
+Jetty, Tomcat, and Undertow each normalise and check a request-target in their own way, so the same URL bound different variables, or none, on each.
+
+- **An empty, `.`, or `..` segment is a 400, decided in core from the raw URI.**
+  - Jetty refused `//` and `%2e`, Tomcat collapsed and resolved them, and Undertow bound `{x}` to `""` and a tail to `../secret`.
+  - The raw URI is the one thing every container reports alike, so the check lives in `AppServlet` rather than in each server module.
+  - A trailing slash is an empty last segment, and stays.
+- **What only Undertow leaves out is made up in `spider-silk-undertow`.**
+  - The front handler answers `OPTIONS *` with 404, as Jetty does, and a path escape that is not UTF-8 with 400, beside the encoded slash it already refused.
+  - A commit listener marks each cookie that carries a `SameSite` attribute, which Undertow's servlet adaptor reports and its serialiser then drops.
+- **Container defaults a handler cannot see are set alike.**
+  - The session cookie is `HttpOnly` on every server, as Tomcat already sent it.
+  - A context path without its leading slash is mounted under it, where Jetty took it as given and answered 404 to everything.
+
+Rejected: resolving `..` in core, which gives two URLs for one resource and a tail that can still climb out of its root.
+Rejected: a flag in core for Undertow's gaps, since server-specific code belongs in the server's module.
 
 ## Rejected — decisions, with the reason
 

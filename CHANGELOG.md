@@ -60,6 +60,29 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 
 ### Fixed
 
+- `spider-silk-core`: a form whose `Content-Type` names a charset the JVM cannot decode, the empty `charset=` included, answers 415 from `param`, `params`, `formParam`, `file`, `fileOrNull`, and `files`, as `body()` does, on every server.
+  Jetty answered 500 from each of them and from `contentType()`, which now answers the header as sent, and Undertow answered its own error page for `charset=`.
+- `spider-silk-core`: a form body is read on POST, PUT, and PATCH on every server, where Tomcat read it on POST alone and Jetty on POST and PUT.
+  On any other method, and on a request with no form body, `param` and `params` answer from the query string alone, so Tomcat no longer answers `?=a` with a 400 blaming a form body.
+- `spider-silk-core`: a request path with an empty, `.`, or `..` segment, literal or percent-encoded, answers 400 on every server before routing.
+  Undertow bound `/a//b` to an empty variable and `/files/../secret` to a tail of `../secret`.
+- `spider-silk-core`: `host()` keeps the brackets of an IPv6 literal on Undertow, `[::1]:9` rather than `::1:9`.
+- `spider-silk-core`: a multipart part with no name is skipped by `file`, `fileOrNull`, and `files`, where Undertow answered 500.
+- `spider-silk-core`: `accepts` and `acceptedTypes` split the `Accept` header only outside quoted parameter values.
+- `spider-silk-core`: under `Cors.anyOrigin()`, every response on a covered path carries `Access-Control-Allow-Origin: *`, with or without an `Origin`, so a shared cache cannot serve an answer without it to a cross-origin caller.
+- `spider-silk-core`: under `app.gzip()`, a `flush()` inside a streamed body delivers what was written, where only the gzip header reached the client until the writer returned.
+- `spider-silk-core`: a request logger that throws an `Error` leaves the response alone, where the container replaced it with its own 500.
+- `spider-silk-core`: `text(null)`, `html(null)`, `rawJson(null)`, and `bytes(type, null)` throw `NullPointerException` at the call, inside the handler, where `exception(...)` sees it.
+- `spider-silk-core`: a parsed JSON number is written back as the digits it was parsed from, so `WebResponse.json(req.bodyJson())` sends the numbers it received.
+  `9007199254740993.0` went out as `9.007199254740992E15`, and `1e3` as `1000.0`.
+- `spider-silk-core`: a JSON type mismatch names the kind it found, such as `Not a JSON object: an array`, where the message, and the 400 `bodyJson(reader)` answered with it, quoted the whole value.
+- `spider-silk-core`: `bodyNdjson` skips only lines of JSON's own whitespace, and a line of a form feed or an em space answers 400 naming it.
+- `spider-silk-core`: `JettyServer.contextPath("app")`, like `TomcatServer` and `UndertowServer`, mounts the app at `/app`, where Jetty answered 404 to everything.
+- `spider-silk-core`, `spider-silk-undertow`: the session cookie is `HttpOnly` on Jetty and Undertow, as on Tomcat.
+- `spider-silk-undertow`: a cookie carries its `SameSite` attribute, `SameSite=Lax` from `cookie(name, value)` among them, where Undertow dropped it.
+- `spider-silk-undertow`: `OPTIONS *` answers 404, as on Jetty, where Undertow answered a bare 500 and logged a stack trace, and a path escape that is not UTF-8 answers 400, where it reached `pathParam` as U+FFFD.
+- `spider-silk-test`: `WebTest.test` returns when the body leaves a streamed response open, where closing the client waited for it for good.
+- `spider-silk-test`: `TestRequest` parses a form body given as `body(...)` under a form `Content-Type`, and reads form fields on POST, PUT, and PATCH only, as the servers do.
 - `spider-silk-core`: a query string whose escapes are not UTF-8, such as `?a=%FF`, answers 400 from `queryParam`, `param`, and `formParam` on every server.
   `queryParam` answered U+FFFD, and `param` a 400 blaming a form body on Jetty and Tomcat and U+FFFD on Undertow.
 - `spider-silk-core`: `paramLong` and `pathParamLong` take an optional sign and ASCII digits only, where full-width and other digits read as numbers.
