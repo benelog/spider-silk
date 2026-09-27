@@ -173,24 +173,63 @@ The levels are those of `java.util.logging`, so slf4j's WARN appears as WARNING 
 An application that wants no slf4j call in its own code logs through `System.getLogger(...)` or `java.util.logging.Logger`, and both arrive at the same handlers.
 
 [#native-image]
-== Logback in a native image
+== Native image
 
-Logback runs in a xref:native-image.adoc[GraalVM native image] with one addition to the build: `logback.xml` among the included resources.
+All three backends run in a xref:native-image.adoc[GraalVM native image], and each needs its configuration file among the included resources.
+A binary carries only the classpath resources the build names, so a configuration file left out is a file the backend does not find.
 
 [source,groovy]
 ----
 graalvmNative {
     binaries {
         main {
-            resources.includedPatterns.add('logback\\.xml')
+            resources.includedPatterns.add('logback\\.xml')    // or 'log4j2\\.xml', or 'logging\\.properties'
         }
     }
 }
 ----
 
-A binary built without that pattern carries no configuration file, and Logback falls back to its default of printing every level.
-The reflection Logback needs to read the file comes from GraalVM's metadata repository, which the xref:gradle-plugin.adoc[spider-silk plugin] enables.
-The example application is built and run this way, and its binary grows from 66.1MB to 68.2MB against the same build on `slf4j-simple`.
+Logback and Log4j then read the file as they do on a JVM.
+The reflection Logback needs comes from GraalVM's metadata repository, which the xref:gradle-plugin.adoc[spider-silk plugin] enables.
+Log4j needed no configuration beyond the resource pattern.
+
+JDK logging differs in how the file is named.
+A native binary does not read `java.util.logging.config.file` when it is given on the command line, so the default format stays.
+Read the file from the classpath at the start of `main` instead:
+
+[source,java]
+----
+public static void main(String[] args) throws IOException {
+    try (InputStream in = FlashcardApp.class.getResourceAsStream("/logging.properties")) {
+        LogManager.getLogManager().readConfiguration(in);
+    }
+    // ...
+}
+----
+
+The same lines work on a JVM, so one way of loading the file serves both.
+
+The backend changes the size of the binary.
+The example application was built with each backend by GraalVM CE 25, and each binary was run and answered requests with its log lines in the configured format:
+
+[cols="2,2,1",options="header"]
+|===
+| Backend | Included resource | Binary
+
+| Logback 1.6.4
+| `logback.xml`
+| 65.0MiB
+
+| Log4j 2.26.1
+| `log4j2.xml`
+| 68.1MiB
+
+| JDK logging, through `slf4j-jdk14`
+| `logging.properties`
+| 63.0MiB
+|===
+
+The example application ships the Logback row.
 
 [#tomcat]
 == Tomcat

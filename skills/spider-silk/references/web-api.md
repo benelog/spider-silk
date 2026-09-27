@@ -282,6 +282,7 @@ runtimeOnly 'ch.qos.logback:logback-classic:1.6.4'                   // Logback,
 
 On Tomcat with Logback or Log4j, add `org.slf4j:jul-to-slf4j` and call `SLF4JBridgeHandler.removeHandlersForRootLogger(); SLF4JBridgeHandler.install();` before starting the server; never combine it with `slf4j-jdk14`.
 Undertow needs no bridge.
+In a native image, add the backend's configuration file to `resources.includedPatterns`; for JDK logging, load it with `LogManager.getLogManager().readConfiguration(...)` from the classpath in `main`, because the binary ignores `-Djava.util.logging.config.file`.
 
 ## Route introspection
 

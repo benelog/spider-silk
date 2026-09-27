@@ -68,7 +68,7 @@ gradle :example-flashcard:nativeCompile
 example-flashcard/build/native/nativeCompile/flashcard
 ----
 
-Built with GraalVM CE 25, the binary comes out at 61MB and Jetty reports itself started after roughly 35ms, against roughly 350ms for the same app on a JVM.
+Built with GraalVM CE 25, the binary comes out at 65MiB and logs its startup line roughly 55ms after the process launches, against roughly 1.2s for the same app on a JVM.
 Everything the example does runs in the binary with no reflection config written by hand: routing, jte templates, static files, sessions and flash, the JSON API, the OpenAPI export, and H2 over spring-jdbc with transactions.
 Every reflection config entry in the image is generated, by the jte plugin for the template classes and by the build itself for the domain package, and not one of them names a framework class.
 `--no-fallback` enforces this: it fails the build rather than quietly emitting a binary that still needs a JVM.
@@ -121,7 +121,7 @@ docker load < example-flashcard/build/jib-image.tar
 docker run -p 8080:8080 ghcr.io/benelog/spider-silk-flashcard:native
 ----
 
-The tar comes out at 34MB against 124MB for the JVM image.
+The tar comes out at 34MiB against 119MiB for the JVM image.
 The price is portability.
 Java bytecode runs on any architecture with a JRE image, while a native binary is compiled for one platform, so this image runs on the architecture that built it.
 There is no cross-compilation.
@@ -169,6 +169,7 @@ The example was built and exercised both ways on one machine, through every repo
 | 60.9MiB (+4.8%)
 |===
 
+The comparison was measured on an earlier version of the example, so both sizes are below the current binary's 65MiB.
 The reflection metadata is baked in when the image is built, so boot pays nothing.
 The costs live elsewhere.
 Reflective mapping is slower per row at request time, and, above all, a missing entry fails at runtime rather than at build time.
