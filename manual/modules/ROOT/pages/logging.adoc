@@ -1,0 +1,229 @@
+= Logging
+:navtitle: Logging
+
+Core carries no logging framework, so the logging backend is the application's choice.
+The framework writes to one place, the servlet log, and only when something fails.
+The embedded server logs through its own API, and the backend on the classpath decides where both end up.
+A line per request is a separate matter, written by the application through xref:request-logging.adoc[`requestLogger(...)`].
+
+[#framework]
+== What the framework logs
+
+`AppServlet` reports four failures to the servlet log, each with the exception that caused it:
+
+[cols="2,3",options="header"]
+|===
+| Message | When
+
+| `Error while handling request`
+| A handler, a filter, or a template threw, and no `exception(...)` handler answered it, so the framework answered 500.
+
+| `Error handler failed for status N`
+| The status page registered for that status threw.
+
+| `Failed while writing the response`
+| Decoration or writing of the response failed.
+
+| `Request logger failed`
+| The lambda given to `requestLogger(...)` threw.
+|===
+
+A request that succeeds produces no line.
+Nothing is logged at startup, and there is no debug output to switch on.
+The framework calls `GenericServlet.log(String, Throwable)`, which is part of the servlet API, so core needs no logging dependency for it.
+jte has no logging either: it reports a failure by throwing.
+
+[#servlet-log]
+== Where the servlet log goes
+
+The container decides where the servlet log goes, so the logger name and the level differ by server:
+
+[cols="1,2,3,1",options="header"]
+|===
+| Server | Logging API | Logger | Level
+
+| Jetty
+| slf4j
+| `org.eclipse.jetty.server.handler.ContextHandler.ROOT`
+| WARN
+
+| Tomcat
+| JULI, which is `java.util.logging`
+| `org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/]`
+| SEVERE
+
+| Undertow
+| JBoss Logging
+| `io.undertow.servlet`
+| ERROR
+|===
+
+`ROOT` in Jetty's logger name is the context at the path `/`.
+The server's own lines, such as the startup banner, go through the same API under the server's package names.
+
+Jetty brings `slf4j-api` and no backend.
+Without a backend on the classpath, slf4j prints one warning at startup and discards every line, the framework's four failures included.
+An application on Jetty therefore adds one of the backends below.
+
+[#logback]
+== Logback
+
+Logback implements the slf4j API directly, so one dependency is the whole setup:
+
+[source,groovy]
+----
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.19'
+    runtimeOnly 'ch.qos.logback:logback-classic:1.6.4'
+}
+----
+
+Logback reads `logback.xml` from the classpath root, which is `src/main/resources/logback.xml` in the build:
+
+[source,xml]
+----
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="org.eclipse.jetty" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
+----
+
+The xref:example-flashcard.adoc[example application] is set up this way.
+A `logback-test.xml` on the test classpath takes precedence over `logback.xml`, so the tests can run at a quieter level.
+
+[#log4j]
+== Log4j
+
+Log4j takes the slf4j calls through its binding for slf4j 2:
+
+[source,groovy]
+----
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.19'
+    runtimeOnly 'org.apache.logging.log4j:log4j-slf4j2-impl:2.26.1'
+}
+----
+
+The binding brings `log4j-api` and `log4j-core` with it.
+Log4j reads `log4j2.xml` from the classpath root:
+
+[source,xml]
+----
+<Configuration>
+    <Appenders>
+        <Console name="CONSOLE" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level [%t] %logger{36} - %msg%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Logger name="org.eclipse.jetty" level="info"/>
+        <Root level="info">
+            <AppenderRef ref="CONSOLE"/>
+        </Root>
+    </Loggers>
+</Configuration>
+----
+
+Without a configuration file, Log4j prints errors only, so Jetty's WARN line for a failed request does not appear.
+An application that prefers the Log4j API to the slf4j API calls `LogManager.getLogger(...)` and declares `log4j-api` in place of `slf4j-api`.
+The binding stays, because Jetty still logs through slf4j.
+
+[#jdk]
+== JDK logging
+
+`slf4j-jdk14` hands the slf4j calls to `java.util.logging`, which needs no library beyond the JDK:
+
+[source,groovy]
+----
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.19'
+    runtimeOnly 'org.slf4j:slf4j-jdk14:2.0.19'
+}
+----
+
+Without a configuration, `java.util.logging` prints INFO and above to standard error in a two-line format.
+A properties file replaces that default:
+
+[source,properties]
+----
+handlers = java.util.logging.ConsoleHandler
+.level = INFO
+java.util.logging.ConsoleHandler.formatter = java.util.logging.SimpleFormatter
+java.util.logging.SimpleFormatter.format = %1$tT.%1$tL %4$-7s %3$s - %5$s%6$s%n
+org.eclipse.jetty.level = INFO
+----
+
+The JVM reads the file named by a system property:
+
+[source,bash]
+----
+java -Djava.util.logging.config.file=logging.properties -jar app.jar
+----
+
+The levels are those of `java.util.logging`, so slf4j's WARN appears as WARNING and its ERROR as SEVERE.
+An application that wants no slf4j call in its own code logs through `System.getLogger(...)` or `java.util.logging.Logger`, and both arrive at the same handlers.
+
+[#native-image]
+== Logback in a native image
+
+Logback runs in a xref:native-image.adoc[GraalVM native image] with one addition to the build: `logback.xml` among the included resources.
+
+[source,groovy]
+----
+graalvmNative {
+    binaries {
+        main {
+            resources.includedPatterns.add('logback\\.xml')
+        }
+    }
+}
+----
+
+A binary built without that pattern carries no configuration file, and Logback falls back to its default of printing every level.
+The reflection Logback needs to read the file comes from GraalVM's metadata repository, which the xref:gradle-plugin.adoc[spider-silk plugin] enables.
+The example application is built and run this way, and its binary grows from 66.1MB to 68.2MB against the same build on `slf4j-simple`.
+
+[#tomcat]
+== Tomcat
+
+Tomcat logs through `java.util.logging` whichever backend the application chose.
+With JDK logging as the backend, Tomcat's lines and the application's share one configuration, and nothing more is needed.
+With Logback or Log4j, Tomcat's lines bypass the backend and appear on standard error in the JDK's default format.
+`jul-to-slf4j` routes them into slf4j, and from there into the backend:
+
+[source,groovy]
+----
+dependencies {
+    implementation 'org.slf4j:jul-to-slf4j:2.0.19'
+}
+----
+
+Install the bridge before the server starts:
+
+[source,java]
+----
+SLF4JBridgeHandler.removeHandlersForRootLogger();
+SLF4JBridgeHandler.install();
+
+app.server((a, port) -> new TomcatServer(a).port(port))
+   .start(8080);
+----
+
+`removeHandlersForRootLogger()` takes the JDK's console handler away, so a line is not printed twice.
+The servlet log then arrives at ERROR under `org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/]`.
+Do not combine `jul-to-slf4j` with `slf4j-jdk14`: each hands its lines to the other, and a line never stops travelling.
+
+[#undertow]
+== Undertow
+
+Undertow needs no bridge.
+JBoss Logging looks for a backend on the classpath itself, and its lines follow Logback, Log4j, or JDK logging, whichever the application chose.

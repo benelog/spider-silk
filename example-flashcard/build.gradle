@@ -18,7 +18,11 @@ dependencies {
     implementation project(':spider-silk-openapi')
     implementation 'org.springframework:spring-jdbc:7.0.9'
     implementation 'com.h2database:h2:2.5.250'
-    runtimeOnly 'org.slf4j:slf4j-simple:2.0.19'
+    // The application logs through the slf4j API and leaves the backend to the
+    // runtime classpath: Logback here, configured by src/main/resources/logback.xml.
+    // Jetty logs through the same API, so its lines follow the same configuration.
+    implementation 'org.slf4j:slf4j-api:2.0.19'
+    runtimeOnly 'ch.qos.logback:logback-classic:1.6.4'
 
     testImplementation project(':spider-silk-test')
     testImplementation project(':spider-silk-tomcat')
@@ -46,13 +50,14 @@ jib {
 // `gradle nativeCompile` builds build/native/nativeCompile/flashcard.
 // The jte wiring above already emits the reflection config for the precompiled
 // template classes; what is declared here is the rest: the resources the app
-// reads from the classpath, and H2's reachability metadata coming from the
-// shared repository the plugin enables.
+// reads from the classpath, Logback's configuration file among them, and the
+// reachability metadata for H2 and Logback coming from the shared repository
+// the plugin enables.
 graalvmNative {
     binaries {
         main {
             imageName = 'flashcard'
-            resources.includedPatterns.addAll(['schema\\.sql', 'public/.*'])
+            resources.includedPatterns.addAll(['schema\\.sql', 'public/.*', 'logback\\.xml'])
         }
     }
 }

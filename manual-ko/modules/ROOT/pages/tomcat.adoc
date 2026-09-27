@@ -78,6 +78,7 @@ Tomcat은 디스크에 `catalina.base` 디렉터리를 필요로 한다.
 `sessions(boolean)`은 없다: Tomcat의 `StandardContext`는 시작 시 세션 관리자를 설치하고 빠져나갈 길을 주지 않는다.
 조용히 아무 일도 하지 않는 메서드는 메서드가 없는 것보다 나쁘다.
 로깅은 JULI를 거치므로, 이를 애플리케이션 자신의 로깅으로 보내려면 `jul-to-slf4j`와 브리지 핸들러가 필요하다.
+xref:logging.adoc#tomcat[로깅]에 의존성과 브리지를 설치하는 두 줄이 있다.
 
 == 직접 시작하지 않은 Tomcat에 배포하기
 

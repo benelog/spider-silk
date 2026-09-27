@@ -10,6 +10,7 @@ app.requestLogger((req, completion) -> logger.info("{} {} -> {} ({}ms)",
 ----
 
 Core carries no logging framework, so which logger, at which level, and in which format is the application's call.
+xref:logging.adoc[Logging] covers the backend behind that logger.
 The lambda receives a `RequestCompletion` after response writing finishes.
 `statusCode()` is the final status reported by the servlet response, including a status changed by a raw writer or by recovery from a write failure.
 `took()` is a `Duration` covering dispatch, rendering, decoration, and writing.
@@ -46,4 +47,4 @@ app.requestLogger((req, completion) -> {
 It is null for a static file, a 404, a 405, and the automatic OPTIONS answer.
 xref:route-introspection.adoc#matched-route[Route Introspection] has the rules.
 `req.body()` reads the text a filter or handler already read, since the text is kept for the whole request.
-An exception or an `Error` the logger throws is written to the servlet log and leaves the response alone.
+An exception or an `Error` the logger throws is written to the xref:logging.adoc#servlet-log[servlet log] and leaves the response alone.

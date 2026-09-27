@@ -35,6 +35,7 @@
 ** xref:testing.adoc[Testing]
 ** xref:route-introspection.adoc[Route Introspection]
 ** xref:openapi.adoc[OpenAPI Export]
+** xref:logging.adoc[Logging]
 ** xref:request-logging.adoc[Request Logging]
 
 * Reference

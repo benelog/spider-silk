@@ -41,7 +41,8 @@ dependencies {
 네이티브 이미지에서 이 선택의 비용은 모든 도메인 타입을 나열한 리플렉션 설정이며, 빌드는 그 목록을 손으로 관리하는 대신 패키지에서 도출한다(아래 참고).
 
 리소스와 드라이버::
-나머지는 빌드에 선언한다: 앱이 런타임에 읽는 클래스패스 리소스와, 플러그인이 GraalVM의 공유 저장소에서 가져오는 H2의 도달 가능성 메타데이터다.
+나머지는 빌드에 선언한다: 앱이 런타임에 읽는 클래스패스 리소스와, 플러그인이 GraalVM의 공유 저장소에서 가져오는 H2와 Logback의 도달 가능성 메타데이터다.
+`logback.xml`은 그 리소스 가운데 하나이며, xref:logging.adoc#native-image[로깅]이 이를 설명한다.
 +
 [source,groovy]
 ----
@@ -49,7 +50,7 @@ graalvmNative {
     binaries {
         main {
             imageName = 'flashcard'
-            resources.includedPatterns.addAll(['schema\\.sql', 'public/.*'])
+            resources.includedPatterns.addAll(['schema\\.sql', 'public/.*', 'logback\\.xml'])
         }
     }
 }

@@ -267,6 +267,22 @@ Read it with `statusCode()`: a 400 is the caller's mistake, a 500 the applicatio
 `req.body()` there answers the text a filter or handler already read.
 Core carries no logging framework — which logger and format is the application's call.
 
+## Logging
+
+The framework itself logs only failures, and only to the servlet log (`GenericServlet.log`): `Error while handling request`, `Error handler failed for status N`, `Failed while writing the response`, and `Request logger failed`.
+The container decides where that goes: Jetty through slf4j at WARN under `org.eclipse.jetty.server.handler.ContextHandler.ROOT`, Tomcat through `java.util.logging` at SEVERE, Undertow through JBoss Logging at ERROR under `io.undertow.servlet`.
+Jetty brings `slf4j-api` and no backend, and without one slf4j discards every line, so add exactly one:
+
+```groovy
+implementation 'org.slf4j:slf4j-api:2.0.19'
+runtimeOnly 'ch.qos.logback:logback-classic:1.6.4'                   // Logback, reads logback.xml
+// runtimeOnly 'org.apache.logging.log4j:log4j-slf4j2-impl:2.26.1'   // Log4j, reads log4j2.xml
+// runtimeOnly 'org.slf4j:slf4j-jdk14:2.0.19'                        // JDK logging, -Djava.util.logging.config.file=...
+```
+
+On Tomcat with Logback or Log4j, add `org.slf4j:jul-to-slf4j` and call `SLF4JBridgeHandler.removeHandlersForRootLogger(); SLF4JBridgeHandler.install();` before starting the server; never combine it with `slf4j-jdk14`.
+Undertow needs no bridge.
+
 ## Route introspection
 
 `app.routes()` is an immutable snapshot of `record Route(String method, String path, String description)`, in registration order, with group prefixes resolved; `{name}` segments are OpenAPI path-template syntax verbatim.

@@ -11,6 +11,9 @@ import gg.jte.TemplateEngine;
 import gg.jte.resolve.DirectoryCodeResolver;
 import jakarta.servlet.MultipartConfigElement;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.Cors;
 import net.benelog.spidersilk.HttpStatus;
@@ -54,6 +57,9 @@ import flashcard.web.StudyController;
 public class FlashcardContext {
 
     private static final long MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+
+    /** The access log: one line per request, under a name of its own to route or silence. */
+    private static final Logger accessLog = LoggerFactory.getLogger("flashcard.access");
 
     private final HomeAction homeAction;
     private final DeckController deckController;
@@ -148,6 +154,11 @@ public class FlashcardContext {
         // generator, served from somewhere else. The rest of /api creates decks,
         // and opening that to any origin would be a worse example than none.
         app.cors(Cors.anyOrigin().forPath("/openapi.json"));
+
+        // Core carries no logging framework, so the line, its level, and its
+        // logger are written here, and logback.xml decides where the line goes.
+        app.requestLogger((req, completion) -> accessLog.info("{} {} -> {} ({}ms)",
+                req.method(), req.path(), completion.statusCode(), completion.took().toMillis()));
 
         // CSV format error: this handler runs after the transaction rolled back.
         app.exception(CsvFormatException.class, (req, e) -> {

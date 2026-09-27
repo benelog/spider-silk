@@ -2,6 +2,9 @@ package flashcard;
 
 import java.util.Arrays;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import net.benelog.spidersilk.App;
 
 /**
@@ -13,11 +16,13 @@ import net.benelog.spidersilk.App;
  */
 public class FlashcardApp {
 
+    private static final Logger logger = LoggerFactory.getLogger(FlashcardApp.class);
+
     public static void main(String[] args) {
         boolean devMode = Arrays.asList(args).contains("--dev");
         App app = new FlashcardContext(FlashcardDatabase.file(), devMode)
                 .start(8080);
-        System.out.println("Flashcard: http://localhost:" + app.port());
+        logger.info("Flashcard: http://localhost:{}", app.port());
         app.join();
     }
 }

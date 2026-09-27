@@ -39,6 +39,13 @@ HSTS is deliberately absent, since `main` serves the app over `http://localhost`
 `cors(...)` is scoped to `/openapi.json` alone, and not to `/api/decks`, which creates decks.
 That document is the only resource here meant for a client other than this application, such as a Swagger UI served elsewhere.
 
+Logging::
+The application logs through the slf4j API, with Logback as the backend and `src/main/resources/logback.xml` as its configuration.
+`FlashcardContext.createApp` registers a xref:request-logging.adoc[request logger] that writes one line per request to the logger `flashcard.access`.
+Jetty's lines and the framework's xref:logging.adoc#servlet-log[servlet log] follow the same configuration, and so do spring-jdbc's, since its commons-logging finds slf4j on the classpath.
+The tests run under `logback-test.xml`, which keeps the console to warnings and errors.
+xref:logging.adoc[Logging] shows the same setup on Log4j and on JDK logging.
+
 Routing::
 There is no `Controller` interface.
 `FlashcardContext.registerRoutes` is the whole table, and handlers arrive as an `Action` class, a public method reference, or a lambda.

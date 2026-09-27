@@ -78,6 +78,7 @@ The default is a temporary directory created on start and deleted on stop, so no
 There is no `sessions(boolean)`: Tomcat's `StandardContext` installs a session manager on start and offers no way out.
 A method that silently did nothing would be worse than no method.
 Logging goes through JULI, so routing it into an application's own logging means `jul-to-slf4j` and a bridge handler.
+xref:logging.adoc#tomcat[Logging] has the dependency and the two lines that install the bridge.
 
 == Deploying to a Tomcat you did not start
 

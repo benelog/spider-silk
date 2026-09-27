@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback reads this file from the classpath root at startup. The application,
+  Jetty, and spring-jdbc all log through it: the first two call the slf4j API,
+  and spring-jdbc's commons-logging finds slf4j on the classpath.
+-->
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- One line per request, written by the requestLogger in FlashcardContext. -->
+    <logger name="flashcard.access" level="INFO"/>
+
+    <!-- What the framework reports to the servlet log arrives under Jetty's context logger. -->
+    <logger name="org.eclipse.jetty" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>

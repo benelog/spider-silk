@@ -1,0 +1,229 @@
+= 로깅
+:navtitle: 로깅
+
+코어는 로깅 프레임워크를 담지 않으므로, 로깅 백엔드는 애플리케이션의 선택이다.
+프레임워크는 서블릿 로그 한 곳에만, 그리고 무언가 실패했을 때만 기록한다.
+내장 서버는 자신의 API로 로깅하며, 둘이 어디에 도착하는지는 클래스패스의 백엔드가 정한다.
+요청마다 한 줄을 남기는 일은 별개이며, 애플리케이션이 xref:request-logging.adoc[`requestLogger(...)`]로 기록한다.
+
+[#framework]
+== 프레임워크가 기록하는 것
+
+`AppServlet`은 네 가지 실패를, 각각 원인이 된 예외와 함께 서블릿 로그에 보고한다:
+
+[cols="2,3",options="header"]
+|===
+| 메시지 | 시점
+
+| `Error while handling request`
+| 핸들러, 필터, 템플릿이 예외를 던졌고 어떤 `exception(...)` 핸들러도 답하지 않아, 프레임워크가 500으로 답했다.
+
+| `Error handler failed for status N`
+| 그 상태에 등록된 상태 페이지가 예외를 던졌다.
+
+| `Failed while writing the response`
+| 응답의 데코레이션이나 쓰기가 실패했다.
+
+| `Request logger failed`
+| `requestLogger(...)`에 준 람다가 예외를 던졌다.
+|===
+
+성공한 요청은 한 줄도 남기지 않는다.
+시작할 때 기록하는 것도 없고, 켤 수 있는 디버그 출력도 없다.
+프레임워크는 서블릿 API의 일부인 `GenericServlet.log(String, Throwable)`을 호출하므로, 코어에는 이를 위한 로깅 의존성이 필요 없다.
+jte에도 로깅이 없다: 실패는 예외를 던져 알린다.
+
+[#servlet-log]
+== 서블릿 로그가 가는 곳
+
+서블릿 로그가 어디로 가는지는 컨테이너가 정하므로, 로거 이름과 레벨은 서버마다 다르다:
+
+[cols="1,2,3,1",options="header"]
+|===
+| 서버 | 로깅 API | 로거 | 레벨
+
+| Jetty
+| slf4j
+| `org.eclipse.jetty.server.handler.ContextHandler.ROOT`
+| WARN
+
+| Tomcat
+| JULI, 곧 `java.util.logging`
+| `org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/]`
+| SEVERE
+
+| Undertow
+| JBoss Logging
+| `io.undertow.servlet`
+| ERROR
+|===
+
+Jetty 로거 이름의 `ROOT`는 경로 `/`의 컨텍스트다.
+시작 배너 같은 서버 자신의 로그는 같은 API를 거쳐 서버의 패키지 이름으로 나온다.
+
+Jetty는 `slf4j-api`를 가져오지만 백엔드는 가져오지 않는다.
+클래스패스에 백엔드가 없으면 slf4j는 시작할 때 경고 한 번을 출력하고, 프레임워크의 네 가지 실패를 포함한 모든 로그를 버린다.
+따라서 Jetty 위의 애플리케이션은 아래 백엔드 가운데 하나를 추가한다.
+
+[#logback]
+== Logback
+
+Logback은 slf4j API를 직접 구현하므로, 의존성 하나가 설정의 전부다:
+
+[source,groovy]
+----
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.19'
+    runtimeOnly 'ch.qos.logback:logback-classic:1.6.4'
+}
+----
+
+Logback은 클래스패스 루트에서 `logback.xml`을 읽으며, 빌드에서는 `src/main/resources/logback.xml`이다:
+
+[source,xml]
+----
+<configuration>
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <logger name="org.eclipse.jetty" level="INFO"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+    </root>
+</configuration>
+----
+
+xref:example-flashcard.adoc[예제 애플리케이션]이 이렇게 설정되어 있다.
+테스트 클래스패스의 `logback-test.xml`은 `logback.xml`보다 우선하므로, 테스트는 더 조용한 레벨로 돌릴 수 있다.
+
+[#log4j]
+== Log4j
+
+Log4j는 slf4j 2용 바인딩으로 slf4j 호출을 받는다:
+
+[source,groovy]
+----
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.19'
+    runtimeOnly 'org.apache.logging.log4j:log4j-slf4j2-impl:2.26.1'
+}
+----
+
+바인딩은 `log4j-api`와 `log4j-core`를 함께 가져온다.
+Log4j는 클래스패스 루트에서 `log4j2.xml`을 읽는다:
+
+[source,xml]
+----
+<Configuration>
+    <Appenders>
+        <Console name="CONSOLE" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level [%t] %logger{36} - %msg%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Logger name="org.eclipse.jetty" level="info"/>
+        <Root level="info">
+            <AppenderRef ref="CONSOLE"/>
+        </Root>
+    </Loggers>
+</Configuration>
+----
+
+설정 파일이 없으면 Log4j는 에러만 출력하므로, 실패한 요청에 대한 Jetty의 WARN 로그는 나타나지 않는다.
+slf4j API보다 Log4j API를 선호하는 애플리케이션은 `LogManager.getLogger(...)`를 호출하고, `slf4j-api` 대신 `log4j-api`를 선언한다.
+Jetty는 여전히 slf4j로 로깅하므로 바인딩은 그대로 둔다.
+
+[#jdk]
+== JDK 로깅
+
+`slf4j-jdk14`는 slf4j 호출을 `java.util.logging`에 넘기며, `java.util.logging`은 JDK 외의 라이브러리가 필요 없다:
+
+[source,groovy]
+----
+dependencies {
+    implementation 'org.slf4j:slf4j-api:2.0.19'
+    runtimeOnly 'org.slf4j:slf4j-jdk14:2.0.19'
+}
+----
+
+설정이 없으면 `java.util.logging`은 INFO 이상을 표준 에러에 두 줄 형식으로 출력한다.
+프로퍼티 파일이 그 기본값을 대체한다:
+
+[source,properties]
+----
+handlers = java.util.logging.ConsoleHandler
+.level = INFO
+java.util.logging.ConsoleHandler.formatter = java.util.logging.SimpleFormatter
+java.util.logging.SimpleFormatter.format = %1$tT.%1$tL %4$-7s %3$s - %5$s%6$s%n
+org.eclipse.jetty.level = INFO
+----
+
+JVM은 시스템 프로퍼티가 가리키는 파일을 읽는다:
+
+[source,bash]
+----
+java -Djava.util.logging.config.file=logging.properties -jar app.jar
+----
+
+레벨은 `java.util.logging`의 것이므로, slf4j의 WARN은 WARNING으로, ERROR는 SEVERE로 나타난다.
+자신의 코드에 slf4j 호출을 두지 않으려는 애플리케이션은 `System.getLogger(...)`나 `java.util.logging.Logger`로 로깅하며, 둘 다 같은 핸들러에 도착한다.
+
+[#native-image]
+== 네이티브 이미지의 Logback
+
+Logback은 빌드에 한 가지만 더하면 xref:native-image.adoc[GraalVM 네이티브 이미지]에서 돌아간다: 포함할 리소스에 `logback.xml`을 넣는다.
+
+[source,groovy]
+----
+graalvmNative {
+    binaries {
+        main {
+            resources.includedPatterns.add('logback\\.xml')
+        }
+    }
+}
+----
+
+그 패턴 없이 빌드한 바이너리는 설정 파일을 담지 않으며, Logback은 모든 레벨을 출력하는 기본값으로 돌아간다.
+Logback이 그 파일을 읽는 데 필요한 리플렉션은 GraalVM의 메타데이터 저장소에서 오며, xref:gradle-plugin.adoc[spider-silk 플러그인]이 그 저장소를 켠다.
+예제 애플리케이션이 이렇게 빌드되고 실행되며, 그 바이너리는 `slf4j-simple`을 쓴 같은 빌드에 비해 66.1MB에서 68.2MB로 커진다.
+
+[#tomcat]
+== Tomcat
+
+Tomcat은 애플리케이션이 어떤 백엔드를 골랐든 `java.util.logging`으로 로깅한다.
+JDK 로깅이 백엔드이면 Tomcat의 로그와 애플리케이션의 로그가 설정 하나를 공유하므로, 더 필요한 것이 없다.
+Logback이나 Log4j에서는 Tomcat의 로그가 백엔드를 거치지 않고 JDK의 기본 형식으로 표준 에러에 나타난다.
+`jul-to-slf4j`가 이를 slf4j로, 거기서 다시 백엔드로 보낸다:
+
+[source,groovy]
+----
+dependencies {
+    implementation 'org.slf4j:jul-to-slf4j:2.0.19'
+}
+----
+
+브리지는 서버가 시작하기 전에 설치한다:
+
+[source,java]
+----
+SLF4JBridgeHandler.removeHandlersForRootLogger();
+SLF4JBridgeHandler.install();
+
+app.server((a, port) -> new TomcatServer(a).port(port))
+   .start(8080);
+----
+
+`removeHandlersForRootLogger()`가 JDK의 콘솔 핸들러를 없애므로, 같은 로그가 두 번 출력되지 않는다.
+그러면 서블릿 로그는 `org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/]` 아래에 ERROR로 도착한다.
+`jul-to-slf4j`를 `slf4j-jdk14`와 함께 쓰지 않는다: 각자가 자신의 로그를 상대에게 넘기므로, 로그가 끝없이 오간다.
+
+[#undertow]
+== Undertow
+
+Undertow에는 브리지가 필요 없다.
+JBoss Logging은 클래스패스에서 백엔드를 스스로 찾으며, 그 로그는 Logback, Log4j, JDK 로깅 가운데 애플리케이션이 고른 것을 따른다.

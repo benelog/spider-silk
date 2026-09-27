@@ -41,7 +41,8 @@ The example keeps these classes by choice, because so much existing JDBC code lo
 Under native image, that choice costs a reflection config listing every domain type, and the build derives that list from the package (see below) rather than maintaining it by hand.
 
 Resources and the driver::
-The rest is declared in the build: the classpath resources the app reads at runtime, and the reachability metadata for H2, which the plugin fetches from GraalVM's shared repository.
+The rest is declared in the build: the classpath resources the app reads at runtime, and the reachability metadata for H2 and Logback, which the plugin fetches from GraalVM's shared repository.
+`logback.xml` is one of those resources, as xref:logging.adoc#native-image[Logging] describes.
 +
 [source,groovy]
 ----
@@ -49,7 +50,7 @@ graalvmNative {
     binaries {
         main {
             imageName = 'flashcard'
-            resources.includedPatterns.addAll(['schema\\.sql', 'public/.*'])
+            resources.includedPatterns.addAll(['schema\\.sql', 'public/.*', 'logback\\.xml'])
         }
     }
 }

@@ -39,6 +39,13 @@ HSTS는 의도적으로 뺐는데, `main`이 앱을 `http://localhost`로 제공
 `cors(...)`는 `/openapi.json`에만 한정되고, 덱을 생성하는 `/api/decks`에는 적용되지 않는다.
 그 문서는 다른 곳에서 제공되는 Swagger UI처럼 이 애플리케이션이 아닌 클라이언트가 읽도록 만든 유일한 리소스다.
 
+로깅::
+애플리케이션은 slf4j API로 로깅하며, 백엔드는 Logback이고 설정은 `src/main/resources/logback.xml`이다.
+`FlashcardContext.createApp`은 요청마다 한 줄을 `flashcard.access` 로거에 기록하는 xref:request-logging.adoc[요청 로거]를 등록한다.
+Jetty의 로그와 프레임워크의 xref:logging.adoc#servlet-log[서블릿 로그]는 같은 설정을 따르고, spring-jdbc의 로그도 그러한데, spring-jdbc의 commons-logging이 클래스패스에서 slf4j를 찾기 때문이다.
+테스트는 `logback-test.xml`로 돌며, 이 파일은 콘솔에 경고와 에러만 남긴다.
+xref:logging.adoc[로깅]이 같은 설정을 Log4j와 JDK 로깅으로 보여 준다.
+
 라우팅::
 `Controller` 인터페이스는 없다.
 `FlashcardContext.registerRoutes`가 테이블 전체이고, 핸들러는 `Action` 클래스, public 메서드 참조, 또는 람다로 도착한다.

@@ -35,6 +35,7 @@
 ** xref:testing.adoc[테스트]
 ** xref:route-introspection.adoc[라우트 인트로스펙션]
 ** xref:openapi.adoc[OpenAPI 내보내기]
+** xref:logging.adoc[로깅]
 ** xref:request-logging.adoc[요청 로깅]
 
 * 참조
