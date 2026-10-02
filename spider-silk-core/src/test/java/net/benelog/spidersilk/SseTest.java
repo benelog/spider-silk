@@ -355,6 +355,12 @@ class SseTest {
             assertThat(handlerEnded.await(5, TimeUnit.SECONDS))
                     .as("the handler should have ended")
                     .isTrue();
+            // The latch counts down in the writer's finally, and AppServlet takes
+            // the stream out of the registry in its own finally just after.
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (!app.openStreams.isEmpty() && System.nanoTime() < deadline) {
+                Thread.sleep(10);
+            }
             assertThat(app.openStreams).as("the registry should be empty").isEmpty();
         } finally {
             app.stop();
