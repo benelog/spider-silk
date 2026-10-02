@@ -1,9 +1,8 @@
 package flashcard.web;
 
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.Map;
 
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
 
@@ -28,13 +27,12 @@ public class DeckController {
 
     public WebResponse showDeck(WebRequest req) {
         long deckId = req.pathParamLong("deckId");
-        Map<String, Object> model = new HashMap<>();
-        model.put("deck", deckService.getDeck(deckId));
-        model.put("cards", cardService.cardsWithTags(deckId));
-        model.put("directions", StudyDirection.values());
-        model.put("message", req.flashed("message"));
-        model.put("error", req.flashed("error"));
-        return WebResponse.template("deck", model);
+        return WebResponse.template("deck", Model.of(
+                "deck", deckService.getDeck(deckId),
+                "cards", cardService.cardsWithTags(deckId),
+                "directions", StudyDirection.values(),
+                "message", req.flashed("message"),
+                "error", req.flashed("error")));
     }
 
     public WebResponse renameDeck(WebRequest req) {
@@ -58,11 +56,10 @@ public class DeckController {
     public WebResponse editCardForm(WebRequest req) {
         long deckId = req.pathParamLong("deckId");
         long cardId = req.pathParamLong("cardId");
-        Map<String, Object> model = new HashMap<>();
-        model.put("deck", deckService.getDeck(deckId));
-        model.put("card", cardService.getCard(cardId));
-        model.put("tags", String.join(", ", cardService.tagsOf(cardId)));
-        return WebResponse.template("card-edit", model);
+        return WebResponse.template("card-edit", Model.of(
+                "deck", deckService.getDeck(deckId),
+                "card", cardService.getCard(cardId),
+                "tags", String.join(", ", cardService.tagsOf(cardId))));
     }
 
     public WebResponse editCard(WebRequest req) {

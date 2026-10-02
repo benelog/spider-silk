@@ -15,6 +15,23 @@ An `App` renders with https://jte.gg[jte] over `classpath:/jte` and appends `.jt
 The model is a `Map`, passed to jte's parameters by name, and `ContentType.Html` escapes `${}` output for you.
 The response copies the model's entries into a read-only map, null values and iteration order kept, so the renderer receives a map it cannot change.
 
+[#model]
+== A model with null values
+
+`Model.of(...)` builds a template model in one expression and accepts a null value.
+`Map.of` throws `NullPointerException` on a null value, and a page model holds one routinely: `req.flashed(...)`, `req.paramOrNull(...)`, and `req.session().get(...)` answer null when there is nothing to show.
+
+[source,java]
+----
+app.get("/decks/{deckId}", req -> WebResponse.template("deck", Model.of(
+        "deck", service.deck(req.pathParamLong("deckId")),
+        "message", req.flashed("message"))));
+----
+
+`Model.of` takes up to ten keys and values, as `Map.of` does, and answers a read-only map that iterates in the order the entries were given.
+A null key throws `NullPointerException`, and a key given twice throws `IllegalArgumentException`, the same exceptions `Map.of` throws.
+A model that gains entries conditionally is still a `HashMap` filled one `put` at a time, and `template(name, model)` takes either.
+
 == A root or a suffix of your own
 
 [source,java]

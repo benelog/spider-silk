@@ -15,6 +15,23 @@ app.get("/decks/{deckId}", req ->
 모델은 `Map`이며 이름으로 jte의 파라미터에 전달되고, `ContentType.Html`이 `${}` 출력을 대신 이스케이프한다.
 응답은 모델의 항목을 null 값과 순회 순서를 유지한 채 읽기 전용 맵으로 복사하므로, 렌더러는 바꿀 수 없는 맵을 받는다.
 
+[#model]
+== null 값을 담은 모델
+
+`Model.of(...)`는 템플릿 모델을 식 하나로 만들며 null 값을 받는다.
+`Map.of`는 null 값에 `NullPointerException`을 던지는데, 페이지 모델은 null을 흔히 담는다: `req.flashed(...)`, `req.paramOrNull(...)`, `req.session().get(...)`은 보여줄 것이 없으면 null을 답한다.
+
+[source,java]
+----
+app.get("/decks/{deckId}", req -> WebResponse.template("deck", Model.of(
+        "deck", service.deck(req.pathParamLong("deckId")),
+        "message", req.flashed("message"))));
+----
+
+`Model.of`는 `Map.of`처럼 키와 값을 열 쌍까지 받으며, 항목이 주어진 순서대로 순회하는 읽기 전용 맵을 답한다.
+null 키는 `NullPointerException`을, 두 번 주어진 키는 `IllegalArgumentException`을 던지며, 이는 `Map.of`가 던지는 것과 같은 예외이다.
+조건에 따라 항목이 늘어나는 모델은 여전히 `put`으로 하나씩 채우는 `HashMap`이며, `template(name, model)`은 둘 다 받는다.
+
 == 직접 정하는 루트나 접미사
 
 [source,java]

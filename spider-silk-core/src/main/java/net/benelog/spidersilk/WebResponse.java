@@ -303,6 +303,10 @@ public final class WebResponse {
      * {@code classpath:/jte/deck.jte}. The name carries no extension: the
      * engine appends its own, so a switch of engine does not rewrite every
      * handler.
+     *
+     * <p>A model that may hold a null value is built with {@link Model#of},
+     * since {@link Map#of} throws on one:
+     * {@code WebResponse.template("deck", Model.of("deck", deck, "message", req.flashed("message")))}.
      */
     public static WebResponse template(String template, Map<String, @Nullable Object> model) {
         return of(new Template(Objects.requireNonNull(template, "template"), model))

@@ -1,8 +1,7 @@
 package flashcard.web;
 
-import java.util.Map;
-
 import net.benelog.spidersilk.Handler;
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
 
@@ -19,7 +18,6 @@ public class StatsAction implements Handler {
 
     @Override
     public WebResponse handle(WebRequest req) {
-        Map<String, Object> stats = Map.of("stats", statsService.overview());
-        return WebResponse.template("stats", stats);
+        return WebResponse.template("stats", Model.of("stats", statsService.overview()));
     }
 }

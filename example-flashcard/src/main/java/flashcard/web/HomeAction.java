@@ -1,9 +1,7 @@
 package flashcard.web;
 
-import java.util.HashMap;
-import java.util.Map;
-
 import net.benelog.spidersilk.Handler;
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
 
@@ -33,15 +31,14 @@ public class HomeAction implements Handler {
 
     @Override
     public WebResponse handle(WebRequest req) {
-        Map<String, Object> model = new HashMap<>();
-        model.put("todayCount", studyService.todayCount());
-        model.put("oftenWrongCount", smartDeckService.oftenWrongCount());
-        model.put("staleCount", smartDeckService.staleCount());
-        model.put("decks", deckService.deckSummaries());
-        model.put("smartDecks", smartDeckService.smartDecks());
-        model.put("directions", StudyDirection.values());
-        model.put("message", req.flashed("message"));
-        model.put("error", req.flashed("error"));
-        return WebResponse.template("home", model);
+        return WebResponse.template("home", Model.of(
+                "todayCount", studyService.todayCount(),
+                "oftenWrongCount", smartDeckService.oftenWrongCount(),
+                "staleCount", smartDeckService.staleCount(),
+                "decks", deckService.deckSummaries(),
+                "smartDecks", smartDeckService.smartDecks(),
+                "directions", StudyDirection.values(),
+                "message", req.flashed("message"),
+                "error", req.flashed("error")));
     }
 }

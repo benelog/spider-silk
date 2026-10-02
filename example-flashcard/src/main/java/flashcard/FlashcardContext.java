@@ -2,7 +2,6 @@ package flashcard;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 import javax.sql.DataSource;
 
@@ -18,6 +17,7 @@ import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.Cors;
 import net.benelog.spidersilk.HttpStatus;
 import net.benelog.spidersilk.JteTemplates;
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.Route;
 import net.benelog.spidersilk.SecurityHeaders;
 import net.benelog.spidersilk.TemplateRenderer;
@@ -238,7 +238,7 @@ public class FlashcardContext {
         // 3. A lambda, for a handler with no state worth a class of its own. Both of
         //    these read app.routes() per request, so they list the routes above.
         app.get("/_routes",
-                req -> WebResponse.template("routes", Map.of("routes", app.routes())));
+                req -> WebResponse.template("routes", Model.of("routes", app.routes())));
         app.get("/openapi.json", req -> WebResponse.json(
                 OpenApi.document("Flashcard API", "1.0.0", documentedRoutes(app))));
     }

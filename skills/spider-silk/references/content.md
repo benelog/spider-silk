@@ -128,6 +128,11 @@ app.get("/decks/{deckId}", req ->
         WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
 // renders classpath:/jte/deck.jte
 
+// A value that may be null (flashed, paramOrNull, session().get) needs Model.of: Map.of throws NPE on it
+app.get("/decks/{deckId}", req -> WebResponse.template("deck", Model.of(
+        "deck", service.deck(req.pathParamLong("deckId")),
+        "message", req.flashed("message"))));
+
 app.templates(new JteTemplates("templates").suffix(".html"));   // a root or suffix of your own
 ```
 
