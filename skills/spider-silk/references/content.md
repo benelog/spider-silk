@@ -163,13 +163,13 @@ Every answer carries `ETag` and `Last-Modified` (reloads come back 304), with `C
 ```java
 app.staticFiles("/assets");                             // a different classpath root
 
-app.staticFiles(new StaticFiles("/public")
+app.staticFiles(StaticFiles.classpath("/public")
         .hostedPath("/assets")                          // classpath:/public/* at /assets/*
         .maxAge(Duration.ofDays(365))                   // only for fingerprinted names
         .precompressed());                              // app.css.br / app.css.gz answer app.css
 
 app.staticFiles(
-        new StaticFiles("/public"),
+        StaticFiles.classpath("/public"),
         StaticFiles.directory(Path.of("/srv/uploads"))  // a directory on disk, path-traversal guarded
                 .hostedPath("/uploads"));               // several roots read in order
 

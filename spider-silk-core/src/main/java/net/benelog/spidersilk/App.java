@@ -58,7 +58,7 @@ public final class App {
     final Set<SseStream> openStreams = ConcurrentHashMap.newKeySet();
 
     volatile @Nullable TemplateRenderer templates;
-    List<StaticFiles> staticFiles = List.of(new StaticFiles(StaticFiles.DEFAULT_ROOT));
+    List<StaticFiles> staticFiles = List.of(StaticFiles.classpath(StaticFiles.DEFAULT_ROOT));
     @Nullable RequestLogger requestLogger;
     @Nullable Cors cors;
     @Nullable Gzip gzip;
@@ -435,7 +435,7 @@ public final class App {
      * {@code "/public"}.
      */
     public App staticFiles(String classpathRoot) {
-        return staticFiles(new StaticFiles(classpathRoot));
+        return staticFiles(StaticFiles.classpath(classpathRoot));
     }
 
     /**
@@ -451,7 +451,7 @@ public final class App {
      *
      * <pre>{@code
      * app.staticFiles(
-     *         new StaticFiles("/public"),
+     *         StaticFiles.classpath("/public"),
      *         StaticFiles.directory(uploads).hostedPath("/uploads"));
      * }</pre>
      *

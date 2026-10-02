@@ -248,12 +248,12 @@ class ReadmeSnippets {
         app.requestLogger((req, completion) -> logger.info("{} {} -> {} ({}ms)",
                 req.method(), req.path(), completion.statusCode(), completion.took().toMillis()));
 
-        app.staticFiles(new StaticFiles("/public")
+        app.staticFiles(StaticFiles.classpath("/public")
                 .hostedPath("/assets")              // classpath:/public/* at /assets/*
                 .maxAge(Duration.ofDays(365)));     // only when the name carries a content hash
 
         app.staticFiles(
-                new StaticFiles("/public"),                        // classpath:/public/* at /*
+                StaticFiles.classpath("/public"),                  // classpath:/public/* at /*
                 StaticFiles.directory(Path.of("/srv/uploads"))     // /srv/uploads/* at /uploads/*
                         .hostedPath("/uploads"));
     }

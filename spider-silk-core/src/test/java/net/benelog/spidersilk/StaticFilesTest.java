@@ -127,7 +127,7 @@ class StaticFilesTest {
     @Test
     void maxAgeReplacesTheRevalidationDefault() {
         App app = new App().staticFiles(
-                new StaticFiles("/public").maxAge(Duration.ofDays(365)));
+                StaticFiles.classpath("/public").maxAge(Duration.ofDays(365)));
 
         WebTest.test(app, client ->
                 assertThat(client.get("/style.css").headers().firstValue("Cache-Control").orElseThrow())
@@ -137,7 +137,7 @@ class StaticFilesTest {
     @Test
     void hostedPathMovesTheFilesAndNothingElseServesThem() {
         App app = new App().staticFiles(
-                new StaticFiles("/public").hostedPath("/assets"));
+                StaticFiles.classpath("/public").hostedPath("/assets"));
 
         WebTest.test(app, client -> {
             assertThat(client.get("/assets/style.css").statusCode()).isEqualTo(200);
@@ -466,7 +466,7 @@ class StaticFilesTest {
         Files.writeString(uploads.resolve("avatar.txt"), "an upload\n");
         Files.writeString(uploads.resolve("style.css"), "shadowed\n");
         App app = new App().staticFiles(
-                new StaticFiles("/public"),
+                StaticFiles.classpath("/public"),
                 StaticFiles.directory(uploads));
 
         WebTest.test(app, client -> {
@@ -479,7 +479,7 @@ class StaticFilesTest {
     void aHostedPathKeepsTheUploadsOffTheAssets(@TempDir Path uploads) throws IOException {
         Files.writeString(uploads.resolve("avatar.txt"), "an upload\n");
         App app = new App().staticFiles(
-                new StaticFiles("/public"),
+                StaticFiles.classpath("/public"),
                 StaticFiles.directory(uploads).hostedPath("/uploads"));
 
         WebTest.test(app, client -> {
@@ -674,7 +674,7 @@ class StaticFilesTest {
     // ---- helpers ----
 
     private static StaticFiles precompressed() {
-        return new StaticFiles("/public").precompressed();
+        return StaticFiles.classpath("/public").precompressed();
     }
 
     private static HttpResponse<String> encoded(TestClient client, String path, String encodings) {

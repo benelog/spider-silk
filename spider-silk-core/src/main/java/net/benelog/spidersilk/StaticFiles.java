@@ -39,12 +39,12 @@ import org.jspecify.annotations.Nullable;
  * <pre>{@code
  * app.staticFiles("/assets");                       // classpath:/assets/* at /*
  *
- * app.staticFiles(new StaticFiles("/public")
+ * app.staticFiles(StaticFiles.classpath("/public")
  *         .hostedPath("/assets")                    // classpath:/public/* at /assets/*
  *         .maxAge(Duration.ofDays(365)));           // for fingerprinted file names
  *
  * app.staticFiles(                                  // both, in the order given
- *         new StaticFiles("/public"),
+ *         StaticFiles.classpath("/public"),
  *         StaticFiles.directory(Path.of("/srv/uploads")).hostedPath("/uploads"));
  * }</pre>
  *
@@ -121,11 +121,6 @@ public final class StaticFiles {
     private String cacheControl = REVALIDATE;
     private boolean precompressed;
 
-    /** @param classpathRoot the classpath directory to serve, e.g. "/public" */
-    public StaticFiles(String classpathRoot) {
-        this(classpathRoot, StaticFiles.class::getResource);
-    }
-
     /**
      * A classpath root looked up through something other than this class's own
      * loader, so a test can stand a packaged or an instrumented resource in for
@@ -135,11 +130,21 @@ public final class StaticFiles {
      */
     StaticFiles(String classpathRoot, Function<String, @Nullable URL> lookup) {
         this(new ClasspathSource(withoutTrailingSlash(
-                Objects.requireNonNull(classpathRoot, "classpathRoot")), lookup));
+                Objects.requireNonNull(classpathRoot, "root")), lookup));
     }
 
     private StaticFiles(Source source) {
         this.source = source;
+    }
+
+    /**
+     * Files served from a directory on the classpath: the assets a build packs
+     * into the jar.
+     *
+     * @param root the classpath directory to serve, e.g. "/public"
+     */
+    public static StaticFiles classpath(String root) {
+        return new StaticFiles(root, StaticFiles.class::getResource);
     }
 
     /**

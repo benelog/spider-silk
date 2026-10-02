@@ -258,7 +258,7 @@ class RegistrationAfterStartTest {
 
     @Test
     void staticFilesChangedAfterRegistrationChangeNothing() {
-        StaticFiles files = new StaticFiles("/public");
+        StaticFiles files = StaticFiles.classpath("/public");
         App site = new App().staticFiles(files);
         files.hostedPath("/elsewhere").cacheControl("private");
 

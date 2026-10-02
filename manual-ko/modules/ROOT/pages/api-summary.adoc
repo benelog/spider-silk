@@ -21,7 +21,7 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
   기본값은 호출하지 않아도 적용되며, 한도를 넘는 본문은 413으로 응답한다; xref:request.adoc#body-limits[요청]을 참고한다
 * 렌더링과 자산: `templates(renderer)`, `staticFiles(classpathRoot)`, `staticFiles(StaticFiles...)`.
   `classpath:/jte` 위의 jte와 루트의 `classpath:/public`이 기본값이므로 둘 다 호출하지 않아도 된다.
-  `StaticFiles.directory(path)`는 클래스패스 대신 디스크의 디렉터리를 제공하고, 한 번에 주어진 여러 루트는 순서대로 읽히며, `precompressed()`는 빌드가 남겨둔 `.br`이나 `.gz` 형제 파일이 있으면 그 파일로 응답한다.
+  `StaticFiles.classpath(root)`는 클래스패스 루트를, `StaticFiles.directory(path)`는 디스크의 디렉터리를 제공하고, 한 번에 주어진 여러 루트는 순서대로 읽히며, `precompressed()`는 빌드가 남겨둔 `.br`이나 `.gz` 형제 파일이 있으면 그 파일로 응답한다.
   `FreeMarkerTemplates`, `HandlebarsTemplates`, `ThymeleafTemplates`는 각자의 모듈에 있는 `TemplateRenderer` 구현체다
 * 서버: `start()` / `start(port)`, `stop()`, `join()`, `port()`, `server(factory)`.
   어떤 방식으로 시작했든 `AppServlet`이 애플리케이션을 서비스하는 동안 등록은 닫힌다: 그때 추가되는 라우트, 필터, 설정은 `IllegalStateException`을 던지고, `stop()`이 등록을 다시 연다.

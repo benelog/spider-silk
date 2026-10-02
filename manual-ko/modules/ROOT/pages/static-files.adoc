@@ -13,7 +13,7 @@
 
 [source,java]
 ----
-app.staticFiles(new StaticFiles("/public")
+app.staticFiles(StaticFiles.classpath("/public")
         .hostedPath("/assets")              // classpath:/public/* at /assets/*
         .maxAge(Duration.ofDays(365)));     // only when the name carries a content hash
 ----
@@ -36,7 +36,7 @@ HEAD와 304도 마찬가지로 아무것도 열지 않으며, 파일이 디렉�
 [source,java]
 ----
 app.staticFiles(
-        new StaticFiles("/public"),                        // classpath:/public/* at /*
+        StaticFiles.classpath("/public"),                  // classpath:/public/* at /*
         StaticFiles.directory(Path.of("/srv/uploads"))     // /srv/uploads/* at /uploads/*
                 .hostedPath("/uploads"));
 ----
@@ -57,7 +57,7 @@ app.staticFiles(
 [source,java]
 ----
 app.gzip();                                             // still deflates what has no sibling
-app.staticFiles(new StaticFiles("/public")
+app.staticFiles(StaticFiles.classpath("/public")
         .precompressed());                              // app.css.br / app.css.gz answer app.css
 ----
 
