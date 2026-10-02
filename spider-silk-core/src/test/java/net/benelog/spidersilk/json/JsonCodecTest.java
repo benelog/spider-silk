@@ -18,7 +18,7 @@ class JsonCodecTest {
             deck -> Json.object().put("id", deck.id()).put("name", deck.name());
 
     static final JsonReader<Deck> DECK_IN =
-            json -> new Deck(json.asObject().getLong("id"), json.asObject().getString("name"));
+            JsonReader.object(object -> new Deck(object.getLong("id"), object.getString("name")));
 
     static final JsonCodec<Deck> DECK = JsonCodec.of(DECK_OUT, DECK_IN);
 
@@ -55,6 +55,27 @@ class JsonCodecTest {
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> JsonReader.list(DECK_IN).read(Json.parse("{}")))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** A value of another shape is the JsonException that bodyJson answers with 400. */
+    @Test
+    void anObjectReaderRefusesAValueThatIsNotAnObject() {
+        assertThatThrownBy(() -> DECK_IN.read(Json.parse("[1, \"a\"]")))
+                .isInstanceOf(JsonException.class)
+                .hasMessage("Not a JSON object: an array");
+        assertThatThrownBy(() -> DECK_IN.read(Json.parse("\"English\"")))
+                .isInstanceOf(JsonException.class);
+    }
+
+    @Test
+    void anObjectReaderMayAnswerNull() {
+        JsonReader<@Nullable String> authorName = JsonReader.object(object -> {
+            JsonObject author = object.getObjectOrNull("author");
+            return author == null ? null : author.getString("name");
+        });
+
+        assertThat(authorName.read(Json.parse("{}"))).isNull();
+        assertThat(authorName.read(Json.parse("{\"author\":{\"name\":\"Al\"}}"))).isEqualTo("Al");
     }
 
     /**

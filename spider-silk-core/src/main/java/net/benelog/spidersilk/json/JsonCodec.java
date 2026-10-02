@@ -11,8 +11,7 @@ import java.util.List;
  * <pre>{@code
  * static final JsonCodec<Deck> DECK = JsonCodec.of(
  *         deck -> Json.object().put("id", deck.id()).put("name", deck.name()),
- *         json -> new Deck(json.asObject().getLong("id"),
- *                          json.asObject().getString("name")));
+ *         JsonReader.object(object -> new Deck(object.getLong("id"), object.getString("name"))));
  * }</pre>
  */
 public interface JsonCodec<T> extends JsonWriter<T>, JsonReader<T> {

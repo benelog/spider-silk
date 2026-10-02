@@ -33,7 +33,7 @@ final class Codecs {
     }
 
     static final JsonReader<NewDeck> NEW_DECK =
-            json -> new NewDeck(json.asObject().getString("name"));
+            JsonReader.object(object -> new NewDeck(object.getString("name")));
 
     static final JsonWriter<Deck> DECK = deck -> Json.object()
             .put("id", deck.id())
@@ -75,8 +75,8 @@ final class Codecs {
      * One line of the NDJSON import. {@code meaning} and {@code tags} are
      * optional, so a line carrying only {@code text} is a whole card.
      */
-    static final JsonReader<CardDraft> CARD_DRAFT = json -> new CardDraft(
-            json.asObject().getString("text"),
-            json.asObject().getString("meaning", ""),
-            json.asObject().getString("tags", ""));
+    static final JsonReader<CardDraft> CARD_DRAFT = JsonReader.object(object -> new CardDraft(
+            object.getString("text"),
+            object.getString("meaning", ""),
+            object.getString("tags", "")));
 }

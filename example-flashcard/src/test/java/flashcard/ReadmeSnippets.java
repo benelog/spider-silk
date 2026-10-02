@@ -194,7 +194,7 @@ class ReadmeSnippets {
     static final JsonWriter<List<Deck>> DECKS = JsonWriter.list(DECK);
 
     static final JsonReader<NewDeck> NEW_DECK =
-            json -> new NewDeck(json.asObject().getString("name"));
+            JsonReader.object(object -> new NewDeck(object.getString("name")));
 
     void jsonSeam(App app) {
         app.get("/api/decks", req -> WebResponse.json(deckService.decks(), DECKS));

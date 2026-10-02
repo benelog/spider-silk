@@ -20,7 +20,7 @@ static final JsonWriter<List<Deck>> DECKS = JsonWriter.list(DECK);
 record NewDeck(String name) { }
 
 static final JsonReader<NewDeck> NEW_DECK =
-        json -> new NewDeck(json.asObject().getString("name"));
+        JsonReader.object(object -> new NewDeck(object.getString("name")));
 ----
 
 [source,java]
@@ -35,6 +35,20 @@ app.post("/api/decks", req -> {
 
 Writers and readers involve no reflection.
 The mapping is code you wrote, so renaming a Java field changes the wire format only if you also edit the mapping.
+
+`JsonReader.object(fromObject)` builds a reader for a JSON object out of a function of its fields.
+The reader takes the object once, so the function reads each field straight off the `JsonObject`:
+
+[source,java]
+----
+static final JsonReader<CardDraft> CARD_DRAFT = JsonReader.object(object -> new CardDraft(
+        object.getString("text"),
+        object.getString("meaning", ""),
+        object.getString("tags", "")));
+----
+
+A body that is not an object throws `JsonException`, which `req.bodyJson(reader)` answers with 400.
+`JsonReader.list(element)` builds a reader for a JSON array out of the reader for one element, as `JsonWriter.list` does for writers.
 
 == Reading values
 

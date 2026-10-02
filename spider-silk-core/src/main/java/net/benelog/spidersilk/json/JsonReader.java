@@ -3,6 +3,7 @@ package net.benelog.spidersilk.json;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Function;
 
 import org.jspecify.annotations.Nullable;
 
@@ -18,15 +19,37 @@ import org.jspecify.annotations.Nullable;
  *
  * <pre>{@code
  * static final JsonReader<NewDeck> NEW_DECK =
- *         json -> new NewDeck(json.asObject().getString("name"));
+ *         JsonReader.object(object -> new NewDeck(object.getString("name")));
  *
  * NewDeck body = req.bodyJson(NEW_DECK);
  * }</pre>
+ *
+ * <p>{@link #object} reads an object, and {@link #list} reads an array. A
+ * reader of any other shape is a lambda over the {@link JsonValue} itself.
  */
 @FunctionalInterface
 public interface JsonReader<T extends @Nullable Object> {
 
     T read(JsonValue json);
+
+    /**
+     * A reader for an object, built from the function that makes the value out
+     * of its fields. The object is taken once, so the function reads each field
+     * straight off it:
+     *
+     * <pre>{@code
+     * static final JsonReader<CardDraft> CARD_DRAFT = JsonReader.object(object -> new CardDraft(
+     *         object.getString("text"),
+     *         object.getString("meaning", ""),
+     *         object.getString("tags", "")));
+     * }</pre>
+     *
+     * <p>A value that is not an object throws {@link JsonException}, which
+     * {@code req.bodyJson(reader)} answers with 400.
+     */
+    static <T extends @Nullable Object> JsonReader<T> object(Function<JsonObject, T> fromObject) {
+        return json -> fromObject.apply(json.asObject());
+    }
 
     /**
      * A reader for a list, built from the reader for one element. The list

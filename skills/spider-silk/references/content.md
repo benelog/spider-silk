@@ -17,7 +17,7 @@ static final JsonWriter<List<Deck>> DECKS = JsonWriter.list(DECK);
 
 record NewDeck(String name) { }
 static final JsonReader<NewDeck> NEW_DECK =
-        json -> new NewDeck(json.asObject().getString("name"));
+        JsonReader.object(object -> new NewDeck(object.getString("name")));
 
 app.get("/api/decks", req -> WebResponse.json(deckService.decks(), DECKS));
 app.post("/api/decks", req -> {
@@ -26,6 +26,7 @@ app.post("/api/decks", req -> {
 });
 ```
 
+- A reader of an object is `JsonReader.object(object -> ...)`: it takes the object once, so each field reads straight off it (`object.getString("text")`, never `json.asObject()` per field), and a body that is not an object is a 400. `JsonReader.list(element)` reads an array.
 - `getString`/`getLong`/... throw `JsonException` (an `IllegalArgumentException`) on a missing key or wrong type, and `req.bodyJson(reader)` turns that or a `DateTimeException` into a 400: a handler gets a whole value or none. `asLong`/`getLong` reject `1.5` rather than truncating it.
 - For keys allowed to be absent: `getString`/`getLong`/`getDouble`/`getBoolean` with a default as the last argument answer that default, for a missing key and an explicit JSON `null` alike. `getObjectOrNull`/`getArrayOrNull` answer `null` on the same terms, since a container has no literal default to name.
 - `isString()`/`isNumber()`/`isBoolean()`, beside `isNull()`, tell a primitive's type without a try/catch; `instanceof JsonObject` and `instanceof JsonArray` do it for the containers.
