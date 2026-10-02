@@ -24,7 +24,10 @@ void createsADeck() {
 }
 ----
 
-`get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and `postJson`, all return the raw `HttpResponse<String>`, so assertions stay in whatever library the project already uses.
+`get`/`post`/`put`/`patch`/`delete`/`head`/`options`, plus `postForm` and `postJson`/`putJson`/`patchJson`, all return the raw `HttpResponse<String>`, so assertions stay in whatever library the project already uses.
+`post`, `put`, and `patch` send a raw body with no `Content-Type`.
+`postJson`, `putJson`, and `patchJson` send `Content-Type: application/json`, and each takes a `JsonValue` tree or raw text, as `jsonBody` does.
+A value the application writes through its own `JsonWriter` is sent as `client.postJson(path, writer.write(value))`.
 `send(builder -> ...)` sends any request these methods do not cover, and `send(builder -> ..., bodyHandler)` reads the body some other way.
 Reading it as bytes is what a xref:cors-compression-and-security-headers.adoc[compressed] answer needs, since decoding gzipped bytes as text corrupts them.
 

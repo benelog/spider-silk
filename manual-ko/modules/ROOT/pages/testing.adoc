@@ -24,7 +24,10 @@ void createsADeck() {
 }
 ----
 
-`get`/`post`/`put`/`patch`/`delete`/`head`/`options`와 `postForm`, `postJson`은 모두 원시 `HttpResponse<String>`을 반환하므로, 단언은 프로젝트가 이미 쓰는 라이브러리에 그대로 머문다.
+`get`/`post`/`put`/`patch`/`delete`/`head`/`options`와 `postForm`, `postJson`/`putJson`/`patchJson`은 모두 원시 `HttpResponse<String>`을 반환하므로, 단언은 프로젝트가 이미 쓰는 라이브러리에 그대로 머문다.
+`post`, `put`, `patch`는 `Content-Type` 없이 원시 본문을 보낸다.
+`postJson`, `putJson`, `patchJson`은 `Content-Type: application/json`을 보내며, `jsonBody`처럼 각각 `JsonValue` 트리나 원시 텍스트를 받는다.
+애플리케이션이 자신의 `JsonWriter`로 쓰는 값은 `client.postJson(path, writer.write(value))`로 보낸다.
 이 메서드들이 다루지 않는 요청은 `send(builder -> ...)`로 보내며, `send(builder -> ..., bodyHandler)`는 본문을 다른 방식으로 읽는다.
 바이트로 읽는 것은 xref:cors-compression-and-security-headers.adoc[압축된] 응답에 필요한데, gzip된 바이트를 텍스트로 디코딩하면 망가지기 때문이다.
 

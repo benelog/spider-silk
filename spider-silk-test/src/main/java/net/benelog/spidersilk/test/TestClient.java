@@ -12,6 +12,8 @@ import java.util.Map;
 import java.util.StringJoiner;
 import java.util.function.UnaryOperator;
 
+import net.benelog.spidersilk.json.JsonValue;
+
 /**
  * An HTTP client aimed at the app under test.
  *
@@ -87,11 +89,50 @@ public final class TestClient {
                 .POST(HttpRequest.BodyPublishers.ofString(encode(form))));
     }
 
-    /** Posts a JSON body. */
+    /** Posts a JSON body, sent as {@code Content-Type: application/json}. */
     public HttpResponse<String> postJson(String path, String json) {
         return send(request -> request.uri(URI.create(url(path)))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json)));
+    }
+
+    /**
+     * Posts a JSON body given as a tree, so a test states the body in the same
+     * builder the handler reads it with rather than in escaped quotes:
+     *
+     * <pre>{@code
+     * client.postJson("/api/decks", Json.object().put("name", "Spanish"))
+     * }</pre>
+     *
+     * <p>A body the application writes through its own {@code JsonWriter} is
+     * {@code client.postJson(path, NEW_DECK.write(deck))}.
+     */
+    public HttpResponse<String> postJson(String path, JsonValue json) {
+        return postJson(path, json.toJson());
+    }
+
+    /** Puts a JSON body, sent as {@code Content-Type: application/json}. */
+    public HttpResponse<String> putJson(String path, String json) {
+        return send(request -> request.uri(URI.create(url(path)))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(json)));
+    }
+
+    /** Puts a JSON body given as a tree, as {@link #postJson(String, JsonValue)} posts one. */
+    public HttpResponse<String> putJson(String path, JsonValue json) {
+        return putJson(path, json.toJson());
+    }
+
+    /** Patches with a JSON body, sent as {@code Content-Type: application/json}. */
+    public HttpResponse<String> patchJson(String path, String json) {
+        return send(request -> request.uri(URI.create(url(path)))
+                .header("Content-Type", "application/json")
+                .method("PATCH", HttpRequest.BodyPublishers.ofString(json)));
+    }
+
+    /** Patches with a JSON body given as a tree, as {@link #postJson(String, JsonValue)} posts one. */
+    public HttpResponse<String> patchJson(String path, JsonValue json) {
+        return patchJson(path, json.toJson());
     }
 
     /** Builds and sends any request. Redirects are not followed, so 302s stay visible. */

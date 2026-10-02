@@ -21,7 +21,7 @@ void createsADeck() {
 }
 ```
 
-- Client methods: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, plus `postForm(path, map)` and `postJson(path, json)`.
+- Client methods: `get`, `post`, `put`, `patch`, `delete`, `head`, `options`, plus `postForm(path, map)` and `postJson`/`putJson`/`patchJson(path, json)`, which send `Content-Type: application/json` and take a `JsonValue` or raw text (`post`/`put`/`patch(path, body)` send no Content-Type).
 - All return the JDK's raw `HttpResponse<String>`, so assertions stay in whatever library the project already uses (AssertJ, JUnit, anything).
 - Redirects are not followed — assert the 302/303 and the `Location`, then request the target if needed.
 - Cookies persist across calls within one `test` block, so login-then-act flows work naturally.
