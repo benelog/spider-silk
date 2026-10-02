@@ -20,9 +20,23 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   They follow the absence rule `WebRequest` follows: the plain name requires the value, a default as the last argument makes it optional, and `OrNull` answers null.
 - `spider-silk-core`: `app.bodyLimits(BodyLimits)` bounds what `body()` and `bodyJson()` hold (`maxBytes`) and what one `bodyNdjson` line holds (`maxNdjsonLineBytes`), in bytes counted as they arrive, and answers 413 beyond them.
   `BodyLimits.unlimited()` lifts both, and `bodyStream()` and `bodyReader()` are never limited.
+- `spider-silk-core`: `Model.of(...)` builds a template model from up to ten key and value pairs, as `Map.of` does, and takes a null value.
+  `Map.of("message", req.flashed("message"))` threw `NullPointerException` and answered 500 whenever no flash was waiting.
+- `spider-silk-core`: `JsonReader.object(fromObject)` builds a reader of a JSON object from a function of its `JsonObject`, so a reader calls `asObject()` once rather than once per field.
+- `spider-silk-test`: `TestClient.putJson(path, json)` and `patchJson(path, json)` send JSON as `postJson` does, and all three take a `String` or a `JsonValue`.
 
 ### Changed
 
+- `spider-silk-core`: `WebResponse.removeCookie(name)` is `WebResponse.expireCookie(name)`.
+  It adds a `Set-Cookie` with `Max-Age=0` that tells the browser to delete the cookie, and does not take back a cookie this response set.
+- `spider-silk-core`: `new StaticFiles(classpathRoot)` is `StaticFiles.classpath(classpathRoot)`, beside `StaticFiles.directory(path)`.
+- `spider-silk-core`: `SseStream.send(event, data)` is `event(name).send(data)`.
+  The name labels the next event only, as `id(...)` does, and two `String` arguments no longer compile in the wrong order.
+- `spider-silk-core`: `UploadedFile.asText()` is `UploadedFile.text()`.
+- `spider-silk-core`: `WebResponse` is annotated `@CheckReturnValue`, so Error Prone and IntelliJ flag a builder call whose new response is dropped, such as `res.header(...)` in a filter that then returns `res`.
+  Core declares `error_prone_annotations` as `compileOnlyApi`: a Gradle build sees it at compile time only, and a Maven build gets it at compile scope.
+- `spider-silk-core`: `StaticFiles.hostedPath(...)` throws `IllegalArgumentException` for a `*`.
+  It takes a prefix, and `hostedPath("/assets/*")` used to answer every file under it with 404.
 - `spider-silk-core`: `WebResponse.json(String)` is `WebResponse.rawJson(String)`.
   `json` now takes only a `JsonValue` or a value with its `JsonWriter`, so a Java string can no longer be sent as a JSON document by mistake.
 - `spider-silk-core`: `app.error(status, handler)` is `app.statusPage(status, handler)`.
@@ -48,7 +62,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   It used to be a `JsonException` reporting "Number out of range".
 - `spider-silk-core`: `attachment(name)` writes a name outside printable ASCII, or one holding a quote or a backslash, as RFC 6266's `filename*` beside an escaped ASCII fallback.
   A control character in the name throws `IllegalArgumentException`.
-- `spider-silk-core`: `SseStream.id(...)` and `send(event, data)` throw `IllegalArgumentException` for a line break in the id or the event name, and `id(...)` for a NUL, before anything is written.
+- `spider-silk-core`: `SseStream.id(...)` and `event(...)` throw `IllegalArgumentException` for a line break in the id or the event name, and `id(...)` for a NUL, before anything is written.
 - `spider-silk-core`: with named origins, `Cors` adds `Vary: Origin` to every answer on a covered path, whether the request carried an allowed `Origin`, another one, or none.
 - `spider-silk-undertow`: `UndertowServer` installs a servlet exception handler that closes the connection when a failure arrives after the response has started.
   Replacing it through `customizeDeployment(...)` gives up that behavior.

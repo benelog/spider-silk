@@ -83,6 +83,8 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 67 | Closing an SSE stream does not wait for a blocked write | ✅ shipped |
 | 68 | A header value core writes is made valid, or refused, where it is set | ✅ shipped |
 | 69 | A body goes to one reader, and a HEAD under gzip carries no length | ✅ shipped |
+| 70 | A request path is refused alike on every server | ✅ shipped |
+| 71 | A second pass over shapes a first reader guesses wrong: `expireCookie`, `@CheckReturnValue`, `event(name)`, `StaticFiles.classpath`, `Model.of` | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
 The exception, 15b, is a decision rather than a gap.
@@ -1340,6 +1342,42 @@ Jetty, Tomcat, and Undertow each normalise and check a request-target in their o
 
 Rejected: resolving `..` in core, which gives two URLs for one resource and a tail that can still climb out of its root.
 Rejected: a flag in core for Undertow's gaps, since server-specific code belongs in the server's module.
+
+## 71 · A second pass over what a first reader guesses wrong
+
+### 71. Five shapes that read one way and behaved another, changed before 1.2.0 ships
+
+Decision 59's pass looked at names, and this one looks at the shapes around them.
+Each change lands in the same breaking 1.2.0, with no deprecated alias, for decision 59's reason.
+
+- **`expireCookie(name)`, not `removeCookie(name)`.**
+  Beside `withoutHeader(name)`, which takes a header out of this response, `removeCookie` read as taking back a `cookie(...)` call.
+  It adds a `Max-Age=0` `Set-Cookie` that deletes the browser's cookie, and the name now says so.
+- **`WebResponse` is `@CheckReturnValue`.**
+  - The settings (`StaticFiles`, `Cors`, `Gzip`, `SecurityHeaders`, `BodyLimits`) chain by changing themselves, and `WebResponse` chains by answering a copy.
+    The two look alike, so `res.header(...); return res;` in a filter dropped the header silently.
+  - Error Prone's annotation is `compileOnlyApi`: Gradle consumers get no runtime jar, and the POM lists it at compile scope.
+- **`event(name)` labels the next SSE event, as `id(id)` does.**
+  `send(event, data)` took two strings that compiled in either order, the trap decision 35 removed from `bytes`.
+- **`StaticFiles.classpath(root)`, beside `StaticFiles.directory(path)`.**
+  Every other setting starts from a static factory, and the public constructor was the one exception.
+  `hostedPath` now refuses a `*`, since it takes a prefix where a filter path and `Cors.forPath` take a pattern, and `"/assets/*"` answered 404 to every file.
+- **`Model.of(...)`, a template model that takes null.**
+  `req.flashed`, `paramOrNull`, and `session().get` answer null, and `Map.of` throws on one, so the natural model was a 500.
+  It mirrors `Map.of` up to ten pairs, keeping order and refusing a null or repeated key.
+
+Smaller asymmetries went with them:
+
+- `UploadedFile.asText()` is `text()`, since `as*` elsewhere names a JSON conversion that can throw.
+- `JsonReader.object(fromObject)` takes the object once, as `JsonReader.list` takes the array.
+- `TestClient` gains `putJson` and `patchJson`, and each JSON send takes a `JsonValue` as `TestRequest.jsonBody` does.
+
+The manual and the example stopped mapping `IllegalArgumentException` to 404.
+Decision 57 already sends bad parameters and bodies past such a handler as a 400, and the mapping turned the framework's own argument checks into 404s.
+The example throws a `NotFoundException` of its own instead.
+
+Rejected: renaming `hostedPath`, `forPath`, and the filter `path` arguments to one word.
+The prefix and the pattern are different things, and the refusal plus one sentence in the manual cover the mistake.
 
 ## Rejected — decisions, with the reason
 
