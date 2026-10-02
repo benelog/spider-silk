@@ -20,6 +20,8 @@ import java.util.Objects;
 
 import jakarta.servlet.http.Cookie;
 
+import com.google.errorprone.annotations.CanIgnoreReturnValue;
+import com.google.errorprone.annotations.CheckReturnValue;
 import org.jspecify.annotations.Nullable;
 
 import net.benelog.spidersilk.json.Json;
@@ -45,6 +47,13 @@ import net.benelog.spidersilk.json.JsonWriter;
  * {@link #status(HttpStatus)}, {@link #header(String, String)}, {@link #cookie(String, String)} —
  * returns a new response rather than changing this one, which is what lets an
  * {@link AfterFilter} take a response and hand back a different one.
+ *
+ * <p>Every builder method therefore answers a new response, and a call whose
+ * result is dropped changes nothing: {@code res.header("X-Trace", id); return res;}
+ * sends no {@code X-Trace}. A filter returns what it built,
+ * {@code return res.header("X-Trace", id);}. The class carries Error Prone's
+ * {@link CheckReturnValue}, so Error Prone and IntelliJ flag a dropped result at
+ * compile time.
  *
  * <p>The immutability covers the envelope and what is cheap to copy: the status,
  * the headers, the cookies, and the template model's entries. A cookie is copied
@@ -74,6 +83,7 @@ import net.benelog.spidersilk.json.JsonWriter;
  * }
  * }</pre>
  */
+@CheckReturnValue
 public final class WebResponse {
 
     /** The kinds of body a response can carry. Sealed, so the list is the whole list. */
@@ -769,7 +779,11 @@ public final class WebResponse {
      * became a bare 500 that no exception handler saw; here it is thrown
      * inside the handler. A value that has to carry such characters is encoded
      * first, with {@code Base64.getUrlEncoder()} for instance.
+     *
+     * <p>It answers the value it checked, the way {@link Objects#requireNonNull}
+     * does, so a caller that only wants the check can drop the result.
      */
+    @CanIgnoreReturnValue
     private static @Nullable String requireCookieValue(String name, @Nullable String value) {
         if (value == null) {
             return null;

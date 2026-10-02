@@ -55,6 +55,9 @@ after 필터는 라우트가 반환한 응답을 받아 대체 응답을 돌려�
 app.afterRoute("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
 ----
 
+`WebResponse`의 메서드는 새 응답을 반환하고 호출된 응답은 바꾸지 않으므로, 필터는 자신이 만든 응답을 반환한다.
+`res.header("X-Trace", id);`를 한 줄로 따로 쓰고 `return res;`를 하면 `X-Trace` 헤더는 나가지 않는다.
+
 after 필터는 라우트 핸들러가 정상적으로 반환했을 때만 실행된다.
 before 필터의 조기 응답, 예외 핸들러의 응답, 라우터의 404나 405, 자동 `OPTIONS` 응답, 정적 파일은 after 필터에 도달하지 않는다.
 `++beforeRoute("/admin/*", ...)++`는 `/admin` 아래에서 제공되는 정적 파일에 대해서는 실행되지 않는다.

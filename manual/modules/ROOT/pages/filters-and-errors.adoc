@@ -55,6 +55,9 @@ An after-filter takes the response the route returned and hands back a replaceme
 app.afterRoute("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
 ----
 
+A `WebResponse` method returns a new response and leaves the one it was called on unchanged, so a filter returns what it built.
+`res.header("X-Trace", id);` on a line of its own, followed by `return res;`, sends no `X-Trace` header.
+
 An after-filter runs only when a route handler returned normally.
 A before-filter's early answer, an exception handler's answer, a router 404 or 405, the automatic `OPTIONS` answer, and a static file never reach it.
 `++beforeRoute("/admin/*", ...)++` does not run for a static file served under `/admin`.

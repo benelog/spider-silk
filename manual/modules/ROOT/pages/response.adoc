@@ -3,6 +3,8 @@
 
 A `WebResponse` is an immutable value.
 Every method returns a new response, so an after-filter can rewrite the response a route returned.
+A result left unused is therefore a change lost.
+`WebResponse` carries Error Prone's `@CheckReturnValue`, so Error Prone and IntelliJ flag such a call at compile time.
 
 The immutability covers the envelope: the status, the headers, the cookies, and the entries of a template model.
 A cookie is copied when it is added and again when `cookies()` hands it out, so changing a `Cookie` object afterwards changes nothing the response sends.

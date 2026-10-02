@@ -8,6 +8,11 @@ dependencies {
     // The embedded server. api, not implementation: JettyServer's customizers
     // expose Jetty types. Deploying AppServlet to another container? Exclude it.
     api 'org.eclipse.jetty.ee10:jetty-ee10-servlet:12.1.13'
+    // @CheckReturnValue on WebResponse, so a consumer's Error Prone and IntelliJ
+    // flag a builder call whose new response is dropped. compileOnlyApi keeps it
+    // off a Gradle consumer's runtime classpath; the POM, which has no such
+    // scope, lists it as compile. The version follows error_prone_core's.
+    compileOnlyApi 'com.google.errorprone:error_prone_annotations:2.50.0'
 
     // The harness lives in its own module now, so the production jar carries
     // no test code. Core's own tests are a consumer of it like any other.
