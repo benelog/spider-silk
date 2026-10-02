@@ -165,12 +165,15 @@ POST 뒤에 301이나 302를 따라가는 브라우저는 보통 GET을 보내�
 return WebResponse.html(page)
         .cookie("theme", "dark")                    // session cookie
         .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
-        .removeCookie("stale");
+        .expireCookie("stale");
 ----
 
 두 인자 형태는 `Path=/`, `HttpOnly`, `SameSite=Lax`를 설정하며, 이는 훔칠 가치가 있는 것을 담은 쿠키라면 갖춰야 할 속성이다.
 `cookie(Cookie)`는 `Secure`, `Domain`, `SameSite=None`을 위해 직접 만든 `jakarta.servlet.http.Cookie`를 받는다.
 응답은 속성까지 포함한 그 쿠키의 복사본을 보관한다.
+`expireCookie(name)`은 기본값으로 설정된 쿠키를 지우라고 브라우저에 알린다.
+이 메서드는 이 응답에서 쿠키를 빼는 것이 아니라, 그 이름에 `Max-Age=0`을 단 `Set-Cookie`를 더한다.
+다른 경로나 도메인으로 설정된 쿠키는 같은 경로와 도메인에 최대 수명 0을 담은 `cookie(Cookie)`로 만료시킨다.
 공백, 쉼표, 세미콜론, 백슬래시, 따옴표, ASCII 밖의 문자처럼 RFC 6265가 허용하지 않는 값은 쿠키를 설정하는 자리에서 `IllegalArgumentException`을 던지므로, 핸들러의 다른 실패처럼 `exception(...)`에 도달한다.
 그런 문자를 담아야 하는 값은 예컨대 `Base64.getUrlEncoder()`로 먼저 인코딩한다.
 클라이언트가 보낸 쿠키를 읽는 것은 xref:request.adoc[요청]에서 다룬다.

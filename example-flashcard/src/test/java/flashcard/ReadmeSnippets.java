@@ -225,7 +225,7 @@ class ReadmeSnippets {
         return WebResponse.html(page)
                 .cookie("theme", "dark")                    // session cookie
                 .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
-                .removeCookie("stale");
+                .expireCookie("stale");
     }
 
     // ---- sessions ----

@@ -114,8 +114,8 @@ class CookiesAndParamsTest {
     }
 
     @Test
-    void removingACookieExpiresIt() {
-        App app = new App().get("/logout", req -> WebResponse.text("bye").removeCookie("token"));
+    void expiringACookieTellsTheBrowserToDeleteIt() {
+        App app = new App().get("/logout", req -> WebResponse.text("bye").expireCookie("token"));
 
         WebTest.test(app, client -> {
             String setCookie = client.get("/logout").headers()

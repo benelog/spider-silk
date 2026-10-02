@@ -1224,7 +1224,7 @@ class UndertowServerTest {
         startOnUndertow(new App()
                 .get("/default", req -> WebResponse.text("ok").cookie("a", "b"))
                 .get("/timed", req -> WebResponse.text("ok").cookie("a", "b", Duration.ofMinutes(5)))
-                .get("/remove", req -> WebResponse.text("ok").removeCookie("a"))
+                .get("/expire", req -> WebResponse.text("ok").expireCookie("a"))
                 .get("/none", req -> {
                     jakarta.servlet.http.Cookie cookie = new jakarta.servlet.http.Cookie("x", "y");
                     cookie.setPath("/");
@@ -1235,7 +1235,7 @@ class UndertowServerTest {
                     return WebResponse.text("ok").cookie(cookie);
                 }));
 
-        for (String path : List.of("/default", "/timed", "/remove")) {
+        for (String path : List.of("/default", "/timed", "/expire")) {
             assertThat(get(path).headers().firstValue("Set-Cookie")).as(path).hasValueSatisfying(
                     cookie -> assertThat(cookie).containsIgnoringCase("; HttpOnly").contains("SameSite=Lax"));
         }

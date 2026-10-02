@@ -148,7 +148,7 @@ response.status(HttpStatus.CREATED).header("Location", "/api/decks/1")
         .contentType("text/plain").vary("Accept-Language").attachment("export.csv")
         .cookie("theme", "dark")                            // Path=/, HttpOnly, SameSite=Lax
         .cookie("token", value, Duration.ofDays(7))
-        .removeCookie("stale");
+        .expireCookie("stale");                             // Set-Cookie stale=; Max-Age=0: the browser deletes it (removeCookie before 1.2.0)
 // cookie(jakarta.servlet.http.Cookie) for Secure, Domain, SameSite=None
 // a value with a space, ; , \ " or non-ASCII throws IllegalArgumentException: Base64.getUrlEncoder() it first
 

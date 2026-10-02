@@ -62,7 +62,7 @@ Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that
 * Bodies written a value at a time: `jsonArray(sink -> ...)` for an array too big to hold, and `ndjson(sink -> ...)` for one value per line.
   Both are a `stream` body underneath, and the writer runs outside handler exception handling
 * Statuses: `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`
-* Building on: `status`, `header`, `withoutHeader(name)`, `contentType`, `vary(field)`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
+* Building on: `status`, `header`, `withoutHeader(name)`, `contentType`, `vary(field)`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `expireCookie`
 * Reading back: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`.
   Header names compare without regard to case, and one field holds one value however many spellings set it.
   A header that must be sent twice is written through `raw`; see xref:response.adoc#headers[Headers]

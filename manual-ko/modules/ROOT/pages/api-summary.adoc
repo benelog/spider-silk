@@ -62,7 +62,7 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 * 값을 하나씩 쓰는 본문: 담아 두기에 너무 큰 배열을 위한 `jsonArray(sink -> ...)`, 한 줄에 값 하나를 쓰는 `ndjson(sink -> ...)`.
   둘 다 내부적으로는 `stream` 본문이며, 라이터는 핸들러 예외 처리 밖에서 실행된다
 * 상태: `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`
-* 덧붙이기: `status`, `header`, `withoutHeader(name)`, `contentType`, `vary(field)`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `removeCookie`
+* 덧붙이기: `status`, `header`, `withoutHeader(name)`, `contentType`, `vary(field)`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `expireCookie`
 * 되읽기: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`.
   헤더 이름은 대소문자를 구분하지 않고 비교되며, 어떤 표기로 몇 번을 설정하든 한 필드는 하나의 값을 가진다.
   두 번 보내야 하는 헤더는 `raw`를 통해 쓴다; xref:response.adoc#headers[헤더]를 참고한다

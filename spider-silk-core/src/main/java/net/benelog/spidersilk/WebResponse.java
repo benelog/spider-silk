@@ -806,8 +806,18 @@ public final class WebResponse {
         return c > 0x20 && c < 0x7F ? "'" + c + "'" : "U+%04X".formatted((int) c);
     }
 
-    /** Expires a cookie that was set with the defaults. */
-    public WebResponse removeCookie(String name) {
+    /**
+     * Tells the browser to delete a cookie that was set with the defaults: a
+     * {@code Set-Cookie} for that name, empty, with {@code Max-Age=0}, scoped
+     * to the whole site.
+     *
+     * <p>It adds a cookie to this response rather than taking one out of it,
+     * which is why it is not named as the inverse of {@link #cookie(String, String)}.
+     * A cookie set with another {@code Path} or a {@code Domain} is expired with
+     * {@link #cookie(Cookie)}, carrying the same path and domain and a max age of
+     * zero.
+     */
+    public WebResponse expireCookie(String name) {
         Cookie cookie = defaultCookie(name, "");
         cookie.setMaxAge(0);
         return withCookie(cookie);
