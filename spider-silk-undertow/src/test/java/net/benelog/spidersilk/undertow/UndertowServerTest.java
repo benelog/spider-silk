@@ -216,7 +216,7 @@ class UndertowServerTest {
     @Test
     void multipartUploadsWorkOutOfTheBox() throws Exception {
         startOnUndertow(new App()
-                .post("/upload", req -> WebResponse.text(req.file("csv").asText())));
+                .post("/upload", req -> WebResponse.text(req.file("csv").text())));
 
         String boundary = "spidersilkboundary";
         String body = "--" + boundary + "\r\n"

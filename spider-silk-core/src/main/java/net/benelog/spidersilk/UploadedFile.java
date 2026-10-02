@@ -14,7 +14,7 @@ import org.jspecify.annotations.Nullable;
  * A single file uploaded via multipart.
  *
  * <p>The content is read once, in whichever shape the handler needs it:
- * {@link #bytes()} and {@link #asText()} hold it in memory, {@link #inputStream()}
+ * {@link #bytes()} and {@link #text()} hold it in memory, {@link #inputStream()}
  * and {@link #writeTo(Path)} do not.
  */
 public final class UploadedFile {
@@ -55,7 +55,8 @@ public final class UploadedFile {
         }
     }
 
-    public String asText() {
+    /** The content as UTF-8 text, held in memory as {@link #bytes()} holds it. */
+    public String text() {
         return new String(bytes(), StandardCharsets.UTF_8);
     }
 

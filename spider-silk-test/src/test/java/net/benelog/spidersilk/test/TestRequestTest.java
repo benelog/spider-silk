@@ -351,7 +351,7 @@ class TestRequestTest {
                 .build();
 
         assertThat(request.file("file").fileName()).isEqualTo("cards.csv");
-        assertThat(request.file("file").asText()).isEqualTo("front,back\nhola,hello\n");
+        assertThat(request.file("file").text()).isEqualTo("front,back\nhola,hello\n");
     }
 
     @Test
@@ -388,7 +388,7 @@ class TestRequestTest {
         assertThat(request.files("cover")).hasSize(1);
         assertThat(request.files("missing")).isEmpty();
         // The first of them is what a container answers for the name alone.
-        assertThat(request.file("pages").asText()).isEqualTo("1");
+        assertThat(request.file("pages").text()).isEqualTo("1");
     }
 
     @Test

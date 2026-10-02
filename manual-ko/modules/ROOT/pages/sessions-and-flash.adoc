@@ -62,7 +62,7 @@ xref:tomcat.adoc[Tomcat]과 xref:undertow.adoc[Undertow]는 각 페이지에서 
 [source,java]
 ----
 app.post("/decks/{deckId}/import", req -> {
-    int imported = deckService.importCsv(req.pathParamLong("deckId"), req.file("file").asText());
+    int imported = deckService.importCsv(req.pathParamLong("deckId"), req.file("file").text());
     req.flash("message", "Imported " + imported + " cards.");
     return WebResponse.redirect("/decks/" + req.pathParam("deckId"), HttpStatus.SEE_OTHER);
 });

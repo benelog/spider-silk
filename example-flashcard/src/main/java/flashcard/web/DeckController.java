@@ -88,7 +88,7 @@ public class DeckController {
 
     public WebResponse importCsv(WebRequest req) {
         long deckId = req.pathParamLong("deckId");
-        int imported = deckService.importCsv(deckId, req.file("file").asText());
+        int imported = deckService.importCsv(deckId, req.file("file").text());
         req.flash("message", "Imported " + imported + " cards.");
         return WebResponse.redirect("/decks/" + deckId);
     }

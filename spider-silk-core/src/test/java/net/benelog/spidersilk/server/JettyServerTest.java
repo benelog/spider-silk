@@ -254,7 +254,7 @@ class JettyServerTest {
     @Test
     void multipartUploadsWorkOutOfTheBox() throws Exception {
         app = new App()
-                .post("/upload", req -> WebResponse.text(req.file("csv").asText()))
+                .post("/upload", req -> WebResponse.text(req.file("csv").text()))
                 .start(0);
 
         String boundary = "spidersilkboundary";

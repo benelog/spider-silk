@@ -85,7 +85,7 @@ class UploadedFilesTest {
         App app = new App().post("/pages", req -> {
             StringJoiner names = new StringJoiner(",");
             for (UploadedFile page : req.files("pages")) {
-                names.add(page.fileName() + ":" + page.asText());
+                names.add(page.fileName() + ":" + page.text());
             }
             return WebResponse.text(names.toString());
         });
@@ -145,7 +145,7 @@ class UploadedFilesTest {
         App app = new App()
                 .post("/avatar", req ->
                         WebResponse.text(req.fileOrNull("avatar") == null ? "none" : "one"))
-                .post("/import", req -> WebResponse.text(req.file("csv").asText()));
+                .post("/import", req -> WebResponse.text(req.file("csv").text()));
 
         WebTest.test(app, client -> {
             assertThat(post(client, "/avatar", file("avatar", "", "application/octet-stream", ""))
@@ -163,7 +163,7 @@ class UploadedFilesTest {
     @Test
     void theFirstFileIsFoundPastAnEmptyInputOfTheSameName() throws Exception {
         App app = new App().post("/scan", req -> WebResponse.text(req.files("f").size() + " "
-                + req.fileOrNull("f").fileName() + " " + req.file("f").asText()));
+                + req.fileOrNull("f").fileName() + " " + req.file("f").text()));
 
         WebTest.test(app, client -> assertThat(post(client, "/scan",
                 file("f", "", "application/octet-stream", ""),

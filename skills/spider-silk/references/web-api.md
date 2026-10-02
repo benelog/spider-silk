@@ -104,7 +104,7 @@ UploadedFile file = req.file("file");                       // missing part or n
 UploadedFile avatar = req.fileOrNull("avatar");             // optional upload; null when absent, never when refused
 List<UploadedFile> pages = req.files("pages");              // one field, several files; empty when none
 // all three: over the multipart limit -> 413, a body that will not parse -> 400
-// UploadedFile: fileName(), contentType(), size(), bytes(), asText(),
+// UploadedFile: fileName(), contentType(), size(), bytes(), text(),
 //               inputStream(), writeTo(path)               // the last two hold nothing in memory
 // fileName() is the client's text, unchecked: write to dir.resolve(UUID.randomUUID() + ext), never dir.resolve(fileName())
 ```
