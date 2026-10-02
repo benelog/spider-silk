@@ -1,6 +1,7 @@
 package net.benelog.spidersilk;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -144,6 +145,13 @@ class StaticFilesTest {
             assertThat(client.get("/assets/style.css").body()).isEqualTo(CSS);
             assertThat(client.get("/style.css").statusCode()).isEqualTo(404);
         });
+    }
+
+    @Test
+    void aHostedPathWrittenAsAPatternIsRefused() {
+        assertThatThrownBy(() -> StaticFiles.classpath("/public").hostedPath("/assets/*"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("hostedPath is a prefix, not a pattern: write \"/assets\", not \"/assets/*\"");
     }
 
     @Test

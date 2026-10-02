@@ -18,6 +18,9 @@ app.staticFiles(StaticFiles.classpath("/public")
         .maxAge(Duration.ofDays(365)));     // only when the name carries a content hash
 ----
 
+`hostedPath`는 패턴이 아니라 접두사를 받는다: `"/assets"`가 그 아래 전부를 덮고, `"/assets/*"`는 `IllegalArgumentException`을 던진다.
+필터 경로와 `Cors.forPath`는 반대로 패턴이어서, 그 아래를 덮으려면 끝의 `*`가 필요하다.
+
 라우트가 먼저 매칭되므로, 라우트가 파일을 가릴 수 있다.
 디렉터리는 결코 제공되지 않는다.
 

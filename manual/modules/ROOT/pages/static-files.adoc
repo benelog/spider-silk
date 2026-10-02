@@ -18,6 +18,9 @@ app.staticFiles(StaticFiles.classpath("/public")
         .maxAge(Duration.ofDays(365)));     // only when the name carries a content hash
 ----
 
+`hostedPath` takes a prefix, not a pattern: `"/assets"` covers everything under it, and `"/assets/*"` throws `IllegalArgumentException`.
+A filter path and `Cors.forPath` are the opposite, a pattern that needs the trailing `*` to cover what is under it.
+
 Routes are matched first, so a route can shadow a file.
 Directories are never served.
 

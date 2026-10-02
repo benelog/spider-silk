@@ -175,9 +175,24 @@ public final class StaticFiles {
         return copy;
     }
 
-    /** The URL prefix the files appear under. The default, "/", is the root. */
+    /**
+     * The URL prefix the files appear under. The default, "/", is the root.
+     *
+     * <p>A prefix and not a pattern: {@code "/assets"} covers everything under
+     * it, where a filter path or {@link Cors#forPath} would say {@code "/assets/*"}.
+     *
+     * @throws IllegalArgumentException if the prefix holds a {@code *}, which
+     *         no request path would start with, so every file under it would
+     *         answer 404
+     */
     public StaticFiles hostedPath(String hostedPath) {
-        this.hostedPath = withoutTrailingSlash(Objects.requireNonNull(hostedPath, "hostedPath"));
+        Objects.requireNonNull(hostedPath, "hostedPath");
+        if (hostedPath.indexOf('*') >= 0) {
+            throw new IllegalArgumentException("hostedPath is a prefix, not a pattern: write \""
+                    + hostedPath.substring(0, hostedPath.indexOf('*')).replaceAll("/+$", "")
+                    + "\", not \"" + hostedPath + "\"");
+        }
+        this.hostedPath = withoutTrailingSlash(hostedPath);
         return this;
     }
 
