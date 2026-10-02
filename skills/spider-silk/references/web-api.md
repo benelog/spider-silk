@@ -179,8 +179,6 @@ app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));  // e
 
 app.exception(NoSuchDeckException.class,
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-app.exception(JsonException.class,       // most specific type wins, whatever the order
-        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
 app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 ```
@@ -188,7 +186,8 @@ app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Ma
 - `afterRoute` sees only a route that returned normally; `responseFilter` sees every response (before-filter answers, exception answers, 404/405, OPTIONS, static files), runs before CORS/security headers/gzip, and a filter that throws goes to `exception`/`error` without the filters running again. Authorization uses `beforeRequest` for every matching request, including static files and missing routes, or `beforeRoute` for a matched route with path variables. `afterRoute` and `responseFilter` reject null results as programming errors.
 - `beforeRequest(filter)` / `beforeRequest(path, filter)` runs before routing, including automatic OPTIONS, and has no path variables. Return null to continue or a response to stop. Its errors and early responses use the normal response pipeline. Route groups support the same two forms.
 - `exception(Type, handler)` runs the handler for the most specific registered type the exception is an instance of, in any registration order.
-- `JsonException` is an `IllegalArgumentException`, so map it separately when `IllegalArgumentException` means 404.
+- Map a status to an exception type the application defines (`NoSuchDeckException`), never to `IllegalArgumentException`: the JDK and the framework throw that for programming errors too, and a 404 handler for it hides those bugs.
+- Bad input never reaches an application handler: a body that is not JSON, a body a reader rejects, and a parameter that does not parse are already a 400 `HttpException`, so do not register `exception(JsonException.class, ...)` or `exception(IllegalArgumentException.class, ...)` to get a 400.
 - Register everything before `app.start(...)`: a route, filter, or setting added while an `AppServlet` serves the app (embedded, a server started directly, or an external container) throws `IllegalStateException`; `stop()` reopens it.
 - `app.cors(...)`, `app.gzip(...)`, `app.securityHeaders(...)`, `app.staticFiles(...)`, and `app.bodyLimits(...)` copy the value they are given, so changing it afterwards does nothing.
 - `throw new HttpException(HttpStatus.UNAUTHORIZED, "...")` rejects from anywhere and lets `statusPage(status, ...)` render the body. It passes a handler for a broader type (`RuntimeException`, `Exception`) by; only `exception(HttpException.class, ...)` or a handler for a subtype catches it.

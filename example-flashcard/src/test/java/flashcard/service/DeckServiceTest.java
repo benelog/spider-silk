@@ -54,6 +54,13 @@ class DeckServiceTest extends RepositoryTestSupport {
     }
 
     @Test
+    void aMissingDeckIsNotFoundRatherThanAnIllegalArgument() {
+        assertThatThrownBy(() -> deckService.getDeck(9999L))
+                .isExactlyInstanceOf(NotFoundException.class)
+                .hasMessage("Deck not found: 9999");
+    }
+
+    @Test
     void exportedCsvCanBeImportedAgain() {
         Deck source = deckService.createDeck("Source");
         cardService.addCard(source.id(), "a, b", "say \"hi\"", "tag1, tag2");

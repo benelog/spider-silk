@@ -54,7 +54,7 @@ public class CardService {
 
     public Card getCard(Long cardId) {
         return cardRepository.findById(cardId)
-                .orElseThrow(() -> new IllegalArgumentException("Card not found: " + cardId));
+                .orElseThrow(() -> new NotFoundException("Card not found: " + cardId));
     }
 
     /**

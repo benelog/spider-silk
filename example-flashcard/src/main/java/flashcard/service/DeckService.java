@@ -41,7 +41,7 @@ public class DeckService {
 
     public Deck getDeck(Long deckId) {
         return deckRepository.findById(deckId)
-                .orElseThrow(() -> new IllegalArgumentException("Deck not found: " + deckId));
+                .orElseThrow(() -> new NotFoundException("Deck not found: " + deckId));
     }
 
     public List<DeckSummary> deckSummaries() {

@@ -101,18 +101,22 @@ What a `WebResponse.raw(...)` writer writes to the servlet response, and a failu
 
 [source,java]
 ----
-app.exception(IllegalArgumentException.class,
+app.exception(DeckException.class,
+        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.CONFLICT));
+app.exception(NoSuchDeckException.class,
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-app.exception(JsonException.class,
-        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 ----
 
 The handler for the most specific type the exception is an instance of runs, whatever order the handlers were registered in.
-`JsonException` is an `IllegalArgumentException`, and a body that failed to parse reaches the second handler above rather than the first.
+`DeckException` and `NoSuchDeckException` are exceptions the application defines, the second extending the first, so a missing deck reaches the second handler above rather than the first.
 Registering a type twice replaces the first handler.
+Map a status to an exception type the application defines, not to `IllegalArgumentException`.
+The JDK and the framework also throw `IllegalArgumentException` for a programming error, and a handler for it would answer that bug with a 404 instead of a 500.
 An `HttpException` is a status the handler chose, not a failure.
 It answers with its status and message and goes to `statusPage(status, ...)` for its body, and a handler registered for a broader type such as `RuntimeException` never sees it.
 A handler registered for `HttpException` itself, or for a subtype of it, does.
+The framework rejects bad input with an `HttpException` of its own.
+A body that is not JSON, a body a reader rejects, and a parameter that does not parse each answer 400 that way, and a handler for `JsonException` or `IllegalArgumentException` never sees them.
 Any other exception that no handler covers answers 500 and is logged.
 An `Error` such as an `AssertionError` answers the same 500, with the headers every answer carries, since `exception(Type, handler)` takes an `Exception` type only.
 Whether an exception handler or the framework's 500 answered it, the exception is reported to the xref:request-logging.adoc[request logger] as `completion.thrown()`, so recording failures does not take a catch-all handler.

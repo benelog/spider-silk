@@ -95,7 +95,7 @@ app.get("/api/decks", req -> {
 });
 
 app.post("/api/decks", req -> {
-    String name = req.bodyJson().asObject().getString("name");
+    String name = req.bodyJson(json -> json.asObject().getString("name"));  // no key -> 400
     JsonObject resBody = Json.object().put("name", name);
     return WebResponse.json(resBody).status(HttpStatus.CREATED);
 });
@@ -106,10 +106,8 @@ app.path("/api/decks", group -> {
     group.get("/{deckId}", api::showDeck);           // GET  /api/decks/{deckId}
 });
 
-app.exception(IllegalArgumentException.class,
+app.exception(NoSuchDeckException.class,  // an exception the application defines
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-app.exception(JsonException.class,        // the more specific type wins, whatever the order
-        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
 app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 

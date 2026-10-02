@@ -65,7 +65,7 @@ public class SmartDeckService {
 
     public SmartDeck getSmartDeck(Long id) {
         return smartDeckRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Smart deck not found: " + id));
+                .orElseThrow(() -> new NotFoundException("Smart deck not found: " + id));
     }
 
     public SmartDeck create(String name, SmartCondition condition, String param) {

@@ -422,7 +422,7 @@ public final class WebRequest {
      *         that name, or if no route has matched yet — in a
      *         {@link App#beforeRequest} filter, or for a 404. That is a mismatch
      *         between the code and where it runs, not bad input, so it is not the
-     *         {@code IllegalArgumentException} an application maps to a status.
+     *         {@code IllegalArgumentException} a parser throws for a 400.
      */
     public String pathParam(String name) {
         String value = pathParams.get(name);

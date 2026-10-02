@@ -108,7 +108,7 @@ app.get("/api/decks", req -> WebResponse.json(
         Json.array().add(Json.object().put("id", 1L).put("name", "English"))));
 
 app.post("/api/decks", req -> {
-    String name = req.bodyJson().asObject().getString("name");   // missing key -> 400
+    String name = req.bodyJson(json -> json.asObject().getString("name"));   // missing key -> 400
     return WebResponse.json(Json.object().put("name", name)).status(HttpStatus.CREATED);
 });
 
@@ -120,10 +120,8 @@ app.path("/api/decks", group -> {
 });
 
 // Exception-to-response mapping, and a styled error page for any 404
-app.exception(IllegalArgumentException.class,
+app.exception(NoSuchDeckException.class,  // a type the application defines, never IllegalArgumentException
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-app.exception(JsonException.class,        // the more specific type wins, whatever the order
-        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
 
 // What almost every deployed app turns on (off until named)

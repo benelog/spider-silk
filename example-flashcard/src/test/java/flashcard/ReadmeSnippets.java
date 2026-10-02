@@ -92,6 +92,12 @@ class ReadmeSnippets {
     record User(String name) {
     }
 
+    static class DeckException extends RuntimeException {
+    }
+
+    static final class NoSuchDeckException extends DeckException {
+    }
+
     static final class MyUndertowServer implements WebServer {
 
         MyUndertowServer(App app, int port) {
@@ -131,7 +137,7 @@ class ReadmeSnippets {
                 Json.array().add(Json.object().put("id", 1L).put("name", "English"))));
 
         app.post("/api/decks", req -> {
-            String name = req.bodyJson().asObject().getString("name");
+            String name = req.bodyJson(json -> json.asObject().getString("name"));  // no key -> 400
             return WebResponse.json(Json.object().put("name", name)).status(HttpStatus.CREATED);
         });
 
@@ -143,7 +149,7 @@ class ReadmeSnippets {
         });
 
         // Exception-to-response mapping
-        app.exception(IllegalArgumentException.class,
+        app.exception(NoSuchDeckException.class,  // an exception the application defines
                 (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
         // One place for a styled error page, whatever produced the status
@@ -172,6 +178,11 @@ class ReadmeSnippets {
         app.afterRoute("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
 
         app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));
+
+        app.exception(DeckException.class,
+                (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.CONFLICT));
+        app.exception(NoSuchDeckException.class,
+                (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
     }
 
     // ---- blocks 10, 11: JSON writers and readers ----

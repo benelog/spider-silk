@@ -22,7 +22,6 @@ import net.benelog.spidersilk.Route;
 import net.benelog.spidersilk.SecurityHeaders;
 import net.benelog.spidersilk.TemplateRenderer;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.JsonException;
 import net.benelog.spidersilk.openapi.OpenApi;
 import net.benelog.spidersilk.server.JettyServer;
 
@@ -35,6 +34,7 @@ import flashcard.repository.TagRepository;
 import flashcard.service.CardService;
 import flashcard.service.CsvFormatException;
 import flashcard.service.DeckService;
+import flashcard.service.NotFoundException;
 import flashcard.service.SmartDeckService;
 import flashcard.service.StatsService;
 import flashcard.service.StudyService;
@@ -165,12 +165,11 @@ public class FlashcardContext {
             req.flash("error", e.getMessage());
             return WebResponse.redirect("/");
         });
-        app.exception(IllegalArgumentException.class,
+        // A lookup that found nothing. Only this type is a 404: an
+        // IllegalArgumentException is a bug and stays a 500, and a bad parameter
+        // or JSON body is already a 400 HttpException that never reaches here.
+        app.exception(NotFoundException.class,
                 (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-        // A body that failed to parse is a 400, not one of the 404s above. The
-        // more specific type wins whatever the order, so this line may sit here.
-        app.exception(JsonException.class,
-                (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.BAD_REQUEST));
 
         registerRoutes(app);
         return app;
