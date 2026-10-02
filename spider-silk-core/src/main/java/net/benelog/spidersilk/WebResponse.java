@@ -372,7 +372,7 @@ public final class WebResponse {
      *     long deckId = req.pathParamLong("deckId");
      *     return WebResponse.sse(stream -> {
      *         while (stream.isOpen()) {
-     *             stream.send("due", Json.object().put("count", service.due(deckId)).toJson());
+     *             stream.event("due").send(Json.object().put("count", service.due(deckId)).toJson());
      *             Thread.sleep(1000);
      *         }
      *     });

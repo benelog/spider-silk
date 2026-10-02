@@ -35,7 +35,7 @@ class SseTest {
     @Test
     void eventsAreFramedTheWayTheProtocolDefinesThem() {
         App app = new App().get("/events", req -> WebResponse.sse(stream -> {
-            stream.id("7").send("tick", "first");
+            stream.id("7").event("tick").send("first");
             stream.send("line one\nline two");
             stream.comment("keep-alive");
         }));
@@ -48,7 +48,7 @@ class SseTest {
                     .startsWith("text/event-stream");
             assertThat(response.headers().firstValue("Cache-Control").orElseThrow())
                     .isEqualTo("no-cache");
-            // The id belongs to the event that follows it, and to no later one.
+            // The id and the name belong to the event that follows them, and to no later one.
             assertThat(response.body()).isEqualTo("""
                     id: 7
                     event: tick
@@ -61,6 +61,46 @@ class SseTest {
 
                     """);
         });
+    }
+
+    /** An event name labels the next event only, the same way an id does. */
+    @Test
+    void anEventNameAppliesToTheNextEventOnly() {
+        App app = new App().get("/events", req -> WebResponse.sse(stream -> {
+            stream.event("tick").send("first");
+            stream.send("second");
+        }));
+
+        WebTest.test(app, client -> assertThat(client.get("/events").body()).isEqualTo("""
+                event: tick
+                data: first
+
+                data: second
+
+                """));
+    }
+
+    /** An id and a name set for the same event go out together, the id first, and both are cleared. */
+    @Test
+    void anIdAndAnEventNameLabelTheSameEvent() {
+        App app = new App().get("/events", req -> WebResponse.sse(stream -> {
+            stream.event("tick").id("7").send("first");
+            stream.id("8").send("second");
+            stream.event("tock").send("third");
+        }));
+
+        WebTest.test(app, client -> assertThat(client.get("/events").body()).isEqualTo("""
+                id: 7
+                event: tick
+                data: first
+
+                id: 8
+                data: second
+
+                event: tock
+                data: third
+
+                """));
     }
 
     /**
@@ -76,7 +116,8 @@ class SseTest {
                     () -> stream.id("7\ndata: injected"),
                     () -> stream.id("7\r"),
                     () -> stream.id("7\0"),
-                    () -> stream.send("tick\ndata: injected", "real"));
+                    () -> stream.event("tick\ndata: injected"),
+                    () -> stream.event("tick\r"));
             for (Runnable attempt : attempts) {
                 try {
                     attempt.run();
@@ -84,13 +125,13 @@ class SseTest {
                     refused.add(e.getMessage());
                 }
             }
-            stream.send("tick", "real");
+            stream.send("real");
         }));
 
         WebTest.test(app, client ->
-                assertThat(client.get("/events").body()).isEqualTo("event: tick\ndata: real\n\n"));
+                assertThat(client.get("/events").body()).isEqualTo("data: real\n\n"));
 
-        assertThat(refused).hasSize(4);
+        assertThat(refused).hasSize(5);
     }
 
     /** The reconnection delay is a stream-level setting, so it goes out on its own. */
@@ -98,7 +139,7 @@ class SseTest {
     void retryWritesTheReconnectionDelayInMilliseconds() {
         App app = new App().get("/events", req -> WebResponse.sse(stream -> {
             stream.retry(Duration.ofSeconds(2));
-            stream.send("tick", "first");
+            stream.event("tick").send("first");
         }));
 
         WebTest.test(app, client -> assertThat(client.get("/events").body()).isEqualTo("""
@@ -363,7 +404,7 @@ class SseTest {
     void webTestReturnsWithAStreamLeftOpen() {
         App app = new App().get("/events", req -> WebResponse.sse(stream -> {
             while (true) {
-                stream.send("tick", "data");
+                stream.event("tick").send("data");
                 Thread.sleep(100);
             }
         }));

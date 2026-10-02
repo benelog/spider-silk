@@ -20,14 +20,19 @@ import org.jspecify.annotations.Nullable;
  * app.get("/events", req -> WebResponse.sse(stream -> {
  *     while (stream.isOpen()) {
  *         stream.id(String.valueOf(counter.incrementAndGet()))
- *               .send("tick", Json.object().put("at", now()).toJson());
+ *               .event("tick")
+ *               .send(Json.object().put("at", now()).toJson());
  *         Thread.sleep(1000);
  *     }
  * }));
  * }</pre>
  *
- * <p>Every method writes one complete event and flushes it, so an event is on
- * the wire when the call returns. The writes hold a lock on the stream:
+ * <p>{@link #id(String)} and {@link #event(String)} label the next event and
+ * write nothing. {@link #send(String)} writes the event under them and clears
+ * both, so a label never carries over to a later event.
+ *
+ * <p>Every writing method writes one complete event and flushes it, so an event
+ * is on the wire when the call returns. The writes hold a lock on the stream:
  * {@link App#stop()} closes the stream from another thread, and a frame must not
  * be cut in half by that. Closing does not wait for a write that is blocked,
  * though. A client that stops reading holds the flush until the connector gives
@@ -59,6 +64,7 @@ public final class SseStream {
     private volatile boolean open = true;
     private boolean outputClosed;
     private @Nullable String nextId;
+    private @Nullable String nextEvent;
 
     SseStream(HttpServletResponse res) throws IOException {
         this.out = res.getOutputStream();
@@ -67,7 +73,7 @@ public final class SseStream {
     /**
      * The {@code id} of the next event, which the browser sends back as
      * {@code Last-Event-ID} when it reconnects. It applies to the next event
-     * only, the way the protocol defines it.
+     * only, the way the protocol defines it, and so does {@link #event(String)}.
      *
      * @throws IllegalArgumentException if the id holds a line break, which
      *         would end the field and start another the handler never wrote,
@@ -89,6 +95,30 @@ public final class SseStream {
     }
 
     /**
+     * The name of the next event, which arrives at the listener registered for
+     * that name instead of {@code EventSource.onmessage}. It applies to the
+     * next event only, the same way as {@link #id(String)}.
+     *
+     * <pre>{@code
+     * stream.id("7").event("tick").send(data);
+     * }</pre>
+     *
+     * @throws IllegalArgumentException if the name holds a line break, which
+     *         would end the field and start another the handler never wrote
+     */
+    public SseStream event(String name) {
+        Objects.requireNonNull(name, "name");
+        requireOneLine("An event name", name);
+        lock.lock();
+        try {
+            this.nextEvent = name;
+        } finally {
+            lock.unlock();
+        }
+        return this;
+    }
+
+    /**
      * The delay the browser waits before it reconnects, written as one
      * {@code retry:} line in milliseconds and flushed on its own. It holds for
      * the rest of the stream, and for the connections that follow it, until
@@ -98,10 +128,11 @@ public final class SseStream {
      * stream.retry(Duration.ofSeconds(2));
      * }</pre>
      *
-     * <p>Unlike {@link #id(String)} this is not a label on the next event, so it
-     * goes out where it is called rather than waiting for one. The browser
-     * applies it as the line arrives, and a stream that sends none reconnects on
-     * the browser's own default, which is a few seconds.
+     * <p>Unlike {@link #id(String)} and {@link #event(String)} this is not a
+     * label on the next event, so it goes out where it is called rather than
+     * waiting for one. The browser applies it as the line arrives, and a stream
+     * that sends none reconnects on the browser's own default, which is a few
+     * seconds.
      *
      * @throws IllegalArgumentException if the delay is negative, which the
      *         protocol has no meaning for and a browser silently ignores
@@ -115,36 +146,29 @@ public final class SseStream {
         return this;
     }
 
-    /** Sends an unnamed event, which arrives at {@code EventSource.onmessage}. */
-    public SseStream send(String data) {
-        return send(null, data);
-    }
-
     /**
-     * Sends a named event, which arrives at the listener registered for that
-     * name. Data spanning several lines is sent as one {@code data:} line each,
-     * which the client joins back together with newlines.
-     *
-     * @throws IllegalArgumentException if the event name holds a line break,
-     *         which would end the field and start another; nothing is written
+     * Sends an event, under the {@link #id(String)} and the
+     * {@link #event(String)} set for it, and clears both. An event with no
+     * name arrives at {@code EventSource.onmessage}. Data spanning several
+     * lines is sent as one {@code data:} line each, which the client joins back
+     * together with newlines.
      */
-    public SseStream send(@Nullable String event, String data) {
-        if (event != null) {
-            requireOneLine("An event name", event);
-        }
-        StringBuilder frame = new StringBuilder();
-        if (event != null) {
-            frame.append("event: ").append(event).append('\n');
-        }
-        appendLines(frame, "data: ", data);
-        frame.append('\n');
+    public SseStream send(String data) {
+        StringBuilder body = new StringBuilder();
+        appendLines(body, "data: ", data);
+        body.append('\n');
         lock.lock();
         try {
+            StringBuilder frame = new StringBuilder();
             if (nextId != null) {
-                frame.insert(0, "id: " + nextId + "\n");
+                frame.append("id: ").append(nextId).append('\n');
             }
-            write(frame.toString());
+            if (nextEvent != null) {
+                frame.append("event: ").append(nextEvent).append('\n');
+            }
+            write(frame.append(body).toString());
             nextId = null;
+            nextEvent = null;
         } finally {
             lock.unlock();
         }

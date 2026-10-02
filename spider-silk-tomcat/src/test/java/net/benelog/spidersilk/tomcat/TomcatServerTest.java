@@ -454,8 +454,8 @@ class TomcatServerTest {
     @Test
     void serverSentEventsStreamOverTomcat() throws Exception {
         startOnTomcat(new App().get("/events", req -> WebResponse.sse(stream -> {
-            stream.send("tick", "1");
-            stream.send("tick", "2");
+            stream.event("tick").send("1");
+            stream.event("tick").send("2");
             stream.close();
         })));
 

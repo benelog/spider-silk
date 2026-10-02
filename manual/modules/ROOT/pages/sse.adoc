@@ -11,7 +11,8 @@ app.get("/decks/{deckId}/events", req -> {
         while (stream.isOpen()) {
             JsonObject eventData = Json.object().put("count", service.due(deckId));
             stream.id(String.valueOf(revision))
-                  .send("due", eventData.toJson());
+                  .event("due")
+                  .send(eventData.toJson());
             Thread.sleep(1000);
         }
     });
@@ -24,7 +25,10 @@ event: due
 data: {"count":12}
 ----
 
-`send(data)` sends an unnamed event, `send(event, data)` a named one, `id(...)` labels the event that follows so the browser can resume with `Last-Event-ID`, `retry(...)` sets the reconnection delay, and `comment(text)` sends a heartbeat no listener sees.
+`send(data)` sends one event, `retry(...)` sets the reconnection delay, and `comment(text)` sends a heartbeat no listener sees.
+`event(name)` and `id(...)` label the event that the next `send` writes, and no later one.
+A named event arrives at the listener registered for that name, and an unnamed one at `EventSource.onmessage`.
+The id lets the browser resume with `Last-Event-ID`.
 Data spanning several lines becomes one `data:` line each, which the client joins back together.
 An id or an event name has no such form, so a line break in either throws `IllegalArgumentException`, and so does a NUL in an id.
 

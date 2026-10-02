@@ -235,7 +235,8 @@ class ReadmeSnippets {
             return WebResponse.sse(stream -> {
                 while (stream.isOpen()) {
                     stream.id(String.valueOf(revision))
-                          .send("due", Json.object().put("count", service.due(deckId)).toJson());
+                          .event("due")
+                          .send(Json.object().put("count", service.due(deckId)).toJson());
                     Thread.sleep(1000);
                 }
             });
