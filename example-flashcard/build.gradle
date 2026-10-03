@@ -17,7 +17,7 @@ dependencies {
     implementation project(':spider-silk-core')
     implementation project(':spider-silk-openapi')
     implementation 'org.springframework:spring-jdbc:7.0.9'
-    implementation 'com.h2database:h2:2.5.250'
+    implementation 'com.h2database:h2:2.5.252'
     // The application logs through the slf4j API and leaves the backend to the
     // runtime classpath: Logback here, configured by src/main/resources/logback.xml.
     // Jetty logs through the same API, so its lines follow the same configuration.
