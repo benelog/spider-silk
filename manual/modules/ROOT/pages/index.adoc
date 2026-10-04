@@ -7,8 +7,87 @@ Thin call stack, strong signature.
 
 Spider Silk is a web framework built on the Jakarta Servlet API.
 
-Thin here is a measurement rather than a metaphor.
-Two stack frames stand between `HttpServlet.service` and a handler, and a stack trace taken inside the handler shows both.
+== Values
+
+=== Fast startup
+An application's startup time is kept to a minimum.
+Startup is a cost paid again at every main point of development and operation: autoscaled containers, serverless environments, test runs, and development-server restarts.
+
+=== Traceable code
+The code a request passes through on its way to a response can be followed by reading the source alone.
+Human developers and AI coding agents both need that traceability.
+For a person, code that is easy to trace is code that is easy to understand and debug.
+An AI agent reasons about behavior from the code before running it, so it fills behavior the code does not show with a guess.
+An agent that guesses wrong about what an annotation does at runtime, for example, writes code that compiles and does not work.
+
+=== Harmony with the open-source ecosystem
+Spider Silk uses proven open-source technology instead of reinventing it.
+Where several technologies play the same role, it leaves an extension point open for the user to choose one.
+
+== Design and technology choices
+This section describes the design and the technology the framework chose to realize the three values above.
+
+=== A simple, intuitive API
+Spider Silk keeps its core API intuitive and simple, for traceability.
+A handler, the core interface, receives the HTTP request as a method parameter of type `WebRequest` and returns the response as a `WebResponse`.
+
+[source,java]
+.The Handler interface
+----
+@FunctionalInterface
+public interface Handler {
+    WebResponse handle(WebRequest request) throws Exception;
+}
+----
+
+A handler is mapped to a URL and an HTTP method as a lambda expression or a method reference.
+
+[source,java]
+.Registering routes
+----
+var deckRepository = new DeckRepository(dataSource);
+var deckService = new DeckService(deckRepository);
+var app = new App();
+
+app.get("/decks/{deckId}", req -> {
+    long deckId = req.pathParamLong("deckId");
+    Deck deck = deckService.getDeck(deckId);
+    return WebResponse.template("deck", Model.of("deck", deck));
+});
+
+app.get("/api/decks", req -> {
+    JsonArray resBody = Json.array();
+    for (DeckSummary deck : deckService.deckSummaries()) {
+        resBody.add(Json.object()
+            .put("id", deck.id())
+            .put("name", deck.name()));
+    }
+    return WebResponse.json(resBody);
+});
+
+app.post("/api/decks", req -> {
+    String name = req.bodyJson(json -> json.asObject().getString("name"));
+    Deck deck = deckService.createDeck(name);
+    JsonObject resBody = Json.object()
+        .put("id", deck.id())
+        .put("name", deck.name());
+    return WebResponse.json(resBody).status(HttpStatus.CREATED);
+});
+
+app.start(8080);
+----
+
+=== No reflection
+The Spider Silk framework's own code uses no reflection.
+There is no annotation scanning and no proxy generation at application startup, so startup is faster.
+The framework's call stack is easy to follow, so the code is more traceable as well.
+An application also compiles to a GraalVM native image more easily.
+
+=== A minimal call stack
+On its main call path, the handler, the framework adds only two stack frames above `HttpServlet.service`.
+The other places the framework calls application code, such as filters, exception handlers, and streamed bodies, stay within four frames.
+The fewer frames a stack trace holds, the easier the code at fault is to reach, so the code is more traceable.
+This is a stack trace taken inside a handler.
 
 [source,text]
 ----
@@ -18,113 +97,120 @@ java.lang.Throwable: where a handler stands
     at net.benelog.spidersilk.AppServlet.service(AppServlet.java:128)  // Spider Silk
     at jakarta.servlet.http.HttpServlet.service(HttpServlet.java)  // the Servlet API
     at org.eclipse.jetty.ee10.servlet.ServletHolder.handle(ServletHolder.java)  // Jetty, from here down
-    at org.eclipse.jetty.ee10.servlet.ServletHandler$ChainEnd.doFilter(ServletHandler.java)
-    at org.eclipse.jetty.ee10.servlet.ServletHandler$MappedServlet.handle(ServletHandler.java)
-    at org.eclipse.jetty.ee10.servlet.ServletChannel.dispatch(ServletChannel.java)
-    at org.eclipse.jetty.ee10.servlet.ServletChannel.handle(ServletChannel.java)
-    ... 12 more Jetty frames
-    at java.base/java.lang.Thread.run(Thread.java)
 ----
 
-Seventeen frames of Jetty follow, and the trace shows five of them.
-Swapping in Tomcat or Undertow changes that part of the stack and not the two frames above it.
-No filter an application registers adds to them either, because each has answered, or declined to, before the handler is called.
-A filter or an exception handler stands one frame deeper, a streamed body two, and nothing the framework calls into goes deeper than four.
-The signature is the other half: a handler answers by returning a `WebResponse`, so a branch that forgets to answer is a compile error rather than a blank response.
-Spider silk is thin and holds, which is what the name is for.
+=== A default stack with a minimal footprint
+Spider Silk chose its default stack for fast startup and traceable code.
+`spider-silk-core` includes Jetty as its web server and jte as its template engine by default.
+With one dependency, an application starts with a server and a template engine in place.
 
-== Three core principles
+==== Jetty
+The default web server is embedded Jetty.
+Of the three servers, Jetty provides server lifecycle management as its own features most completely.
+With Jetty, therefore, less of this framework's code stands between the application and the server than with Tomcat or Undertow.
+Jetty provides these features on its own:
 
-No reflection.::
-There is no annotation scanning, no proxies, and no automatic binding.
-What runs is what the code says, stack traces stay short, and startup stays fast.
+* Jetty's own `stopTimeout` handles a graceful stop, `setStopAtShutdown` the shutdown hook, and Jetty's non-daemon threads keep the JVM alive.
+* It runs without a working directory on disk.
+* Sessions can be turned off with `sessions(false)`.
 
-The API is intuitively simple.::
-A handler is a function from a request to a response: `WebResponse handle(WebRequest request)`.
-That signature is the whole model.
-
-Better RESTful API support than raw servlets.::
-Routing is per method, paths carry variables, parameters are extracted with a declared type, and exceptions map to status codes.
-
+==== jte
 The default template engine is https://jte.gg[jte].
-jte compiles templates to Java source, which matches how the rest of the framework works.
+jte compiles templates to Java source.
+An expression such as `${deck.name()}` therefore runs as a compiled method call.
+jte does not read model values by reflection, so it fits the no-reflection principle.
+A precompiled template needs no compiler at runtime, so it works well in a xref:native-image.adoc[GraalVM native image] too.
+In development, a `DirectoryCodeResolver` reading the source directory shows an edited template without a rebuild (xref:templates.adoc#production[Development and production]).
+The `Model` a handler passes is matched to the template's parameters only when the page renders, but with xref:templates.adoc#jte-models[jte-models] the compiler checks the template call.
 
-== Modules
-
+=== An extensible module structure
+Spider Silk provides optional modules so that widely used technologies beyond the default stack can be used as well.
 Every module depends on `spider-silk-core`, and core depends on none of them.
-A module is named after what it is tied to: a server, a template engine, or Jetty's WebSocket.
+
+[cols="1,2,4,2",options="header"]
+|===
+| Category | Module | Contents | Dependencies
+
+| Default
+| `spider-silk-core`
+| The framework itself.
+The default web server is Jetty, and the default template engine is jte.
+| `gg.jte:jte`, embedded Jetty (`jetty-ee10-servlet`)
+
+.2+| Web server
+| xref:tomcat.adoc[`spider-silk-tomcat`]
+| Runs the same application on embedded Tomcat.
+It suits an organization that already operates Tomcat, or an application moving over from Spring Boot.
+| core, `tomcat-embed-core` 11.0.x
+
+| xref:undertow.adoc[`spider-silk-undertow`]
+| Runs the same application on embedded Undertow.
+Undertow's graceful stop counts requests, so draining works on a virtual-thread executor too.
+| core, `undertow-servlet` 2.3.x
+
+.3+| Template engine
+| xref:freemarker.adoc[`spider-silk-freemarker`]
+| Renders with https://freemarker.apache.org[FreeMarker].
+| core, `freemarker`
+
+| xref:handlebars.adoc[`spider-silk-handlebars`]
+| Renders with https://github.com/jknack/handlebars.java[Handlebars.java].
+| core, `handlebars`
+
+| xref:thymeleaf.adoc[`spider-silk-thymeleaf`]
+| Renders with https://www.thymeleaf.org[Thymeleaf].
+| core, `thymeleaf`
+
+| WebSocket
+| xref:websocket.adoc[`spider-silk-jetty-websocket`]
+| Maps WebSocket endpoints beside the application's HTTP routes.
+It is Jetty-only by construction, so it is a module named after Jetty rather than a method of `App`.
+| core, `jetty-websocket-jetty-server`
+
+| Testing
+| xref:testing.adoc[`spider-silk-test`]
+| The `WebTest` harness and `TestRequest`, for test scope.
+It is a separate module, so the production jar carries no test code.
+| core, and otherwise the JDK only (the servlet API compile-time only, as in core)
+
+| Example
+| `example-flashcard`
+| A flashcard study application
+| core, spring-jdbc, H2
+|===
+
+Routing, filters, status pages, JSON, templates, static files, SSE, multipart uploads, and sessions behave the same on all three servers.
+The APIs of `TomcatServer` and `UndertowServer` follow `JettyServer`'s, so switching servers changes one line: the factory passed to `App.server(...)`.
+
+The template engine is switched with `App.templates(...)`.
+Switching engines leaves a handler's `WebResponse.template(name, model)` call as it is.
+
+The dependencies between the modules are shown in the figure below.
 
 .The modules and what they depend on
 image::modules.svg[Every module depends on spider-silk-core; the example application depends on core and openapi, and on the test harness and the server modules in test scope,link=self]
 
-[cols="1,2,2",options="header"]
-|===
-| Module | Contents | Dependencies
+=== Development tool integration
+Spider Silk provides tools for testing, API documentation, builds, and AI coding agents as separate modules and a skill, so that it fits the development tool ecosystem.
 
-| `spider-silk-core`
-| The framework itself
-| `gg.jte:jte`, embedded Jetty (`jetty-ee10-servlet`)
+.Testing
+* The `WebTest` harness of xref:testing.adoc[`spider-silk-test`] starts the application on a free port and hands over a client that keeps cookies.
 
-| `spider-silk-test`
-| The `WebTest` harness and `TestRequest`, for test scope
-| core, and otherwise the JDK only (the servlet API compile-time only, as in core)
+.API documentation
+* xref:openapi.adoc[`spider-silk-openapi`] turns the route list `app.routes()` answers into an OpenAPI 3.1 document.
+Routes are plain data, so the module works without reflection.
 
-| `example-flashcard`
-| Example: a flashcard study app
-| core, spring-jdbc, H2
-|===
+.Build tools
+* The xref:gradle-plugin.adoc[Gradle plugin] `net.benelog.spidersilk` carries the conventions for precompiled jte templates, Jib container images, and GraalVM native compilation.
+* xref:maven-parent.adoc[`spider-silk-maven-parent`] provides the same packaging conventions as a Maven parent POM.
 
-== At a glance
+.AI coding agents
+* The xref:agent-skill.adoc[agent skill] lives in `skills/spider-silk/` in the https://agentskills.io[Agent Skills] format, and guides an agent to use the framework as intended rather than by guessing.
+Agent Skills is an open standard and the skill uses no feature particular to one tool, so Claude Code, Codex, Cursor, GitHub Copilot, and other AI agents read the same directory as it is.
+The repository doubles as a plugin marketplace, so Claude Code installs it with two commands:
 
-[source,java]
+[source,subs="attributes+"]
 ----
-App app = new App();    // jte over classpath:/jte, and classpath:/public served at /
-
-app.get("/decks/{deckId}", req -> {
-    long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
-    return WebResponse.template("deck", model); // classpath:/jte/deck.jte
-});
-
-app.get("/api/decks", req -> {
-    JsonArray resBody = Json.array().add(
-        Json.object()
-            .put("id", 1L)
-            .put("name", "English")
-    );
-    return WebResponse.json(resBody);
-});
-
-app.post("/api/decks", req -> {
-    String name = req.bodyJson(json -> json.asObject().getString("name"));  // no key -> 400
-    JsonObject resBody = Json.object().put("name", name);
-    return WebResponse.json(resBody).status(HttpStatus.CREATED);
-});
-
-app.path("/api/decks", group -> {
-    group.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
-    group.get("", api::listDecks);                   // GET  /api/decks
-    group.get("/{deckId}", api::showDeck);           // GET  /api/decks/{deckId}
-});
-
-app.exception(NoSuchDeckException.class,  // an exception the application defines
-        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-
-app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Model.of("path", req.path())));
-
-app.start(8080);                                // embedded Jetty, sessions on
+/plugin marketplace add {project-repo}
+/plugin install spider-silk@spider-silk
 ----
-
-`start` returns as soon as the port is bound.
-Every route, filter, and setting is registered before `start`.
-Adding one while the application is served throws `IllegalStateException`, and `stop()` opens registration again.
-The server's threads keep the JVM alive from there, so `join()` is only needed when you want to block the main thread as well.
-`stop()` shuts the server down.
-`port()` reports the bound port, so a test that calls `start(0)` reads back the port the OS picked.
-
-== Positioning and roadmap
-
-https://github.com/benelog/spider-silk/blob/main/notes/positioning.md[notes/positioning.md] places Spider Silk next to Javalin, Spark, Helidon SE, and Spring Boot, and states what it trades away to get there.
-
-https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[notes/decisions.md] gives the reasoning behind each piece, item by item, together with the list of what was rejected.
-
-https://github.com/benelog/spider-silk/issues[The issue tracker] records what was deliberately deferred, one issue per item, with the condition that would make it worth doing.
