@@ -1685,7 +1685,13 @@ public final class WebRequest {
         this.thrown = thrown;
     }
 
-    /** The same request, with the route that matched and the path variables it resolved. */
+    /**
+     * The same request, with the route that matched and the path variables it resolved.
+     *
+     * <p>spider-silk-opentelemetry-agent advises this method by its name and its two parameters,
+     * to report the route as the span's {@code http.route}, so a change to either is a change to
+     * that module as well; its test runs the agent and fails when they drift apart.
+     */
     WebRequest withRoute(Route matched, Map<String, String> resolved) {
         WebRequest copy = new WebRequest(req, resolved, limits, matched);
         // The same servlet request, so the same path: the copy is made after

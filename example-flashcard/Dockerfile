@@ -35,6 +35,7 @@ COPY spider-silk-handlebars/build.gradle spider-silk-handlebars/
 COPY spider-silk-thymeleaf/build.gradle spider-silk-thymeleaf/
 COPY spider-silk-jetty-websocket/build.gradle spider-silk-jetty-websocket/
 COPY spider-silk-openapi/build.gradle spider-silk-openapi/
+COPY spider-silk-opentelemetry-agent/build.gradle spider-silk-opentelemetry-agent/
 COPY example-flashcard/build.gradle example-flashcard/
 RUN ./gradlew --no-daemon :example-flashcard:resolveDependencies
 
