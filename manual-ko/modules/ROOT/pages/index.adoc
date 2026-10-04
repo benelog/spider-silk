@@ -121,7 +121,6 @@ jte는 템플릿을 Java 소스로 컴파일한다.
 jte는 모델 값을 리플렉션으로 읽지 않으므로 리플렉션 없음의 원칙과 맞는다.
 미리 컴파일한 템플릿은 런타임에 컴파일러가 필요 없으므로 xref:native-image.adoc[GraalVM 네이티브 이미지]에서도 잘 동작한다.
 개발 중에 ``DirectoryCodeResolver``로 소스 디렉터리를 읽게 하면 템플릿을 고친 뒤 다시 빌드하지 않아도 바로 반영된다(xref:templates.adoc#production[개발과 프로덕션]).
-핸들러가 넘기는 ``Model``은 렌더링할 때에야 템플릿의 파라미터와 맞춰 보지만, xref:templates.adoc#jte-models[jte-models]를 쓰면 템플릿 호출을 컴파일러가 검사한다.
 
 === 확장성 있는 모듈 구조
 Spider Silk는 기본 기술 스택 외에도 많이 쓰이는 기술을 사용할 수 있도록 선택 모듈을 제공한다.
@@ -213,4 +212,12 @@ Agent Skills는 개방 표준이고 이 스킬은 특정 도구에만 있는 기
 ----
 /plugin marketplace add {project-repo}
 /plugin install spider-silk@spider-silk
+----
+
+리포지토리는 Codex 플러그인 마켓플레이스도 겸하므로, Codex에서도 두 명령으로 설치한다:
+
+[source,subs="attributes+"]
+----
+codex plugin marketplace add {project-repo}
+codex plugin add spider-silk@spider-silk
 ----

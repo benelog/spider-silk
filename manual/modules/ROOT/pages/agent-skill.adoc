@@ -10,7 +10,7 @@ The skill is distilled from this manual, and the manual stays the source of trut
 
 The repository doubles as a plugin marketplace, so installation is two commands inside Claude Code:
 
-[source]
+[source,subs="attributes+"]
 ----
 /plugin marketplace add {project-repo}
 /plugin install spider-silk@spider-silk
@@ -31,8 +31,28 @@ A project-level copy is also what Cursor and GitHub Copilot read, as their secti
 
 == Codex
 
-Codex reads skills from `~/.codex/skills` for every project, and from a project's own `.codex/skills`.
-Copy `skills/spider-silk` into either one.
+The repository doubles as a Codex plugin marketplace too, so installation is two commands in a shell:
+
+[source,subs="attributes+"]
+----
+codex plugin marketplace add {project-repo}
+codex plugin add spider-silk@spider-silk
+----
+
+The skill then loads in every Codex session.
+`codex plugin marketplace upgrade` fetches a newer version of the marketplace, and `codex plugin remove spider-silk@spider-silk` uninstalls the plugin.
+
+Codex also reads skills from a project's own `.agents/skills/`.
+Copy the skill directory there for a single project instead, so that collaborators get the skill by cloning:
+
+[source,bash,subs="attributes+"]
+----
+git clone --depth 1 https://github.com/{project-repo} /tmp/spider-silk
+mkdir -p .agents/skills
+cp -r /tmp/spider-silk/skills/spider-silk .agents/skills/
+----
+
+Restart Codex if a copied skill does not appear right away.
 
 == Cursor
 

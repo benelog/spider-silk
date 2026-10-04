@@ -1,0 +1,21 @@
+{
+  "name": "spider-silk",
+  "version": "1.1.0",
+  "description": "Build web applications with Spider Silk, the no-reflection Java web framework: dependency setup (Maven Central), routing, JSON, templates, testing, servers, and deployment.",
+  "author": {
+    "name": "Sanghyuk Jung",
+    "url": "https://github.com/benelog"
+  },
+  "homepage": "https://spider-silk.benelog.net",
+  "repository": "https://github.com/benelog/spider-silk",
+  "license": "Apache-2.0",
+  "keywords": ["java", "web-framework", "jakarta-servlet", "spider-silk"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Spider Silk",
+    "shortDescription": "Agent skill for the Spider Silk web framework",
+    "developerName": "Sanghyuk Jung",
+    "category": "Coding",
+    "websiteURL": "https://spider-silk.benelog.net"
+  }
+}

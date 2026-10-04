@@ -14,6 +14,7 @@ A version on Central is permanent, so every step before the tag is a check that 
    - `spider-silk-maven-parent/pom.xml`
    - `skills/spider-silk/SKILL.md`, `skills/spider-silk/references/setup.md`, and `skills/spider-silk/references/testing.md`
    - `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`
+   - `.codex-plugin/plugin.json`
 3. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [x.y.z] - YYYY-MM-DD`, open a new empty `## [Unreleased]` above it, and update the compare links at the bottom.
    The workflow copies that section into the GitHub Release and fails when it is missing.
 4. Run `./gradlew build`, commit, and push to `main`.

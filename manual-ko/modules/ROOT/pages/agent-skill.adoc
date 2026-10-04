@@ -10,7 +10,7 @@ Gradle 플러그인은 Plugin Portal이 아니라 Maven Central에서 해석되�
 
 리포지토리는 플러그인 마켓플레이스를 겸하므로, 설치는 Claude Code 안에서 두 명령이면 된다:
 
-[source]
+[source,subs="attributes+"]
 ----
 /plugin marketplace add {project-repo}
 /plugin install spider-silk@spider-silk
@@ -31,8 +31,28 @@ cp -r /tmp/spider-silk/skills/spider-silk .claude/skills/
 
 == Codex
 
-Codex는 모든 프로젝트에 대해 ``~/.codex/skills``에서, 그리고 프로젝트 자체의 ``.codex/skills``에서 스킬을 읽는다.
-``skills/spider-silk``를 둘 중 하나에 복사한다.
+리포지토리는 Codex 플러그인 마켓플레이스도 겸하므로, 설치는 셸에서 두 명령이면 된다:
+
+[source,subs="attributes+"]
+----
+codex plugin marketplace add {project-repo}
+codex plugin add spider-silk@spider-silk
+----
+
+그러면 스킬은 모든 Codex 세션에서 로드된다.
+``codex plugin marketplace upgrade``는 마켓플레이스의 새 버전을 받아 오고, ``codex plugin remove spider-silk@spider-silk``는 플러그인을 제거한다.
+
+Codex는 프로젝트 자체의 ``.agents/skills/``에서도 스킬을 읽는다.
+단일 프로젝트에만 쓰려면 대신 스킬 디렉터리를 그곳에 복사하여, 협업자가 클론만으로 스킬을 얻게 한다:
+
+[source,bash,subs="attributes+"]
+----
+git clone --depth 1 https://github.com/{project-repo} /tmp/spider-silk
+mkdir -p .agents/skills
+cp -r /tmp/spider-silk/skills/spider-silk .agents/skills/
+----
+
+복사한 스킬이 바로 보이지 않으면 Codex를 다시 시작한다.
 
 == Cursor
 

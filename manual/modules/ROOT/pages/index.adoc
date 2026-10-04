@@ -121,7 +121,6 @@ An expression such as `${deck.name()}` therefore runs as a compiled method call.
 jte does not read model values by reflection, so it fits the no-reflection principle.
 A precompiled template needs no compiler at runtime, so it works well in a xref:native-image.adoc[GraalVM native image] too.
 In development, a `DirectoryCodeResolver` reading the source directory shows an edited template without a rebuild (xref:templates.adoc#production[Development and production]).
-The `Model` a handler passes is matched to the template's parameters only when the page renders, but with xref:templates.adoc#jte-models[jte-models] the compiler checks the template call.
 
 === An extensible module structure
 Spider Silk provides optional modules so that widely used technologies beyond the default stack can be used as well.
@@ -213,4 +212,12 @@ The repository doubles as a plugin marketplace, so Claude Code installs it with 
 ----
 /plugin marketplace add {project-repo}
 /plugin install spider-silk@spider-silk
+----
+
+The repository is a Codex plugin marketplace as well, so Codex installs it with two commands too:
+
+[source,subs="attributes+"]
+----
+codex plugin marketplace add {project-repo}
+codex plugin add spider-silk@spider-silk
 ----
