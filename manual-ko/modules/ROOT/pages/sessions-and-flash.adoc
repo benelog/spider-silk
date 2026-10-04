@@ -6,7 +6,7 @@
 
 == 세션 속성
 
-세션 속성은 모든 세션 연산을 한곳에 모은 `WebSession`인 `req.session()`을 통해 읽고 쓴다:
+세션 속성은 모든 세션 연산을 한곳에 모은 ``WebSession``인 ``req.session()``을 통해 읽고 쓴다:
 
 [source,java]
 ----
@@ -16,27 +16,27 @@ User same = req.session().get("user");              // the same read, cast by th
 req.session().remove("user");                       // creates no session to remove from
 ----
 
-`session()`도 읽기도 세션을 만들지 않으므로, 로그인하지 않은 방문자에게는 세션 객체 비용이 들지 않는다.
+``session()``도 읽기도 세션을 만들지 않으므로, 로그인하지 않은 방문자에게는 세션 객체 비용이 들지 않는다.
 쓰기는 필요할 때 세션을 만든다.
 값은 어떤 객체든 될 수 있고 서버에 머무른다: 컨테이너의 세션 쿠키만 오간다.
-그 쿠키는 Jetty, Tomcat, Undertow에서 똑같이 `HttpOnly`이므로, 페이지의 스크립트는 그것을 읽지 못한다.
+그 쿠키는 Jetty, Tomcat, Undertow에서 똑같이 ``HttpOnly``이므로, 페이지의 스크립트는 그것을 읽지 못한다.
 
 타입을 넘기면 잘못된 타입이 그 값을 읽는 줄에서 실패한다.
-`get(key, User.class)`는 `Class.cast`로 캐스팅하며 그 줄에서 `IllegalStateException`으로 실패하고, 키, 발견된 타입, 요청한 타입을 알려준다.
-`get(key)`는 대신 호출 지점에서 캐스팅하므로, 같은 실수가 읽기가 아니라 대입에서 `ClassCastException`이 된다.
+``get(key, User.class)``는 ``Class.cast``로 캐스팅하며 그 줄에서 ``IllegalStateException``으로 실패하고, 키, 발견된 타입, 요청한 타입을 알려준다.
+``get(key)``는 대신 호출 지점에서 캐스팅하므로, 같은 실수가 읽기가 아니라 대입에서 ``ClassCastException``이 된다.
 어느 쪽 실수든 400이 아니라 500으로 답한다: 값을 세션에 넣은 것은 애플리케이션 자신이므로, 예상하지 못한 타입은 애플리케이션 자신의 실수이다.
 타입이 호출 지점에 쓰여 있으므로, 어느 쪽도 이 프레임워크가 피하는 의미의 리플렉션이 아니다.
 
-쓰기는 `set`이라는 이름이고, 모든 읽기는 `get`이라는 이름이다.
-어떤 인자도 한쪽을 다른 쪽으로 바꾸지 않으므로, `Class`는 다른 값과 똑같이 저장된다.
-`get(key, type)`에 타입으로 리터럴 `null`을 넘기면 `NullPointerException`을 던지며, 메시지는 `remove(key)`를 알려준다.
+쓰기는 ``set``이라는 이름이고, 모든 읽기는 ``get``이라는 이름이다.
+어떤 인자도 한쪽을 다른 쪽으로 바꾸지 않으므로, ``Class``는 다른 값과 똑같이 저장된다.
+``get(key, type)``에 타입으로 리터럴 ``null``을 넘기면 ``NullPointerException``을 던지며, 메시지는 ``remove(key)``를 알려준다.
 
-null 값을 쓰면 속성이 제거되는데, 이는 `HttpSession.setAttribute`에 대한 컨테이너의 규칙이다.
-따라서 `set(key, null)`과 `remove(key)`는 같은 일을 하며, 이름으로 그 일을 드러내는 것은 두 번째뿐이다.
+null 값을 쓰면 속성이 제거되는데, 이는 ``HttpSession.setAttribute``에 대한 컨테이너의 규칙이다.
+따라서 ``set(key, null)``과 ``remove(key)``는 같은 일을 하며, 이름으로 그 일을 드러내는 것은 두 번째뿐이다.
 
 == 세션 끝내기
 
-`session().invalidate()`는 세션을 끝내며, 애플리케이션은 이것으로 방문자를 로그아웃시킨다:
+``session().invalidate()``는 세션을 끝내며, 애플리케이션은 이것으로 방문자를 로그아웃시킨다:
 
 [source,java]
 ----
@@ -51,7 +51,7 @@ app.post("/logout", req -> {
 무효화한 뒤에는 바로 반환한다: 호출 뒤에 읽은 세션 속성은 null로 답하고, 호출 뒤에 쓴 세션 속성은 새 세션을 시작한다.
 
 세션은 서블릿 컨테이너가 제공하며, 기본으로 켜져 있다.
-`JettyServer`는 `sessions(false)`로 이를 끈다.
+``JettyServer``는 ``sessions(false)``로 이를 끈다.
 xref:tomcat.adoc[Tomcat]과 xref:undertow.adoc[Undertow]는 각 페이지에서 설명하듯이 항상 세션 매니저를 설치한다.
 
 == 플래시
@@ -71,14 +71,14 @@ app.get("/decks/{deckId}", req -> WebResponse.template("deck",
         Model.of("message", req.flashed("message"), "deck", ...)));
 ----
 
-`flash(key, value)`는 문자열을 세션에 저장한다.
-다음 요청이 디스패치되기 전에, 플래시된 모든 것이 세션에서 빠져나와 그 요청으로 옮겨지며, 그 요청에서 `flashed(key)`로 읽는다.
+``flash(key, value)``는 문자열을 세션에 저장한다.
+다음 요청이 디스패치되기 전에, 플래시된 모든 것이 세션에서 빠져나와 그 요청으로 옮겨지며, 그 요청에서 ``flashed(key)``로 읽는다.
 그 뒤의 어떤 요청도 아무것도 찾지 못한다.
-`flashed`는 아무도 플래시하지 않은 키에 대해 null로 답하므로, 템플릿은 메시지를 조건부로 렌더링할 수 있다.
-xref:templates.adoc#model[템플릿]에서 설명하듯이 `Map.of`는 그 null에 `NullPointerException`을 던지므로, 모델은 `Model.of`로 만든다.
+``flashed``는 아무도 플래시하지 않은 키에 대해 null로 답하므로, 템플릿은 메시지를 조건부로 렌더링할 수 있다.
+xref:templates.adoc#model[템플릿]에서 설명하듯이 ``Map.of``는 그 null에 ``NullPointerException``을 던지므로, 모델은 ``Model.of``로 만든다.
 플래시는 세션 위에서 동작하므로 세션이 켜져 있어야 하며, 기본으로 켜져 있다.
 
-`flash(key, null)`은 키를 제거하며, null 세션 속성과 같은 규칙이다.
+``flash(key, null)``은 키를 제거하며, null 세션 속성과 같은 규칙이다.
 핸들러는 같은 요청 안에서 앞서 설정한 플래시를 이렇게 철회한다:
 
 [source,java]
@@ -90,5 +90,5 @@ if (imported == 0) {
 ----
 
 제거는 다음 요청을 기다리는 값에만 적용된다.
-이 요청이 받은 값은 `flashed(key)`를 통해 계속 읽을 수 있다.
+이 요청이 받은 값은 ``flashed(key)``를 통해 계속 읽을 수 있다.
 세션이 없는 상태에서 플래시를 철회해도 세션을 시작하지 않는다.

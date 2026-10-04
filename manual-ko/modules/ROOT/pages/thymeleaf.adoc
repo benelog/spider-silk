@@ -1,7 +1,7 @@
 = Thymeleaf
 :navtitle: Thymeleaf
 
-`spider-silk-thymeleaf`는 코어에 번들된 jte 대신 https://www.thymeleaf.org[Thymeleaf]로 렌더링한다.
+``spider-silk-thymeleaf``는 코어에 번들된 jte 대신 https://www.thymeleaf.org[Thymeleaf]로 렌더링한다.
 xref:tomcat.adoc[Tomcat]이 별도 모듈인 것과 같은 이유로 별도 모듈이다.
 한 엔진에 대한 종속은 아티팩트 이름에 담기고, 코어는 템플릿 의존성이 셋이 아니라 하나인 웹 계층으로 남는다.
 
@@ -31,16 +31,16 @@ new App()
                 WebResponse.template("deck", Model.of("deck", service.deck(req.pathParamLong("deckId")))));
 ----
 
-이는 `classpath:/thymeleaf/deck.html`을 렌더링하며, UTF-8 HTML로 파싱하고 파싱된 템플릿은 캐시한다.
-모델의 키가 템플릿이 읽는 변수이므로, `${deck.title}`은 `Map.of("deck", ...)`에 닿는다.
+이는 ``classpath:/thymeleaf/deck.html``을 렌더링하며, UTF-8 HTML로 파싱하고 파싱된 템플릿은 캐시한다.
+모델의 키가 템플릿이 읽는 변수이므로, ``${deck.title}``은 ``Map.of("deck", ...)``에 닿는다.
 
-`th:text`는 이스케이프하고 `th:utext`는 하지 않는데, 이는 Thymeleaf 자체의 기본값이며 여기서 그것을 위해 설정할 것이 없는 이유다.
+``th:text``는 이스케이프하고 ``th:utext``는 하지 않는데, 이는 Thymeleaf 자체의 기본값이며 여기서 그것을 위해 설정할 것이 없는 이유다.
 
 == 모델인 것과 모델이 아닌 것
 
 이 모듈은 Thymeleaf의 서블릿 없는 절반을 쓴다: 템플릿 이름, 모델, 렌더링 결과를 쓸 라이터다.
-`WebContext`가 없으므로, `#request`, `#session`, `@bean`처럼 Spring MVC 페이지가 쓰는 표현식은 쓸 수 없다.
-핸들러가 `Map`에 넣은 것이 페이지가 읽을 수 있는 것이며, 그 밖에는 없다.
+``WebContext``가 없으므로, `#request`, `#session`, ``@bean``처럼 Spring MVC 페이지가 쓰는 표현식은 쓸 수 없다.
+핸들러가 ``Map``에 넣은 것이 페이지가 읽을 수 있는 것이며, 그 밖에는 없다.
 
 == 직접 정하는 루트나 접미사
 
@@ -53,12 +53,12 @@ app.templates(new ThymeleafTemplates("thymeleaf")   // classpath:/thymeleaf
 접미사는 덧붙일 뿐 검사하지 않으므로, 확장자를 아직 달고 있는 이름은 접미사가 두 번 붙은 채로 조회된다.
 리졸버 자체의 접미사는 비워 두므로, 작동하는 것은 `suffix` 하나뿐이다.
 
-`locale(Locale)`은 `#{...}` 메시지와 `#numbers`가 어떤 로케일을 기준으로 형식을 만들지 설정한다.
-기본값은 JVM의 것인데, `TemplateRenderer`는 요청이 아니라 모델을 건네받기 때문이다.
+``locale(Locale)``은 `#{...}` 메시지와 ``#numbers``가 어떤 로케일을 기준으로 형식을 만들지 설정한다.
+기본값은 JVM의 것인데, ``TemplateRenderer``는 요청이 아니라 모델을 건네받기 때문이다.
 
 == 다이얼렉트와 리졸버
 
-다른 생성자는 설정된 `TemplateEngine`을 받으며, 파일 시스템 리졸버, 메시지 소스, 다이얼렉트는 여기에 들어간다:
+다른 생성자는 설정된 ``TemplateEngine``을 받으며, 파일 시스템 리졸버, 메시지 소스, 다이얼렉트는 여기에 들어간다:
 
 [source,java]
 ----
@@ -74,10 +74,10 @@ engine.setTemplateResolver(resolver);
 app.templates(new ThymeleafTemplates(engine));
 ----
 
-위처럼 리졸버의 접미사를 비워 두지 않으면, `ThymeleafTemplates`가 이미 덧붙인 접미사 위에 `.html`을 또 덧붙인다.
+위처럼 리졸버의 접미사를 비워 두지 않으면, ``ThymeleafTemplates``가 이미 덧붙인 접미사 위에 ``.html``을 또 덧붙인다.
 
 == 리플렉션
 
-Thymeleaf는 `${deck.title}`을 OGNL로 평가하는데, 이는 리플렉션을 쓴다.
+Thymeleaf는 ``${deck.title}``을 OGNL로 평가하는데, 이는 리플렉션을 쓴다.
 이는 코어가 아니라 모듈의 리플렉션이다.
 규칙이 적용되는 범위는 xref:reflection-scope.adoc["리플렉션 없음"의 범위]를 참고한다.

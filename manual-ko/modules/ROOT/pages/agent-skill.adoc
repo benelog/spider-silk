@@ -1,7 +1,7 @@
 = 에이전트 스킬
 :navtitle: 에이전트 스킬
 
-리포지토리는 `skills/spider-silk/`에 https://agentskills.io[Agent Skills] 형식의 에이전트 스킬을 담고 있다: 작업이 프레임워크에 닿는 순간 에이전트가 한 번 로드하는 `SKILL.md`와, 작업에 필요할 때만 읽는 참조 문서 파일들이다.
+리포지토리는 ``skills/spider-silk/``에 https://agentskills.io[Agent Skills] 형식의 에이전트 스킬을 담고 있다: 작업이 프레임워크에 닿는 순간 에이전트가 한 번 로드하는 ``SKILL.md``와, 작업에 필요할 때만 읽는 참조 문서 파일들이다.
 Spider Silk를 본 적 없는 AI 코딩 에이전트는 추측하는데, 이만큼 의도적으로 설계된 프레임워크는 추측하기에 나쁜 곳이다.
 Gradle 플러그인은 Plugin Portal이 아니라 Maven Central에서 해석되고, JSON 매핑은 리플렉션이 아니라 직접 작성하며, 에이전트가 습관적으로 만들어 내는 `Controller` 인터페이스는 정확히 xref:handlers.adoc[핸들러]가 만들지 말라고 하는 것이다.
 스킬은 이 매뉴얼에서 추려낸 것이고, 매뉴얼이 진실의 원천으로 남는다: 스킬이 판가름하지 못하는 질문은 여기서 답하고, API를 바꾸는 릴리스는 스킬도 함께 바꾼다.
@@ -16,9 +16,9 @@ Gradle 플러그인은 Plugin Portal이 아니라 Maven Central에서 해석되�
 /plugin install spider-silk@spider-silk
 ----
 
-그러면 스킬은 모든 프로젝트에서 필요할 때 로드되며, 업데이트와 제거는 `/plugin`으로 한다.
+그러면 스킬은 모든 프로젝트에서 필요할 때 로드되며, 업데이트와 제거는 ``/plugin``으로 한다.
 
-단일 프로젝트에만 쓰려면 대신 스킬 디렉터리를 프로젝트의 `.claude/skills/`에 복사하여, 협업자가 클론만으로 스킬을 얻고 각자 아무것도 설치하지 않게 한다:
+단일 프로젝트에만 쓰려면 대신 스킬 디렉터리를 프로젝트의 ``.claude/skills/``에 복사하여, 협업자가 클론만으로 스킬을 얻고 각자 아무것도 설치하지 않게 한다:
 
 [source,bash,subs="attributes+"]
 ----
@@ -31,18 +31,18 @@ cp -r /tmp/spider-silk/skills/spider-silk .claude/skills/
 
 == Codex
 
-Codex는 모든 프로젝트에 대해 `~/.codex/skills`에서, 그리고 프로젝트 자체의 `.codex/skills`에서 스킬을 읽는다.
-`skills/spider-silk`를 둘 중 하나에 복사한다.
+Codex는 모든 프로젝트에 대해 ``~/.codex/skills``에서, 그리고 프로젝트 자체의 ``.codex/skills``에서 스킬을 읽는다.
+``skills/spider-silk``를 둘 중 하나에 복사한다.
 
 == Cursor
 
-Cursor는 프로젝트의 `.cursor/skills/`와 사용자 수준의 `~/.cursor/skills/`를 읽는다.
-프로젝트의 `.claude/skills/`도 읽으므로, 이미 Claude Code용으로 설정된 프로젝트에는 더 필요한 것이 없다.
+Cursor는 프로젝트의 ``.cursor/skills/``와 사용자 수준의 ``~/.cursor/skills/``를 읽는다.
+프로젝트의 ``.claude/skills/``도 읽으므로, 이미 Claude Code용으로 설정된 프로젝트에는 더 필요한 것이 없다.
 
 == GitHub Copilot
 
-Copilot은 프로젝트의 `.github/skills/`를 읽고, 코딩 에이전트와 CLI에서는 `~/.copilot/skills/`를 읽는다.
-Copilot 역시 프로젝트의 `.claude/skills/`를 읽는다.
+Copilot은 프로젝트의 ``.github/skills/``를 읽고, 코딩 에이전트와 CLI에서는 ``~/.copilot/skills/``를 읽는다.
+Copilot 역시 프로젝트의 ``.claude/skills/``를 읽는다.
 
 == 그 밖의 도구
 
@@ -52,7 +52,7 @@ https://agentskills.io 가 그런 도구의 목록을 관리한다.
 
 == 무엇이 들어 있나
 
-`SKILL.md`는 모든 작업에 필요한 것을 담는다: 에이전트의 코드가 지켜야 할 규칙으로 서술한 프레임워크의 원칙, 첫 빌드에 필요한 의존성 및 플러그인 리포지토리, 그리고 코어 API 한눈에 보기다.
+``SKILL.md``는 모든 작업에 필요한 것을 담는다: 에이전트의 코드가 지켜야 할 규칙으로 서술한 프레임워크의 원칙, 첫 빌드에 필요한 의존성 및 플러그인 리포지토리, 그리고 코어 API 한눈에 보기다.
 나머지는 다섯 개의 참조 문서 파일이 영역별로 하나씩 담는다: 설정, 웹 API, 콘텐츠, 서버와 배포, 테스트다.
 그러면 에이전트는 작업이 닿는 영역의 파일만 읽는다.
 스킬에 새로운 정보는 없다: 모든 문장은 이 매뉴얼에서 가져와 독자의 화면 대신 에이전트의 컨텍스트 윈도에 맞게 압축한 것이다.
@@ -64,7 +64,7 @@ https://agentskills.io 가 그런 도구의 목록을 관리한다.
 작업은 빈 디렉터리에서 만드는 노트 API, 동작하는 앱에 콘텐츠 협상과 API 키를 더하는 변경, 그리고 기존 `\{id}` 라우트보다 앞서 리터럴 경로를 등록해야 하는 SSE 엔드포인트였다.
 
 모든 단언이 모든 실행에서, 스킬이 있든 없든, 세 모델 모두에서 통과했다.
-스킬 없는 에이전트도 무력하지 않다: 배포된 jar가 주어지자 모든 모델이 소스 jar를 풀거나 `~/.m2`에 `javap`를 돌려 API를 재구성했고, `accepts`, before 필터의 null 계약, `WebResponse.sse`를 스스로 찾아냈다.
+스킬 없는 에이전트도 무력하지 않다: 배포된 jar가 주어지자 모든 모델이 소스 jar를 풀거나 ``~/.m2``에 ``javap``를 돌려 API를 재구성했고, `accepts`, before 필터의 null 계약, ``WebResponse.sse``를 스스로 찾아냈다.
 
 스킬은 그 재구성에 드는 비용을 바꾼다.
 스킬이 있으면 같은 작업이 Fable 5에서 12%, Opus 5에서 16%, Sonnet 5에서 22% 적은 토큰으로 완료되었다.

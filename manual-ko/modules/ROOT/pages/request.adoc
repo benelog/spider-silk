@@ -1,12 +1,12 @@
 = 요청
 :navtitle: 요청
 
-`WebRequest`는 클라이언트가 보낸 요청을 핸들러가 읽는 창구다.
+``WebRequest``는 클라이언트가 보낸 요청을 핸들러가 읽는 창구다.
 단순한 읽기를 먼저 나열하고, getter 이상이 필요한 부분인 쿠키, 반복 파라미터, 쿼리 문자열과 폼 본문의 분리, 콘텐츠 협상, 파일 업로드, 본문 크기 한도가 뒤따른다.
 
 == 요청이 무엇인가
 
-요청에 관한 평범한 질문에는 모두 전용 메서드가 있으므로, `raw()`를 거칠 필요가 없다.
+요청에 관한 평범한 질문에는 모두 전용 메서드가 있으므로, ``raw()``를 거칠 필요가 없다.
 
 [source,java]
 ----
@@ -23,14 +23,14 @@ req.host();                 // "shop.example.com", with the port when it is not 
 req.remoteAddress();        // "203.0.113.7", the proxy's address when one is in front
 ----
 
-`req.scheme() + "://" + req.host() + req.path()`는 요청의 절대 URL이다.
-따라서 `host()`는 스킴의 기본값이 아닌 포트라면 항상 포트를 포함하는데, URL을 손으로 조립하다 틀리기 쉬운 경우가 바로 8080에서 도는 개발 서버이기 때문이다.
+``req.scheme() + "://" + req.host() + req.path()``는 요청의 절대 URL이다.
+따라서 ``host()``는 스킴의 기본값이 아닌 포트라면 항상 포트를 포함하는데, URL을 손으로 조립하다 틀리기 쉬운 경우가 바로 8080에서 도는 개발 서버이기 때문이다.
 
-`isSecure()`, `scheme()`, `host()`는 컨테이너가 믿는 것을 보고한다.
-TLS를 종료하는 프록시 뒤에서는 컨테이너에 `X-Forwarded-Proto`를 신뢰하라고 알려 주어야 하며, 그렇지 않으면 브라우저에는 HTTPS로 도달한 요청이 여기서는 여전히 평범한 HTTP로 읽힌다.
+`isSecure()`, `scheme()`, ``host()``는 컨테이너가 믿는 것을 보고한다.
+TLS를 종료하는 프록시 뒤에서는 컨테이너에 ``X-Forwarded-Proto``를 신뢰하라고 알려 주어야 하며, 그렇지 않으면 브라우저에는 HTTPS로 도달한 요청이 여기서는 여전히 평범한 HTTP로 읽힌다.
 
-`raw()`는 이 메서드들이 다루지 않는 경우를 위해 남아 있다: 비동기 컨텍스트, 클라이언트 인증서, 컨테이너 고유의 속성.
-`raw()`는 지름길이 아니라 비상구이며, `raw()`로 읽은 것은 프레임워크 몰래 읽은 것이다.
+``raw()``는 이 메서드들이 다루지 않는 경우를 위해 남아 있다: 비동기 컨텍스트, 클라이언트 인증서, 컨테이너 고유의 속성.
+``raw()``는 지름길이 아니라 비상구이며, ``raw()``로 읽은 것은 프레임워크 몰래 읽은 것이다.
 
 == 쿠키
 
@@ -43,20 +43,20 @@ String theme = req.cookie("theme");         // null when absent
 Map<String, String> all = req.cookies();    // a repeated name keeps the first value
 ----
 
-`WebResponse.cookie(...)`가 쿠키 하나를 설정하며, 기본값은 xref:response.adoc#cookies[응답]에서 설명한다.
+``WebResponse.cookie(...)``가 쿠키 하나를 설정하며, 기본값은 xref:response.adoc#cookies[응답]에서 설명한다.
 
 == 없는 값
 
 읽기 메서드의 이름은 값이 없을 때 무슨 일이 일어나는지 밝힌다.
 기본 이름은 값을 요구하며 값이 없으면 400으로 답한다: `param(name)`, `queryParam(name)`, `formParam(name)`, `file(name)`.
-같은 이름에 `OrNull`을 붙이면 대신 null로 답한다: `paramOrNull(name)`, `queryParamOrNull(name)`, `formParamOrNull(name)`, `fileOrNull(name)`.
+같은 이름에 ``OrNull``을 붙이면 대신 null로 답한다: `paramOrNull(name)`, `queryParamOrNull(name)`, `formParamOrNull(name)`, `fileOrNull(name)`.
 마지막 인자로 기본값을 주면 null 없이 선택적인 읽기가 된다: `param(name, default)`, `paramLong(name, default)`.
-`header(name)`, `cookie(name)`, `session().get(key)`는 기본 이름으로 null을 답하는데, 그 헤더나 쿠키나 속성이 없는 요청은 잘못된 요청이 아니라 흔한 경우이기 때문이다.
-`JsonObject`도 xref:json.adoc[JSON]에서 설명하듯이 같은 규칙을 따른다.
+`header(name)`, `cookie(name)`, ``session().get(key)``는 기본 이름으로 null을 답하는데, 그 헤더나 쿠키나 속성이 없는 요청은 잘못된 요청이 아니라 흔한 경우이기 때문이다.
+``JsonObject``도 xref:json.adoc[JSON]에서 설명하듯이 같은 규칙을 따른다.
 
 == 반복 파라미터
 
-`params(name)`은 반복 파라미터가 담은 모든 값을 읽는다.
+``params(name)``은 반복 파라미터가 담은 모든 값을 읽는다.
 
 [source,java]
 ----
@@ -64,19 +64,19 @@ List<String> tags = req.params("tag");      // ?tag=java&tag=web, or a checkbox 
 ----
 
 값은 요청 순서대로 돌아오고, 없는 파라미터는 빈 리스트를 준다: "체크된 상자 없음"은 답이지 400이 아니다.
-`param(name)`은 여전히 첫 값을 반환하고 값이 없으면 여전히 400으로 답한다.
-`paramOrNull(name)`은 첫 값을 반환하거나, 없으면 null을 반환한다.
-`param(name, default)`는 대신 기본값을 반환한다.
-null 기본값은 `paramOrNull(name)`으로 쓰는데, `param(name, null)`은 파서 형태에도 일치해서 컴파일되지 않기 때문이다.
-`paramLong("page", 1)`과 `paramEnum("direction", Direction.class, Direction.FRONT)`는 선택적인 타입 파라미터에 기본값을 준다.
+``param(name)``은 여전히 첫 값을 반환하고 값이 없으면 여전히 400으로 답한다.
+``paramOrNull(name)``은 첫 값을 반환하거나, 없으면 null을 반환한다.
+``param(name, default)``는 대신 기본값을 반환한다.
+null 기본값은 ``paramOrNull(name)``으로 쓰는데, ``param(name, null)``은 파서 형태에도 일치해서 컴파일되지 않기 때문이다.
+``paramLong("page", 1)``과 ``paramEnum("direction", Direction.class, Direction.FRONT)``는 선택적인 타입 파라미터에 기본값을 준다.
 기본값은 부재만 다룬다.
 존재하지만 파싱할 수 없는 파라미터는 여전히 400이다.
-`paramBoolean(name)`과 `paramBoolean(name, default)`는 대소문자를 가리지 않고 `true` 또는 `false`를 읽으며 그 밖의 값에는 400으로 답하므로, `?archived=yes`는 false로 읽히는 대신 거부된다.
-따라서 체크박스는 `value="true"`를 담거나, 존재 여부가 곧 답이 되도록 `params(name)`으로 읽는다.
+``paramBoolean(name)``과 ``paramBoolean(name, default)``는 대소문자를 가리지 않고 `true` 또는 ``false``를 읽으며 그 밖의 값에는 400으로 답하므로, ``?archived=yes``는 false로 읽히는 대신 거부된다.
+따라서 체크박스는 ``value="true"``를 담거나, 존재 여부가 곧 답이 되도록 ``params(name)``으로 읽는다.
 
 == 그 밖의 타입: 파서
 
-`param(name, parser)`는 전용 메서드가 없는 타입을 읽으며, 파서는 호출 지점에서 작성한 `Function<String, T>`이다.
+``param(name, parser)``는 전용 메서드가 없는 타입을 읽으며, 파서는 호출 지점에서 작성한 ``Function<String, T>``이다.
 
 [source,java]
 ----
@@ -87,16 +87,16 @@ int deckId = req.pathParam("deckId", Integer::parseInt);   // path variables too
 ----
 
 텍스트를 거부하는 파서는 파라미터 이름을 밝히며 400으로 답하며, 전용 메서드와 같은 계약이다.
-거부한다는 것은 `IllegalArgumentException`이나 `DateTimeException`을 던진다는 뜻이며, `UUID::fromString`, `Integer::parseInt`, `LocalDate::parse`가 이미 그렇게 한다.
+거부한다는 것은 ``IllegalArgumentException``이나 ``DateTimeException``을 던진다는 뜻이며, `UUID::fromString`, `Integer::parseInt`, ``LocalDate::parse``가 이미 그렇게 한다.
 파서가 던지는 그 밖의 예외는 요청이 아니라 파서의 결함이며, 500으로 남는다.
 리플렉션은 개입하지 않는다: 매핑은 직접 작성한 람다다.
 
-전용 메서드는 요청 전체의 `param`과 경로 변수에만 있다: `paramLong`, `paramBoolean`, `paramEnum`, `pathParamLong`, `pathParamEnum`.
-쿼리 문자열과 폼 본문은 그 밖의 모든 타입을 파서로 읽으므로, `queryParamLong`을 찾을 필요가 없다.
+전용 메서드는 요청 전체의 ``param``과 경로 변수에만 있다: `paramLong`, `paramBoolean`, `paramEnum`, `pathParamLong`, `pathParamEnum`.
+쿼리 문자열과 폼 본문은 그 밖의 모든 타입을 파서로 읽으므로, ``queryParamLong``을 찾을 필요가 없다.
 
 == 쿼리 문자열 대 폼 본문
 
-서블릿 API는 둘을 합치므로, `param("id")`는 URL의 `id`와 폼의 `id`에 똑같이 답한다.
+서블릿 API는 둘을 합치므로, ``param("id")``는 URL의 ``id``와 폼의 ``id``에 똑같이 답한다.
 차이가 중요할 때는 출처를 지정한다:
 
 [source,java]
@@ -107,9 +107,9 @@ List<String> tags = req.formParams("tag");
 ----
 
 폼 본문은 폼 인코딩이든 멀티파트든 POST, PUT, PATCH에서 읽으며, 모든 서버에서 같다.
-그 밖의 메서드에서는 필드를 읽지 않으며, `formParam`은 폼이 없는 요청에서처럼 답한다.
+그 밖의 메서드에서는 필드를 읽지 않으며, ``formParam``은 폼이 없는 요청에서처럼 답한다.
 
-파서는 지정된 출처를 타입으로 읽으며, `param(name, parser)`와 같은 계약을 따른다:
+파서는 지정된 출처를 타입으로 읽으며, ``param(name, parser)``와 같은 계약을 따른다:
 
 [source,java]
 ----
@@ -117,24 +117,24 @@ LocalDate due = req.formParam("due", LocalDate::parse);       // 400 when the fo
 int page = req.queryParam("page", Integer::parseInt, 1);      // default covers absence only
 ----
 
-`queryParam(name)`과 `formParam(name)`은 파서가 있든 없든 값을 요구하며, 값이 없으면 400으로 답한다.
-`queryParamOrNull(name)`과 `formParamOrNull(name)`은 값이 없으면 null을 반환한다.
+``queryParam(name)``과 ``formParam(name)``은 파서가 있든 없든 값을 요구하며, 값이 없으면 400으로 답한다.
+``queryParamOrNull(name)``과 ``formParamOrNull(name)``은 값이 없으면 null을 반환한다.
 빈 문자열은 제공된 값이며 파서에 그대로 전달된다.
 기본값은 파서 형태를 선택적으로 만들며, 파서가 거부하는 값은 어느 쪽이든 400이다.
-다른 출처가 담은 이름은 인정되지 않으므로, `formParam("page", parser)`는 유일한 `page`가 URL에 있는 요청에 400으로 답한다.
-`(name, defaultString)` 형태는 없는데, `queryParamOrNull(name)`이 이미 파서 오버로드와 겹치지 않고 선택적 문자열을 다루기 때문이다.
+다른 출처가 담은 이름은 인정되지 않으므로, ``formParam("page", parser)``는 유일한 ``page``가 URL에 있는 요청에 400으로 답한다.
+`(name, defaultString)` 형태는 없는데, ``queryParamOrNull(name)``이 이미 파서 오버로드와 겹치지 않고 선택적 문자열을 다루기 때문이다.
 
-`?q=%zz`나 바이트가 UTF-8이 아닌 `?q=%FF`처럼 디코딩되지 않는 쿼리 문자열은 어떤 이름을 읽든 `param`, `queryParam`, `formParam`의 모든 형태에서 400으로 답한다.
-폼 인코딩도 멀티파트도 아니거나 다른 메서드여서 폼 본문이 없는 요청은 `param`과 `params`를 쿼리 문자열만으로 답하므로, 컨테이너의 파서는 그 요청을 보지 않는다.
-컨테이너가 파싱하지 못하는 폼 본문은 `param`, `params`, `formParam`의 모든 형태에서 400으로 답하며, 컨테이너가 밝힌 이유를 메시지로 담는다.
+``?q=%zz``나 바이트가 UTF-8이 아닌 ``?q=%FF``처럼 디코딩되지 않는 쿼리 문자열은 어떤 이름을 읽든 `param`, `queryParam`, ``formParam``의 모든 형태에서 400으로 답한다.
+폼 인코딩도 멀티파트도 아니거나 다른 메서드여서 폼 본문이 없는 요청은 ``param``과 ``params``를 쿼리 문자열만으로 답하므로, 컨테이너의 파서는 그 요청을 보지 않는다.
+컨테이너가 파싱하지 못하는 폼 본문은 `param`, `params`, ``formParam``의 모든 형태에서 400으로 답하며, 컨테이너가 밝힌 이유를 메시지로 담는다.
 디코딩되지 않는 이스케이프와 컨테이너 자체의 폼 한도를 넘는 본문이 여기에 해당한다.
-멀티파트 폼은 `file(name)`과 똑같이 답한다: 멀티파트 한도를 넘는 파트나 본문은 413, 파싱되지 않는 본문은 400이다.
-`Content-Type`이 이 JVM이 디코딩하지 못하는 charset을 지정한 폼은 `body()`처럼 이 읽기들과 `file`, `fileOrNull`, `files`에서 415로 답한다.
+멀티파트 폼은 ``file(name)``과 똑같이 답한다: 멀티파트 한도를 넘는 파트나 본문은 413, 파싱되지 않는 본문은 400이다.
+``Content-Type``이 이 JVM이 디코딩하지 못하는 charset을 지정한 폼은 ``body()``처럼 이 읽기들과 `file`, `fileOrNull`, ``files``에서 415로 답한다.
 Undertow는 이스케이프가 디코딩되지 않는 필드를 버리고, 자체 한도를 넘는 폼은 애플리케이션이 실행되기 전에 413으로 거부한다.
 
 == 콘텐츠 협상
 
-`accepts`는 `Accept` 헤더를 읽어, 핸들러가 제공하는 미디어 타입 중 호출자가 선호하는 것을 반환한다:
+``accepts``는 `Accept` 헤더를 읽어, 핸들러가 제공하는 미디어 타입 중 호출자가 선호하는 것을 반환한다:
 
 [source,java]
 ----
@@ -145,30 +145,30 @@ app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
 ----
 
 답은 전달한 문자열 중 하나이므로, `case` 레이블로 그대로 읽히며 어떤 미디어 타입도 두 번 쓰이지 않는다.
-품질 값과 구체성은 명세가 요구하는 대로 적용된다: `text/html`이 `text/*`보다 먼저 매칭되고, `text/*`는 다시 순수 와일드카드보다 먼저 매칭되며, 호출자가 `q=0`으로 가중치를 준 타입은 와일드카드에 포함되더라도 거부된다.
+품질 값과 구체성은 명세가 요구하는 대로 적용된다: ``text/html``이 ``text/*``보다 먼저 매칭되고, ``text/*``는 다시 순수 와일드카드보다 먼저 매칭되며, 호출자가 ``q=0``으로 가중치를 준 타입은 와일드카드에 포함되더라도 거부된다.
 
 두 가지 경계 사례는 짚어 둘 만한데, 손으로 쓴 파서가 어김없이 틀리는 곳이기 때문이다:
 
-* `Accept`가 전혀 없는 요청은 호출자에게 선호가 없다는 뜻이지, 아무것도 받지 않겠다는 뜻이 아니다.
+* ``Accept``가 전혀 없는 요청은 호출자에게 선호가 없다는 뜻이지, 아무것도 받지 않겠다는 뜻이 아니다.
   첫 후보가 이기므로, 목록은 핸들러가 선호하는 순서로 쓴다.
-* 어느 것도 받지 않겠다는 호출자에게는 `406 Not Acceptable`로 답하며, 이는 `param(name)`이 null을 반환하는 대신 400으로 답하는 것과 같은 방식이다.
-* 여러 줄로 보낸 `Accept`는 RFC 9110이 목록 필드를 읽듯 줄들을 쉼표로 이은 것으로 읽으며, `app.gzip()`과 사전 압축된 정적 파일이 읽는 `Accept-Encoding`도 마찬가지다.
+* 어느 것도 받지 않겠다는 호출자에게는 ``406 Not Acceptable``로 답하며, 이는 ``param(name)``이 null을 반환하는 대신 400으로 답하는 것과 같은 방식이다.
+* 여러 줄로 보낸 ``Accept``는 RFC 9110이 목록 필드를 읽듯 줄들을 쉼표로 이은 것으로 읽으며, ``app.gzip()``과 사전 압축된 정적 파일이 읽는 ``Accept-Encoding``도 마찬가지다.
 
 따라서 핸들러는 null 분기를 쓸 일이 없다.
 
-`accepts`나 `acceptedTypes()`를 호출하면 답이 요청 헤더에 의존하게 되므로, 핸들러가 말하지 않아도 응답은 `Vary: Accept`를 실어 보낸다.
+``accepts``나 ``acceptedTypes()``를 호출하면 답이 요청 헤더에 의존하게 되므로, 핸들러가 말하지 않아도 응답은 ``Vary: Accept``를 실어 보낸다.
 406에도, 제공되는 타입이 하나뿐이었던 답에도 이 헤더가 붙는다.
-`app.gzip()`이 `Accept-Encoding`에 대해 하는 것과 같은 관리이며, 이유도 같다: 공유 캐시가 다음 브라우저에 JSON을 건네서는 안 된다.
+``app.gzip()``이 ``Accept-Encoding``에 대해 하는 것과 같은 관리이며, 이유도 같다: 공유 캐시가 다음 브라우저에 JSON을 건네서는 안 된다.
 
-`req.acceptedTypes()`는 `accepts`가 내부에서 쓰는 파싱 결과로, `accepts`가 표현할 수 없는 드문 결정을 위한 것이다.
-요청된 미디어 타입을 선호도가 높은 순서로, 거부된 타입은 빼고 보고하며, 요청이 `Accept`를 보내지 않았으면 비어 있다.
+``req.acceptedTypes()``는 ``accepts``가 내부에서 쓰는 파싱 결과로, ``accepts``가 표현할 수 없는 드문 결정을 위한 것이다.
+요청된 미디어 타입을 선호도가 높은 순서로, 거부된 타입은 빼고 보고하며, 요청이 ``Accept``를 보내지 않았으면 비어 있다.
 
-`Accept-Language`와 `Accept-Encoding`은 대신 협상해 주지 않는다.
+``Accept-Language``와 ``Accept-Encoding``은 대신 협상해 주지 않는다.
 인코딩은 압축 계층의 몫이고, 언어 협상에는 코어에 없는 로케일 지원이 필요하다.
 
 == 파일 업로드
 
-`req.file(name)`은 멀티파트 폼에서 파일을 읽으며, 파트가 없으면 400으로, 요청이 아예 멀티파트가 아니면 400으로 답한다:
+``req.file(name)``은 멀티파트 폼에서 파일을 읽으며, 파트가 없으면 400으로, 요청이 아예 멀티파트가 아니면 400으로 답한다:
 
 [source,java]
 ----
@@ -180,10 +180,10 @@ app.post("/decks/{deckId}/import", req -> {
 });
 ----
 
-`UploadedFile`은 `fileName()`, `contentType()`, `size()`를 제공하고, 내용은 네 가지 방식으로 건넨다.
-`fileName()`은 클라이언트가 보낸 이름을 검사 없이 그대로 돌려주므로 `../`나 클라이언트가 고른 경로를 담을 수 있으며, 표시용일 뿐이고 디스크에 쓰는 파일은 아래 예처럼 애플리케이션이 만든 이름 아래에 둔다.
-`bytes()`와 `text()`는 내용을 각각 바이트 배열과 UTF-8 텍스트로 메모리에 담는다.
-`inputStream()`과 `writeTo(path)`는 그렇지 않으므로, 어떤 크기의 업로드든 중간에 바이트 배열 없이 파서나 파일에 도달한다:
+``UploadedFile``은 `fileName()`, `contentType()`, ``size()``를 제공하고, 내용은 네 가지 방식으로 건넨다.
+``fileName()``은 클라이언트가 보낸 이름을 검사 없이 그대로 돌려주므로 ``../``나 클라이언트가 고른 경로를 담을 수 있으며, 표시용일 뿐이고 디스크에 쓰는 파일은 아래 예처럼 애플리케이션이 만든 이름 아래에 둔다.
+``bytes()``와 ``text()``는 내용을 각각 바이트 배열과 UTF-8 텍스트로 메모리에 담는다.
+``inputStream()``과 ``writeTo(path)``는 그렇지 않으므로, 어떤 크기의 업로드든 중간에 바이트 배열 없이 파서나 파일에 도달한다:
 
 [source,java]
 ----
@@ -195,36 +195,36 @@ app.post("/scans", req -> {
 ----
 
 스트림은 호출자가 닫는다.
-`inputStream()`과 `bytes()`는 같은 내용을 읽고, 한 번 읽은 것은 다시 읽을 수 없으므로, 바이트도 함께 원하는 핸들러는 두 번 요청하는 대신 직접 버퍼링한다.
-`writeTo`는 절대 경로를 받거나, 작업 디렉터리를 기준으로 해석되는 상대 경로를 받는다.
-`writeTo`는 내용을 다른 방식으로 읽은 뒤에 한 번만 호출하는데, 업로드를 이미 디스크에 버퍼링한 컨테이너는 그 파일을 복사하는 대신 이동할 수 있기 때문이다.
+``inputStream()``과 ``bytes()``는 같은 내용을 읽고, 한 번 읽은 것은 다시 읽을 수 없으므로, 바이트도 함께 원하는 핸들러는 두 번 요청하는 대신 직접 버퍼링한다.
+``writeTo``는 절대 경로를 받거나, 작업 디렉터리를 기준으로 해석되는 상대 경로를 받는다.
+``writeTo``는 내용을 다른 방식으로 읽은 뒤에 한 번만 호출하는데, 업로드를 이미 디스크에 버퍼링한 컨테이너는 그 파일을 복사하는 대신 이동할 수 있기 때문이다.
 
-`req.fileOrNull(name)`은 폼이 담지 않아도 되는 업로드에 null로 답하며, 부재가 곧 답인 값에 대해 `req.cookie(name)`과 `req.queryParamOrNull(name)`이 쓰는 것과 같은 형태다.
+``req.fileOrNull(name)``은 폼이 담지 않아도 되는 업로드에 null로 답하며, 부재가 곧 답인 값에 대해 ``req.cookie(name)``과 ``req.queryParamOrNull(name)``이 쓰는 것과 같은 형태다.
 null은 파일이 없을 수 있는 모든 경우를 다룬다: 그 이름의 파트가 없는 경우, 아무것도 선택되지 않아 브라우저가 비워서 보낸 파일 입력, 그리고 아예 멀티파트가 아닌 요청.
-`req.file(name)`은 이 셋 모두에 400으로 답하는데, 파일을 명시적으로 요청한 핸들러에는 그 파일이 반드시 필요하기 때문이다.
+``req.file(name)``은 이 셋 모두에 400으로 답하는데, 파일을 명시적으로 요청한 핸들러에는 그 파일이 반드시 필요하기 때문이다.
 
-`req.files(name)`은 하나의 필드 이름으로 보낸 모든 파일을 요청이 보낸 순서대로 답하며, `<input type="file" multiple>`이 보내는 요청이 바로 이런 형태다.
-필드가 아무것도 담지 않았으면 리스트는 비어 있으며, 보내지 않은 반복 파라미터에 대해 `req.params(name)`이 비어 있는 것과 같다.
-파일을 담은 파트만 세므로, 같은 멀티파트 폼의 텍스트 필드는 여전히 `req.param(name)`으로 읽는다.
+``req.files(name)``은 하나의 필드 이름으로 보낸 모든 파일을 요청이 보낸 순서대로 답하며, ``<input type="file" multiple>``이 보내는 요청이 바로 이런 형태다.
+필드가 아무것도 담지 않았으면 리스트는 비어 있으며, 보내지 않은 반복 파라미터에 대해 ``req.params(name)``이 비어 있는 것과 같다.
+파일을 담은 파트만 세므로, 같은 멀티파트 폼의 텍스트 필드는 여전히 ``req.param(name)``으로 읽는다.
 
 업로드 한도는 서버에 설정하는 서블릿 컨테이너의 멀티파트 구성이다: 최대 크기와, 큰 업로드를 버퍼링할 위치.
-`multipart(new MultipartConfigElement(...))`가 `JettyServer`, xref:tomcat.adoc[TomcatServer], xref:undertow.adoc[UndertowServer]에 이 구성을 똑같이 설정한다.
+``multipart(new MultipartConfigElement(...))``가 `JettyServer`, xref:tomcat.adoc[TomcatServer], xref:undertow.adoc[UndertowServer]에 이 구성을 똑같이 설정한다.
 기본값은 크기 상한 없이 시스템 임시 디렉터리에 버퍼링하며, 메모리 내 임계값은 1MB다.
-`multipart(null)`은 멀티파트 처리를 끄며, 그러면 멀티파트 요청의 파라미터 읽기는 모든 서버에서 쿼리 문자열만으로 답한다.
+``multipart(null)``은 멀티파트 처리를 끄며, 그러면 멀티파트 요청의 파라미터 읽기는 모든 서버에서 쿼리 문자열만으로 답한다.
 모든 서버는 또 한 폼에 텍스트 필드를 포함해 최대 1000개의 파트를 받고, Jetty와 Tomcat은 파트마다 최대 8KB의 헤더를 받으며, 이를 넘으면 Jetty와 Tomcat은 413, Undertow는 400으로 답한다.
 
 컨테이너가 거부한 업로드는 없는 업로드가 아니라 실패한 업로드다.
 그 한도를 넘는 파트나 본문은 413으로 답하고, 닫는 경계 앞에서 끊긴 본문처럼 파싱되지 않는 멀티파트 본문은 400으로 답한다.
-`file(name)`, `fileOrNull(name)`, `files(name)`은 둘 모두에 똑같이 답하므로, 핸들러가 실패한 업로드를 아무것도 고르지 않은 폼으로 읽는 일은 없다.
-요청이 멀티파트인지는 `Content-Type`이 정한다: `multipart/form-data`만 멀티파트다.
+`file(name)`, `fileOrNull(name)`, ``files(name)``은 둘 모두에 똑같이 답하므로, 핸들러가 실패한 업로드를 아무것도 고르지 않은 폼으로 읽는 일은 없다.
+요청이 멀티파트인지는 ``Content-Type``이 정한다: ``multipart/form-data``만 멀티파트다.
 
 [#body-limits]
 == 본문 크기 한도
 
-`body()`와 `bodyNdjson(reader)`는 요청 본문을 최대 1MB까지만 메모리에 담고, 그보다 크면 413으로 응답한다.
-`body()`와 그 위의 `bodyJson()`은 본문 전체를 담으므로, 이들의 한도는 본문을 제한한다.
-`bodyNdjson(reader)`는 한 번에 한 줄을 담으므로, 이 한도는 한 줄을 제한하고 줄 수는 제한하지 않는다.
-`app.bodyLimits(BodyLimits)`가 두 한도를 바꾼다:
+``body()``와 ``bodyNdjson(reader)``는 요청 본문을 최대 1MB까지만 메모리에 담고, 그보다 크면 413으로 응답한다.
+``body()``와 그 위의 ``bodyJson()``은 본문 전체를 담으므로, 이들의 한도는 본문을 제한한다.
+``bodyNdjson(reader)``는 한 번에 한 줄을 담으므로, 이 한도는 한 줄을 제한하고 줄 수는 제한하지 않는다.
+``app.bodyLimits(BodyLimits)``가 두 한도를 바꾼다:
 
 [source,java]
 ----
@@ -234,23 +234,23 @@ app.bodyLimits(BodyLimits.defaults()
 ----
 
 두 한도 모두 문자가 아니라 바이트를 센다.
-바이트는 도착하는 대로, 문자로 디코딩되기 전에 세므로, `é`는 UTF-8에서 둘로 센다.
+바이트는 도착하는 대로, 문자로 디코딩되기 전에 세므로, ``é``는 UTF-8에서 둘로 센다.
 N바이트 한도는 정확히 N바이트인 본문을 읽고 N + 1바이트인 본문을 거부한다.
-한 줄의 바이트 수에는 줄바꿈이 들어가지 않으며, `\r\n` 줄바꿈의 `\r`도 마찬가지다.
+한 줄의 바이트 수에는 줄바꿈이 들어가지 않으며, `\r\n` 줄바꿈의 ``\r``도 마찬가지다.
 
-한도는 `Content-Length`를 믿지 않는다.
+한도는 ``Content-Length``를 믿지 않는다.
 한도를 넘는 길이를 선언한 본문은 한 바이트도 읽기 전에 거부된다.
 청크 본문처럼 길이를 선언하지 않은 본문은 한도를 넘는 첫 바이트에서 거부되며, 보내는 것보다 짧은 길이를 선언한 본문도 마찬가지다.
 NDJSON 줄은 한도를 넘어서는 즉시 거부되므로, 끝나지 않는 줄이 드는 비용은 줄 전체가 아니라 한도와 8KB 청크 하나다.
 
-413은 상태가 `CONTENT_TOO_LARGE`인 `HttpException`이며, `exception(...)`과 `statusPage(...)`를 거치는 평범한 에러 경로를 탄다.
+413은 상태가 ``CONTENT_TOO_LARGE``인 ``HttpException``이며, ``exception(...)``과 ``statusPage(...)``를 거치는 평범한 에러 경로를 탄다.
 한 번 거부된 본문은 계속 거부된다.
-예외를 잡고 다시 읽는 핸들러는 `body()`, `bodyStream()`, `bodyReader()`에서 또다시 413을 받으며, 앞부분이 이미 소비된 본문의 나머지를 받는 일은 없다.
-`Content-Length`보다 먼저 끝나거나 읽는 도중 연결이 끊긴 본문은 `body()`, `bodyJson()`, `bodyNdjson(reader)`에서 400으로 답하며, 같은 방식으로 계속 거부된다.
+예외를 잡고 다시 읽는 핸들러는 `body()`, `bodyStream()`, ``bodyReader()``에서 또다시 413을 받으며, 앞부분이 이미 소비된 본문의 나머지를 받는 일은 없다.
+``Content-Length``보다 먼저 끝나거나 읽는 도중 연결이 끊긴 본문은 `body()`, `bodyJson()`, ``bodyNdjson(reader)``에서 400으로 답하며, 같은 방식으로 계속 거부된다.
 
-`bodyStream()`과 `bodyReader()`에는 한도가 없다.
+``bodyStream()``과 ``bodyReader()``에는 한도가 없다.
 스트림을 읽는 호출자는 그중 얼마를 담을지 스스로 정하므로, 파일이나 파서로 스트리밍하는 큰 업로드에는 설정이 필요 없다.
-큰 본문을 받는 핸들러는 처음부터 `bodyStream()`으로 읽고, 중간에 바이트 배열 없이 파일로 복사한다:
+큰 본문을 받는 핸들러는 처음부터 ``bodyStream()``으로 읽고, 중간에 바이트 배열 없이 파일로 복사한다:
 
 [source,java]
 ----
@@ -263,18 +263,18 @@ app.put("/backups", req -> {
 });
 ----
 
-본문은 한 번, 한 가지 방식으로만 나가므로, 이 핸들러는 같은 요청에서 `body()`를 부르지 않는다.
-`bodyStream()`, `bodyReader()`, `bodyNdjson(reader)` 다음에 다른 방식으로 다시 읽으면 `IllegalStateException`을 던지며, 같은 스트림이나 리더를 다시 요청하는 경우만 첫 호출자가 멈춘 자리의 그것을 돌려받는다.
-`body()`가 이미 응답한 413은 뒤이은 `bodyStream()`으로 되돌려지지 않으므로, 엔드포인트는 처음부터 스트림을 택한다.
+본문은 한 번, 한 가지 방식으로만 나가므로, 이 핸들러는 같은 요청에서 ``body()``를 부르지 않는다.
+`bodyStream()`, `bodyReader()`, `bodyNdjson(reader)` 다음에 다른 방식으로 다시 읽으면 ``IllegalStateException``을 던지며, 같은 스트림이나 리더를 다시 요청하는 경우만 첫 호출자가 멈춘 자리의 그것을 돌려받는다.
+``body()``가 이미 응답한 413은 뒤이은 ``bodyStream()``으로 되돌려지지 않으므로, 엔드포인트는 처음부터 스트림을 택한다.
 이 복사를 제한하는 것은 핸들러 자신과 애플리케이션 앞의 프록시뿐이므로, 업로드에 상한을 둬야 하는 핸들러는 복사하는 바이트를 직접 센다.
 
-`BodyLimits.unlimited()`는 프록시나 컨테이너가 이미 본문을 제한하는 애플리케이션을 위해 두 한도를 모두 없앤다.
+``BodyLimits.unlimited()``는 프록시나 컨테이너가 이미 본문을 제한하는 애플리케이션을 위해 두 한도를 모두 없앤다.
 
 어느 한도도 폼 필드와 멀티파트 업로드는 세지 않는데, 이들은 서블릿 컨테이너가 파싱하기 때문이다.
 폼의 크기는 컨테이너 자체의 설정이고, 업로드의 크기는 앞 절에서 설명한 멀티파트 구성이다.
 
-`AppServlet`이 한도를 적용하므로, 한도는 Jetty, Tomcat, Undertow, 외부 컨테이너에서 똑같이 동작한다.
+``AppServlet``이 한도를 적용하므로, 한도는 Jetty, Tomcat, Undertow, 외부 컨테이너에서 똑같이 동작한다.
 컨테이너나 그 앞의 프록시가 정한 한도는 추가로 적용되며, 둘 중 낮은 쪽이 먼저 응답한다.
 
 기본값은 기존 애플리케이션이 받아들이는 것을 바꾼다.
-`body()`나 `bodyJson()`으로 읽는 1MB 넘는 본문과 1MB 넘는 NDJSON 줄은 `bodyLimits`로 한도를 올리기 전까지 413으로 응답한다.
+``body()``나 ``bodyJson()``으로 읽는 1MB 넘는 본문과 1MB 넘는 NDJSON 줄은 ``bodyLimits``로 한도를 올리기 전까지 413으로 응답한다.
