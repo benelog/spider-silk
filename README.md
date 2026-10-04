@@ -22,17 +22,16 @@ Spider Silk is a web framework built on the Jakarta Servlet API.
 
 - **Fast startup.**
   There is no annotation scanning and no proxy generation, so an application starts fast in an autoscaled container, a serverless function, a test run, and a development-server restart alike.
-- **Code you can trace.**
-  The code a request passes through can be followed by reading the source alone, by a person and by an AI coding agent.
-- **No reflection.**
-  The framework's own code reflects over nothing, so what runs is what the code says, and a GraalVM native image needs no reflection config for it.
-- **A thin call stack.**
-  Two stack frames stand between `HttpServlet.service` and a handler, and nothing the framework calls into is more than four frames deep.
-- **A simple API.**
-  A handler is `WebResponse handle(WebRequest request)`, registered as a lambda or a method reference.
-  It returns its answer, so a branch that forgets to answer does not compile.
-- **A small default stack.**
-  One dependency brings embedded Jetty and jte, and jte compiles templates to Java, so rendering takes no reflection either.
+- **Code traceable from its source.**
+  A person and an AI coding agent alike follow the code a request passes through without running it.
+  - **A simple API.**
+    A handler is `WebResponse handle(WebRequest request)`, registered as a lambda or a method reference.
+  - **No reflection.**
+    The framework's own code reflects over nothing, so what runs is what the code says, and a GraalVM native image needs no reflection config for it.
+  - **A thin call stack.**
+    Two stack frames stand between `HttpServlet.service` and a handler, and nothing the framework calls into is more than four frames deep.
+  - **A small default stack.**
+    One dependency brings embedded Jetty and jte, and jte compiles templates to Java, so rendering takes no reflection either.
 - **Open to the ecosystem.**
   Tomcat and Undertow, and FreeMarker, Handlebars, and Thymeleaf, come as optional modules, and switching to one is a single line.
 - **Tooling around it.**

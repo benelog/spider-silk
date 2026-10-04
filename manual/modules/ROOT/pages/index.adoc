@@ -13,7 +13,7 @@ Spider Silk is a web framework built on the Jakarta Servlet API.
 An application's startup time is kept to a minimum.
 Startup is a cost paid again at every main point of development and operation: autoscaled containers, serverless environments, test runs, and development-server restarts.
 
-=== Traceable code
+=== Code traceable from its source
 The code a request passes through on its way to a response can be followed by reading the source alone.
 Human developers and AI coding agents both need that traceability.
 For a person, code that is easy to trace is code that is easy to understand and debug.
