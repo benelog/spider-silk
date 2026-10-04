@@ -17,7 +17,19 @@ The repository doubles as a plugin marketplace, so installation is two commands 
 /plugin install spider-silk@spider-silk
 ----
 
-The skill then loads on demand in every project, and you update or remove it through `/plugin`.
+The skill then loads on demand in every project, and you remove it through `/plugin`.
+
+An installed skill follows a new release once its marketplace is refreshed.
+Claude Code refreshes a marketplace outside Anthropic's own only when auto-update is on for it, and auto-update is off by default.
+`/plugin` turns it on: **Marketplaces**, then `spider-silk`, then **Enable auto-update**.
+With auto-update off, one command refreshes the marketplace and installs the new release:
+
+[source]
+----
+/plugin marketplace update spider-silk
+----
+
+The running session keeps the version it loaded, and `/reload-plugins` or a restart applies the new one.
 
 Copy the skill directory into the project's `.claude/skills/` for a single project instead, so that collaborators get the skill by cloning and install nothing of their own:
 
@@ -40,8 +52,18 @@ codex plugin marketplace add {project-repo}
 codex plugin add spider-silk@spider-silk
 ----
 
-The skill then loads in every Codex session.
-`codex plugin marketplace upgrade` fetches a newer version of the marketplace, and `codex plugin remove spider-silk@spider-silk` uninstalls the plugin.
+The skill then loads in every Codex session, and `codex plugin remove spider-silk@spider-silk` uninstalls it.
+
+An installed skill stays at the version it was installed at until it is added again.
+Two commands fetch the marketplace and install the release it names:
+
+[source]
+----
+codex plugin marketplace upgrade spider-silk
+codex plugin add spider-silk@spider-silk
+----
+
+A Codex session started afterwards loads the new version.
 
 Codex also reads skills from a project's own `.agents/skills/`.
 Copy the skill directory there for a single project instead, so that collaborators get the skill by cloning:

@@ -17,7 +17,19 @@ Gradle 플러그인은 Plugin Portal이 아니라 Maven Central에서 해석되�
 /plugin install spider-silk@spider-silk
 ----
 
-그러면 스킬은 모든 프로젝트에서 필요할 때 로드되며, 업데이트와 제거는 ``/plugin``으로 한다.
+그러면 스킬은 모든 프로젝트에서 필요할 때 로드되며, 제거는 ``/plugin``으로 한다.
+
+설치된 스킬은 마켓플레이스가 갱신되어야 새 릴리스를 따라간다.
+Claude Code는 Anthropic의 것이 아닌 마켓플레이스를 자동 업데이트가 켜져 있을 때만 스스로 갱신하며, 자동 업데이트는 기본으로 꺼져 있다.
+``/plugin``에서 **Marketplaces**, ``spider-silk``, **Enable auto-update**를 차례로 골라 켠다.
+자동 업데이트가 꺼져 있으면, 명령 하나가 마켓플레이스를 갱신하고 새 릴리스를 설치한다:
+
+[source]
+----
+/plugin marketplace update spider-silk
+----
+
+실행 중인 세션은 로드한 버전을 유지하며, ``/reload-plugins``나 재시작이 새 버전을 적용한다.
 
 단일 프로젝트에만 쓰려면 대신 스킬 디렉터리를 프로젝트의 ``.claude/skills/``에 복사하여, 협업자가 클론만으로 스킬을 얻고 각자 아무것도 설치하지 않게 한다:
 
@@ -40,8 +52,18 @@ codex plugin marketplace add {project-repo}
 codex plugin add spider-silk@spider-silk
 ----
 
-그러면 스킬은 모든 Codex 세션에서 로드된다.
-``codex plugin marketplace upgrade``는 마켓플레이스의 새 버전을 받아 오고, ``codex plugin remove spider-silk@spider-silk``는 플러그인을 제거한다.
+그러면 스킬은 모든 Codex 세션에서 로드되며, ``codex plugin remove spider-silk@spider-silk``는 플러그인을 제거한다.
+
+설치된 스킬은 다시 추가하기 전까지 설치한 버전에 머문다.
+두 명령이 마켓플레이스를 받아 오고 그것이 가리키는 릴리스를 설치한다:
+
+[source]
+----
+codex plugin marketplace upgrade spider-silk
+codex plugin add spider-silk@spider-silk
+----
+
+그 뒤에 시작한 Codex 세션이 새 버전을 로드한다.
 
 Codex는 프로젝트 자체의 ``.agents/skills/``에서도 스킬을 읽는다.
 단일 프로젝트에만 쓰려면 대신 스킬 디렉터리를 그곳에 복사하여, 협업자가 클론만으로 스킬을 얻게 한다:
