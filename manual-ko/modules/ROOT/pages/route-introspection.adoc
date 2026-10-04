@@ -51,6 +51,14 @@ app.beforeRoute(req -> {
 GET 라우트가 응답한 HEAD는 그 GET 라우트를 보고한다.
 보고되는 라우트는 라우터가 고른 것이므로, 자체의 선호가 아니라 동점을 가리는 등록 순서를 따른다.
 
+https://opentelemetry.io/docs/zero-code/java/agent/[OpenTelemetry Java 에이전트] 아래에서 Spider Silk 애플리케이션은 ``++/*++``에 매핑된 서블릿 하나이므로, 라우트를 에이전트에 따로 알려 주어야 한다.
+에이전트의 서블릿 계측은 ``http.route``를 그 매핑으로 설정하고, 모든 요청은 ``++GET /*++`` 스팬 하나가 된다.
+https://spider-sense.benelog.net[Spider Sense]는 에이전트 확장의 계측 모듈 ``spider-sense-spider-silk``에서 라우트를 알린다.
+이 모듈은 라우터가 라우트를 찾은 뒤 Spider Silk가 호출하는 메서드에 advice를 걸고, 에이전트 자체의 프레임워크 계측들이 하듯 컨트롤러를 출처로 하여 ``http.route``를 그 라우트의 경로로 설정한다.
+그러면 스팬의 이름은 ``GET /api/decks/\{deckId}``가 된다.
+Spider Sense 없이 표준 에이전트를 쓰는 애플리케이션은 같은 일을 하는 확장이 필요하며, 이 모듈의 소스가 그 참고가 된다: https://github.com/benelog/spider-sense/blob/main/spider-sense-extension/src/main/java/net/benelog/spidersense/extension/SpiderSilkInstrumentationModule.java[``SpiderSilkInstrumentationModule``]과 https://github.com/benelog/spider-sense/blob/main/spider-sense-extension/src/main/java/net/benelog/spidersense/extension/SpiderSilkRouteInstrumentation.java[``SpiderSilkRouteInstrumentation``].
+이 모듈이 advice를 거는 ``WebRequest.withRoute``는 Spider Silk의 API가 아니라 내부 메서드이므로, 모듈을 복사해 쓴다면 Spider Silk를 올릴 때마다 다시 확인한다.
+
 [#descriptions]
 == 설명
 
