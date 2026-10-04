@@ -85,6 +85,7 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 69 | A body goes to one reader, and a HEAD under gzip carries no length | ✅ shipped |
 | 70 | A request path is refused alike on every server | ✅ shipped |
 | 71 | A second pass over shapes a first reader guesses wrong: `expireCookie`, `@CheckReturnValue`, `event(name)`, `StaticFiles.classpath`, `Model.of` | ✅ shipped |
+| 72 | jte is the default engine, with its costs against the other engines that compile | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
 The exception, 15b, is a decision rather than a gap.
@@ -1378,6 +1379,35 @@ The example throws a `NotFoundException` of its own instead.
 
 Rejected: renaming `hostedPath`, `forPath`, and the filter `path` arguments to one word.
 The prefix and the pattern are different things, and the refusal plus one sentence in the manual cover the mistake.
+
+## 72 · Why jte, among the engines that compile
+
+### 72. jte is the default engine, with its costs against the other engines that compile
+
+jte is core's template engine because it compiles a template to Java, so rendering takes no reflection.
+Rocker and JStachio compile too, and jte's costs against them are recorded here as accepted.
+
+- **What jte brings:**
+  - `${deck.title}` becomes a method call in a generated class.
+  - In development a template edit is picked up at runtime, without a rebuild.
+  - In production the build precompiles the templates, so the jar needs no compiler and a template that does not compile fails the build.
+  - Its HTML output escapes by context, so an attribute and a text node are each escaped their own way.
+- **Costs accepted:**
+  - **Two modes.**
+    Runtime compilation needs the JDK's `jdk.compiler`, so a JRE-only image or a native image must precompile.
+    Decisions 25 and 26 carry that setting so an application does not restate it.
+  - **The caller's side is not type-checked.**
+    A template's `@param` declarations are checked inside the template, but a model passed as a `Map` or `Model.of` is checked only when the page renders.
+    JStachio binds a template to a model class, so `javac` catches the mismatch.
+    jte's `jte-models` extension generates a typed facade, a `Templates` interface with a method per template, and `WebResponse.template(name, model)` does not use it.
+  - **A template can hold any Java expression**, so logic can drift into it.
+    Logic-less Mustache, as in JStachio and Handlebars, prevents that by construction.
+  - **A smaller ecosystem**: one principal maintainer, less editor support outside IntelliJ, and fewer designers who know it than know FreeMarker or Thymeleaf.
+    The FreeMarker, Handlebars, and Thymeleaf modules cover a team that needs one of those.
+
+Rejected: JStachio as the default.
+It puts an annotation processor in every application's build, and a template edit takes a recompile.
+Its JMustache extension rendered edits at runtime, and it is deprecated as of 1.3.0 because it did not reliably match JStachio's output.
 
 ## Rejected — decisions, with the reason
 
