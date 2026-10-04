@@ -73,6 +73,9 @@ claude plugin eval . --tag trigger --ablation none   # whether the skill descrip
 
 ## Issues and Commits
 
+- **Do not commit or push until explicitly told to.**
+  Finish the change in the working tree and stop there; a request to edit a file is not a request to commit it.
+  Each commit and each push waits for its own instruction, and an instruction to commit is not an instruction to push.
 - **A commit message never references an issue.**
   No `#12`, no `Fixes #34`, no tracker URL: a commit message says what the change does and stops there.
   The link runs the other way — once the commit is pushed, comment its SHA on the related issue.
