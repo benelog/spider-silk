@@ -47,7 +47,7 @@ tasks.register('centralBundle', Zip) {
 tasks.register('verifyVersionReferences') {
     def expected = version.toString()
     def checked = [
-            'README.md',
+            'README.adoc',
             'manual/antora.yml',
             'manual-ko/antora.yml',
             'spider-silk-maven-parent/pom.xml',
@@ -74,7 +74,10 @@ tasks.register('verifyVersionReferences') {
     doLast {
         def problems = []
         checked.each { name, f ->
+            // An AsciiDoc attribute reference such as {project-version} is
+            // not a version: it reads the one the file declares, which is checked.
             def found = patterns.collectMany { p -> (f.text =~ p).collect { it[1] } }
+                    .findAll { !(it ==~ /\{[\w-]+\}/) }
             if (found.isEmpty()) {
                 problems << "${name}: no version reference found"
             }

@@ -9,7 +9,7 @@ A version on Central is permanent, so every step before the tag is a check that 
    It is the one place the build reads the version from, and `spider-silk-gradle-plugin` reads it from there too.
 2. Run `./gradlew verifyVersionReferences`.
    It names every file that still writes the old version, and each one is edited by hand:
-   - `README.md`
+   - `README.adoc` (`:project-version:`, which every version in it reads)
    - `manual/antora.yml` (`project-version`, which every manual page reads)
    - `spider-silk-maven-parent/pom.xml`
    - `skills/spider-silk/SKILL.md`, `skills/spider-silk/references/setup.md`, and `skills/spider-silk/references/testing.md`
