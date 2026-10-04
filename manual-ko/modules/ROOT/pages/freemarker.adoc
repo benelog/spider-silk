@@ -30,7 +30,7 @@ new App()
 ----
 
 이는 ``classpath:/freemarker/deck.ftlh``를 렌더링하며, UTF-8로 읽고 파싱된 템플릿은 캐시한다.
-모델이 곧 데이터 모델이므로, ``${deck.title}``은 ``Map.of("deck", ...)``에 닿는다.
+``model.asMap()``이 곧 데이터 모델이므로, ``${deck.title}``은 ``Model.of("deck", ...)``의 `deck` 항목에 닿는다.
 
 == 여기서 이스케이프는 결정 사항이다
 
@@ -77,4 +77,4 @@ FreeMarker 자체의 기본값인 ``DEBUG_HANDLER``는 페이지에 스택 트�
 FreeMarker는 ``${deck.title}``을 객체 래퍼를 통해 읽는데, 객체 래퍼는 레코드나 빈을 리플렉션으로 읽는다.
 이는 코어가 아니라 모듈의 리플렉션이다.
 규칙이 적용되는 범위는 xref:reflection-scope.adoc["리플렉션 없음"의 범위]를 참고한다.
-모델을 템플릿이 이미 가진 값들의 ``Map``으로 유지하면 그 리플렉션마저 피할 수 있다.
+모델 값을 레코드나 빈이 아니라 맵으로 두면 그 리플렉션마저 피할 수 있다.

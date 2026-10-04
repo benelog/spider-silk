@@ -121,7 +121,7 @@ app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
 ## WebResponse
 
 Immutable value: every method returns a new response, so chains compose and after-filters can rewrite.
-Cookies are copied on the way in and on the way out of `cookies()`, and a template model is copied into a read-only map (nulls kept); `bytes` arrays and stream writers are handed over, not copied.
+Cookies are copied on the way in and on the way out of `cookies()`, and a template model is an immutable `Model` (nulls kept); `bytes` arrays and stream writers are handed over, not copied.
 
 ```java
 // Bodies

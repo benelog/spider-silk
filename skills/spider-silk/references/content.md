@@ -121,17 +121,24 @@ app.get("/decks/{deckId}/export", req ->
 ## Templates
 
 `WebResponse.template(name, model)` renders a page; the name carries no extension — the engine appends its own.
-Out of the box an `App` renders with jte over `classpath:/jte`, appending `.jte`; the model `Map` is passed to jte's parameters by name and `${}` output is HTML-escaped.
+Out of the box an `App` renders with jte over `classpath:/jte`, appending `.jte`; the `Model`'s entries are passed to jte's parameters by name and `${}` output is HTML-escaped.
 
 ```java
 app.get("/decks/{deckId}", req ->
         WebResponse.template("deck", Model.of("deck", service.deck(req.pathParamLong("deckId")))));
 // renders classpath:/jte/deck.jte
 
-// A value that may be null (flashed, paramOrNull, session().get) needs Model.of: Map.of throws NPE on it
+// A value that may be null (flashed, paramOrNull, session().get) is an entry like any other
 app.get("/decks/{deckId}", req -> WebResponse.template("deck", Model.of(
         "deck", service.deck(req.pathParamLong("deckId")),
         "message", req.flashed("message"))));
+
+// Model is immutable, not a Map: a conditional entry is with(), which answers a new model
+Model model = Model.of("decks", service.decks());
+if (req.session().get("user") instanceof User user) {
+    model = model.with("user", user);
+}
+return WebResponse.template("decks", model);
 
 app.templates(new JteTemplates("templates").suffix(".html"));   // a root or suffix of your own
 ```
@@ -147,6 +154,34 @@ Rendering happens while exception handling still applies, so a template that thr
   No JDK needed at runtime; a template that does not compile fails the build.
   A GraalVM native image requires this mode.
 
+### Type-checked calls with jte-models
+
+A `Model` meets the template's `@param`s by name only at render time.
+When the application wants the compiler to check the call, jte's jte-models extension generates a method per template; core has no API for it, because `WebResponse.html` already sends a rendered string.
+
+```groovy
+spiderSilk { jte() }
+jte { jteExtension('gg.jte.models.generator.ModelExtension') }
+dependencies {
+    jteGenerate 'gg.jte:jte-models:3.2.4'
+    implementation 'gg.jte:jte-models:3.2.4'
+}
+```
+
+```java
+import gg.jte.generated.precompiled.StaticTemplates;
+import gg.jte.generated.precompiled.Templates;
+
+Templates templates = new StaticTemplates();   // DynamicTemplates(engine) in development
+// every @param is an argument, defaulted ones included
+app.get("/decks/{deckId}", req -> WebResponse.html(
+        templates.deck(service.deck(req.pathParamLong("deckId")), req.flashed("message")).render()));
+```
+
+- The page renders inside the handler: a template that throws reaches `app.exception(...)` (as jte's `TemplateException`), and after-route filters see a `Text` body, not a `Template`.
+- `App.templates(...)` and its suffix are not involved.
+- An edited `@param` changes the generated interface, so it takes a rebuild even with `DynamicTemplates`.
+
 ### Other engines
 
 Each is a module of its own; `templates(renderer)` swaps it in.
@@ -159,7 +194,7 @@ app.templates(new ThymeleafTemplates("thymeleaf"));     // classpath:/thymeleaf/
 ```
 
 Each also has a constructor taking the engine's own configured object (`Configuration`, `Handlebars`, `TemplateEngine`) for helpers, dialects, or file-system loading — leave the engine-side suffix empty, since the renderer appends its own.
-Any other engine is one lambda: `app.templates((template, model, out) -> mustache.compile(template + ".mustache").execute(out, model));`
+Any other engine is one lambda: `app.templates((template, model, out) -> mustache.compile(template + ".mustache").execute(out, model.asMap()));` — a renderer receives a `Model` and hands `model.asMap()` to an engine that takes a map.
 
 ## Static files
 

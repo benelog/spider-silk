@@ -8,7 +8,7 @@ A result left unused is therefore a change lost.
 
 The immutability covers the envelope: the status, the headers, the cookies, and the entries of a template model.
 A cookie is copied when it is added and again when `cookies()` hands it out, so changing a `Cookie` object afterwards changes nothing the response sends.
-A template model is copied into a read-only map when the template body is built, so a map the handler keeps writing to does not reach the page.
+A template model is a `Model`, which is immutable, so nothing the handler does after building it reaches the page.
 The copies are shallow, and a mutable object stored as a model value is still the one the handler passed.
 The array of a `bytes` body and the writer of a `stream` body are handed over rather than copied, because those two bodies exist to avoid a second copy of a large body.
 

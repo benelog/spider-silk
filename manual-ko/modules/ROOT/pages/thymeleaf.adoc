@@ -32,7 +32,7 @@ new App()
 ----
 
 이는 ``classpath:/thymeleaf/deck.html``을 렌더링하며, UTF-8 HTML로 파싱하고 파싱된 템플릿은 캐시한다.
-모델의 키가 템플릿이 읽는 변수이므로, ``${deck.title}``은 ``Map.of("deck", ...)``에 닿는다.
+모델의 키가 템플릿이 읽는 변수이므로, ``${deck.title}``은 ``Model.of("deck", ...)``의 `deck` 항목에 닿는다.
 
 ``th:text``는 이스케이프하고 ``th:utext``는 하지 않는데, 이는 Thymeleaf 자체의 기본값이며 여기서 그것을 위해 설정할 것이 없는 이유다.
 

@@ -75,7 +75,7 @@ app.get("/decks/{deckId}", req -> WebResponse.template("deck",
 다음 요청이 디스패치되기 전에, 플래시된 모든 것이 세션에서 빠져나와 그 요청으로 옮겨지며, 그 요청에서 ``flashed(key)``로 읽는다.
 그 뒤의 어떤 요청도 아무것도 찾지 못한다.
 ``flashed``는 아무도 플래시하지 않은 키에 대해 null로 답하므로, 템플릿은 메시지를 조건부로 렌더링할 수 있다.
-xref:templates.adoc#model[템플릿]에서 설명하듯이 ``Map.of``는 그 null에 ``NullPointerException``을 던지므로, 모델은 ``Model.of``로 만든다.
+xref:templates.adoc#model[템플릿]에서 설명하듯이 ``Model.of``는 그 null을 항목으로 받는다.
 플래시는 세션 위에서 동작하므로 세션이 켜져 있어야 하며, 기본으로 켜져 있다.
 
 ``flash(key, null)``은 키를 제거하며, null 세션 속성과 같은 규칙이다.

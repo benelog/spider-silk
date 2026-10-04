@@ -12,8 +12,8 @@ app.get("/decks/{deckId}", req ->
 
 Nothing has to be configured for that.
 An `App` renders with https://jte.gg[jte] over `classpath:/jte` and appends `.jte`, so the handler above renders `classpath:/jte/deck.jte`.
-The model is a `Map`, passed to jte's parameters by name, and `ContentType.Html` escapes `${}` output for you.
-The response copies the model's entries into a read-only map, null values and iteration order kept, so the renderer receives a map it cannot change.
+The model's entries are passed to jte's parameters by name, and `ContentType.Html` escapes `${}` output for you.
+A `Model` is immutable, so nothing the handler still holds changes the page.
 
 [#model]
 == A model with null values
@@ -28,9 +28,23 @@ app.get("/decks/{deckId}", req -> WebResponse.template("deck", Model.of(
         "message", req.flashed("message"))));
 ----
 
-`Model.of` takes up to ten keys and values, as `Map.of` does, and answers a read-only map that iterates in the order the entries were given.
+`Model.of` takes up to ten keys and values, as `Map.of` does, and keeps the order the entries were given.
 A null key throws `NullPointerException`, and a key given twice throws `IllegalArgumentException`, the same exceptions `Map.of` throws.
-A model that gains entries conditionally is still a `HashMap` filled one `put` at a time, and `template(name, model)` takes either.
+
+A `Model` is an immutable value, not a map.
+A model that gains entries conditionally grows with `with(key, value)`, which answers a new model:
+
+[source,java]
+----
+Model model = Model.of("decks", service.decks());
+if (req.session().get("user") instanceof User user) {
+    model = model.with("user", user);
+}
+return WebResponse.template("decks", model);
+----
+
+`with` throws `IllegalArgumentException` on a key the model already holds.
+`asMap()` answers the entries as a read-only map, null values and order kept, for a renderer that hands them to an engine taking a map.
 
 == A root or a suffix of your own
 
@@ -44,12 +58,13 @@ The suffix is appended, never checked for, so a name that still carries its exte
 
 == Another engine
 
-`TemplateRenderer` is a single method, taking a template name, a model, and the writer to render into.
+`TemplateRenderer` is a single method, taking a template name, a `Model`, and the writer to render into.
 Implement it for an engine that is not jte, and pass it to `templates(renderer)` to take the place of the default.
+An engine that takes a map receives `model.asMap()`.
 
 [source,java]
 ----
-app.templates((template, model, out) -> mustache.compile(template + ".mustache").execute(out, model));
+app.templates((template, model, out) -> mustache.compile(template + ".mustache").execute(out, model.asMap()));
 ----
 
 Three engines come as modules of their own, with the root, the suffix, and the escaping already settled: xref:freemarker.adoc[FreeMarker], xref:handlebars.adoc[Handlebars], and xref:thymeleaf.adoc[Thymeleaf].
@@ -116,3 +131,60 @@ The jar then renders from compiled classes: no runtime compiler, no JDK on the m
 The suffix applies either way, so no handler changes.
 The example project switches between the two modes with a `--dev` flag.
 A xref:native-image.adoc[native image] has no compiler at runtime at all, so precompiling is the only mode there.
+
+[#jte-models]
+== Type-checked template calls with jte-models
+
+The jte extension https://jte.gg/jte-models/[jte-models] generates a Java method per template, so the compiler checks a handler's call to a template.
+A `Model` is matched to a template's parameters by name only when the page renders: a misspelled key or a value of the wrong type fails the request, not the build.
+The generated method takes the template's `@param` declarations as its parameters instead.
+
+The extension is two more lines beside `spiderSilk { jte() }`, which already applies the jte plugin and calls `generate()`:
+
+[source,groovy,subs="attributes+"]
+----
+jte {
+    jteExtension('gg.jte.models.generator.ModelExtension')
+}
+
+dependencies {
+    jteGenerate 'gg.jte:jte-models:{jte-version}'
+    implementation 'gg.jte:jte-models:{jte-version}'
+}
+----
+
+The build then generates the interface `gg.jte.generated.precompiled.Templates`, with one method per template, and two implementations of it.
+`StaticTemplates` renders the precompiled classes, and `DynamicTemplates` renders through the `TemplateEngine` it is given.
+Every `@param` is a parameter of the method, one with a default value included.
+The method answers a `JteModel`, whose `render()` answers the page as a string, so `WebResponse.html` sends it:
+
+[source,java]
+----
+Templates templates = new StaticTemplates();
+
+// deck.jte declares @param Deck deck and @param String message = null
+app.get("/decks/{deckId}", req -> WebResponse.html(
+        templates.deck(service.deck(req.pathParamLong("deckId")), req.flashed("message")).render()));
+----
+
+Core has no API of its own for jte-models, because `html` already sends a rendered string.
+The call differs from `template()` in three ways:
+
+* The page renders inside the handler, so a template that throws reaches `app.exception(...)` as any other exception of the handler does.
+jte wraps the failure in a `TemplateException`, as it does when `JteTemplates` renders.
+* The page renders before the after-route filters run, so a filter sees a `Text` body holding the page rather than a `Template` body.
+* `App.templates(...)` is not involved, so the renderer set there and its suffix do not apply.
+
+Development hands `DynamicTemplates` an engine over the source directory, as the development mode above does:
+
+[source,java]
+----
+Templates templates = dev
+        ? new DynamicTemplates(TemplateEngine.create(
+                new DirectoryCodeResolver(Path.of("src/main/resources/jte")),
+                Path.of("build/jte-classes"), ContentType.Html))
+        : new StaticTemplates();
+----
+
+An edited template body shows on the next request.
+An edited `@param` declaration changes the generated `Templates` interface, so it takes a rebuild.

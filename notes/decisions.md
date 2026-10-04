@@ -86,6 +86,7 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 70 | A request path is refused alike on every server | ✅ shipped |
 | 71 | A second pass over shapes a first reader guesses wrong: `expireCookie`, `@CheckReturnValue`, `event(name)`, `StaticFiles.classpath`, `Model.of` | ✅ shipped |
 | 72 | jte is the default engine, with its costs against the other engines that compile | ✅ shipped |
+| 73 | A template takes an immutable `Model`, and a `Map` comes out only at the engine's edge | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
 The exception, 15b, is a decision rather than a gap.
@@ -1365,7 +1366,8 @@ Each change lands in the same breaking 1.2.0, with no deprecated alias, for deci
   `hostedPath` now refuses a `*`, since it takes a prefix where a filter path and `Cors.forPath` take a pattern, and `"/assets/*"` answered 404 to every file.
 - **`Model.of(...)`, a template model that takes null.**
   `req.flashed`, `paramOrNull`, and `session().get` answer null, and `Map.of` throws on one, so the natural model was a 500.
-  It mirrors `Map.of` up to ten pairs, keeping order and refusing a null or repeated key.
+  Its overloads follow `Map.of` up to ten pairs, keeping order and refusing a null or repeated key.
+  It answers an immutable `Model` rather than a map, as decision 73 records.
 
 Smaller asymmetries went with them:
 
@@ -1400,6 +1402,7 @@ Rocker and JStachio compile too, and jte's costs against them are recorded here 
     A template's `@param` declarations are checked inside the template, but a model passed as a `Map` or `Model.of` is checked only when the page renders.
     JStachio binds a template to a model class, so `javac` catches the mismatch.
     jte's `jte-models` extension generates a typed facade, a `Templates` interface with a method per template, and `WebResponse.template(name, model)` does not use it.
+    An application that wants the check uses the facade with `WebResponse.html(templates.deck(deck).render())`, as decision 73 records.
   - **A template can hold any Java expression**, so logic can drift into it.
     Logic-less Mustache, as in JStachio and Handlebars, prevents that by construction.
   - **A smaller ecosystem**: one principal maintainer, less editor support outside IntelliJ, and fewer designers who know it than know FreeMarker or Thymeleaf.
@@ -1408,6 +1411,27 @@ Rocker and JStachio compile too, and jte's costs against them are recorded here 
 Rejected: JStachio as the default.
 It puts an annotation processor in every application's build, and a template edit takes a recompile.
 Its JMustache extension rendered edits at runtime, and it is deprecated as of 1.3.0 because it did not reliably match JStachio's output.
+
+## 73 · The template model is a value, not a map
+
+### 73. A template takes an immutable `Model`, and a `Map` comes out only at the engine's edge
+
+`WebResponse.template(name, model)` takes a `Model`, and no API takes a model as a `Map` any longer.
+A handler that built or passed a map had two ways to write one model, and a `HashMap` it kept writing to could still change before the copy was taken.
+
+- **`Model` is an immutable value.**
+  - `Model.of(...)` builds it, with decision 71's rules for null values and keys.
+  - `model.with(key, value)` answers a new model, for an entry added under a condition.
+  - Equality is by entries, so a test compares a `Template` body with `equals`.
+- **`TemplateRenderer` takes the `Model` too.**
+  - `model.asMap()` is the one place a `Map` comes out, at the edge where a renderer hands it to an engine.
+  - It is public, because the FreeMarker, Handlebars, and Thymeleaf renderers live in other packages.
+- **jte-models needs nothing from core.**
+  - `JteModel.render()` answers the page as a string, so `WebResponse.html(templates.deck(deck).render())` sends it.
+  - The page then renders inside the handler, before the after-route filters, and `App.templates(...)` is not involved.
+
+Rejected: keeping `template(name, Map)` beside `template(name, Model)`, which leaves the two ways to write a model.
+Rejected: a `template(JteModel)` in core, which would tie core's API to a jte extension for what `html(...)` already does.
 
 ## Rejected — decisions, with the reason
 

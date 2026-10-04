@@ -32,7 +32,7 @@ new App()
 ----
 
 That renders `classpath:/thymeleaf/deck.html`, parsed as UTF-8 HTML with the parsed template cached.
-The model's keys are the variables a template reads, so `${deck.title}` reaches `Map.of("deck", ...)`.
+The model's keys are the variables a template reads, so `${deck.title}` reaches the `deck` entry of `Model.of("deck", ...)`.
 
 `th:text` escapes and `th:utext` does not, which is Thymeleaf's own default and the reason nothing has to be configured for it here.
 

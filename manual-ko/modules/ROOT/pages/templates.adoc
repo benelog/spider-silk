@@ -12,8 +12,8 @@ app.get("/decks/{deckId}", req ->
 
 이를 위해 설정할 것은 없다.
 ``App``은 https://jte.gg[jte]로 ``classpath:/jte``의 템플릿을 렌더링하며 ``.jte``를 덧붙이므로, 위의 핸들러는 ``classpath:/jte/deck.jte``를 렌더링한다.
-모델은 ``Map``이며 이름으로 jte의 파라미터에 전달되고, ``ContentType.Html``이 `${}` 출력을 대신 이스케이프한다.
-응답은 모델의 항목을 null 값과 순회 순서를 유지한 채 읽기 전용 맵으로 복사하므로, 렌더러는 바꿀 수 없는 맵을 받는다.
+모델의 항목은 이름으로 jte의 파라미터에 전달되고, ``ContentType.Html``이 `${}` 출력을 대신 이스케이프한다.
+``Model``은 불변이므로, 핸들러가 아직 쥐고 있는 어떤 것도 페이지를 바꾸지 못한다.
 
 [#model]
 == null 값을 담은 모델
@@ -28,9 +28,23 @@ app.get("/decks/{deckId}", req -> WebResponse.template("deck", Model.of(
         "message", req.flashed("message"))));
 ----
 
-``Model.of``는 ``Map.of``처럼 키와 값을 열 쌍까지 받으며, 항목이 주어진 순서대로 순회하는 읽기 전용 맵을 답한다.
+``Model.of``는 ``Map.of``처럼 키와 값을 열 쌍까지 받으며, 항목이 주어진 순서를 유지한다.
 null 키는 ``NullPointerException``을, 두 번 주어진 키는 ``IllegalArgumentException``을 던지며, 이는 ``Map.of``가 던지는 것과 같은 예외이다.
-조건에 따라 항목이 늘어나는 모델은 여전히 ``put``으로 하나씩 채우는 ``HashMap``이며, ``template(name, model)``은 둘 다 받는다.
+
+``Model``은 맵이 아니라 불변 값이다.
+조건에 따라 항목이 늘어나는 모델은 새 모델을 답하는 ``with(key, value)``로 항목을 더한다:
+
+[source,java]
+----
+Model model = Model.of("decks", service.decks());
+if (req.session().get("user") instanceof User user) {
+    model = model.with("user", user);
+}
+return WebResponse.template("decks", model);
+----
+
+``with``는 모델이 이미 가진 키에 ``IllegalArgumentException``을 던진다.
+``asMap()``은 null 값과 순서를 유지한 읽기 전용 맵으로 항목을 답하며, 맵을 받는 엔진에 항목을 넘기는 렌더러가 쓴다.
 
 == 직접 정하는 루트나 접미사
 
@@ -44,12 +58,13 @@ app.templates(new JteTemplates("templates")     // classpath:/templates
 
 == 다른 엔진
 
-``TemplateRenderer``는 템플릿 이름, 모델, 렌더링 결과를 쓸 라이터를 받는 메서드 하나다.
+``TemplateRenderer``는 템플릿 이름, ``Model``, 렌더링 결과를 쓸 라이터를 받는 메서드 하나다.
 jte가 아닌 엔진은 이 인터페이스를 구현하고, ``templates(renderer)``에 전달해 기본값을 대체한다.
+맵을 받는 엔진에는 ``model.asMap()``을 넘긴다.
 
 [source,java]
 ----
-app.templates((template, model, out) -> mustache.compile(template + ".mustache").execute(out, model));
+app.templates((template, model, out) -> mustache.compile(template + ".mustache").execute(out, model.asMap()));
 ----
 
 세 엔진은 루트, 접미사, 이스케이프가 이미 정해진 별도 모듈로 제공된다: xref:freemarker.adoc[FreeMarker], xref:handlebars.adoc[Handlebars], xref:thymeleaf.adoc[Thymeleaf]다.
@@ -116,3 +131,60 @@ app.templates(new JteTemplates(TemplateEngine.createPrecompiled(ContentType.Html
 접미사는 어느 쪽이든 적용되므로, 핸들러는 바뀌지 않는다.
 예제 프로젝트는 `--dev` 플래그로 두 모드를 전환한다.
 xref:native-image.adoc[네이티브 이미지]에는 런타임 컴파일러가 아예 없으므로, 거기서는 사전 컴파일이 유일한 모드다.
+
+[#jte-models]
+== jte-models로 타입을 검사하는 템플릿 호출
+
+jte 확장 https://jte.gg/jte-models/[jte-models]는 템플릿마다 Java 메서드를 생성하므로, 핸들러가 템플릿을 부르는 호출을 컴파일러가 검사한다.
+``Model``은 페이지를 렌더링할 때에야 이름으로 템플릿의 파라미터에 맞춰지므로, 철자가 틀린 키나 타입이 틀린 값은 빌드가 아니라 요청을 실패시킨다.
+생성된 메서드는 대신 템플릿의 `@param` 선언을 파라미터로 받는다.
+
+이 확장은 ``spiderSilk { jte() }`` 곁에 두 줄을 더하는 것으로 충분하며, ``spiderSilk { jte() }``가 이미 jte 플러그인을 적용하고 ``generate()``를 호출한다:
+
+[source,groovy,subs="attributes+"]
+----
+jte {
+    jteExtension('gg.jte.models.generator.ModelExtension')
+}
+
+dependencies {
+    jteGenerate 'gg.jte:jte-models:{jte-version}'
+    implementation 'gg.jte:jte-models:{jte-version}'
+}
+----
+
+그러면 빌드는 템플릿마다 메서드 하나를 가진 인터페이스 ``gg.jte.generated.precompiled.Templates``와, 그 구현 두 개를 생성한다.
+``StaticTemplates``는 사전 컴파일된 클래스를 렌더링하고, ``DynamicTemplates``는 건네받은 ``TemplateEngine``으로 렌더링한다.
+기본값이 있는 것을 포함해 모든 `@param`이 메서드의 파라미터다.
+메서드는 ``JteModel``을 답하고, 그 ``render()``가 페이지를 문자열로 답하므로, ``WebResponse.html``이 그것을 보낸다:
+
+[source,java]
+----
+Templates templates = new StaticTemplates();
+
+// deck.jte declares @param Deck deck and @param String message = null
+app.get("/decks/{deckId}", req -> WebResponse.html(
+        templates.deck(service.deck(req.pathParamLong("deckId")), req.flashed("message")).render()));
+----
+
+``html``이 이미 렌더링된 문자열을 보내므로, core에는 jte-models를 위한 API가 따로 없다.
+이 호출은 ``template()``과 세 가지가 다르다:
+
+* 페이지가 핸들러 안에서 렌더링되므로, 예외를 던지는 템플릿은 핸들러의 다른 예외와 마찬가지로 ``app.exception(...)``에 도달한다.
+jte는 ``JteTemplates``가 렌더링할 때와 마찬가지로 실패를 ``TemplateException``으로 감싼다.
+* 페이지가 after-route 필터보다 먼저 렌더링되므로, 필터는 ``Template`` 본문이 아니라 페이지를 담은 ``Text`` 본문을 본다.
+* ``App.templates(...)``를 거치지 않으므로, 거기 설정한 렌더러와 그 접미사는 적용되지 않는다.
+
+개발 중에는 앞의 개발 모드처럼 소스 디렉터리를 읽는 엔진을 ``DynamicTemplates``에 건넨다:
+
+[source,java]
+----
+Templates templates = dev
+        ? new DynamicTemplates(TemplateEngine.create(
+                new DirectoryCodeResolver(Path.of("src/main/resources/jte")),
+                Path.of("build/jte-classes"), ContentType.Html))
+        : new StaticTemplates();
+----
+
+템플릿 본문을 고치면 다음 요청에 바로 반영된다.
+`@param` 선언을 고치면 생성되는 ``Templates`` 인터페이스가 바뀌므로 다시 빌드해야 한다.

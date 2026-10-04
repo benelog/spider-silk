@@ -20,8 +20,10 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   They follow the absence rule `WebRequest` follows: the plain name requires the value, a default as the last argument makes it optional, and `OrNull` answers null.
 - `spider-silk-core`: `app.bodyLimits(BodyLimits)` bounds what `body()` and `bodyJson()` hold (`maxBytes`) and what one `bodyNdjson` line holds (`maxNdjsonLineBytes`), in bytes counted as they arrive, and answers 413 beyond them.
   `BodyLimits.unlimited()` lifts both, and `bodyStream()` and `bodyReader()` are never limited.
-- `spider-silk-core`: `Model.of(...)` builds a template model from up to ten key and value pairs, as `Map.of` does, and takes a null value.
+- `spider-silk-core`: `Model`, the immutable template model.
+  `Model.of(...)` builds one from up to ten key and value pairs, as `Map.of` does, and takes a null value.
   `Map.of("message", req.flashed("message"))` threw `NullPointerException` and answered 500 whenever no flash was waiting.
+  `model.with(key, value)` answers a model with one more entry, and `model.asMap()` answers the entries as a read-only map.
 - `spider-silk-core`: `JsonReader.object(fromObject)` builds a reader of a JSON object from a function of its `JsonObject`, so a reader calls `asObject()` once rather than once per field.
 - `spider-silk-test`: `TestClient.putJson(path, json)` and `patchJson(path, json)` send JSON as `postJson` does, and all three take a `String` or a `JsonValue`.
 
@@ -38,6 +40,10 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `spider-silk-core`: `StaticFiles.hostedPath(...)` throws `IllegalArgumentException` for a `*`.
   It takes a prefix, and `hostedPath("/assets/*")` used to answer every file under it with 404.
 - `spider-silk-core`: `WebResponse.json(String)` is `WebResponse.rawJson(String)`.
+- `spider-silk-core`: `WebResponse.template(name, Map)` is `WebResponse.template(name, Model)`, and `WebResponse.Template` is `Template(String name, Model model)`.
+  A model built with `Map.of` becomes `Model.of` with the same arguments, and a `HashMap` filled with `put` becomes a `Model` grown with `with`.
+- `spider-silk-core`: `TemplateRenderer.render(template, model, out)` takes a `Model` instead of a `Map`.
+  A renderer of your own hands `model.asMap()` to an engine that takes a map.
   `json` now takes only a `JsonValue` or a value with its `JsonWriter`, so a Java string can no longer be sent as a JSON document by mistake.
 - `spider-silk-core`: `app.error(status, handler)` is `app.statusPage(status, handler)`.
 - `spider-silk-core`: `app.guards()` is `app.hooks()`, and the sealed `Guard` is `Hook`.

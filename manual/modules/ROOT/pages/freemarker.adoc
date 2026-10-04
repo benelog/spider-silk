@@ -30,7 +30,7 @@ new App()
 ----
 
 That renders `classpath:/freemarker/deck.ftlh`, read as UTF-8 with the parsed template cached.
-The model is the data model, so `${deck.title}` reaches `Map.of("deck", ...)`.
+`model.asMap()` is the data model, so `${deck.title}` reaches the `deck` entry of `Model.of("deck", ...)`.
 
 == Escaping is a decision here
 
@@ -77,4 +77,4 @@ FreeMarker's own default, `DEBUG_HANDLER`, writes the stack trace into the page.
 FreeMarker reads `${deck.title}` through its object wrapper, which is reflective for a record or a bean.
 That is the module's reflection, not core's.
 See xref:reflection-scope.adoc[The Scope of "No Reflection"] for where the rule applies.
-Keeping the model a `Map` of values a template already holds avoids even that reflection.
+Model values that are maps rather than records or beans avoid even that reflection.

@@ -57,7 +57,9 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 == ``WebResponse``가 제공하는 것
 
 * 본문: `html`, `text`, `rawJson(text)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `file(path)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
-* ``Model.of(...)``는 ``Map.of``가 거부하는 null 값을 담을 수 있는, 항목 열 개까지의 `template(name, model)` 모델을 만든다; xref:templates.adoc#model[템플릿]을 참고한다
+* ``Model.of(...)``는 `template(name, model)`이 받는 불변 ``Model``을 null 값을 담을 수 있는 항목 열 개까지로 만든다; xref:templates.adoc#model[템플릿]을 참고한다
+* ``model.with(key, value)``는 항목 하나를 더한 모델을, ``model.asMap()``은 렌더러를 위한 읽기 전용 맵을 답한다
+* jte-models가 생성한 메서드로 부르는 jte 템플릿은 ``html(templates.deck(deck).render())``로 보낸다; xref:templates.adoc#jte-models[템플릿]을 참고한다
 * ``file(path)``는 콘텐츠 타입을 이름에서, 길이를 파일에서 읽는다.
   읽을 수 있는 일반 파일이 아닌 경로는 ``UncheckedIOException``을 던지므로, 없는 파일에 대한 404는 핸들러가 직접 작성한다
 * 값을 하나씩 쓰는 본문: 담아 두기에 너무 큰 배열을 위한 `jsonArray(sink -> ...)`, 한 줄에 값 하나를 쓰는 `ndjson(sink -> ...)`.

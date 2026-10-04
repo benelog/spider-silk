@@ -75,7 +75,7 @@ app.get("/decks/{deckId}", req -> WebResponse.template("deck",
 Before the next request is dispatched, everything flashed moves out of the session and into that request, where `flashed(key)` reads it.
 Any request after that finds nothing.
 `flashed` answers null for a key nobody flashed, so a template can render the message conditionally.
-The model is built with `Model.of`, because `Map.of` throws `NullPointerException` on that null, as xref:templates.adoc#model[Templates] describes.
+`Model.of` takes that null as an entry, as xref:templates.adoc#model[Templates] describes.
 Flash rides on the session, so it needs sessions on, which they are by default.
 
 `flash(key, null)` removes the key, the same rule a null session attribute follows.
