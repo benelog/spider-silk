@@ -5,6 +5,7 @@
 Spider Silk를 본 적 없는 AI 코딩 에이전트는 추측하는데, 이만큼 의도적으로 설계된 프레임워크는 추측하기에 나쁜 곳이다.
 Gradle 플러그인은 Plugin Portal이 아니라 Maven Central에서 해석되고, JSON 매핑은 리플렉션이 아니라 직접 작성하며, 에이전트가 습관적으로 만들어 내는 `Controller` 인터페이스는 정확히 xref:handlers.adoc[핸들러]가 만들지 말라고 하는 것이다.
 스킬은 이 매뉴얼에서 추려낸 것이고, 매뉴얼이 진실의 원천으로 남는다: 스킬이 판가름하지 못하는 질문은 여기서 답하고, API를 바꾸는 릴리스는 스킬도 함께 바꾼다.
+아래의 모든 설치 방법은 최신 릴리스의 태그 ``v{project-version}``에서 스킬을 가져오므로, 스킬은 ``main``의 출시되지 않은 API가 아니라 Maven Central에 있는 jar의 API를 설명한다.
 
 == Claude Code
 
@@ -22,7 +23,7 @@ Gradle 플러그인은 Plugin Portal이 아니라 Maven Central에서 해석되�
 
 [source,bash,subs="attributes+"]
 ----
-git clone --depth 1 https://github.com/{project-repo} /tmp/spider-silk
+git clone --depth 1 --branch v{project-version} https://github.com/{project-repo} /tmp/spider-silk
 mkdir -p .claude/skills
 cp -r /tmp/spider-silk/skills/spider-silk .claude/skills/
 ----
@@ -47,7 +48,7 @@ Codex는 프로젝트 자체의 ``.agents/skills/``에서도 스킬을 읽는다
 
 [source,bash,subs="attributes+"]
 ----
-git clone --depth 1 https://github.com/{project-repo} /tmp/spider-silk
+git clone --depth 1 --branch v{project-version} https://github.com/{project-repo} /tmp/spider-silk
 mkdir -p .agents/skills
 cp -r /tmp/spider-silk/skills/spider-silk .agents/skills/
 ----

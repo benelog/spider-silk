@@ -104,6 +104,7 @@ The [manual](https://spider-silk.benelog.net) covers the rest: the modules, temp
 
 [`skills/spider-silk/`](skills/spider-silk/SKILL.md) is an [Agent Skill](https://agentskills.io) that guides a coding agent to use the framework as intended.
 The repository is a plugin marketplace for both Claude Code and Codex.
+Either marketplace installs the skill from the latest release's tag, so the skill describes the API of the jars on Maven Central.
 
 Claude Code installs it with two commands inside a session:
 

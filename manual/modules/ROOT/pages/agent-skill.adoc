@@ -5,6 +5,7 @@ The repository carries an agent skill at `skills/spider-silk/`, in the https://a
 An AI coding agent that has never seen Spider Silk guesses, and a framework this deliberate is a bad place to guess.
 The Gradle plugin resolves from Maven Central rather than the Plugin Portal, JSON mapping is written rather than reflected, and the `Controller` interface an agent invents out of habit is exactly what xref:handlers.adoc[Handlers] says not to build.
 The skill is distilled from this manual, and the manual stays the source of truth: a question the skill cannot settle is answered here, and a release that changes an API changes the skill alongside it.
+Every installation below takes the skill from the latest release's tag, `v{project-version}`, so the skill describes the API of the jars on Maven Central rather than the unreleased one on `main`.
 
 == Claude Code
 
@@ -22,7 +23,7 @@ Copy the skill directory into the project's `.claude/skills/` for a single proje
 
 [source,bash,subs="attributes+"]
 ----
-git clone --depth 1 https://github.com/{project-repo} /tmp/spider-silk
+git clone --depth 1 --branch v{project-version} https://github.com/{project-repo} /tmp/spider-silk
 mkdir -p .claude/skills
 cp -r /tmp/spider-silk/skills/spider-silk .claude/skills/
 ----
@@ -47,7 +48,7 @@ Copy the skill directory there for a single project instead, so that collaborato
 
 [source,bash,subs="attributes+"]
 ----
-git clone --depth 1 https://github.com/{project-repo} /tmp/spider-silk
+git clone --depth 1 --branch v{project-version} https://github.com/{project-repo} /tmp/spider-silk
 mkdir -p .agents/skills
 cp -r /tmp/spider-silk/skills/spider-silk .agents/skills/
 ----

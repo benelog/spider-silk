@@ -56,6 +56,7 @@ tasks.register('verifyVersionReferences') {
             'skills/spider-silk/references/testing.md',
             '.claude-plugin/plugin.json',
             '.claude-plugin/marketplace.json',
+            '.agents/plugins/marketplace.json',
             '.codex-plugin/plugin.json',
     ].collectEntries { [(it): file(it)] }
     def patterns = [
@@ -64,6 +65,7 @@ tasks.register('verifyVersionReferences') {
             ~/<artifactId>spider-silk-[a-z-]+<\/artifactId>\s*<version>([^<]+)<\/version>/,
             ~/project-version: (\S+)/,
             ~/"version": "([^"]+)"/,
+            ~/"ref": "v([^"]+)"/,
             ~/(?m)^  version: "([^"]+)"/,
             ~/The current version is `([^`]+)`/,
     ]

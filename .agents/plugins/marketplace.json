@@ -7,8 +7,9 @@
     {
       "name": "spider-silk",
       "source": {
-        "source": "local",
-        "path": "./"
+        "source": "url",
+        "url": "https://github.com/benelog/spider-silk.git",
+        "ref": "v1.1.0"
       },
       "policy": {
         "installation": "AVAILABLE",
