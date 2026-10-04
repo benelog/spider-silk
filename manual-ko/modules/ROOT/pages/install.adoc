@@ -123,6 +123,9 @@ Hello, silk
 
 | `spider-silk-openapi`
 | xref:openapi.adoc[`OpenApi`]: 라우트 목록을 담은 OpenAPI 3.1 문서
+
+| `spider-silk-opentelemetry-agent`
+| xref:opentelemetry.adoc[OpenTelemetry Java 에이전트 확장]: 매칭된 라우트로 이름 붙은 스팬, jar는 의존성으로 추가하지 않고 에이전트에 건넨다
 |===
 
 === 빌드

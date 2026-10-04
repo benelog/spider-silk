@@ -35,7 +35,7 @@ Spider Silk is a web framework built on the Jakarta Servlet API.
 - **Open to the ecosystem.**
   Tomcat and Undertow, and FreeMarker, Handlebars, and Thymeleaf, come as optional modules, and switching to one is a single line.
 - **Tooling around it.**
-  A test harness, an OpenAPI export, a Gradle plugin and a Maven parent for packaging, and an agent skill for AI coding agents come with the framework.
+  A test harness, an OpenAPI export, an OpenTelemetry agent extension, a Gradle plugin and a Maven parent for packaging, and an agent skill for AI coding agents come with the framework.
 
 **The manual explains each of these in detail: [spider-silk.benelog.net](https://spider-silk.benelog.net)** ([한국어 매뉴얼](https://spider-silk.benelog.net/ko/)), for every released version.
 

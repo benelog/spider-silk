@@ -37,6 +37,7 @@
 ** xref:openapi.adoc[OpenAPI Export]
 ** xref:logging.adoc[Logging]
 ** xref:request-logging.adoc[Request Logging]
+** xref:opentelemetry.adoc[OpenTelemetry]
 
 * Reference
 ** xref:api-summary.adoc[API Summary]

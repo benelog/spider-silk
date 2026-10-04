@@ -51,13 +51,8 @@ From `beforeRoute` on, it stays set through the handler, the after-filters, the 
 A HEAD answered by a GET route reports that GET route.
 The route reported is the one the router chose, so it follows the registration order that breaks ties rather than a preference of its own.
 
-Under the https://opentelemetry.io/docs/zero-code/java/agent/[OpenTelemetry Java agent], a Spider Silk application is one servlet mapped at `++/*++`, so the route has to be reported to the agent.
-The agent's servlet instrumentation sets `http.route` to that mapping, and every request becomes the one span `++GET /*++`.
-https://spider-sense.benelog.net[Spider Sense] reports the route from its agent extension, in the instrumentation module `spider-sense-spider-silk`.
-The module advises the method Spider Silk calls once the router has matched a route, and sets `http.route` to that route's path with the controller as its source, as the agent's own framework instrumentations do.
-The span is then named `GET /api/decks/\{deckId}`.
-An application that runs the stock agent without Spider Sense needs an extension that does the same, and the module's source is the reference for one: https://github.com/benelog/spider-sense/blob/main/spider-sense-extension/src/main/java/net/benelog/spidersense/extension/SpiderSilkInstrumentationModule.java[`SpiderSilkInstrumentationModule`] and https://github.com/benelog/spider-sense/blob/main/spider-sense-extension/src/main/java/net/benelog/spidersense/extension/SpiderSilkRouteInstrumentation.java[`SpiderSilkRouteInstrumentation`].
-The method the module advises, `WebRequest.withRoute`, is internal to Spider Silk rather than part of its API, so a copy of the module is checked again at each Spider Silk upgrade.
+Under the OpenTelemetry Java agent, a Spider Silk application is one servlet mapped at `++/*++`, so every request is the one span `++GET /*++` unless something reports the route.
+xref:opentelemetry.adoc[`spider-silk-opentelemetry-agent`] reports this route to the agent, so the span is named `GET /api/decks/\{deckId}` with no code in the application.
 
 [#descriptions]
 == Descriptions

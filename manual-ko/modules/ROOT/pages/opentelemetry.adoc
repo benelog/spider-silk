@@ -1,0 +1,54 @@
+= OpenTelemetry
+:navtitle: OpenTelemetry
+
+``spider-silk-opentelemetry-agent``는 서버 스팬마다 요청에 응답한 라우트로 이름을 붙이는 https://opentelemetry.io/docs/zero-code/java/agent/[OpenTelemetry Java 에이전트]의 확장이다.
+스팬은 ``++GET /*++`` 대신 ``GET /api/decks/\{deckId}``가 되고, 그 ``http.route`` 속성도 같은 경로 템플릿을 담는다.
+
+== 에이전트에 이 모듈이 필요한 이유
+
+Spider Silk 애플리케이션은 ``++/*++``에 매핑된 서블릿 하나이고, 그 위에 Spider Silk의 라우터가 있다.
+에이전트의 서블릿 계측은 그 매핑을 모든 요청의 ``http.route``로 보고하므로, 모든 요청이 ``++GET /*++`` 스팬 하나가 된다.
+에이전트는 Spring MVC의 라우터를 계측해 핸들러의 패턴을 대신 보고하지만, Spider Silk의 라우터를 위한 계측은 없다.
+이 모듈이 그 계측이다.
+
+== 설치
+
+jar는 애플리케이션의 클래스 패스에 넣지 않고 에이전트에 건넨다:
+
+[source,bash,subs="attributes+"]
+----
+java -javaagent:opentelemetry-javaagent.jar \
+     -Dotel.javaagent.extensions=spider-silk-opentelemetry-agent-{project-version}.jar \
+     -jar app.jar
+----
+
+jar는 ``{project-group}:spider-silk-opentelemetry-agent:{project-version}``로 Maven Central에 배포된다.
+jar는 자신이 가리키는 클래스를 하나도 담지 않는다: OpenTelemetry의 클래스는 에이전트가, Spider Silk의 클래스는 애플리케이션이 제공한다.
+애플리케이션의 코드는 바뀌지 않는다.
+
+== 보고하는 것
+
+보고되는 라우트는 xref:route-introspection.adoc#matched-route[`req.route()`]가 보고하는 라우트이며, 등록된 그대로 그룹 접두사가 해석된 형태다.
+그 형태가 이미 ``http.route``의 경로 템플릿 문법이므로, 모듈은 그대로 넘긴다.
+라우트는 라우터가 라우트를 찾은 뒤, 그 라우트의 필터나 핸들러가 실행되기 전에 보고된다.
+라우트는 컨트롤러를 출처로 하여 들어가며, 이 출처는 Spring MVC 핸들러의 패턴처럼 서블릿 매핑보다 우선한다.
+
+매칭된 라우트가 없는 요청은 ``++/*++``를 유지한다: 정적 파일, 404, 405, 자동 OPTIONS 응답이 그렇다.
+GET 라우트가 응답한 HEAD는 그 GET 라우트를 보고한다.
+
+``-Dotel.instrumentation.spider-silk.enabled=false``는 다른 에이전트 계측과 마찬가지로 이 모듈을 끈다.
+
+== 에이전트 버전
+
+이 모듈은 에이전트 {otel-agent-version}에 맞춰 컴파일하고 테스트한다.
+에이전트는 확장 API를 alpha로 배포하므로, 에이전트의 릴리스가 그 API를 바꿀 수 있다.
+다른 에이전트 릴리스는 이 빌드가 확인하지 않는다.
+
+== 동작 방식
+
+이 모듈은 core의 메서드 하나, 라우터가 라우트를 찾았을 때 요청 스레드에서 호출하는 ``WebRequest.withRoute``에 advice를 건다.
+에이전트는 클래스가 로드될 때 그 advice를 ``WebRequest``에 엮어 넣으며, 이는 프레임워크가 아니라 에이전트의 메커니즘이다.
+core는 OpenTelemetry 의존성도 자체 계측도 갖지 않으며, 에이전트 없이 시작한 애플리케이션은 이 중 아무것도 실행하지 않는다.
+
+이 메서드는 core의 API가 아니라 내부 메서드다.
+메서드와 advice가 한 빌드에서 함께 바뀌도록 이 모듈은 이 리포지토리에 있다: 모듈의 테스트는 실제 에이전트 아래에서 애플리케이션을 실행하며, 메서드의 이름이나 파라미터가 바뀌면 실패한다.

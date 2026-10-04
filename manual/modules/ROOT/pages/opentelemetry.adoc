@@ -1,0 +1,54 @@
+= OpenTelemetry
+:navtitle: OpenTelemetry
+
+`spider-silk-opentelemetry-agent` is an extension of the https://opentelemetry.io/docs/zero-code/java/agent/[OpenTelemetry Java agent] that names each server span after the route that answered the request.
+A span reads `GET /api/decks/\{deckId}` instead of `++GET /*++`, and its `http.route` attribute carries the same path template.
+
+== Why the agent needs it
+
+A Spider Silk application is one servlet mapped at `++/*++`, with Spider Silk's router above it.
+The agent's servlet instrumentation reports that mapping as the `http.route` of every request, so every request becomes the one span `++GET /*++`.
+The agent instruments the router of Spring MVC and reports a handler's pattern instead, but it has no instrumentation for Spider Silk's router.
+This module is that instrumentation.
+
+== Installation
+
+The jar is handed to the agent, not put on the application's class path:
+
+[source,bash,subs="attributes+"]
+----
+java -javaagent:opentelemetry-javaagent.jar \
+     -Dotel.javaagent.extensions=spider-silk-opentelemetry-agent-{project-version}.jar \
+     -jar app.jar
+----
+
+The jar is published to Maven Central as `{project-group}:spider-silk-opentelemetry-agent:{project-version}`.
+It ships none of the classes it names: the agent supplies the OpenTelemetry ones, and the application supplies Spider Silk's.
+The application's code does not change.
+
+== What it reports
+
+The route reported is the one xref:route-introspection.adoc#matched-route[`req.route()`] reports, as registered and with group prefixes resolved.
+That form is already the path-template syntax of `http.route`, so the module passes it on unchanged.
+The route is reported once the router has matched it, before any filter or handler of the route runs.
+It goes in with the controller as its source, which outranks the servlet mapping, as a Spring MVC handler's pattern does.
+
+A request no route matched keeps `++/*++`: a static file, a 404, a 405, and the automatic OPTIONS answer.
+A HEAD answered by a GET route reports that GET route.
+
+`-Dotel.instrumentation.spider-silk.enabled=false` switches the module off, as it does any agent instrumentation.
+
+== The agent version
+
+The module is compiled and tested against agent {otel-agent-version}.
+The agent publishes its extension API as alpha, so a release of the agent can change it.
+A different agent release is not checked by this build.
+
+== How it works
+
+The module advises one method of core, `WebRequest.withRoute`, which the router calls on the request thread when it has matched a route.
+The agent weaves that advice into `WebRequest` as the class loads, which is the agent's mechanism rather than the framework's.
+Core carries no OpenTelemetry dependency and no instrumentation of its own, and an application started without the agent runs none of this.
+
+The method is internal to core rather than part of its API.
+The module lives in this repository so that the method and the advice change in one build: the module's test runs an application under the real agent, and fails when the method's name or parameters change.

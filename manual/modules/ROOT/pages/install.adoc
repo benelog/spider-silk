@@ -123,6 +123,9 @@ Add one only when you want what it names instead of, or beside, the core default
 
 | `spider-silk-openapi`
 | xref:openapi.adoc[`OpenApi`]: the route list as an OpenAPI 3.1 document
+
+| `spider-silk-opentelemetry-agent`
+| xref:opentelemetry.adoc[An OpenTelemetry Java agent extension]: spans named after the matched route, with the jar handed to the agent rather than added as a dependency
 |===
 
 === Build

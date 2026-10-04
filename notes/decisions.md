@@ -87,6 +87,7 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 71 | A second pass over shapes a first reader guesses wrong: `expireCookie`, `@CheckReturnValue`, `event(name)`, `StaticFiles.classpath`, `Model.of` | ✅ shipped |
 | 72 | jte is the default engine, with its costs against the other engines that compile | ✅ shipped |
 | 73 | A template takes an immutable `Model`, and a `Map` comes out only at the engine's edge | ✅ shipped |
+| 74 | `spider-silk-opentelemetry-agent`: the matched route as the span's `http.route` | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
 The exception, 15b, is a decision rather than a gap.
@@ -1432,6 +1433,29 @@ A handler that built or passed a map had two ways to write one model, and a `Has
 
 Rejected: keeping `template(name, Map)` beside `template(name, Model)`, which leaves the two ways to write a model.
 Rejected: a `template(JteModel)` in core, which would tie core's API to a jte extension for what `html(...)` already does.
+
+## 74 · Naming a span by its route
+
+### 74. `spider-silk-opentelemetry-agent` reports the matched route to the OpenTelemetry Java agent
+
+An extension of the agent reports the route a request matched, because the agent sees one servlet at `/*` and named every span `GET /*`.
+The instrumentation came over from Spider Sense, so the core method it advises and the advice change in one build.
+
+- **An agent extension, not a library.**
+  - The agent already makes the server span, and the module only tells it the route, through `HttpServerRoute.update` with the controller as the source, as the agent's Spring MVC instrumentation does.
+  - The application's code and class path stay as they are: the jar goes to `-Dotel.javaagent.extensions`.
+- **It advises `WebRequest.withRoute`, which stays internal.**
+  - The router calls it on the request thread once a route matched, before any filter or handler of the route.
+  - The module's test runs the real agent and fails when the method's name or parameters change, which a separate repository found only at its next upgrade.
+- **Core stays as it was.**
+  It carries no OpenTelemetry dependency and no instrumentation, and an application started without the agent runs none of the advice.
+- **It is tied to an agent release.**
+  The extension API is published as alpha, so the module names the agent version it is built and tested against, and a new agent is a test run.
+- A request no route matched keeps `/*`, since no route answered it, which is decision 56's null case.
+
+Rejected: an instrumentation in the agent's own repository, whose release cadence the framework would not control.
+Rejected: a `beforeRoute` filter that sets the route through the OpenTelemetry API, which every application would have to register against an attribute the agent owns.
+Rejected: making `withRoute` public, which would freeze an internal seam for one consumer.
 
 ## Rejected — decisions, with the reason
 

@@ -25,6 +25,8 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   `Map.of("message", req.flashed("message"))` threw `NullPointerException` and answered 500 whenever no flash was waiting.
   `model.with(key, value)` answers a model with one more entry, and `model.asMap()` answers the entries as a read-only map.
 - `spider-silk-core`: `JsonReader.object(fromObject)` builds a reader of a JSON object from a function of its `JsonObject`, so a reader calls `asObject()` once rather than once per field.
+- `spider-silk-opentelemetry-agent`: an extension of the OpenTelemetry Java agent that reports the route a request matched as the server span's `http.route`.
+  A span is named `GET /decks/{deckId}` where the agent named every request `GET /*`.
 - `spider-silk-test`: `TestClient.putJson(path, json)` and `patchJson(path, json)` send JSON as `postJson` does, and all three take a `String` or a `JsonValue`.
 
 ### Changed

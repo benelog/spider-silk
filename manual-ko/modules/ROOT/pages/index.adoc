@@ -190,7 +190,7 @@ Undertow의 정상 종료는 요청을 세므로, 가상 스레드 executor에�
 image::modules.svg[모든 모듈은 spider-silk-core에 의존한다; 예제 애플리케이션은 core와 openapi에 의존하고, 테스트 범위에서 테스트 하니스와 서버 모듈에 의존한다,link=self]
 
 === 개발 도구 생태계 연동
-Spider Silk는 개발 도구 생태계와 조화를 이루도록 테스트, API 문서, 빌드, AI 코딩 에이전트를 위한 도구를 별도 모듈과 스킬로 제공한다.
+Spider Silk는 개발 도구 생태계와 조화를 이루도록 테스트, API 문서, 관측, 빌드, AI 코딩 에이전트를 위한 도구를 별도 모듈과 스킬로 제공한다.
 
 .테스트
 * xref:testing.adoc[`spider-silk-test`]의 `WebTest` 하니스는 빈 포트에서 애플리케이션을 시작하고, 쿠키를 유지하는 클라이언트를 건넨다.
@@ -198,6 +198,10 @@ Spider Silk는 개발 도구 생태계와 조화를 이루도록 테스트, API 
 .API 문서
 * xref:openapi.adoc[`spider-silk-openapi`]는 ``app.routes()``가 돌려주는 라우트 목록을 OpenAPI 3.1 문서로 바꾼다.
 라우트가 평범한 데이터이므로, 이 모듈은 리플렉션 없이 동작한다.
+
+.관측
+* xref:opentelemetry.adoc[`spider-silk-opentelemetry-agent`]는 서버 스팬마다 응답한 라우트로 ``GET /api/decks/\{deckId}``처럼 이름을 붙이는 OpenTelemetry Java 에이전트의 확장이다.
+이 모듈이 없으면 에이전트는 ``++/*++``에 매핑된 서블릿 하나만 보고 모든 스팬을 ``++GET /*++``로 이름 붙인다.
 
 .빌드 도구
 * xref:gradle-plugin.adoc[Gradle 플러그인] ``net.benelog.spidersilk``는 jte 템플릿 사전 컴파일, Jib 컨테이너 이미지, GraalVM 네이티브 컴파일의 컨벤션을 담는다.

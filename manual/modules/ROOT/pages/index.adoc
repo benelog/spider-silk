@@ -190,7 +190,7 @@ The dependencies between the modules are shown in the figure below.
 image::modules.svg[Every module depends on spider-silk-core; the example application depends on core and openapi, and on the test harness and the server modules in test scope,link=self]
 
 === Development tool integration
-Spider Silk provides tools for testing, API documentation, builds, and AI coding agents as separate modules and a skill, so that it fits the development tool ecosystem.
+Spider Silk provides tools for testing, API documentation, observability, builds, and AI coding agents as separate modules and a skill, so that it fits the development tool ecosystem.
 
 .Testing
 * The `WebTest` harness of xref:testing.adoc[`spider-silk-test`] starts the application on a free port and hands over a client that keeps cookies.
@@ -198,6 +198,10 @@ Spider Silk provides tools for testing, API documentation, builds, and AI coding
 .API documentation
 * xref:openapi.adoc[`spider-silk-openapi`] turns the route list `app.routes()` answers into an OpenAPI 3.1 document.
 Routes are plain data, so the module works without reflection.
+
+.Observability
+* xref:opentelemetry.adoc[`spider-silk-opentelemetry-agent`] is an extension of the OpenTelemetry Java agent that names each server span after the route that answered it, such as `GET /api/decks/\{deckId}`.
+Without it the agent sees one servlet mapped at `++/*++` and names every span `++GET /*++`.
 
 .Build tools
 * The xref:gradle-plugin.adoc[Gradle plugin] `net.benelog.spidersilk` carries the conventions for precompiled jte templates, Jib container images, and GraalVM native compilation.

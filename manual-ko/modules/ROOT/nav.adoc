@@ -37,6 +37,7 @@
 ** xref:openapi.adoc[OpenAPI 내보내기]
 ** xref:logging.adoc[로깅]
 ** xref:request-logging.adoc[요청 로깅]
+** xref:opentelemetry.adoc[OpenTelemetry]
 
 * 참조
 ** xref:api-summary.adoc[API 요약]

@@ -64,6 +64,7 @@ Add one only when the user wants what it names instead of, or beside, the core d
 | **Features** | | |
 | `spider-silk-jetty-websocket` | `WebSockets`: WebSocket endpoints beside the routes | Jetty-only by design |
 | `spider-silk-openapi` | `OpenApi.document(...)`: an OpenAPI 3.1 document from `app.routes()` | Depends on core only |
+| `spider-silk-opentelemetry-agent` | Spans of the OpenTelemetry Java agent named after the matched route (`GET /decks/{deckId}`, not `GET /*`) | Not a dependency: the jar goes to `-Dotel.javaagent.extensions`, with no code in the app |
 
 The exclusions are optional; they only keep an unused server or engine off the classpath.
 
