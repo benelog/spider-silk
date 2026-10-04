@@ -120,7 +120,8 @@ codex plugin marketplace add benelog/spider-silk
 codex plugin add spider-silk@spider-silk
 ```
 
-[The manual](https://spider-silk.benelog.net/agent-skill.html) covers a project-level copy, and Cursor and GitHub Copilot.
+A new release reaches an installed skill through `/plugin marketplace update spider-silk` in Claude Code, and through `codex plugin marketplace upgrade spider-silk` followed by `codex plugin add spider-silk@spider-silk` in Codex.
+[The manual](https://spider-silk.benelog.net/agent-skill.html) covers auto-update, a project-level copy, and Cursor and GitHub Copilot.
 
 ## Further reading
 
