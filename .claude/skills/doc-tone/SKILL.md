@@ -3,7 +3,7 @@ name: doc-tone
 description: >-
   The prose style for this repository's documentation: lead with the conclusion, one idea per sentence,
   the register of a technical reference manual.
-  Use this skill when writing or editing any prose under `manual/` (the Antora pages), `README.md`,
+  Use this skill when writing or editing any prose under `manual/` (the Antora pages), `README.adoc`,
   or `notes/` (positioning.md, decisions.md) — a new chapter, a new section, a rewrite, or a paragraph
   added to an existing page. It governs how a sentence is built, not what the documentation says.
 ---
@@ -37,7 +37,7 @@ Declarative, present tense, the defined term first, no literary flourish.
    Each existing sentence carries one precise semantic.
    Rewrite sentence by sentence; never summarize a paragraph away and regenerate it.
 7. **One sentence per line.**
-   A line ends where a sentence ends, however long it runs (this is also a `CLAUDE.md` rule).
+   A line ends where a sentence ends, however long it runs (this is also an `AGENTS.md` rule).
    The diff then shows the sentence that changed instead of every line a rewrap touched.
 8. **English stays English.** The documentation is in English whatever language the request arrives in.
    The Korean manual under `manual-ko/` is the one exception: it is a translation of `manual/`, page for page and sentence for sentence, written in 해라체 평서문 under the same rules 1 to 7.

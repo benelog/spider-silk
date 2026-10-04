@@ -25,11 +25,11 @@
   Do not wrap prose to a column width: a line ends where a sentence ends, however long it runs.
   A diff then shows the sentence that changed instead of every line a rewrap touched.
   Headings, tables, and code blocks are unaffected.
-  The same rule applies to the AsciiDoc pages under `manual/`.
+  The same rule applies to the AsciiDoc pages under `manual/` and to `README.adoc`.
 - **The manual lives in `manual/`, as an Antora component.**
   Pages are AsciiDoc under `manual/modules/ROOT/pages/`, one chapter per file, listed in `manual/modules/ROOT/nav.adoc`.
   A new chapter is a new page plus a `nav.adoc` entry, nested under one of the existing groups (`**`, not `*`); only Introduction and Installation sit at the top level.
-  `README.md` stays a Quick Start: why Spider Silk, installation, hello world, the agent-skill install, and links into the site.
+  `README.adoc` stays a Quick Start: why Spider Silk, installation, hello world, the agent-skill install, and links into the site.
   Do not grow the README back into the manual.
 - **The Korean manual lives in `manual-ko/`, the Antora component `ko`, and mirrors `manual/` page for page.**
   The English page is the source: a change to a page under `manual/` is a change to the same page under `manual-ko/` in the same commit, sentence for sentence, and a new chapter is added to both `nav.adoc` files.
@@ -46,7 +46,7 @@
   A page embeds a diagram with a captioned `image::name.svg[alt,link=self]`, after the sentence that states what the diagram shows.
 - **The prose style is a skill**: `.claude/skills/doc-tone/SKILL.md`.
   Lead with the conclusion, one idea per sentence, the register of a technical reference manual.
-  It covers `manual/`, `README.md`, and `notes/` alike, and carries the before/after examples and the verification steps.
+  It covers `manual/`, `README.adoc`, and `notes/` alike, and carries the before/after examples and the verification steps.
 
 ## Build / Verification
 
