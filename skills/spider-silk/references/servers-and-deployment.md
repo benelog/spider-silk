@@ -16,7 +16,7 @@ new JettyServer(app)
         .threadPool(new QueuedThreadPool(200, 8))
         .multipart(new MultipartConfigElement(tmp, 10_485_760L, 10_485_760L, 1_048_576))
         .stopTimeout(Duration.ofSeconds(20))
-        .shutdownHook(false)                    // something else owns the lifecycle
+        .shutdownHook(false) // something else owns the lifecycle
         .customizeHttpConfiguration(http -> http.setSendServerVersion(false))
         .customizeContext(context -> context.addFilter(MyFilter.class, "/*", null))
         .customizeServer(server -> server.setDumpBeforeStop(true))
@@ -58,7 +58,7 @@ new App()
 
 new TomcatServer(app)
         .port(8443).host("127.0.0.1").contextPath("/app")
-        .baseDir(Path.of("/var/tmp/tomcat"))    // default: temp dir, deleted on stop
+        .baseDir(Path.of("/var/tmp/tomcat")) // default: temp dir, deleted on stop
         .executor(Executors.newVirtualThreadPerTaskExecutor())
         .multipart(...).stopTimeout(Duration.ofSeconds(20)).shutdownHook(false)
         .customizeConnector(c -> c.setProperty("maxThreads", "400"))
@@ -100,7 +100,7 @@ Everything core provides works the same on all three, and `WebTest` starts no se
 ```java
 ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
 ServletHolder holder = new ServletHolder(new AppServlet(app));
-holder.setInitOrder(0);                           // web.xml: <load-on-startup>0</load-on-startup>
+holder.setInitOrder(0); // web.xml: <load-on-startup>0</load-on-startup>
 context.addServlet(holder, "/*");
 ```
 

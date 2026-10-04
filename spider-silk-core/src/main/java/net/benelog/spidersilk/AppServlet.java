@@ -56,7 +56,7 @@ import org.jspecify.annotations.Nullable;
  * <pre>{@code
  * public final class MyServlet extends AppServlet {
  *     public MyServlet() {
- *         super(Routes.app());   // whatever assembles the App
+ *         super(Routes.app()); // whatever assembles the App
  *     }
  * }
  * }</pre>
@@ -757,7 +757,7 @@ public class AppServlet extends HttpServlet {
         SseStream stream = new SseStream(res);
         app.openStreams.add(stream);
         try {
-            res.flushBuffer();  // commit the headers, so the client opens before the first event
+            res.flushBuffer(); // commit the headers, so the client opens before the first event
             writer.write(stream);
         } catch (SseStream.Closed e) {
             // The client left, or the server is stopping. Both end the request normally.

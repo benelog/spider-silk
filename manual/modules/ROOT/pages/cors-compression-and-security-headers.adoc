@@ -38,10 +38,10 @@ An `App` that says none of the three behaves exactly as it did before they exist
 [source,java]
 ----
 app.cors(Cors.allowOrigin("https://app.example.com", "https://admin.example.com")
-        .forPath("/api/*")                  // the default is "/*"
-        .allowCredentials()                 // cookies may be sent
-        .exposeHeaders("X-Total-Count")     // a script may read this one back
-        .maxAge(Duration.ofHours(1)));      // how long a preflight answer lasts
+        .forPath("/api/*") // the default is "/*"
+        .allowCredentials() // cookies may be sent
+        .exposeHeaders("X-Total-Count") // a script may read this one back
+        .maxAge(Duration.ofHours(1))); // how long a preflight answer lasts
 ----
 
 Two things then happen.
@@ -69,10 +69,10 @@ A caller that is not a browser ignores all of it, so authentication and authoriz
 
 [source,java]
 ----
-app.gzip();                                 // the defaults
+app.gzip(); // the defaults
 
 app.gzip(Gzip.defaults()
-        .minBytes(4096)                     // 1024 by default
+        .minBytes(4096) // 1024 by default
         .types("text/", "application/json"));
 ----
 
@@ -113,11 +113,11 @@ HSTS and a Content Security Policy are off until asked for, because either could
 [source,java]
 ----
 app.securityHeaders(SecurityHeaders.defaults()
-        .frameOptions("SAMEORIGIN")                 // the app embeds itself
-        .hsts(Duration.ofDays(365))                 // once HTTPS is certain
+        .frameOptions("SAMEORIGIN") // the app embeds itself
+        .hsts(Duration.ofDays(365)) // once HTTPS is certain
         .contentSecurityPolicy("default-src 'self'")
         .permissionsPolicy("camera=()")
-        .header("X-Robots-Tag", "noindex"));        // anything else, same point
+        .header("X-Robots-Tag", "noindex")); // anything else, same point
 ----
 
 HSTS goes out only on a request that already arrived over HTTPS.

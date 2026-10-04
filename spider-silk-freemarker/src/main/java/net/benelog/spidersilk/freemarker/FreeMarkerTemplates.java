@@ -22,7 +22,7 @@ import net.benelog.spidersilk.TemplateRenderer;
  * <pre>{@code
  * app.templates(new FreeMarkerTemplates("freemarker"));
  *
- * WebResponse.template("deck", model);   // renders classpath:/freemarker/deck.ftlh
+ * WebResponse.template("deck", model); // renders classpath:/freemarker/deck.ftlh
  * }</pre>
  *
  * <p>Unlike jte, FreeMarker is not what an {@link App} renders with unless told
@@ -67,7 +67,7 @@ public final class FreeMarkerTemplates implements TemplateRenderer {
      * <pre>{@code
      * app.templates(new FreeMarkerTemplates("freemarker").suffix(".ftl"));
      *
-     * WebResponse.template("deck", model);   // renders classpath:/freemarker/deck.ftl
+     * WebResponse.template("deck", model); // renders classpath:/freemarker/deck.ftl
      * }</pre>
      *
      * <p>The default is {@code ".ftlh"}. It is appended, never checked for: a

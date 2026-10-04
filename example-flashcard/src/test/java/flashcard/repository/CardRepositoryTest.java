@@ -83,7 +83,7 @@ class CardRepositoryTest extends RepositoryTestSupport {
         Card card = cardRepository.insert(Card.create(deck.id(), "apple", "a fruit", now));
         Tag tag = tagRepository.insert(Tag.create("fruit"));
         tagRepository.attach(card.id(), tag.id());
-        tagRepository.attach(card.id(), tag.id());   // merge makes duplicate calls safe
+        tagRepository.attach(card.id(), tag.id()); // merge makes duplicate calls safe
 
         assertThat(cardRepository.findByTagName("fruit")).isEqualTo(List.of(card));
         assertThat(tagRepository.findTagNamesByCardId(card.id())).isEqualTo(List.of("fruit"));

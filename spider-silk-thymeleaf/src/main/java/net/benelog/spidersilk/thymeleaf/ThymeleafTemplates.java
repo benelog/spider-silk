@@ -21,7 +21,7 @@ import net.benelog.spidersilk.TemplateRenderer;
  * <pre>{@code
  * app.templates(new ThymeleafTemplates("thymeleaf"));
  *
- * WebResponse.template("deck", model);   // renders classpath:/thymeleaf/deck.html
+ * WebResponse.template("deck", model); // renders classpath:/thymeleaf/deck.html
  * }</pre>
  *
  * <p>Unlike jte, Thymeleaf is not what an {@link App} renders with unless told
@@ -63,7 +63,7 @@ public final class ThymeleafTemplates implements TemplateRenderer {
      * <pre>{@code
      * app.templates(new ThymeleafTemplates("thymeleaf").suffix(".th.html"));
      *
-     * WebResponse.template("deck", model);   // renders classpath:/thymeleaf/deck.th.html
+     * WebResponse.template("deck", model); // renders classpath:/thymeleaf/deck.th.html
      * }</pre>
      *
      * <p>The default is {@code ".html"}. It is appended, never checked for: a

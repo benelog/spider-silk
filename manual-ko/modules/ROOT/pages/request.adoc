@@ -10,17 +10,17 @@
 
 [source,java]
 ----
-req.method();               // "GET"
-req.path();                 // "/decks/3", with no query string on the end
-req.header("Accept");       // the first value; the lookup ignores case
-req.headers("X-Tag");       // every value of a repeated header, empty when absent
-req.headers();              // every header, by name, each with all of its values
-req.contentType();          // the body's declared type, null when the request sent none
-req.queryString();          // "q=a+b&page=2", undecoded, null when the URL carried none
-req.isSecure();             // whether the request arrived over TLS
-req.scheme();               // "http" or "https"
-req.host();                 // "shop.example.com", with the port when it is not the default
-req.remoteAddress();        // "203.0.113.7", the proxy's address when one is in front
+req.method(); // "GET"
+req.path(); // "/decks/3", with no query string on the end
+req.header("Accept"); // the first value; the lookup ignores case
+req.headers("X-Tag"); // every value of a repeated header, empty when absent
+req.headers(); // every header, by name, each with all of its values
+req.contentType(); // the body's declared type, null when the request sent none
+req.queryString(); // "q=a+b&page=2", undecoded, null when the URL carried none
+req.isSecure(); // whether the request arrived over TLS
+req.scheme(); // "http" or "https"
+req.host(); // "shop.example.com", with the port when it is not the default
+req.remoteAddress(); // "203.0.113.7", the proxy's address when one is in front
 ----
 
 ``req.scheme() + "://" + req.host() + req.path()``는 요청의 절대 URL이다.
@@ -39,8 +39,8 @@ TLS를 종료하는 프록시 뒤에서는 컨테이너에 ``X-Forwarded-Proto``
 
 [source,java]
 ----
-String theme = req.cookie("theme");         // null when absent
-Map<String, String> all = req.cookies();    // a repeated name keeps the first value
+String theme = req.cookie("theme"); // null when absent
+Map<String, String> all = req.cookies(); // a repeated name keeps the first value
 ----
 
 ``WebResponse.cookie(...)``가 쿠키 하나를 설정하며, 기본값은 xref:response.adoc#cookies[응답]에서 설명한다.
@@ -60,7 +60,7 @@ Map<String, String> all = req.cookies();    // a repeated name keeps the first v
 
 [source,java]
 ----
-List<String> tags = req.params("tag");      // ?tag=java&tag=web, or a checkbox group
+List<String> tags = req.params("tag"); // ?tag=java&tag=web, or a checkbox group
 ----
 
 값은 요청 순서대로 돌아오고, 없는 파라미터는 빈 리스트를 준다: "체크된 상자 없음"은 답이지 400이 아니다.
@@ -82,8 +82,8 @@ null 기본값은 ``paramOrNull(name)``으로 쓰는데, ``param(name, null)``�
 ----
 LocalDate since = req.param("since", LocalDate::parse);
 UUID owner = req.param("owner", UUID::fromString);
-int page = req.param("page", Integer::parseInt, 1);        // default covers absence only
-int deckId = req.pathParam("deckId", Integer::parseInt);   // path variables too
+int page = req.param("page", Integer::parseInt, 1); // default covers absence only
+int deckId = req.pathParam("deckId", Integer::parseInt); // path variables too
 ----
 
 텍스트를 거부하는 파서는 파라미터 이름을 밝히며 400으로 답하며, 전용 메서드와 같은 계약이다.
@@ -101,8 +101,8 @@ int deckId = req.pathParam("deckId", Integer::parseInt);   // path variables too
 
 [source,java]
 ----
-String page = req.queryParamOrNull("page");     // query string only, null when absent
-String name = req.formParam("name");            // form body only, 400 when absent
+String page = req.queryParamOrNull("page"); // query string only, null when absent
+String name = req.formParam("name"); // form body only, 400 when absent
 List<String> tags = req.formParams("tag");
 ----
 
@@ -113,8 +113,8 @@ List<String> tags = req.formParams("tag");
 
 [source,java]
 ----
-LocalDate due = req.formParam("due", LocalDate::parse);       // 400 when the form carries none
-int page = req.queryParam("page", Integer::parseInt, 1);      // default covers absence only
+LocalDate due = req.formParam("due", LocalDate::parse); // 400 when the form carries none
+int page = req.queryParam("page", Integer::parseInt, 1); // default covers absence only
 ----
 
 ``queryParam(name)``과 ``formParam(name)``은 파서가 있든 없든 값을 요구하며, 값이 없으면 400으로 답한다.
@@ -229,8 +229,8 @@ null은 파일이 없을 수 있는 모든 경우를 다룬다: 그 이름의 �
 [source,java]
 ----
 app.bodyLimits(BodyLimits.defaults()
-        .maxBytes(8 * 1024 * 1024)          // body() and bodyJson(): 8MB
-        .maxNdjsonLineBytes(64 * 1024));    // one NDJSON line: 64KB
+        .maxBytes(8 * 1024 * 1024) // body() and bodyJson(): 8MB
+        .maxNdjsonLineBytes(64 * 1024)); // one NDJSON line: 64KB
 ----
 
 두 한도 모두 문자가 아니라 바이트를 센다.

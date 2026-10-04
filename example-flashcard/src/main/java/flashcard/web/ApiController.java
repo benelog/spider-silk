@@ -38,7 +38,7 @@ public class ApiController {
 
     public WebResponse listCards(WebRequest req) {
         long deckId = req.pathParamLong("deckId");
-        deckService.getDeck(deckId);   // NotFoundException -> 404 when missing
+        deckService.getDeck(deckId); // NotFoundException -> 404 when missing
         return WebResponse.json(cardService.cardsWithTags(deckId), Codecs.CARDS);
     }
 

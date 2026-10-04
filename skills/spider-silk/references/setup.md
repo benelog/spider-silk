@@ -87,7 +87,7 @@ plugins {
 }
 
 spiderSilk {
-    jte()   // precompiled templates; leave out for FreeMarker, Handlebars, or Thymeleaf
+    jte() // precompiled templates; leave out for FreeMarker, Handlebars, or Thymeleaf
 }
 
 application {

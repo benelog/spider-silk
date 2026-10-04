@@ -10,17 +10,17 @@ Every ordinary question about a request has a method, so none of them needs `raw
 
 [source,java]
 ----
-req.method();               // "GET"
-req.path();                 // "/decks/3", with no query string on the end
-req.header("Accept");       // the first value; the lookup ignores case
-req.headers("X-Tag");       // every value of a repeated header, empty when absent
-req.headers();              // every header, by name, each with all of its values
-req.contentType();          // the body's declared type, null when the request sent none
-req.queryString();          // "q=a+b&page=2", undecoded, null when the URL carried none
-req.isSecure();             // whether the request arrived over TLS
-req.scheme();               // "http" or "https"
-req.host();                 // "shop.example.com", with the port when it is not the default
-req.remoteAddress();        // "203.0.113.7", the proxy's address when one is in front
+req.method(); // "GET"
+req.path(); // "/decks/3", with no query string on the end
+req.header("Accept"); // the first value; the lookup ignores case
+req.headers("X-Tag"); // every value of a repeated header, empty when absent
+req.headers(); // every header, by name, each with all of its values
+req.contentType(); // the body's declared type, null when the request sent none
+req.queryString(); // "q=a+b&page=2", undecoded, null when the URL carried none
+req.isSecure(); // whether the request arrived over TLS
+req.scheme(); // "http" or "https"
+req.host(); // "shop.example.com", with the port when it is not the default
+req.remoteAddress(); // "203.0.113.7", the proxy's address when one is in front
 ----
 
 `req.scheme() + "://" + req.host() + req.path()` is the absolute URL of the request.
@@ -39,8 +39,8 @@ Cookies split along the same line as the rest of the API.
 
 [source,java]
 ----
-String theme = req.cookie("theme");         // null when absent
-Map<String, String> all = req.cookies();    // a repeated name keeps the first value
+String theme = req.cookie("theme"); // null when absent
+Map<String, String> all = req.cookies(); // a repeated name keeps the first value
 ----
 
 `WebResponse.cookie(...)` sets one, with the defaults xref:response.adoc#cookies[The Response] describes.
@@ -60,7 +60,7 @@ A default as the last argument makes a read optional without a null: `param(name
 
 [source,java]
 ----
-List<String> tags = req.params("tag");      // ?tag=java&tag=web, or a checkbox group
+List<String> tags = req.params("tag"); // ?tag=java&tag=web, or a checkbox group
 ----
 
 The values come back in request order, and an absent parameter gives an empty list: "no boxes checked" is an answer, not a 400.
@@ -82,8 +82,8 @@ A checkbox therefore carries `value="true"`, or is read through `params(name)` w
 ----
 LocalDate since = req.param("since", LocalDate::parse);
 UUID owner = req.param("owner", UUID::fromString);
-int page = req.param("page", Integer::parseInt, 1);        // default covers absence only
-int deckId = req.pathParam("deckId", Integer::parseInt);   // path variables too
+int page = req.param("page", Integer::parseInt, 1); // default covers absence only
+int deckId = req.pathParam("deckId", Integer::parseInt); // path variables too
 ----
 
 A parser that rejects the text answers 400 naming the parameter, the same contract the named forms have.
@@ -101,8 +101,8 @@ Name the source when the difference matters:
 
 [source,java]
 ----
-String page = req.queryParamOrNull("page");     // query string only, null when absent
-String name = req.formParam("name");            // form body only, 400 when absent
+String page = req.queryParamOrNull("page"); // query string only, null when absent
+String name = req.formParam("name"); // form body only, 400 when absent
 List<String> tags = req.formParams("tag");
 ----
 
@@ -113,8 +113,8 @@ A parser reads a named source into a type, with the contract `param(name, parser
 
 [source,java]
 ----
-LocalDate due = req.formParam("due", LocalDate::parse);       // 400 when the form carries none
-int page = req.queryParam("page", Integer::parseInt, 1);      // default covers absence only
+LocalDate due = req.formParam("due", LocalDate::parse); // 400 when the form carries none
+int page = req.queryParam("page", Integer::parseInt, 1); // default covers absence only
 ----
 
 `queryParam(name)` and `formParam(name)` require a value, with or without a parser, and answer 400 when it is absent.
@@ -229,8 +229,8 @@ The `Content-Type` decides whether a request is multipart at all: only `multipar
 [source,java]
 ----
 app.bodyLimits(BodyLimits.defaults()
-        .maxBytes(8 * 1024 * 1024)          // body() and bodyJson(): 8MB
-        .maxNdjsonLineBytes(64 * 1024));    // one NDJSON line: 64KB
+        .maxBytes(8 * 1024 * 1024) // body() and bodyJson(): 8MB
+        .maxNdjsonLineBytes(64 * 1024)); // one NDJSON line: 64KB
 ----
 
 Both limits count bytes, not characters.

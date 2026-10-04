@@ -50,8 +50,8 @@ return WebResponse.template("decks", model);
 
 [source,java]
 ----
-app.templates(new JteTemplates("templates")     // classpath:/templates
-        .suffix(".html"));                      // .../deck.html
+app.templates(new JteTemplates("templates") // classpath:/templates
+        .suffix(".html")); // .../deck.html
 ----
 
 접미사는 덧붙일 뿐 검사하지 않으므로, 확장자를 아직 달고 있는 이름은 접미사가 두 번 붙은 채로 조회된다.
@@ -71,9 +71,9 @@ app.templates((template, model, out) -> mustache.compile(template + ".mustache")
 
 [source,java]
 ----
-app.templates(new FreeMarkerTemplates("freemarker"));   // classpath:/freemarker/deck.ftlh
-app.templates(new HandlebarsTemplates("hbs"));          // classpath:/hbs/deck.hbs
-app.templates(new ThymeleafTemplates("thymeleaf"));     // classpath:/thymeleaf/deck.html
+app.templates(new FreeMarkerTemplates("freemarker")); // classpath:/freemarker/deck.ftlh
+app.templates(new HandlebarsTemplates("hbs")); // classpath:/hbs/deck.hbs
+app.templates(new ThymeleafTemplates("thymeleaf")); // classpath:/thymeleaf/deck.html
 ----
 
 그 밖의 엔진은 위의 Mustache 예처럼 한 줄로 연결한다.

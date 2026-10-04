@@ -4,9 +4,9 @@ package net.benelog.spidersilk;
  * How much of a request body the framework holds in memory at once.
  *
  * <pre>{@code
- * app.bodyLimits(BodyLimits.defaults().maxBytes(8 * 1024 * 1024));   // 8MB bodies
+ * app.bodyLimits(BodyLimits.defaults().maxBytes(8 * 1024 * 1024)); // 8MB bodies
  *
- * app.bodyLimits(BodyLimits.unlimited());                            // bounded elsewhere
+ * app.bodyLimits(BodyLimits.unlimited()); // bounded elsewhere
  * }</pre>
  *
  * <p>Two reads buffer, and each has its own limit. {@link WebRequest#body()} —

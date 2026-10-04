@@ -9,8 +9,8 @@ import org.jspecify.annotations.Nullable;
  *
  * <pre>{@code
  * app.beforeRoute("/admin/*", req -> req.session().get("user") == null
- *         ? WebResponse.redirect("/login")     // answers here; the route never runs
- *         : null);                             // carry on
+ *         ? WebResponse.redirect("/login") // answers here; the route never runs
+ *         : null); // carry on
  * }</pre>
  *
  * <p>Returning null continues to the next filter and then to routing or the matched handler.

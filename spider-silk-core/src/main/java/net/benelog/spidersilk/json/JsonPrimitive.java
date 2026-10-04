@@ -9,7 +9,7 @@ public final class JsonPrimitive implements JsonValue {
     static final JsonPrimitive TRUE = new JsonPrimitive(true);
     static final JsonPrimitive FALSE = new JsonPrimitive(false);
 
-    private final @Nullable Object value;   // String | Long | Double | JsonDecimal | Boolean | null
+    private final @Nullable Object value; // String | Long | Double | JsonDecimal | Boolean | null
 
     JsonPrimitive(@Nullable Object value) {
         this.value = value;
@@ -24,7 +24,7 @@ public final class JsonPrimitive implements JsonValue {
         if (value instanceof String s) {
             Json.writeString(sb, s);
         } else {
-            sb.append(value);   // null, true/false, numbers
+            sb.append(value); // null, true/false, numbers
         }
     }
 }

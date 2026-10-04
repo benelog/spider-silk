@@ -10,10 +10,10 @@
 
 [source,java]
 ----
-req.session().set("user", user);                    // creates the session if there is none yet
-User user = req.session().get("user", User.class);  // null when absent
-User same = req.session().get("user");              // the same read, cast by the caller
-req.session().remove("user");                       // creates no session to remove from
+req.session().set("user", user); // creates the session if there is none yet
+User user = req.session().get("user", User.class); // null when absent
+User same = req.session().get("user"); // the same read, cast by the caller
+req.session().remove("user"); // creates no session to remove from
 ----
 
 ``session()``도 읽기도 세션을 만들지 않으므로, 로그인하지 않은 방문자에게는 세션 객체 비용이 들지 않는다.
@@ -85,7 +85,7 @@ xref:templates.adoc#model[템플릿]에서 설명하듯이 ``Model.of``는 그 n
 ----
 req.flash("message", "Imported " + imported + " cards.");
 if (imported == 0) {
-    req.flash("message", null);   // the next request reads null
+    req.flash("message", null); // the next request reads null
 }
 ----
 

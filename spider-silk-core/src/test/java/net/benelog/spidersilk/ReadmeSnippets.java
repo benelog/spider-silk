@@ -19,7 +19,7 @@ class ReadmeSnippets {
     void createsADeck(App app) {
         WebTest.test(app, client -> {
             var created = client.postForm("/decks", Map.of("name", "English"));
-            assertThat(created.statusCode()).isEqualTo(302);   // redirects are not followed
+            assertThat(created.statusCode()).isEqualTo(302); // redirects are not followed
             assertThat(client.get("/api/decks").body()).contains("English");
         });
     }

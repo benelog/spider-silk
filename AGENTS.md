@@ -19,6 +19,14 @@
   Do not make changes that break this principle.
 - There is no DI container: `FlashcardContext` assembles the object graph by calling constructors directly.
 
+## Code Style
+
+- **A trailing `//` comment sits one space after the code, with one space after the `//`.**
+  Comments on neighbouring lines are not aligned into a column: `app.gzip(); // the defaults`, never `app.gzip();      // the defaults`.
+  Text inside a comment is not padded to line up with the line above either (`// GET /api/decks`, not `// GET  /api/decks`).
+  A comment too long for one line goes on its own line above the code, not on an indented continuation line under the trailing one.
+  The rule covers the code blocks in `manual/`, `manual-ko/`, `README.adoc`, and `skills/` as well as the source.
+
 ## Documentation
 
 - **Markdown is one sentence per line.**

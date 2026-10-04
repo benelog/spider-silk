@@ -13,7 +13,7 @@
 ----
 dependencies {
     implementation('{project-group}:spider-silk-tomcat:{project-version}') {
-        exclude group: 'org.eclipse.jetty.ee10'    // core's Jetty, unused here
+        exclude group: 'org.eclipse.jetty.ee10' // core's Jetty, unused here
     }
 }
 ----
@@ -43,7 +43,7 @@ new TomcatServer(app)
         .port(8443)
         .host("127.0.0.1")
         .contextPath("/app")
-        .baseDir(Path.of("/var/tmp/tomcat"))    // default: a temp dir, deleted on stop
+        .baseDir(Path.of("/var/tmp/tomcat")) // default: a temp dir, deleted on stop
         .executor(Executors.newVirtualThreadPerTaskExecutor())
         .multipart(new MultipartConfigElement(tmp, 10_485_760L, 10_485_760L, 1_048_576))
         .stopTimeout(Duration.ofSeconds(20))

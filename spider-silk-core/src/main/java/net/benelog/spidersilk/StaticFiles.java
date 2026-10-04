@@ -37,13 +37,13 @@ import org.jspecify.annotations.Nullable;
  * this is for a directory, a hosted path, or a cache policy of your own.
  *
  * <pre>{@code
- * app.staticFiles("/assets");                       // classpath:/assets/* at /*
+ * app.staticFiles("/assets"); // classpath:/assets/* at /*
  *
  * app.staticFiles(StaticFiles.classpath("/public")
- *         .hostedPath("/assets")                    // classpath:/public/* at /assets/*
- *         .maxAge(Duration.ofDays(365)));           // for fingerprinted file names
+ *         .hostedPath("/assets") // classpath:/public/* at /assets/*
+ *         .maxAge(Duration.ofDays(365))); // for fingerprinted file names
  *
- * app.staticFiles(                                  // both, in the order given
+ * app.staticFiles( // both, in the order given
  *         StaticFiles.classpath("/public"),
  *         StaticFiles.directory(Path.of("/srv/uploads")).hostedPath("/uploads"));
  * }</pre>

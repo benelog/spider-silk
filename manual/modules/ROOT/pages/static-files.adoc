@@ -14,8 +14,8 @@ For a fingerprinted name, set a long `maxAge`:
 [source,java]
 ----
 app.staticFiles(StaticFiles.classpath("/public")
-        .hostedPath("/assets")              // classpath:/public/* at /assets/*
-        .maxAge(Duration.ofDays(365)));     // only when the name carries a content hash
+        .hostedPath("/assets") // classpath:/public/* at /assets/*
+        .maxAge(Duration.ofDays(365))); // only when the name carries a content hash
 ----
 
 `hostedPath` takes a prefix, not a pattern: `"/assets"` covers everything under it, and `"/assets/*"` throws `IllegalArgumentException`.
@@ -39,8 +39,8 @@ The first request for a file with a stamped time is the one exception: it reads 
 [source,java]
 ----
 app.staticFiles(
-        StaticFiles.classpath("/public"),                  // classpath:/public/* at /*
-        StaticFiles.directory(Path.of("/srv/uploads"))     // /srv/uploads/* at /uploads/*
+        StaticFiles.classpath("/public"), // classpath:/public/* at /*
+        StaticFiles.directory(Path.of("/srv/uploads")) // /srv/uploads/* at /uploads/*
                 .hostedPath("/uploads"));
 ----
 
@@ -59,9 +59,9 @@ Called with no argument at all, `staticFiles()` serves nothing and leaves every 
 
 [source,java]
 ----
-app.gzip();                                             // still deflates what has no sibling
+app.gzip(); // still deflates what has no sibling
 app.staticFiles(StaticFiles.classpath("/public")
-        .precompressed());                              // app.css.br / app.css.gz answer app.css
+        .precompressed()); // app.css.br / app.css.gz answer app.css
 ----
 
 Brotli wins where both siblings exist and the client takes both.

@@ -790,7 +790,7 @@ class UndertowServerTest {
     @Test
     void anIdleConnectionDoesNotDelayTheStop() throws Exception {
         startOnUndertow(new App().get("/", req -> WebResponse.text("ok")));
-        assertThat(get("/").statusCode()).isEqualTo(200);   // leaves a keep-alive connection behind
+        assertThat(get("/").statusCode()).isEqualTo(200); // leaves a keep-alive connection behind
 
         long startedAt = System.nanoTime();
         app.stop();

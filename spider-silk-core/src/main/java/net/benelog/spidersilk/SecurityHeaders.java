@@ -11,11 +11,11 @@ import org.jspecify.annotations.Nullable;
  * The response headers a browser reads as instructions about how careful to be.
  *
  * <pre>{@code
- * app.securityHeaders();                          // the three defaults below
+ * app.securityHeaders(); // the three defaults below
  *
  * app.securityHeaders(SecurityHeaders.defaults()
- *         .frameOptions("SAMEORIGIN")             // the app embeds itself
- *         .hsts(Duration.ofDays(365))             // once HTTPS is certain
+ *         .frameOptions("SAMEORIGIN") // the app embeds itself
+ *         .hsts(Duration.ofDays(365)) // once HTTPS is certain
  *         .contentSecurityPolicy("default-src 'self'"));
  * }</pre>
  *

@@ -40,8 +40,8 @@ app.beforeRequest("/admin/*", req -> req.session().get("user") == null
 [source,java]
 ----
 app.beforeRoute("/admin/*", req -> req.session().get("user") == null
-        ? WebResponse.redirect("/login")    // answers here, so the route handler never runs
-        : null);                            // carry on
+        ? WebResponse.redirect("/login") // answers here, so the route handler never runs
+        : null); // carry on
 ----
 
 응답을 반환하는 before 필터는 거기서 요청을 끝낸다.

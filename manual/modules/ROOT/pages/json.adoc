@@ -28,7 +28,7 @@ static final JsonReader<NewDeck> NEW_DECK =
 app.get("/api/decks", req -> WebResponse.json(deckService.decks(), DECKS));
 
 app.post("/api/decks", req -> {
-    Deck deck = deckService.create(req.bodyJson(NEW_DECK).name());   // no key -> 400
+    Deck deck = deckService.create(req.bodyJson(NEW_DECK).name()); // no key -> 400
     return WebResponse.json(deck, DECK).status(HttpStatus.CREATED);
 });
 ----

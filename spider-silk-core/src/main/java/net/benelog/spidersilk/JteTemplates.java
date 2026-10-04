@@ -58,7 +58,7 @@ public final class JteTemplates implements TemplateRenderer {
      * <pre>{@code
      * app.templates(new JteTemplates("jte").suffix(".html"));
      *
-     * WebResponse.template("deck");   // renders classpath:/jte/deck.html
+     * WebResponse.template("deck"); // renders classpath:/jte/deck.html
      * }</pre>
      *
      * <p>The default is {@code ".jte"}. It is appended, never checked for: a

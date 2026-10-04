@@ -12,9 +12,9 @@ Coming in, `req.bodyStream()` and `req.bodyReader()` hand over the body unread.
 
 [source,java]
 ----
-public static WebResponse rawJson(String json)   // whatever produced it
-public InputStream bodyStream()                  // the bytes, unparsed
-public BufferedReader bodyReader()               // the characters, unparsed
+public static WebResponse rawJson(String json) // whatever produced it
+public InputStream bodyStream() // the bytes, unparsed
+public BufferedReader bodyReader() // the characters, unparsed
 ----
 
 That is the whole integration.

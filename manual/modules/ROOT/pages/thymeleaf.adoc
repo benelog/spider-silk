@@ -11,7 +11,7 @@ A tie to one engine belongs in the artifact's name, and core stays a web tier wi
 ----
 dependencies {
     implementation('{project-group}:spider-silk-thymeleaf:{project-version}') {
-        exclude group: 'gg.jte'    // core's jte, unused here
+        exclude group: 'gg.jte' // core's jte, unused here
     }
 }
 ----
@@ -46,8 +46,8 @@ Whatever the handler puts in the `Map` is what the page can read, and nothing el
 
 [source,java]
 ----
-app.templates(new ThymeleafTemplates("thymeleaf")   // classpath:/thymeleaf
-        .suffix(".th.html"));                       // .../deck.th.html
+app.templates(new ThymeleafTemplates("thymeleaf") // classpath:/thymeleaf
+        .suffix(".th.html")); // .../deck.th.html
 ----
 
 The suffix is appended, never checked for, so a name that still carries its extension is looked up with the suffix twice over.
@@ -64,9 +64,9 @@ The other constructor takes a configured `TemplateEngine`, which is where a file
 ----
 ClassLoaderTemplateResolver resolver = new ClassLoaderTemplateResolver();
 resolver.setPrefix("thymeleaf/");
-resolver.setSuffix("");                 // ThymeleafTemplates appends its own
+resolver.setSuffix(""); // ThymeleafTemplates appends its own
 resolver.setTemplateMode(TemplateMode.HTML);
-resolver.setCacheable(false);           // reload while developing
+resolver.setCacheable(false); // reload while developing
 
 TemplateEngine engine = new TemplateEngine();
 engine.setTemplateResolver(resolver);

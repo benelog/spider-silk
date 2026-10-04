@@ -12,9 +12,9 @@ DTO가 삼백 개인 애플리케이션이나, 소유하지 않은 스키마에�
 
 [source,java]
 ----
-public static WebResponse rawJson(String json)   // whatever produced it
-public InputStream bodyStream()                  // the bytes, unparsed
-public BufferedReader bodyReader()               // the characters, unparsed
+public static WebResponse rawJson(String json) // whatever produced it
+public InputStream bodyStream() // the bytes, unparsed
+public BufferedReader bodyReader() // the characters, unparsed
 ----
 
 이것이 통합의 전부다.

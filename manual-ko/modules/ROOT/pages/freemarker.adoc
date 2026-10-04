@@ -11,7 +11,7 @@ xref:tomcat.adoc[Tomcat]이 별도 모듈인 것과 같은 이유로 별도 모�
 ----
 dependencies {
     implementation('{project-group}:spider-silk-freemarker:{project-version}') {
-        exclude group: 'gg.jte'    // core's jte, unused here
+        exclude group: 'gg.jte' // core's jte, unused here
     }
 }
 ----
@@ -44,8 +44,8 @@ FreeMarker 자체는 출력 형식이 지시하기 전까지 아무것도 이스
 
 [source,java]
 ----
-app.templates(new FreeMarkerTemplates("freemarker")     // classpath:/freemarker
-        .suffix(".ftl"));                               // .../deck.ftl, still escaped
+app.templates(new FreeMarkerTemplates("freemarker") // classpath:/freemarker
+        .suffix(".ftl")); // .../deck.ftl, still escaped
 ----
 
 접미사는 덧붙일 뿐 검사하지 않으므로, 확장자를 아직 달고 있는 이름은 접미사가 두 번 붙은 채로 조회된다.
@@ -61,7 +61,7 @@ app.templates(new FreeMarkerTemplates("freemarker")     // classpath:/freemarker
 Configuration configuration = new Configuration(Configuration.VERSION_2_3_34);
 configuration.setTemplateLoader(new ClassTemplateLoader(loader, "freemarker"));
 configuration.setDefaultEncoding("UTF-8");
-configuration.setOutputFormat(HTMLOutputFormat.INSTANCE);                        // or nothing is escaped
+configuration.setOutputFormat(HTMLOutputFormat.INSTANCE); // or nothing is escaped
 configuration.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
 configuration.setSharedVariable("siteName", "Spider Silk");
 

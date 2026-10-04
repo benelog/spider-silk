@@ -87,7 +87,7 @@ The factory runs before the handshake is answered, which is where the upgrade is
 ----
 new WebSockets().at("/chat", (request, response) -> {
     if (!authorized(request)) {
-        return null;                  // 403, and the handshake is answered
+        return null; // 403, and the handshake is answered
     }
     if (request.hasSubProtocol("chat")) {
         response.setAcceptedSubProtocol("chat");

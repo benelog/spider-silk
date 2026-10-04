@@ -22,7 +22,7 @@ import net.benelog.spidersilk.TemplateRenderer;
  * <pre>{@code
  * app.templates(new HandlebarsTemplates("hbs"));
  *
- * WebResponse.template("deck", model);   // renders classpath:/hbs/deck.hbs
+ * WebResponse.template("deck", model); // renders classpath:/hbs/deck.hbs
  * }</pre>
  *
  * <p>Unlike jte, Handlebars is not what an {@link App} renders with unless told
@@ -59,7 +59,7 @@ public final class HandlebarsTemplates implements TemplateRenderer {
      * <pre>{@code
      * app.templates(new HandlebarsTemplates("hbs").suffix(".html"));
      *
-     * WebResponse.template("deck", model);   // renders classpath:/hbs/deck.html
+     * WebResponse.template("deck", model); // renders classpath:/hbs/deck.html
      * }</pre>
      *
      * <p>The default is {@code ".hbs"}. It is appended, never checked for: a

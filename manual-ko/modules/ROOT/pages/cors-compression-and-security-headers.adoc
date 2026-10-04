@@ -38,10 +38,10 @@ xref:filters-and-errors.adoc#response-filters[응답 필터]도 그 답들에 �
 [source,java]
 ----
 app.cors(Cors.allowOrigin("https://app.example.com", "https://admin.example.com")
-        .forPath("/api/*")                  // the default is "/*"
-        .allowCredentials()                 // cookies may be sent
-        .exposeHeaders("X-Total-Count")     // a script may read this one back
-        .maxAge(Duration.ofHours(1)));      // how long a preflight answer lasts
+        .forPath("/api/*") // the default is "/*"
+        .allowCredentials() // cookies may be sent
+        .exposeHeaders("X-Total-Count") // a script may read this one back
+        .maxAge(Duration.ofHours(1))); // how long a preflight answer lasts
 ----
 
 그러면 두 가지가 일어난다.
@@ -69,10 +69,10 @@ CORS는 스크립트가 무엇을 *읽을* 수 있는지에 대해 브라우저�
 
 [source,java]
 ----
-app.gzip();                                 // the defaults
+app.gzip(); // the defaults
 
 app.gzip(Gzip.defaults()
-        .minBytes(4096)                     // 1024 by default
+        .minBytes(4096) // 1024 by default
         .types("text/", "application/json"));
 ----
 
@@ -113,11 +113,11 @@ HSTS와 Content Security Policy는 요청하기 전까지 꺼져 있는데, 둘 
 [source,java]
 ----
 app.securityHeaders(SecurityHeaders.defaults()
-        .frameOptions("SAMEORIGIN")                 // the app embeds itself
-        .hsts(Duration.ofDays(365))                 // once HTTPS is certain
+        .frameOptions("SAMEORIGIN") // the app embeds itself
+        .hsts(Duration.ofDays(365)) // once HTTPS is certain
         .contentSecurityPolicy("default-src 'self'")
         .permissionsPolicy("camera=()")
-        .header("X-Robots-Tag", "noindex"));        // anything else, same point
+        .header("X-Robots-Tag", "noindex")); // anything else, same point
 ----
 
 HSTS는 이미 HTTPS로 도착한 요청에 대해서만 나간다.

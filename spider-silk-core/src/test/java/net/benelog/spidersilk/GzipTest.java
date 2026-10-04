@@ -159,9 +159,9 @@ class GzipTest {
                 "가".repeat(40),
                 "😀".repeat(30),
                 "é".repeat(50) + "가나다" + "😀",
-                "a\uD83Db",                            // an unpaired high surrogate
-                "\uDE00".repeat(20),                   // unpaired low surrogates
-                "\uD83D".repeat(3) + "😀");  // unpaired highs, then a pair
+                "a\uD83Db", // an unpaired high surrogate
+                "\uDE00".repeat(20), // unpaired low surrogates
+                "\uD83D".repeat(3) + "😀"); // unpaired highs, then a pair
         for (String sample : samples) {
             int encoded = sample.getBytes(StandardCharsets.UTF_8).length;
             for (int threshold = 0; threshold <= encoded + 4; threshold++) {

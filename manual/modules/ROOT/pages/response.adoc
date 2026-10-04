@@ -101,8 +101,8 @@ Field names are case-insensitive in HTTP, and the map that holds the headers com
 ----
 WebResponse response = WebResponse.text("ok").header("X-Trace-Id", trace);
 
-response.header("x-trace-id");   // the trace id: the spelling asked for does not matter
-response.headers();              // every field, in the order they were set
+response.header("x-trace-id"); // the trace id: the spelling asked for does not matter
+response.headers(); // every field, in the order they were set
 ----
 
 A response holds one value per field.
@@ -137,10 +137,10 @@ A path like `/decks/3` is what an application normally wants, and is what HTTP a
 
 [source,java]
 ----
-WebResponse.redirect("/decks/" + deck.id());                             // 302
-WebResponse.redirect("/decks", HttpStatus.SEE_OTHER);                    // 303, after a POST
-WebResponse.redirect("/new-home", HttpStatus.MOVED_PERMANENTLY);         // 301, moved for good
-WebResponse.redirect("/api/v2/decks", HttpStatus.PERMANENT_REDIRECT);    // 308, keeps the method
+WebResponse.redirect("/decks/" + deck.id()); // 302
+WebResponse.redirect("/decks", HttpStatus.SEE_OTHER); // 303, after a POST
+WebResponse.redirect("/new-home", HttpStatus.MOVED_PERMANENTLY); // 301, moved for good
+WebResponse.redirect("/api/v2/decks", HttpStatus.PERMANENT_REDIRECT); // 308, keeps the method
 ----
 
 302 is the default because a redirect is reversible only while it is temporary.
@@ -163,7 +163,7 @@ A browser following a 301 or 302 after a POST will usually issue a GET, and thos
 [source,java]
 ----
 return WebResponse.html(page)
-        .cookie("theme", "dark")                    // session cookie
+        .cookie("theme", "dark") // session cookie
         .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
         .expireCookie("stale");
 ----

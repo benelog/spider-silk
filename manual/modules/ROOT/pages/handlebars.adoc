@@ -11,7 +11,7 @@ A tie to one engine belongs in the artifact's name, and core stays a web tier wi
 ----
 dependencies {
     implementation('{project-group}:spider-silk-handlebars:{project-version}') {
-        exclude group: 'gg.jte'    // core's jte, unused here
+        exclude group: 'gg.jte' // core's jte, unused here
     }
 }
 ----
@@ -38,8 +38,8 @@ The model's keys are the names a template reads, so `+{{deck.title}}+` reaches t
 
 [source,java]
 ----
-app.templates(new HandlebarsTemplates("hbs")    // classpath:/hbs
-        .suffix(".html"));                      // .../deck.html
+app.templates(new HandlebarsTemplates("hbs") // classpath:/hbs
+        .suffix(".html")); // .../deck.html
 ----
 
 The suffix is appended, never checked for, so a name that still carries its extension is looked up with the suffix twice over.

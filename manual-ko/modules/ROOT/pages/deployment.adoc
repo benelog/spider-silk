@@ -11,7 +11,7 @@
 ----
 ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
 ServletHolder holder = new ServletHolder(new AppServlet(app));
-holder.setInitOrder(0);                           // initialize while the context starts
+holder.setInitOrder(0); // initialize while the context starts
 context.addServlet(holder, "/*");
 ----
 

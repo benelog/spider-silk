@@ -11,7 +11,7 @@ xref:tomcat.adoc[Tomcat]이 별도 모듈인 것과 같은 이유로 별도 모�
 ----
 dependencies {
     implementation('{project-group}:spider-silk-handlebars:{project-version}') {
-        exclude group: 'gg.jte'    // core's jte, unused here
+        exclude group: 'gg.jte' // core's jte, unused here
     }
 }
 ----
@@ -38,8 +38,8 @@ new App()
 
 [source,java]
 ----
-app.templates(new HandlebarsTemplates("hbs")    // classpath:/hbs
-        .suffix(".html"));                      // .../deck.html
+app.templates(new HandlebarsTemplates("hbs") // classpath:/hbs
+        .suffix(".html")); // .../deck.html
 ----
 
 접미사는 덧붙일 뿐 검사하지 않으므로, 확장자를 아직 달고 있는 이름은 접미사가 두 번 붙은 채로 조회된다.

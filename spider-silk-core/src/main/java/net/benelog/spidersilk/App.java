@@ -22,11 +22,11 @@ import net.benelog.spidersilk.server.WebServerFactory;
  * There is no annotation scanning and no reflection: only what you register runs.
  *
  * <pre>{@code
- * App app = new App();   // jte over classpath:/jte, and classpath:/public served at /
+ * App app = new App(); // jte over classpath:/jte, and classpath:/public served at /
  *
  * app.get("/decks/{deckId}", req -> {
  *     long deckId = req.pathParamLong("deckId");
- *     return WebResponse.template("deck", Model.of("deck", deck));   // classpath:/jte/deck.jte
+ *     return WebResponse.template("deck", Model.of("deck", deck)); // classpath:/jte/deck.jte
  * });
  *
  * app.start(8080);
@@ -202,8 +202,8 @@ public final class App {
      *
      * <pre>{@code
      * app.path("/api/decks", decks -> {
-     *     decks.get("", this::listDecks);           // GET /api/decks
-     *     decks.get("/{deckId}", this::showDeck);   // GET /api/decks/{deckId}
+     *     decks.get("", this::listDecks); // GET /api/decks
+     *     decks.get("/{deckId}", this::showDeck); // GET /api/decks/{deckId}
      * });
      * }</pre>
      */

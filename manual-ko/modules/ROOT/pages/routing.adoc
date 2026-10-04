@@ -12,10 +12,10 @@ HEAD와 OPTIONS 요청에는 자동으로 답하므로, ``head``와 ``options``�
 
 [source,java]
 ----
-app.get("/decks", decks::list);                           // this path, exactly
-app.get("/decks/{deckId}", decks::show);                  // {deckId} matches one segment
-app.get("/files/{path*}", files::serve);                  // {path*} matches the rest of the path
-app.beforeRoute("/admin/*", req -> requireAdmin(req));    // matched routes under /admin
+app.get("/decks", decks::list); // this path, exactly
+app.get("/decks/{deckId}", decks::show); // {deckId} matches one segment
+app.get("/files/{path*}", files::serve); // {path*} matches the rest of the path
+app.beforeRoute("/admin/*", req -> requireAdmin(req)); // matched routes under /admin
 ----
 
 패턴은 세그먼트 단위로 비교된다.
@@ -44,7 +44,7 @@ app.beforeRoute("/admin/*", req -> requireAdmin(req));    // matched routes unde
 
 [source,java]
 ----
-long deckId = req.pathParamLong("deckId");   // non-numeric input becomes a 400
+long deckId = req.pathParamLong("deckId"); // non-numeric input becomes a 400
 String name = req.pathParam("name");
 Direction direction = req.pathParamEnum("direction", Direction.class);
 ----
@@ -68,11 +68,11 @@ Direction direction = req.pathParamEnum("direction", Direction.class);
 [source,java]
 ----
 app.path("/api/decks", decks -> {
-    decks.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
-    decks.get("", api::listDecks);                   // GET  /api/decks
-    decks.get("/{deckId}", api::showDeck);           // GET  /api/decks/{deckId}
-    decks.path("/{deckId}/cards", cards ->           // groups nest, prefixes concatenate
-        cards.get("", api::listCards));              // GET  /api/decks/{deckId}/cards
+    decks.beforeRoute(req -> requireApiKey(req)); // guards matched routes under /api/decks
+    decks.get("", api::listDecks); // GET /api/decks
+    decks.get("/{deckId}", api::showDeck); // GET /api/decks/{deckId}
+    decks.path("/{deckId}/cards", cards -> // groups nest, prefixes concatenate
+        cards.get("", api::listCards)); // GET /api/decks/{deckId}/cards
 });
 ----
 
@@ -89,8 +89,8 @@ app.path("/api/decks", decks -> {
 
 [source,java]
 ----
-app.get("/study/today", study::today);      // wins for /study/today
-app.get("/study/{mode}", study::byMode);    // everything else under /study
+app.get("/study/today", study::today); // wins for /study/today
+app.get("/study/{mode}", study::byMode); // everything else under /study
 ----
 
 정확히 같은 요청에 매칭되는 두 번째 라우트를 등록하면 그 자리에서 ``IllegalStateException``을 던진다.

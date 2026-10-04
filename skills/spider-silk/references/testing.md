@@ -15,7 +15,7 @@ testImplementation 'net.benelog.spidersilk:spider-silk-test:1.1.0'
 void createsADeck() {
     WebTest.test(app, client -> {
         var created = client.postForm("/decks", Map.of("name", "English"));
-        assertThat(created.statusCode()).isEqualTo(302);   // redirects are not followed
+        assertThat(created.statusCode()).isEqualTo(302); // redirects are not followed
         assertThat(client.get("/api/decks").body()).contains("English");
     });
 }

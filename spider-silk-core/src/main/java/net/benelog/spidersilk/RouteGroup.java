@@ -9,10 +9,10 @@ import java.util.function.Consumer;
  *
  * <pre>{@code
  * app.path("/api/decks", decks -> {
- *     decks.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
- *     decks.get("", this::listDecks);                  // GET  /api/decks
- *     decks.post("", this::createDeck);                // POST /api/decks
- *     decks.get("/{deckId}", this::showDeck);          // GET  /api/decks/{deckId}
+ *     decks.beforeRoute(req -> requireApiKey(req)); // guards matched routes under /api/decks
+ *     decks.get("", this::listDecks); // GET /api/decks
+ *     decks.post("", this::createDeck); // POST /api/decks
+ *     decks.get("/{deckId}", this::showDeck); // GET /api/decks/{deckId}
  * });
  * }</pre>
  *

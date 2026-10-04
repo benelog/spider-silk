@@ -95,11 +95,11 @@ Embedded Jetty ships with core, so nothing else is needed to serve a request.
 ## The core API at a glance
 
 ```java
-App app = new App();    // jte over classpath:/jte, classpath:/public served at /
+App app = new App(); // jte over classpath:/jte, classpath:/public served at /
 
 // Server-side rendering: template name carries no extension
 app.get("/decks/{deckId}", req -> {
-    long deckId = req.pathParamLong("deckId");   // non-numeric input becomes a 400
+    long deckId = req.pathParamLong("deckId"); // non-numeric input becomes a 400
     return WebResponse.template("deck", Model.of("deck", service.deck(deckId)));
 });
 
@@ -108,19 +108,19 @@ app.get("/api/decks", req -> WebResponse.json(
         Json.array().add(Json.object().put("id", 1L).put("name", "English"))));
 
 app.post("/api/decks", req -> {
-    String name = req.bodyJson(json -> json.asObject().getString("name"));   // missing key -> 400
+    String name = req.bodyJson(json -> json.asObject().getString("name")); // missing key -> 400
     return WebResponse.json(Json.object().put("name", name)).status(HttpStatus.CREATED);
 });
 
 // Routes sharing a prefix: the group is an argument, not ambient state
 app.path("/api/decks", group -> {
-    group.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
-    group.get("", api::listDecks);                   // GET  /api/decks
-    group.get("/{deckId}", api::showDeck);           // GET  /api/decks/{deckId}
+    group.beforeRoute(req -> requireApiKey(req)); // guards matched routes under /api/decks
+    group.get("", api::listDecks); // GET /api/decks
+    group.get("/{deckId}", api::showDeck); // GET /api/decks/{deckId}
 });
 
 // Exception-to-response mapping, and a styled error page for any 404
-app.exception(NoSuchDeckException.class,  // a type the application defines, never IllegalArgumentException
+app.exception(NoSuchDeckException.class, // a type the application defines, never IllegalArgumentException
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Model.of("path", req.path())));
 
@@ -171,7 +171,7 @@ Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus
 // End to end: starts the app on a free port, client keeps cookies, stops it after
 WebTest.test(app, client -> {
     var created = client.postForm("/decks", Map.of("name", "English"));
-    assertThat(created.statusCode()).isEqualTo(302);      // redirects are not followed
+    assertThat(created.statusCode()).isEqualTo(302); // redirects are not followed
     assertThat(client.get("/api/decks").body()).contains("English");
 });
 

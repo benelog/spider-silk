@@ -21,7 +21,7 @@ static final JsonReader<NewDeck> NEW_DECK =
 
 app.get("/api/decks", req -> WebResponse.json(deckService.decks(), DECKS));
 app.post("/api/decks", req -> {
-    Deck deck = deckService.create(req.bodyJson(NEW_DECK).name());   // missing key -> 400
+    Deck deck = deckService.create(req.bodyJson(NEW_DECK).name()); // missing key -> 400
     return WebResponse.json(deck, DECK).status(HttpStatus.CREATED);
 });
 ```
@@ -50,7 +50,7 @@ Two response kinds write the elements as they are produced instead:
 ```java
 // An ordinary JSON array, written a value at a time: the brackets and commas belong to the response
 app.get("/api/decks/{deckId}/cards", req -> {
-    long deckId = req.pathParamLong("deckId");           // look the deck up here, not inside the writer
+    long deckId = req.pathParamLong("deckId"); // look the deck up here, not inside the writer
     return WebResponse.jsonArray(sink -> service.eachCard(deckId, card -> sink.write(card, CARD)));
 });
 
@@ -140,7 +140,7 @@ if (req.session().get("user") instanceof User user) {
 }
 return WebResponse.template("decks", model);
 
-app.templates(new JteTemplates("templates").suffix(".html"));   // a root or suffix of your own
+app.templates(new JteTemplates("templates").suffix(".html")); // a root or suffix of your own
 ```
 
 Rendering happens while exception handling still applies, so a template that throws reaches `app.exception(...)`.
@@ -172,7 +172,7 @@ dependencies {
 import gg.jte.generated.precompiled.StaticTemplates;
 import gg.jte.generated.precompiled.Templates;
 
-Templates templates = new StaticTemplates();   // DynamicTemplates(engine) in development
+Templates templates = new StaticTemplates(); // DynamicTemplates(engine) in development
 // every @param is an argument, defaulted ones included
 app.get("/decks/{deckId}", req -> WebResponse.html(
         templates.deck(service.deck(req.pathParamLong("deckId")), req.flashed("message")).render()));
@@ -188,9 +188,9 @@ Each is a module of its own; `templates(renderer)` swaps it in.
 All append their suffix (never checked for, so keep extensions out of template names), and all escape by default.
 
 ```java
-app.templates(new FreeMarkerTemplates("freemarker"));   // classpath:/freemarker/deck.ftlh, ${x?no_esc} opts out
-app.templates(new HandlebarsTemplates("hbs"));          // classpath:/hbs/deck.hbs, {{{x}}} opts out
-app.templates(new ThymeleafTemplates("thymeleaf"));     // classpath:/thymeleaf/deck.html, th:utext opts out
+app.templates(new FreeMarkerTemplates("freemarker")); // classpath:/freemarker/deck.ftlh, ${x?no_esc} opts out
+app.templates(new HandlebarsTemplates("hbs")); // classpath:/hbs/deck.hbs, {{{x}}} opts out
+app.templates(new ThymeleafTemplates("thymeleaf")); // classpath:/thymeleaf/deck.html, th:utext opts out
 ```
 
 Each also has a constructor taking the engine's own configured object (`Configuration`, `Handlebars`, `TemplateEngine`) for helpers, dialects, or file-system loading — leave the engine-side suffix empty, since the renderer appends its own.
@@ -202,19 +202,19 @@ Any other engine is one lambda: `app.templates((template, model, out) -> mustach
 Every answer carries `ETag` and `Last-Modified` (reloads come back 304), with `Cache-Control: no-cache` by default. A file whose modification time is a build's stamp (before 2000, such as Jib's 1970-01-01T00:00:01Z) is tagged by a CRC-32 of its content and carries no `Last-Modified`.
 
 ```java
-app.staticFiles("/assets");                             // a different classpath root
+app.staticFiles("/assets"); // a different classpath root
 
 app.staticFiles(StaticFiles.classpath("/public")
-        .hostedPath("/assets")                          // classpath:/public/* at /assets/*
-        .maxAge(Duration.ofDays(365))                   // only for fingerprinted names
-        .precompressed());                              // app.css.br / app.css.gz answer app.css
+        .hostedPath("/assets") // classpath:/public/* at /assets/*
+        .maxAge(Duration.ofDays(365)) // only for fingerprinted names
+        .precompressed()); // app.css.br / app.css.gz answer app.css
 
 app.staticFiles(
         StaticFiles.classpath("/public"),
-        StaticFiles.directory(Path.of("/srv/uploads"))  // a directory on disk, path-traversal guarded
-                .hostedPath("/uploads"));               // several roots read in order
+        StaticFiles.directory(Path.of("/srv/uploads")) // a directory on disk, path-traversal guarded
+                .hostedPath("/uploads")); // several roots read in order
 
-app.staticFiles();                                      // serves nothing at all
+app.staticFiles(); // serves nothing at all
 ```
 
 `precompressed()` serves a `.br` or `.gz` sibling a build left next to the asset (brotli preferred), skipping siblings older than the file; `gzip()` still deflates what has no sibling.
@@ -261,7 +261,7 @@ new App()
 
 final class EchoSocket implements WebSocketHandler {
     @Override public void onText(Session session, String message) {
-        session.sendText(message, Callback.NOOP);       // async; a real Callback notices failures
+        session.sendText(message, Callback.NOOP); // async; a real Callback notices failures
     }
 }
 ```

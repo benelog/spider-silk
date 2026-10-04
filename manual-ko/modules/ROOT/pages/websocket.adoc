@@ -87,7 +87,7 @@ image::websocket-connection.svg[업그레이드가 아직 HTTP 요청인 동안 
 ----
 new WebSockets().at("/chat", (request, response) -> {
     if (!authorized(request)) {
-        return null;                  // 403, and the handshake is answered
+        return null; // 403, and the handshake is answered
     }
     if (request.hasSubProtocol("chat")) {
         response.setAcceptedSubProtocol("chat");

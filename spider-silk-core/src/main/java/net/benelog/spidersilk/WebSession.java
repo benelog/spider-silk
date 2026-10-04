@@ -12,9 +12,9 @@ import org.jspecify.annotations.Nullable;
  * {@link WebRequest#session()}: every session read and write in one place.
  *
  * <pre>{@code
- * req.session().set("user", user);                    // signing in
- * User user = req.session().get("user", User.class);  // null when signed out
- * req.session().invalidate();                         // signing out
+ * req.session().set("user", user); // signing in
+ * User user = req.session().get("user", User.class); // null when signed out
+ * req.session().invalidate(); // signing out
  * }</pre>
  *
  * <p>Holding one starts no session. Only {@link #set} creates one, so a read,

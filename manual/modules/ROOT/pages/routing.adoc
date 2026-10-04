@@ -12,10 +12,10 @@ Each of those methods also accepts a xref:route-introspection.adoc#descriptions[
 
 [source,java]
 ----
-app.get("/decks", decks::list);                           // this path, exactly
-app.get("/decks/{deckId}", decks::show);                  // {deckId} matches one segment
-app.get("/files/{path*}", files::serve);                  // {path*} matches the rest of the path
-app.beforeRoute("/admin/*", req -> requireAdmin(req));    // matched routes under /admin
+app.get("/decks", decks::list); // this path, exactly
+app.get("/decks/{deckId}", decks::show); // {deckId} matches one segment
+app.get("/files/{path*}", files::serve); // {path*} matches the rest of the path
+app.beforeRoute("/admin/*", req -> requireAdmin(req)); // matched routes under /admin
 ----
 
 Patterns are compared segment by segment.
@@ -44,7 +44,7 @@ A handler reads what a `\{name}` segment matched by name, and states the type at
 
 [source,java]
 ----
-long deckId = req.pathParamLong("deckId");   // non-numeric input becomes a 400
+long deckId = req.pathParamLong("deckId"); // non-numeric input becomes a 400
 String name = req.pathParam("name");
 Direction direction = req.pathParamEnum("direction", Direction.class);
 ----
@@ -68,11 +68,11 @@ The group arrives as an argument rather than as ambient state:
 [source,java]
 ----
 app.path("/api/decks", decks -> {
-    decks.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
-    decks.get("", api::listDecks);                   // GET  /api/decks
-    decks.get("/{deckId}", api::showDeck);           // GET  /api/decks/{deckId}
-    decks.path("/{deckId}/cards", cards ->           // groups nest, prefixes concatenate
-        cards.get("", api::listCards));              // GET  /api/decks/{deckId}/cards
+    decks.beforeRoute(req -> requireApiKey(req)); // guards matched routes under /api/decks
+    decks.get("", api::listDecks); // GET /api/decks
+    decks.get("/{deckId}", api::showDeck); // GET /api/decks/{deckId}
+    decks.path("/{deckId}/cards", cards -> // groups nest, prefixes concatenate
+        cards.get("", api::listCards)); // GET /api/decks/{deckId}/cards
 });
 ----
 
@@ -89,8 +89,8 @@ A literal route registered before a variable one therefore always wins:
 
 [source,java]
 ----
-app.get("/study/today", study::today);      // wins for /study/today
-app.get("/study/{mode}", study::byMode);    // everything else under /study
+app.get("/study/today", study::today); // wins for /study/today
+app.get("/study/{mode}", study::byMode); // everything else under /study
 ----
 
 Registering a second route that matches exactly the same requests throws `IllegalStateException` on the spot.

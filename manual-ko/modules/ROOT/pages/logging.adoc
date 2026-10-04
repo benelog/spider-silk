@@ -183,7 +183,7 @@ java -Djava.util.logging.config.file=logging.properties -jar app.jar
 graalvmNative {
     binaries {
         main {
-            resources.includedPatterns.add('logback\\.xml')    // or 'log4j2\\.xml', or 'logging\\.properties'
+            resources.includedPatterns.add('logback\\.xml') // or 'log4j2\\.xml', or 'logging\\.properties'
         }
     }
 }

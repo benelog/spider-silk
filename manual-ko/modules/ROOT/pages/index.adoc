@@ -92,11 +92,11 @@ Spider Silk 프레임워크 내부 코드는 리플렉션을 쓰지 않는다.
 [source,text]
 ----
 java.lang.Throwable: where a handler stands
-    at com.example.decks.DeckRoutes.one(DeckRoutes.java:15)  // the handler
-    at net.benelog.spidersilk.AppServlet.dispatch(AppServlet.java:221)  // Spider Silk
-    at net.benelog.spidersilk.AppServlet.service(AppServlet.java:128)  // Spider Silk
-    at jakarta.servlet.http.HttpServlet.service(HttpServlet.java)  // the Servlet API
-    at org.eclipse.jetty.ee10.servlet.ServletHolder.handle(ServletHolder.java)  // Jetty, from here down
+    at com.example.decks.DeckRoutes.one(DeckRoutes.java:15) // the handler
+    at net.benelog.spidersilk.AppServlet.dispatch(AppServlet.java:221) // Spider Silk
+    at net.benelog.spidersilk.AppServlet.service(AppServlet.java:128) // Spider Silk
+    at jakarta.servlet.http.HttpServlet.service(HttpServlet.java) // the Servlet API
+    at org.eclipse.jetty.ee10.servlet.ServletHolder.handle(ServletHolder.java) // Jetty, from here down
 ----
 
 === 풋프린트를 최소화하는 기본 기술 스택

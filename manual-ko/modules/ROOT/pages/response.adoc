@@ -101,8 +101,8 @@ HTTP에서 필드 이름은 대소문자를 구별하지 않으며, 헤더를 �
 ----
 WebResponse response = WebResponse.text("ok").header("X-Trace-Id", trace);
 
-response.header("x-trace-id");   // the trace id: the spelling asked for does not matter
-response.headers();              // every field, in the order they were set
+response.header("x-trace-id"); // the trace id: the spelling asked for does not matter
+response.headers(); // every field, in the order they were set
 ----
 
 응답은 필드당 하나의 값을 가진다.
@@ -137,10 +137,10 @@ return WebResponse.raw((req, res) -> {
 
 [source,java]
 ----
-WebResponse.redirect("/decks/" + deck.id());                             // 302
-WebResponse.redirect("/decks", HttpStatus.SEE_OTHER);                    // 303, after a POST
-WebResponse.redirect("/new-home", HttpStatus.MOVED_PERMANENTLY);         // 301, moved for good
-WebResponse.redirect("/api/v2/decks", HttpStatus.PERMANENT_REDIRECT);    // 308, keeps the method
+WebResponse.redirect("/decks/" + deck.id()); // 302
+WebResponse.redirect("/decks", HttpStatus.SEE_OTHER); // 303, after a POST
+WebResponse.redirect("/new-home", HttpStatus.MOVED_PERMANENTLY); // 301, moved for good
+WebResponse.redirect("/api/v2/decks", HttpStatus.PERMANENT_REDIRECT); // 308, keeps the method
 ----
 
 302가 기본인 이유는 리다이렉트가 임시인 동안에만 되돌릴 수 있기 때문이다.
@@ -163,7 +163,7 @@ POST 뒤에 301이나 302를 따라가는 브라우저는 보통 GET을 보내�
 [source,java]
 ----
 return WebResponse.html(page)
-        .cookie("theme", "dark")                    // session cookie
+        .cookie("theme", "dark") // session cookie
         .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
         .expireCookie("stale");
 ----

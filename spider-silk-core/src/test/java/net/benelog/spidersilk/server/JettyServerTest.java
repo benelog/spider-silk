@@ -700,7 +700,7 @@ class JettyServerTest {
     @Test
     void anIdleConnectionDoesNotDelayTheStop() throws Exception {
         app = new App().get("/", req -> WebResponse.text("ok")).start(0);
-        assertThat(get("/").statusCode()).isEqualTo(200);   // leaves a keep-alive connection behind
+        assertThat(get("/").statusCode()).isEqualTo(200); // leaves a keep-alive connection behind
 
         long startedAt = System.nanoTime();
         app.stop();

@@ -124,11 +124,11 @@ class ReadmeSnippets {
     // ---- block 2: At a Glance ----
 
     void atAGlance() {
-        App app = new App();    // jte over classpath:/jte, and classpath:/public served at /
+        App app = new App(); // jte over classpath:/jte, and classpath:/public served at /
 
         // Server-side rendering
         app.get("/decks/{deckId}", req -> {
-            long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
+            long deckId = req.pathParamLong("deckId"); // non-numeric input becomes a 400
             return WebResponse.template("deck", Model.of("deck", deck));
         });
 
@@ -137,19 +137,19 @@ class ReadmeSnippets {
                 Json.array().add(Json.object().put("id", 1L).put("name", "English"))));
 
         app.post("/api/decks", req -> {
-            String name = req.bodyJson(json -> json.asObject().getString("name"));  // no key -> 400
+            String name = req.bodyJson(json -> json.asObject().getString("name")); // no key -> 400
             return WebResponse.json(Json.object().put("name", name)).status(HttpStatus.CREATED);
         });
 
         // Routes sharing a prefix — the group is an argument, not ambient state
         app.path("/api/decks", group -> {
-            group.beforeRoute(req -> requireApiKey(req));    // guards matched routes under /api/decks
-            group.get("", api::listDecks);                   // GET  /api/decks
-            group.get("/{deckId}", api::listCards);          // GET  /api/decks/{deckId}
+            group.beforeRoute(req -> requireApiKey(req)); // guards matched routes under /api/decks
+            group.get("", api::listDecks); // GET /api/decks
+            group.get("/{deckId}", api::listCards); // GET /api/decks/{deckId}
         });
 
         // Exception-to-response mapping
-        app.exception(NoSuchDeckException.class,  // an exception the application defines
+        app.exception(NoSuchDeckException.class, // an exception the application defines
                 (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
         // One place for a styled error page, whatever produced the status
@@ -172,8 +172,8 @@ class ReadmeSnippets {
 
     void filters(App app) {
         app.beforeRoute("/admin/*", req -> req.session().get("user") == null
-                ? WebResponse.redirect("/login")    // answers here, so the route handler never runs
-                : null);                            // carry on
+                ? WebResponse.redirect("/login") // answers here, so the route handler never runs
+                : null); // carry on
 
         app.afterRoute("/api/*", (req, res) -> res.header("Cache-Control", "no-store"));
 
@@ -200,7 +200,7 @@ class ReadmeSnippets {
         app.get("/api/decks", req -> WebResponse.json(deckService.decks(), DECKS));
 
         app.post("/api/decks", req -> {
-            Deck deck = deckService.create(req.bodyJson(NEW_DECK).name());   // no key -> 400
+            Deck deck = deckService.create(req.bodyJson(NEW_DECK).name()); // no key -> 400
             return WebResponse.json(deck, DECK).status(HttpStatus.CREATED);
         });
 
@@ -211,19 +211,19 @@ class ReadmeSnippets {
     // ---- blocks 12, 13: cookies, query vs form ----
 
     WebResponse cookiesAndParams(WebRequest req, String page, String value) {
-        String theme = req.cookie("theme");                 // null when absent
-        List<String> tags = req.params("tag");              // ?tag=java&tag=web, or a checkbox group
+        String theme = req.cookie("theme"); // null when absent
+        List<String> tags = req.params("tag"); // ?tag=java&tag=web, or a checkbox group
 
-        String queryPage = req.queryParamOrNull("page");    // query string only, null when absent
-        String name = req.formParam("name");                // form body only, 400 when absent
+        String queryPage = req.queryParamOrNull("page"); // query string only, null when absent
+        String name = req.formParam("name"); // form body only, 400 when absent
         List<String> formTags = req.formParams("tag");
 
-        String search = req.paramOrNull("q");                         // null when absent
-        LocalDate due = req.formParam("due", LocalDate::parse);       // 400 when the form carries none
+        String search = req.paramOrNull("q"); // null when absent
+        LocalDate due = req.formParam("due", LocalDate::parse); // 400 when the form carries none
         int pageNumber = req.queryParam("page", Integer::parseInt, 1); // default covers absence only
 
         return WebResponse.html(page)
-                .cookie("theme", "dark")                    // session cookie
+                .cookie("theme", "dark") // session cookie
                 .cookie("token", value, Duration.ofDays(7)) // survives a browser restart
                 .expireCookie("stale");
     }
@@ -231,10 +231,10 @@ class ReadmeSnippets {
     // ---- sessions ----
 
     void sessions(WebRequest req, User user) {
-        req.session().set("user", user);                 // creates the session if there is none yet
-        User read = req.session().get("user", User.class);  // null when absent
-        User same = req.session().get("user");              // the same read, cast by the caller
-        req.session().remove("user");                    // creates no session to remove from
+        req.session().set("user", user); // creates the session if there is none yet
+        User read = req.session().get("user", User.class); // null when absent
+        User same = req.session().get("user"); // the same read, cast by the caller
+        req.session().remove("user"); // creates no session to remove from
         req.session().invalidate();
     }
 
@@ -261,12 +261,12 @@ class ReadmeSnippets {
                 req.method(), req.path(), completion.statusCode(), completion.took().toMillis()));
 
         app.staticFiles(StaticFiles.classpath("/public")
-                .hostedPath("/assets")              // classpath:/public/* at /assets/*
-                .maxAge(Duration.ofDays(365)));     // only when the name carries a content hash
+                .hostedPath("/assets") // classpath:/public/* at /assets/*
+                .maxAge(Duration.ofDays(365))); // only when the name carries a content hash
 
         app.staticFiles(
-                StaticFiles.classpath("/public"),                  // classpath:/public/* at /*
-                StaticFiles.directory(Path.of("/srv/uploads"))     // /srv/uploads/* at /uploads/*
+                StaticFiles.classpath("/public"), // classpath:/public/* at /*
+                StaticFiles.directory(Path.of("/srv/uploads")) // /srv/uploads/* at /uploads/*
                         .hostedPath("/uploads"));
     }
 
@@ -293,8 +293,8 @@ class ReadmeSnippets {
                 .sessions(false)
                 .threadPool(new QueuedThreadPool(200, 8))
                 .multipart(new MultipartConfigElement(tmp, 10_485_760L, 10_485_760L, 1_048_576))
-                .stopTimeout(Duration.ofSeconds(20))    // longer drain for slow requests
-                .shutdownHook(false)                    // something else owns the lifecycle
+                .stopTimeout(Duration.ofSeconds(20)) // longer drain for slow requests
+                .shutdownHook(false) // something else owns the lifecycle
                 .customizeHttpConfiguration(http -> http.setSendServerVersion(false))
                 .customizeContext(context -> context.addFilter(MyFilter.class, "/*", null))
                 .customizeServer(server -> server.setDumpBeforeStop(true));
@@ -305,11 +305,11 @@ class ReadmeSnippets {
         app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool));
 
         app.server((a, port) -> new JettyServer(a).port(port).sessions(false));
-        app.server((a, port) -> new MyUndertowServer(a, port));   // implements WebServer
+        app.server((a, port) -> new MyUndertowServer(a, port)); // implements WebServer
 
         ServletContextHandler context = new ServletContextHandler(ServletContextHandler.SESSIONS);
         ServletHolder holder = new ServletHolder(new AppServlet(app));
-        holder.setInitOrder(0);                           // initialize while the context starts
+        holder.setInitOrder(0); // initialize while the context starts
         context.addServlet(holder, "/*");
     }
 

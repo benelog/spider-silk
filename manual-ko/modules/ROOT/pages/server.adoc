@@ -13,8 +13,8 @@ new JettyServer(app)
         .sessions(false)
         .threadPool(new QueuedThreadPool(200, 8))
         .multipart(new MultipartConfigElement(tmp, 10_485_760L, 10_485_760L, 1_048_576))
-        .stopTimeout(Duration.ofSeconds(20))    // longer drain for slow requests
-        .shutdownHook(false)                    // something else owns the lifecycle
+        .stopTimeout(Duration.ofSeconds(20)) // longer drain for slow requests
+        .shutdownHook(false) // something else owns the lifecycle
         .customizeHttpConfiguration(http -> http.setSendServerVersion(false))
         .customizeContext(context -> context.addFilter(MyFilter.class, "/*", null))
         .customizeServer(server -> server.setDumpBeforeStop(true))
@@ -59,13 +59,13 @@ JVM 셧다운 훅이 Ctrl-C나 SIGTERM에서 서버를 멈추고, ``stop()``은 
 app.server((a, port) -> new JettyServer(a).port(port).sessions(false))
    .start(9000);
 
-app.server((a, port) -> new TomcatServer(a).port(port))     // spider-silk-tomcat
+app.server((a, port) -> new TomcatServer(a).port(port)) // spider-silk-tomcat
    .start(9000);
 
-app.server((a, port) -> new UndertowServer(a).port(port))   // spider-silk-undertow
+app.server((a, port) -> new UndertowServer(a).port(port)) // spider-silk-undertow
    .start(9000);
 
-app.server((a, port) -> new MyOwnServer(a, port))           // implements WebServer
+app.server((a, port) -> new MyOwnServer(a, port)) // implements WebServer
    .start(9000);
 ----
 

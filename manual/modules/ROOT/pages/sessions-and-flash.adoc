@@ -10,10 +10,10 @@ Session attributes are read and written through `req.session()`, a `WebSession` 
 
 [source,java]
 ----
-req.session().set("user", user);                    // creates the session if there is none yet
-User user = req.session().get("user", User.class);  // null when absent
-User same = req.session().get("user");              // the same read, cast by the caller
-req.session().remove("user");                       // creates no session to remove from
+req.session().set("user", user); // creates the session if there is none yet
+User user = req.session().get("user", User.class); // null when absent
+User same = req.session().get("user"); // the same read, cast by the caller
+req.session().remove("user"); // creates no session to remove from
 ----
 
 Neither `session()` nor a read creates a session, so a visitor who has not signed in costs no session object.
@@ -85,7 +85,7 @@ A handler withdraws a flash it set earlier in the same request this way:
 ----
 req.flash("message", "Imported " + imported + " cards.");
 if (imported == 0) {
-    req.flash("message", null);   // the next request reads null
+    req.flash("message", null); // the next request reads null
 }
 ----
 

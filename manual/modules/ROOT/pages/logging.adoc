@@ -183,7 +183,7 @@ A binary carries only the classpath resources the build names, so a configuratio
 graalvmNative {
     binaries {
         main {
-            resources.includedPatterns.add('logback\\.xml')    // or 'log4j2\\.xml', or 'logging\\.properties'
+            resources.includedPatterns.add('logback\\.xml') // or 'log4j2\\.xml', or 'logging\\.properties'
         }
     }
 }

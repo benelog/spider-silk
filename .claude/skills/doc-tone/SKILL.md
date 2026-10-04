@@ -5,7 +5,8 @@ description: >-
   the register of a technical reference manual.
   Use this skill when writing or editing any prose under `manual/` (the Antora pages), `README.adoc`,
   or `notes/` (positioning.md, decisions.md) — a new chapter, a new section, a rewrite, or a paragraph
-  added to an existing page. It governs how a sentence is built, not what the documentation says.
+  added to an existing page. It governs how a sentence is built, not what the documentation says,
+  and how a `//` comment sits in a code block.
 ---
 
 # Documentation tone
@@ -81,9 +82,43 @@ Description-then-link, in a list of further reading:
 
 > [notes/positioning.md](notes/positioning.md) places Spider Silk next to Javalin, Spark, Helidon SE, and Spring Boot, and states what it trades away to get there.
 
+## Comments in code blocks
+
+A trailing `//` comment sits one space after the code, with one space after the `//` (this is also an `AGENTS.md` rule).
+Comments on neighbouring lines are not aligned into a column.
+Text inside a comment is not padded to line up with the line above either.
+A comment too long for one line goes on its own line above the code, not on an indented continuation line under the trailing one.
+
+Aligned into a column:
+
+```java
+req.session().set("user", user);                    // creates the session if there is none yet
+User user = req.session().get("user", User.class);  // null when absent
+decks.get("", api::listDecks);                      // GET  /api/decks
+```
+
+```java
+req.session().set("user", user); // creates the session if there is none yet
+User user = req.session().get("user", User.class); // null when absent
+decks.get("", api::listDecks); // GET /api/decks
+```
+
+A continuation line under a trailing comment:
+
+```java
+WebResponse.file(path);                       // type from the name, length from the file
+                                              //   not a readable file -> UncheckedIOException
+```
+
+```java
+// Not a readable file -> UncheckedIOException.
+WebResponse.file(path); // type from the name, length from the file
+```
+
 ## Never touched
 
 - Code blocks, tables, headings, `:navtitle:` and other AsciiDoc attributes.
+  The spacing of a `//` comment in a code block is the one exception, under the section above.
 - `xref:` anchors and link targets. A heading is an anchor target: `## Rejected — decisions, with the reason`
   is linked as `#rejected--decisions-with-the-reason`, so its em-dash stays.
 - In `notes/decisions.md`, the decision numbers and the cross-references between them ("decision 27's rule",
@@ -102,9 +137,10 @@ so a page's tail can be missed entirely. Use the Read tool, or dump the prose to
 **Verify**, in this order:
 
 ```bash
-npm run docs                                   # manual/ and manual-ko/: failure_level is warn, so a broken xref fails the build
-grep -rn "—\|; " <files>                       # leftover old-style prose; hits inside tables are expected
-diff <(git show HEAD:<file> | grep '^#') <(grep '^#' <file>)   # headings, and therefore anchors, unchanged
+npm run docs # manual/ and manual-ko/: failure_level is warn, so a broken xref fails the build
+grep -rn "—\|; " <files> # leftover old-style prose; hits inside tables are expected
+grep -rnE '\S {2,}//|//  +\S' <files> # a // comment aligned into a column, or padded inside
+diff <(git show HEAD:<file> | grep '^#') <(grep '^#' <file>) # headings, and therefore anchors, unchanged
 ```
 
 Commit per group of pages rather than in one sweep, so a broken anchor is easy to place.

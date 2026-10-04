@@ -11,7 +11,7 @@ A tie to one engine belongs in the artifact's name, and core stays a web tier wi
 ----
 dependencies {
     implementation('{project-group}:spider-silk-freemarker:{project-version}') {
-        exclude group: 'gg.jte'    // core's jte, unused here
+        exclude group: 'gg.jte' // core's jte, unused here
     }
 }
 ----
@@ -44,8 +44,8 @@ A suffix of your own drops the statement in the name, but the configuration stil
 
 [source,java]
 ----
-app.templates(new FreeMarkerTemplates("freemarker")     // classpath:/freemarker
-        .suffix(".ftl"));                               // .../deck.ftl, still escaped
+app.templates(new FreeMarkerTemplates("freemarker") // classpath:/freemarker
+        .suffix(".ftl")); // .../deck.ftl, still escaped
 ----
 
 The suffix is appended, never checked for, so a name that still carries its extension is looked up with the suffix twice over.
@@ -61,7 +61,7 @@ It is handed over whole, so the escaping, the exception handling, and the encodi
 Configuration configuration = new Configuration(Configuration.VERSION_2_3_34);
 configuration.setTemplateLoader(new ClassTemplateLoader(loader, "freemarker"));
 configuration.setDefaultEncoding("UTF-8");
-configuration.setOutputFormat(HTMLOutputFormat.INSTANCE);                        // or nothing is escaped
+configuration.setOutputFormat(HTMLOutputFormat.INSTANCE); // or nothing is escaped
 configuration.setTemplateExceptionHandler(TemplateExceptionHandler.RETHROW_HANDLER);
 configuration.setSharedVariable("siteName", "Spider Silk");
 

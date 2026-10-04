@@ -59,7 +59,7 @@ public class StatsService {
 
         LocalDate anchor = dates.getFirst();
         if (!anchor.equals(today) && !anchor.equals(today.minusDays(1))) {
-            return 0;   // already rested for more than two days
+            return 0; // already rested for more than two days
         }
 
         int streak = 1;

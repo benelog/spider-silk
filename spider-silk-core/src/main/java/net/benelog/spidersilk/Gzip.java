@@ -16,9 +16,9 @@ import org.jspecify.annotations.Nullable;
  * Compresses the response when the client says it can read it.
  *
  * <pre>{@code
- * app.gzip();                                     // the defaults below
+ * app.gzip(); // the defaults below
  *
- * app.gzip(Gzip.defaults().minBytes(4096));       // only what is worth the CPU
+ * app.gzip(Gzip.defaults().minBytes(4096)); // only what is worth the CPU
  * }</pre>
  *
  * <p>Registered through {@link App#gzip(Gzip)}, not as a filter: the stylesheet

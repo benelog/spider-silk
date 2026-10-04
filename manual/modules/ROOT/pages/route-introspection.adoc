@@ -41,7 +41,7 @@ Its path is the pattern with group prefixes resolved, so a tracing span, a metri
 [source,java]
 ----
 app.beforeRoute(req -> {
-    Span.current().updateName(req.method() + " " + req.route().path());   // "GET /api/decks/{deckId}"
+    Span.current().updateName(req.method() + " " + req.route().path()); // "GET /api/decks/{deckId}"
     return null;
 });
 ----
