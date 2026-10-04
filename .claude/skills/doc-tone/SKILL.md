@@ -93,19 +93,8 @@ Description-then-link, in a list of further reading:
 
 ## How to apply it
 
-Edit with exact-match replacements that fail loudly on a miss, not by retyping a file:
-
-```python
-def apply(path, reps):
-    s = open(path).read()
-    for a, b in reps:
-        if a not in s:
-            raise SystemExit("MISS in %s: %r" % (path, a[:70]))
-        s = s.replace(a, b, 1)
-    open(path, 'w').write(s)
-```
-
-A full-file rewrite can silently corrupt a code block it retypes; a replacement that raises cannot.
+Edit with exact-match replacements that fail loudly on a miss, not by retyping a file.
+A full-file rewrite can silently corrupt a code block it retypes; a replacement that fails on a miss cannot.
 
 **Read the whole file first.** `cat` and `sed` output is truncated by this machine's rtk hook without saying so,
 so a page's tail can be missed entirely. Use the Read tool, or dump the prose to a scratch file and read that.
@@ -113,7 +102,7 @@ so a page's tail can be missed entirely. Use the Read tool, or dump the prose to
 **Verify**, in this order:
 
 ```bash
-npm run docs                                   # manual/ only: failure_level is warn, so a broken xref fails the build
+npm run docs                                   # manual/ and manual-ko/: failure_level is warn, so a broken xref fails the build
 grep -rn "—\|; " <files>                       # leftover old-style prose; hits inside tables are expected
 diff <(git show HEAD:<file> | grep '^#') <(grep '^#' <file>)   # headings, and therefore anchors, unchanged
 ```
