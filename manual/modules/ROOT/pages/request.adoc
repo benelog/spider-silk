@@ -140,7 +140,7 @@ Undertow drops a field whose escape will not decode, and refuses a form over its
 ----
 app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
     case "application/json" -> WebResponse.json(deckService.decks(), Codecs::writeDecks);
-    default -> WebResponse.template("decks", Map.of("decks", deckService.decks()));
+    default -> WebResponse.template("decks", Model.of("decks", deckService.decks()));
 });
 ----
 

@@ -26,7 +26,7 @@ jte 제외는 선택 사항이다.
 new App()
         .templates(new HandlebarsTemplates("hbs"))
         .get("/decks/{deckId}", req ->
-                WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+                WebResponse.template("deck", Model.of("deck", service.deck(req.pathParamLong("deckId")))));
 ----
 
 이는 `classpath:/hbs/deck.hbs`를 렌더링한다.

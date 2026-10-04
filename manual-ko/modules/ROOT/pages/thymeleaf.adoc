@@ -28,7 +28,7 @@ jte 제외는 선택 사항이다.
 new App()
         .templates(new ThymeleafTemplates("thymeleaf"))
         .get("/decks/{deckId}", req ->
-                WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+                WebResponse.template("deck", Model.of("deck", service.deck(req.pathParamLong("deckId")))));
 ----
 
 이는 `classpath:/thymeleaf/deck.html`을 렌더링하며, UTF-8 HTML로 파싱하고 파싱된 템플릿은 캐시한다.

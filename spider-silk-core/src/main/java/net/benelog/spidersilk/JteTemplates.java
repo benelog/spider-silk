@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
-import java.util.Map;
 import java.util.Objects;
 
 import gg.jte.CodeResolver;
@@ -12,8 +11,6 @@ import gg.jte.ContentType;
 import gg.jte.TemplateEngine;
 import gg.jte.output.WriterOutput;
 import gg.jte.resolve.ResourceCodeResolver;
-
-import org.jspecify.annotations.Nullable;
 
 /**
  * jte (https://jte.gg) integration.
@@ -61,7 +58,7 @@ public final class JteTemplates implements TemplateRenderer {
      * <pre>{@code
      * app.templates(new JteTemplates("jte").suffix(".html"));
      *
-     * WebResponse.template("deck", model);   // renders classpath:/jte/deck.html
+     * WebResponse.template("deck");   // renders classpath:/jte/deck.html
      * }</pre>
      *
      * <p>The default is {@code ".jte"}. It is appended, never checked for: a
@@ -73,7 +70,7 @@ public final class JteTemplates implements TemplateRenderer {
     }
 
     @Override
-    public void render(String template, Map<String, @Nullable Object> model, Writer out) {
-        engine.render(template + suffix, model, new WriterOutput(out));
+    public void render(String template, Model model, Writer out) {
+        engine.render(template + suffix, model.asMap(), new WriterOutput(out));
     }
 }

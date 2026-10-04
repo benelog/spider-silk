@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.StringWriter;
 import java.net.http.HttpResponse;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.HttpStatus;
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.WebResponse;
 import net.benelog.spidersilk.test.WebTest;
 
@@ -21,7 +21,7 @@ class ThymeleafTemplatesTest {
     void aTemplateIsRenderedAsHtml() {
         App app = new App()
                 .templates(new ThymeleafTemplates("thymeleaf"))
-                .get("/hello", req -> WebResponse.template("greeting", Map.of("name", "Silk")));
+                .get("/hello", req -> WebResponse.template("greeting", Model.of("name", "Silk")));
 
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.get("/hello");
@@ -37,7 +37,7 @@ class ThymeleafTemplatesTest {
     void thTextEscapesTheModel() {
         App app = new App()
                 .templates(new ThymeleafTemplates("thymeleaf"))
-                .get("/hello", req -> WebResponse.template("greeting", Map.of("name", "<script>")));
+                .get("/hello", req -> WebResponse.template("greeting", Model.of("name", "<script>")));
 
         WebTest.test(app, client ->
                 assertThat(client.get("/hello").body()).isEqualTo("<p>Hello, &lt;script&gt;!</p>\n"));
@@ -47,7 +47,7 @@ class ThymeleafTemplatesTest {
     void aRootAndSuffixOfItsOwnReplaceTheDefaults() {
         App app = new App()
                 .templates(new ThymeleafTemplates("templates").suffix(".th.html"))
-                .get("/hello", req -> WebResponse.template("greeting", Map.of("name", "Silk")));
+                .get("/hello", req -> WebResponse.template("greeting", Model.of("name", "Silk")));
 
         WebTest.test(app, client ->
                 assertThat(client.get("/hello").body()).isEqualTo("<p>Howdy, Silk!</p>\n"));
@@ -58,7 +58,7 @@ class ThymeleafTemplatesTest {
         StringWriter out = new StringWriter();
 
         assertThatThrownBy(() -> new ThymeleafTemplates("thymeleaf")
-                .render("greeting.html", Map.of("name", "Silk"), out))
+                .render("greeting.html", Model.of("name", "Silk"), out))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("greeting.html.html");
     }
@@ -67,7 +67,7 @@ class ThymeleafTemplatesTest {
     void aTemplateThatThrowsReachesTheExceptionHandler() {
         App app = new App()
                 .templates(new ThymeleafTemplates("thymeleaf"))
-                .get("/hello", req -> WebResponse.template("nothing-here", Map.of()))
+                .get("/hello", req -> WebResponse.template("nothing-here"))
                 .exception(Exception.class,
                         (req, e) -> WebResponse.text("caught").status(HttpStatus.BAD_REQUEST));
 

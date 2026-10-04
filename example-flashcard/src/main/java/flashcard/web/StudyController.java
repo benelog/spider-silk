@@ -1,8 +1,6 @@
 package flashcard.web;
 
-import java.util.HashMap;
-import java.util.Map;
-
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
 
@@ -58,20 +56,18 @@ public class StudyController {
         if (studySession == null || studySession.isEmpty()) {
             return WebResponse.redirect("/");
         }
-        Map<String, Object> model = new HashMap<>();
-        model.put("study", studySession);
-
         if (studySession.isRoundFinished()) {
-            return WebResponse.template(studySession.hasWrongCards()
-                    ? "study-round-end" : "study-done", model);
+            return WebResponse.template(studySession.hasWrongCards() ? "study-round-end" : "study-done",
+                    Model.of("study", studySession));
         }
 
         Card card = studyService.currentCard(studySession);
         boolean textFirst = studySession.getDirection() == StudyDirection.TEXT_TO_MEANING;
-        model.put("question", textFirst ? card.text() : card.meaning());
-        model.put("answer", textFirst ? card.meaning() : card.text());
-        model.put("flipped", req.paramBoolean("flipped", false));
-        return WebResponse.template("study", model);
+        return WebResponse.template("study", Model.of(
+                "study", studySession,
+                "question", textFirst ? card.text() : card.meaning(),
+                "answer", textFirst ? card.meaning() : card.text(),
+                "flipped", req.paramBoolean("flipped", false)));
     }
 
     public WebResponse answer(WebRequest req) {

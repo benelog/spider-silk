@@ -26,7 +26,7 @@ It only keeps an unused engine off the classpath, and leaving it in lets both wo
 new App()
         .templates(new HandlebarsTemplates("hbs"))
         .get("/decks/{deckId}", req ->
-                WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+                WebResponse.template("deck", Model.of("deck", service.deck(req.pathParamLong("deckId")))));
 ----
 
 That renders `classpath:/hbs/deck.hbs`.

@@ -3,7 +3,6 @@ package net.benelog.spidersilk.handlebars;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
-import java.util.Map;
 import java.util.Objects;
 
 import com.github.jknack.handlebars.Context;
@@ -12,9 +11,8 @@ import com.github.jknack.handlebars.Template;
 import com.github.jknack.handlebars.cache.ConcurrentMapTemplateCache;
 import com.github.jknack.handlebars.io.ClassPathTemplateLoader;
 
-import org.jspecify.annotations.Nullable;
-
 import net.benelog.spidersilk.App;
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.TemplateRenderer;
 
 /**
@@ -73,10 +71,10 @@ public final class HandlebarsTemplates implements TemplateRenderer {
     }
 
     @Override
-    public void render(String template, Map<String, @Nullable Object> model, Writer out) {
+    public void render(String template, Model model, Writer out) {
         try {
             Template compiled = handlebars.compile(template + suffix);
-            compiled.apply(Context.newContext(model), out);
+            compiled.apply(Context.newContext(model.asMap()), out);
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot render the template " + template + suffix, e);
         }

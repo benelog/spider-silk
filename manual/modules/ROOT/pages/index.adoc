@@ -109,7 +109,7 @@ app.path("/api/decks", group -> {
 app.exception(NoSuchDeckException.class,  // an exception the application defines
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
-app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
+app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Model.of("path", req.path())));
 
 app.start(8080);                                // embedded Jetty, sessions on
 ----

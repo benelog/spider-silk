@@ -6,7 +6,6 @@ import java.net.URI;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
@@ -59,7 +58,7 @@ class ResponseFilterTest {
         List<String> seen = new ArrayList<>();
         App app = new App()
                 .statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.text("styled 404"))
-                .get("/page", req -> WebResponse.template("greeting", Map.of("name", "Silk")))
+                .get("/page", req -> WebResponse.template("greeting", Model.of("name", "Silk")))
                 .responseFilter((req, res) -> {
                     seen.add(switch (res.body()) {
                         case WebResponse.Text text -> text.content().strip();
@@ -105,7 +104,7 @@ class ResponseFilterTest {
                 .gzip(Gzip.defaults().minBytes(0))
                 .securityHeaders()
                 .get("/", req -> WebResponse.text("plain"))
-                .responseFilter((req, res) -> WebResponse.template("greeting", Map.of("name", "Filter".repeat(100)))
+                .responseFilter((req, res) -> WebResponse.template("greeting", Model.of("name", "Filter".repeat(100)))
                         .header("X-Frame-Options", "SAMEORIGIN"));
 
         WebTest.test(app, client -> {

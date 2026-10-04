@@ -96,7 +96,7 @@ class ResponseBodiesTest {
         assertThat(describe(WebResponse.html("hello"))).isEqualTo("hello");
         assertThat(describe(WebResponse.bytes("application/octet-stream", new byte[2])))
                 .isEqualTo("2 bytes");
-        assertThat(describe(WebResponse.template("deck", java.util.Map.of())))
+        assertThat(describe(WebResponse.template("deck")))
                 .isEqualTo("template deck");
         assertThat(describe(WebResponse.stream("text/csv", out -> { }))).isEqualTo("a stream");
         assertThat(describe(WebResponse.sse(stream -> { }))).isEqualTo("an event stream");

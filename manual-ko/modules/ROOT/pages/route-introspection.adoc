@@ -6,7 +6,7 @@
 
 [source,java]
 ----
-app.get("/_routes", req -> WebResponse.template("routes", Map.of("routes", app.routes())));
+app.get("/_routes", req -> WebResponse.template("routes", Model.of("routes", app.routes())));
 ----
 
 순서가 동점을 가리기 때문에, 정확히 같은 요청에 매칭되는 두 번째 라우트(같은 경로이거나, 변수 이름만 바꾼 같은 형태)는 결코 실행될 수 없다.

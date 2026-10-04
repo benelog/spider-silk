@@ -2,7 +2,6 @@ package net.benelog.spidersilk;
 
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import jakarta.servlet.http.Cookie;
@@ -53,7 +52,7 @@ class WebResponseTest {
 
         WebResponse.Template template = (WebResponse.Template) response.body();
         assertThat(template.name()).isEqualTo("about");
-        assertThat(template.model()).isEqualTo(Map.of());
+        assertThat(template.model()).isEqualTo(Model.of());
     }
 
     @Test
@@ -289,32 +288,13 @@ class WebResponseTest {
     }
 
     @Test
-    void aModelChangedAfterTheTemplateWasBuiltDoesNotChangeTheTemplate() {
-        Map<String, Object> model = new LinkedHashMap<>();
-        model.put("title", "Decks");
-        WebResponse response = WebResponse.template("decks", model);
-
-        model.put("title", "Changed");
-        model.put("extra", "added");
+    void aTemplateResponseCarriesItsModel() {
+        WebResponse response = WebResponse.template("decks", Model.of("title", "Decks", "message", null));
 
         WebResponse.Template template = (WebResponse.Template) response.body();
-        assertThat(template.model()).containsExactly(Map.entry("title", "Decks"));
-    }
-
-    /** The copy is read-only, keeps a null value, and keeps the order the model iterated in. */
-    @Test
-    void theModelCopyIsReadOnlyAndKeepsNullsAndOrder() {
-        Map<String, Object> model = new LinkedHashMap<>();
-        model.put("b", 2);
-        model.put("message", null);
-        model.put("a", 1);
-
-        WebResponse.Template template = new WebResponse.Template("decks", model);
-
-        assertThat(List.copyOf(template.model().keySet())).containsExactly("b", "message", "a");
-        assertThat(template.model()).containsEntry("message", null);
-        assertThatThrownBy(() -> template.model().put("c", 3))
-                .isInstanceOf(UnsupportedOperationException.class);
+        assertThat(template.name()).isEqualTo("decks");
+        assertThat(template.model()).isEqualTo(Model.of("title", "Decks", "message", null));
+        assertThat(response.header("Content-Type")).isEqualTo("text/html; charset=UTF-8");
     }
 
     /** A null body is refused where it is passed, not while it is written. */

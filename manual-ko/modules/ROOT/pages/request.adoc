@@ -140,7 +140,7 @@ Undertow는 이스케이프가 디코딩되지 않는 필드를 버리고, 자�
 ----
 app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
     case "application/json" -> WebResponse.json(deckService.decks(), Codecs::writeDecks);
-    default -> WebResponse.template("decks", Map.of("decks", deckService.decks()));
+    default -> WebResponse.template("decks", Model.of("decks", deckService.decks()));
 });
 ----
 

@@ -100,7 +100,7 @@ App app = new App();    // jte over classpath:/jte, classpath:/public served at 
 // Server-side rendering: template name carries no extension
 app.get("/decks/{deckId}", req -> {
     long deckId = req.pathParamLong("deckId");   // non-numeric input becomes a 400
-    return WebResponse.template("deck", Map.of("deck", service.deck(deckId)));
+    return WebResponse.template("deck", Model.of("deck", service.deck(deckId)));
 });
 
 // JSON API: you state in code what goes out (no automatic serialization)
@@ -122,7 +122,7 @@ app.path("/api/decks", group -> {
 // Exception-to-response mapping, and a styled error page for any 404
 app.exception(NoSuchDeckException.class,  // a type the application defines, never IllegalArgumentException
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
-app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
+app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Model.of("path", req.path())));
 
 // What almost every deployed app turns on (off until named)
 app.cors(Cors.allowOrigin("https://app.example.com").forPath("/api/*"))

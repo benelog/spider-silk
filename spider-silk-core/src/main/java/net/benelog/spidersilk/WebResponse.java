@@ -34,8 +34,8 @@ import net.benelog.spidersilk.json.JsonWriter;
  * The answer a {@link Handler} returns: a status, headers, cookies, and a body.
  *
  * <pre>{@code
- * app.get("/decks/{deckId}", req ->
- *         WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+ * app.get("/decks/{deckId}", req -> WebResponse.template("deck",
+ *         Model.of("deck", service.deck(req.pathParamLong("deckId")))));
  *
  * app.post("/decks", req ->
  *         WebResponse.redirect("/decks/" + service.create(req.param("name")).id()));
@@ -57,10 +57,10 @@ import net.benelog.spidersilk.json.JsonWriter;
  *
  * <p>The immutability covers the envelope and what is cheap to copy: the status,
  * the headers, the cookies, and the template model's entries. A cookie is copied
- * when it is added and again when {@link #cookies()} hands it out, and a model is
- * copied into a read-only map when the {@link Template} is built, so nothing a
- * caller still holds changes a response already made. The copies are shallow: a
- * model value that is itself mutable is still the object the caller passed. The
+ * when it is added and again when {@link #cookies()} hands it out, and a
+ * {@link Model} cannot be changed once built, so nothing a caller still holds
+ * changes a response already made. A model value that is itself mutable is
+ * still the object the caller passed. The
  * bytes of a {@link Bytes} body and the writer of a streamed one are handed over
  * rather than copied, as their own descriptions say.
  *
@@ -127,17 +127,14 @@ public final class WebResponse {
      * handler's exception handling still applies, so a template that throws is
      * routed to {@link App#exception} like any other failure.
      *
-     * <p>The model is copied, in its iteration order, into a map that cannot be
-     * changed, so a map the caller keeps writing to after this does not reach
-     * the page. The copy keeps null values, which a template model takes and
-     * {@link Map#copyOf} would refuse. It copies the entries and not the values
-     * they point to.
+     * <p>The model is a {@link Model}, which is immutable, so nothing a caller
+     * still holds changes the page.
      */
-    public record Template(String name, Map<String, @Nullable Object> model) implements Body {
+    public record Template(String name, Model model) implements Body {
 
         public Template {
             Objects.requireNonNull(name, "name");
-            model = Collections.unmodifiableMap(new LinkedHashMap<>(Objects.requireNonNull(model, "model")));
+            Objects.requireNonNull(model, "model");
         }
     }
 
@@ -293,7 +290,7 @@ public final class WebResponse {
 
     /** A template with nothing to pass in. */
     public static WebResponse template(String template) {
-        return template(template, Map.of());
+        return template(template, Model.of());
     }
 
     /**
@@ -304,11 +301,11 @@ public final class WebResponse {
      * engine appends its own, so a switch of engine does not rewrite every
      * handler.
      *
-     * <p>A model that may hold a null value is built with {@link Model#of},
-     * since {@link Map#of} throws on one:
-     * {@code WebResponse.template("deck", Model.of("deck", deck, "message", req.flashed("message")))}.
+     * <pre>{@code
+     * return WebResponse.template("deck", Model.of("deck", deck, "message", req.flashed("message")));
+     * }</pre>
      */
-    public static WebResponse template(String template, Map<String, @Nullable Object> model) {
+    public static WebResponse template(String template, Model model) {
         return of(new Template(Objects.requireNonNull(template, "template"), model))
                 .contentType("text/html; charset=UTF-8");
     }

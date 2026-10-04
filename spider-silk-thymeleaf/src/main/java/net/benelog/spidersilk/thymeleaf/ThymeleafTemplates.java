@@ -2,16 +2,15 @@ package net.benelog.spidersilk.thymeleaf;
 
 import java.io.Writer;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Objects;
 
-import org.jspecify.annotations.Nullable;
 import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.templatemode.TemplateMode;
 import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 
 import net.benelog.spidersilk.App;
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.TemplateRenderer;
 
 /**
@@ -86,8 +85,8 @@ public final class ThymeleafTemplates implements TemplateRenderer {
     }
 
     @Override
-    public void render(String template, Map<String, @Nullable Object> model, Writer out) {
-        engine.process(template + suffix, new Context(locale, model), out);
+    public void render(String template, Model model, Writer out) {
+        engine.process(template + suffix, new Context(locale, model.asMap()), out);
     }
 
     private static TemplateEngine engineOver(String classpathRoot) {

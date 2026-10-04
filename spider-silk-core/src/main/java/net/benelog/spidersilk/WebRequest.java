@@ -327,7 +327,7 @@ public final class WebRequest {
      * <pre>{@code
      * app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
      *     case "application/json" -> WebResponse.json(service.decks(), Codecs::writeDecks);
-     *     default -> WebResponse.template("decks", Map.of("decks", service.decks()));
+     *     default -> WebResponse.template("decks", Model.of("decks", service.decks()));
      * });
      * }</pre>
      *

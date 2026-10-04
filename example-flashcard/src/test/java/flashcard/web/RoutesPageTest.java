@@ -2,15 +2,14 @@ package flashcard.web;
 
 import java.io.StringWriter;
 import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
 import net.benelog.spidersilk.JteTemplates;
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.Route;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
 
 /** The overview page renders straight from app.routes(), so a list is the whole model. */
 class RoutesPageTest {
@@ -19,7 +18,7 @@ class RoutesPageTest {
     void rendersARowPerRoute() {
         StringWriter html = new StringWriter();
 
-        new JteTemplates("jte").render("routes", Map.of("routes", List.of(
+        new JteTemplates("jte").render("routes", Model.of("routes", List.of(
                 new Route("GET", "/api/decks", "List every deck"),
                 new Route("POST", "/api/decks/{deckId}/cards"))), html);
 

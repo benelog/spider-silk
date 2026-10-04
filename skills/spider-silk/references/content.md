@@ -125,7 +125,7 @@ Out of the box an `App` renders with jte over `classpath:/jte`, appending `.jte`
 
 ```java
 app.get("/decks/{deckId}", req ->
-        WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+        WebResponse.template("deck", Model.of("deck", service.deck(req.pathParamLong("deckId")))));
 // renders classpath:/jte/deck.jte
 
 // A value that may be null (flashed, paramOrNull, session().get) needs Model.of: Map.of throws NPE on it

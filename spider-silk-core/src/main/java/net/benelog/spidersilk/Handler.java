@@ -5,7 +5,7 @@ package net.benelog.spidersilk;
  * so no reflection is needed.
  *
  * <pre>{@code
- * app.get("/decks/{deckId}", req -> WebResponse.template("deck", model));
+ * app.get("/decks/{deckId}", req -> WebResponse.template("deck", Model.of("deck", deck)));
  * }</pre>
  *
  * <p>Returning the response rather than writing it means the compiler checks

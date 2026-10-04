@@ -6,7 +6,7 @@ Routes are an explicit list, so no annotation scanning, no plugin, and no reflec
 
 [source,java]
 ----
-app.get("/_routes", req -> WebResponse.template("routes", Map.of("routes", app.routes())));
+app.get("/_routes", req -> WebResponse.template("routes", Model.of("routes", app.routes())));
 ----
 
 Because order breaks ties, a second route matching exactly the same requests (the same path, or the same shape with a variable renamed) could never run.

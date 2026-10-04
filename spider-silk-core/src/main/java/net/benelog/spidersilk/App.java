@@ -26,7 +26,7 @@ import net.benelog.spidersilk.server.WebServerFactory;
  *
  * app.get("/decks/{deckId}", req -> {
  *     long deckId = req.pathParamLong("deckId");
- *     return WebResponse.template("deck", model);   // classpath:/jte/deck.jte
+ *     return WebResponse.template("deck", Model.of("deck", deck));   // classpath:/jte/deck.jte
  * });
  *
  * app.start(8080);
@@ -221,7 +221,7 @@ public final class App {
      * read back as data, and registration is closed while that copy is served.
      *
      * <pre>{@code
-     * app.get("/_routes", req -> WebResponse.template("routes", Map.of("routes", app.routes())));
+     * app.get("/_routes", req -> WebResponse.template("routes", Model.of("routes", app.routes())));
      * }</pre>
      *
      * <p>What was registered, and only that: the HEAD and OPTIONS answers
@@ -324,7 +324,7 @@ public final class App {
      *
      * <pre>{@code
      * app.statusPage(HttpStatus.NOT_FOUND,
-     *         req -> WebResponse.template("not-found", Map.of("path", req.path())));
+     *         req -> WebResponse.template("not-found", Model.of("path", req.path())));
      * }</pre>
      *
      * <p>A response that already carries a body is left alone. What the handler

@@ -7,7 +7,7 @@ The name carries no extension: the engine appends its own.
 [source,java]
 ----
 app.get("/decks/{deckId}", req ->
-        WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+        WebResponse.template("deck", Model.of("deck", service.deck(req.pathParamLong("deckId")))));
 ----
 
 Nothing has to be configured for that.

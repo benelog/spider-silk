@@ -5,7 +5,6 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 import jakarta.servlet.MultipartConfigElement;
 
@@ -17,6 +16,7 @@ import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.AppServlet;
 import net.benelog.spidersilk.HttpStatus;
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.Route;
 import net.benelog.spidersilk.StaticFiles;
 import net.benelog.spidersilk.WebRequest;
@@ -43,7 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>Not a test — there are no assertions to run and nothing here is executed.
  * It exists so that {@code compileTestJava} fails the build when a snippet in
  * the README names a method the framework no longer has. Only symbols the
- * README leaves undefined on purpose (a {@code model}, a {@code logger}, a
+ * README leaves undefined on purpose (a {@code deck}, a {@code logger}, a
  * service) are supplied as stubs below; every Spider Silk call is verbatim.
  */
 @SuppressWarnings("unused")
@@ -51,7 +51,7 @@ class ReadmeSnippets {
 
     // ---- symbols the README leaves to the reader ----
 
-    private Map<String, Object> model = Map.of();
+    private Object deck = new Object();
     private ApiController api;
     private ApiController controller;
     private StatsAction statsAction;
@@ -129,7 +129,7 @@ class ReadmeSnippets {
         // Server-side rendering
         app.get("/decks/{deckId}", req -> {
             long deckId = req.pathParamLong("deckId");  // non-numeric input becomes a 400
-            return WebResponse.template("deck", model);
+            return WebResponse.template("deck", Model.of("deck", deck));
         });
 
         // JSON API — you state in code what goes out (no automatic serialization)
@@ -153,7 +153,7 @@ class ReadmeSnippets {
                 (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
         // One place for a styled error page, whatever produced the status
-        app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
+        app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Model.of("path", req.path())));
     }
 
     // ---- blocks 3, 5, 7: the three shapes a handler comes in ----
@@ -274,7 +274,7 @@ class ReadmeSnippets {
 
     void introspection(App app) {
         app.get("/_routes",
-                req -> WebResponse.template("routes", Map.of("routes", app.routes())));
+                req -> WebResponse.template("routes", Model.of("routes", app.routes())));
 
         JsonObject paths = Json.object();
         for (Route route : app.routes()) {

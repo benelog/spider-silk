@@ -28,7 +28,7 @@ It only keeps an unused engine off the classpath.
 new App()
         .templates(new ThymeleafTemplates("thymeleaf"))
         .get("/decks/{deckId}", req ->
-                WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+                WebResponse.template("deck", Model.of("deck", service.deck(req.pathParamLong("deckId")))));
 ----
 
 That renders `classpath:/thymeleaf/deck.html`, parsed as UTF-8 HTML with the parsed template cached.

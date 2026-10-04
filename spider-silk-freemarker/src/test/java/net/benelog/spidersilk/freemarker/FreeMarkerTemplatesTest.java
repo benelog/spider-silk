@@ -5,12 +5,12 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.StringWriter;
 import java.net.http.HttpResponse;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.HttpStatus;
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.WebResponse;
 import net.benelog.spidersilk.test.WebTest;
 
@@ -21,7 +21,7 @@ class FreeMarkerTemplatesTest {
     void aTemplateIsRenderedAsHtml() {
         App app = new App()
                 .templates(new FreeMarkerTemplates("freemarker"))
-                .get("/hello", req -> WebResponse.template("greeting", Map.of("name", "Silk")));
+                .get("/hello", req -> WebResponse.template("greeting", Model.of("name", "Silk")));
 
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.get("/hello");
@@ -37,7 +37,7 @@ class FreeMarkerTemplatesTest {
     void theHtmlOutputFormatEscapesTheModel() {
         App app = new App()
                 .templates(new FreeMarkerTemplates("freemarker"))
-                .get("/hello", req -> WebResponse.template("greeting", Map.of("name", "<script>")));
+                .get("/hello", req -> WebResponse.template("greeting", Model.of("name", "<script>")));
 
         WebTest.test(app, client ->
                 assertThat(client.get("/hello").body()).isEqualTo("<p>Hello, &lt;script&gt;!</p>\n"));
@@ -51,7 +51,7 @@ class FreeMarkerTemplatesTest {
     void theUrlBuiltInEncodesInUtf8() {
         StringWriter out = new StringWriter();
 
-        new FreeMarkerTemplates("freemarker").render("link", Map.of("q", "a b&한"), out);
+        new FreeMarkerTemplates("freemarker").render("link", Model.of("q", "a b&한"), out);
 
         assertThat(out.toString()).isEqualTo("<a href=\"/search?q=a%20b%26%ED%95%9C\">search</a>\n");
     }
@@ -61,7 +61,7 @@ class FreeMarkerTemplatesTest {
     void aRootAndSuffixOfItsOwnReplaceTheDefaults() {
         App app = new App()
                 .templates(new FreeMarkerTemplates("templates").suffix(".ftl"))
-                .get("/hello", req -> WebResponse.template("greeting", Map.of("name", "<b>")));
+                .get("/hello", req -> WebResponse.template("greeting", Model.of("name", "<b>")));
 
         WebTest.test(app, client ->
                 assertThat(client.get("/hello").body()).isEqualTo("<p>Howdy, &lt;b&gt;!</p>\n"));
@@ -72,7 +72,7 @@ class FreeMarkerTemplatesTest {
         StringWriter out = new StringWriter();
 
         assertThatThrownBy(() -> new FreeMarkerTemplates("freemarker")
-                .render("greeting.ftlh", Map.of("name", "Silk"), out))
+                .render("greeting.ftlh", Model.of("name", "Silk"), out))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("greeting.ftlh.ftlh");
     }
@@ -81,7 +81,7 @@ class FreeMarkerTemplatesTest {
     void aTemplateThatThrowsReachesTheExceptionHandler() {
         App app = new App()
                 .templates(new FreeMarkerTemplates("freemarker"))
-                .get("/hello", req -> WebResponse.template("nothing-here", Map.of()))
+                .get("/hello", req -> WebResponse.template("nothing-here"))
                 .exception(Exception.class,
                         (req, e) -> WebResponse.text("caught").status(HttpStatus.BAD_REQUEST));
 

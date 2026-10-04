@@ -45,7 +45,7 @@ public class StatsAction implements Handler {               // one class, one ro
     private final StatsService stats;
     public StatsAction(StatsService stats) { this.stats = stats; }
     @Override public WebResponse handle(WebRequest req) {
-        return WebResponse.template("stats", Map.of("stats", stats.overview()));
+        return WebResponse.template("stats", Model.of("stats", stats.overview()));
     }
 }
 app.get("/stats", statsAction);
@@ -114,7 +114,7 @@ Content negotiation reads `Accept` for you and answers one of the offered string
 ```java
 app.get("/decks", req -> switch (req.accepts("text/html", "application/json")) {
     case "application/json" -> WebResponse.json(deckService.decks(), Codecs::writeDecks);
-    default -> WebResponse.template("decks", Map.of("decks", deckService.decks()));
+    default -> WebResponse.template("decks", Model.of("decks", deckService.decks()));
 });
 ```
 
@@ -129,7 +129,7 @@ WebResponse.html(page); WebResponse.text(s); WebResponse.bytes("application/pdf"
 WebResponse.rawJson(text); WebResponse.json(jsonValue); WebResponse.json(value, writer);   // rawJson: text that is JSON already
 WebResponse.jsonArray(sink -> ...); WebResponse.ndjson(sink -> ...);   // written a value at a time, see content.md
 WebResponse.template("deck");                       // name carries no extension
-WebResponse.template("deck", Map.of("deck", deck));
+WebResponse.template("deck", Model.of("deck", deck));
 WebResponse.stream("text/csv", out -> exporter.write(out));
 WebResponse.file(path);                       // type from the name, length from the file
                                               //   not a readable file -> UncheckedIOException,
@@ -180,7 +180,7 @@ app.responseFilter((req, res) -> res.header("X-Request-Id", requestId()));  // e
 app.exception(NoSuchDeckException.class,
         (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.NOT_FOUND));
 
-app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Map.of("path", req.path())));
+app.statusPage(HttpStatus.NOT_FOUND, req -> WebResponse.template("not-found", Model.of("path", req.path())));
 ```
 
 - `afterRoute` sees only a route that returned normally; `responseFilter` sees every response (before-filter answers, exception answers, 404/405, OPTIONS, static files), runs before CORS/security headers/gzip, and a filter that throws goes to `exception`/`error` without the filters running again. Authorization uses `beforeRequest` for every matching request, including static files and missing routes, or `beforeRoute` for a matched route with path variables. `afterRoute` and `responseFilter` reject null results as programming errors.

@@ -3,7 +3,6 @@ package net.benelog.spidersilk.freemarker;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
-import java.util.Map;
 import java.util.Objects;
 
 import freemarker.cache.ClassTemplateLoader;
@@ -13,9 +12,8 @@ import freemarker.template.Template;
 import freemarker.template.TemplateException;
 import freemarker.template.TemplateExceptionHandler;
 
-import org.jspecify.annotations.Nullable;
-
 import net.benelog.spidersilk.App;
+import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.TemplateRenderer;
 
 /**
@@ -86,11 +84,11 @@ public final class FreeMarkerTemplates implements TemplateRenderer {
     }
 
     @Override
-    public void render(String template, Map<String, @Nullable Object> model, Writer out) {
+    public void render(String template, Model model, Writer out) {
         String name = template + suffix;
         try {
             Template compiled = configuration.getTemplate(name);
-            compiled.process(model, out);
+            compiled.process(model.asMap(), out);
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot render the template " + name, e);
         } catch (TemplateException e) {

@@ -7,7 +7,6 @@ import java.io.StringWriter;
 import java.net.http.HttpResponse;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CyclicBarrier;
@@ -26,7 +25,7 @@ class TemplatesTest {
     @Test
     void anAppRendersWithJteWithoutBeingConfigured() {
         App app = new App().get("/hello",
-                req -> WebResponse.template("greeting", Map.of("name", "Silk")));
+                req -> WebResponse.template("greeting", Model.of("name", "Silk")));
 
         WebTest.test(app, client -> {
             HttpResponse<String> response = client.get("/hello");
@@ -41,7 +40,7 @@ class TemplatesTest {
     @Test
     void theModelIsEscapedByTheDefaultEngine() {
         App app = new App().get("/hello",
-                req -> WebResponse.template("greeting", Map.of("name", "<script>")));
+                req -> WebResponse.template("greeting", Model.of("name", "<script>")));
 
         WebTest.test(app, client ->
                 assertThat(client.get("/hello").body()).isEqualTo("<p>Hello, &lt;script&gt;!</p>\n"));
@@ -51,7 +50,7 @@ class TemplatesTest {
     void aRootAndSuffixOfItsOwnReplaceTheDefaults() {
         App app = new App()
                 .templates(new JteTemplates("templates").suffix(".html"))
-                .get("/hello", req -> WebResponse.template("greeting", Map.of("name", "Silk")));
+                .get("/hello", req -> WebResponse.template("greeting", Model.of("name", "Silk")));
 
         WebTest.test(app, client ->
                 assertThat(client.get("/hello").body()).isEqualTo("<p>Howdy, Silk!</p>\n"));
@@ -62,7 +61,7 @@ class TemplatesTest {
         StringWriter out = new StringWriter();
 
         assertThatThrownBy(() -> new JteTemplates("jte")
-                .render("greeting.jte", Map.of("name", "Silk"), out))
+                .render("greeting.jte", Model.of("name", "Silk"), out))
                 .hasMessageContaining("greeting.jte.jte");
     }
 
@@ -74,7 +73,7 @@ class TemplatesTest {
     @Test
     void concurrentRendersEachGetTheirOwnPage() {
         App app = new App().get("/hello/{name}",
-                req -> WebResponse.template("greeting", Map.of("name", req.pathParam("name"))));
+                req -> WebResponse.template("greeting", Model.of("name", req.pathParam("name"))));
 
         WebTest.test(app, client -> {
             int callers = 16;
@@ -114,7 +113,7 @@ class TemplatesTest {
     @Test
     void aTemplateThatThrowsReachesTheExceptionHandler() {
         App app = new App()
-                .get("/hello", req -> WebResponse.template("nothing-here", Map.of()))
+                .get("/hello", req -> WebResponse.template("nothing-here"))
                 .exception(Exception.class,
                         (req, e) -> WebResponse.text("caught").status(HttpStatus.BAD_REQUEST));
 

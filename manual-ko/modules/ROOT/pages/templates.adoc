@@ -7,7 +7,7 @@
 [source,java]
 ----
 app.get("/decks/{deckId}", req ->
-        WebResponse.template("deck", Map.of("deck", service.deck(req.pathParamLong("deckId")))));
+        WebResponse.template("deck", Model.of("deck", service.deck(req.pathParamLong("deckId")))));
 ----
 
 이를 위해 설정할 것은 없다.

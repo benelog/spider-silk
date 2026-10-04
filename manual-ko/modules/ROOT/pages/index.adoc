@@ -84,7 +84,7 @@ var app = new App();
 app.get("/decks/{deckId}", req -> {
     long deckId = req.pathParamLong("deckId");
     Deck deck = deckService.getDeck(deckId);
-    return WebResponse.template("deck", Map.of("deck", deck));
+    return WebResponse.template("deck", Model.of("deck", deck));
 });
 
 app.get("/api/decks", req -> {
