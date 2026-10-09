@@ -1,0 +1,10 @@
+// The benchmark is a build of its own, so `./gradlew build` at the root never
+// downloads Spring Boot. includeBuild('..') substitutes this working tree's
+// spider-silk modules for the published coordinates, so a run measures the
+// code checked out beside it.
+rootProject.name = 'spider-silk-benchmark'
+
+includeBuild('..')
+
+include 'spider-silk-app'
+include 'spring-mvc-app'

@@ -225,3 +225,23 @@ Agent Skills는 개방 표준이고 이 스킬은 특정 도구에만 있는 기
 codex plugin marketplace add {project-repo}
 codex plugin add spider-silk@spider-silk
 ----
+
+== 성능
+부록의 xref:benchmark.adoc[벤치마크]에서 Jetty 위의 Spider Silk는 작은 응답을 Spring MVC보다 약 1.45배 빠르게 처리하며, JVM 프로세스는 3분의 1의 시간에 부팅한다.
+이 벤치마크는 두 프레임워크를 한 노트북에서 같은 JVM과 같은 부하로 실행했으며, 비교 대상은 기본 설정의 Spring Boot 4.1 위의 Spring MVC, Jackson, Thymeleaf다.
+
+[cols="3,>2,>2",options="header"]
+|===
+| 측정 항목 | Spider Silk (Jetty) | Spring MVC
+
+| 단순 텍스트, 초당 요청 수 | 213,891 | 145,592
+| 작은 JSON 객체, 초당 요청 수 | 212,094 | 146,067
+| 레코드 100개의 JSON 목록, 초당 요청 수 | 77,530 | 73,986
+| HTML 페이지, 초당 요청 수 (jte 대 Thymeleaf) | 162,826 | 50,719
+| JVM에서의 부팅 시간 | 312 ms | 923 ms
+| GraalVM 네이티브 이미지의 부팅 시간 | 48 ms | 50 ms
+|===
+
+직렬화기가 대부분의 일을 하는 JSON 목록에서는 Spider Silk가 Jackson을 쓰는 Spring MVC보다 약 5% 많은 요청을 처리한다.
+양쪽 모두 Thymeleaf를 쓰면 두 프레임워크의 페이지 렌더링 성능은 5% 이내로 차이가 나므로, HTML 페이지에서의 격차는 jte의 몫이다.
+측정 방법, 머신, 네이티브 이미지, 이 수치의 한계는 부록에서 다룬다.

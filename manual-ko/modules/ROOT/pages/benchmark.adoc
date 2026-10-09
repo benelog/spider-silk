@@ -1,0 +1,305 @@
+= 부록: 성능 벤치마크
+:navtitle: 부록: 벤치마크
+
+이 부록은 리포지토리의 `benchmark/` 디렉터리에 있는 벤치마크를 한 번 실행한 결과를 보고하며, 이 벤치마크는 Spider Silk와 Spring MVC를 같은 머신에서 같은 JVM과 같은 부하로 측정한다.
+측정은 2026-10-09에 <<machine>>에 기술한 노트북에서, 1.1.0 릴리스 이후 143개 커밋을 지난 `main` 브랜치의 커밋 `fa300ce`에 `WebResponse.json`이 `Bytes`로 응답하게 하는 변경을 더한 코드를 대상으로 했다.
+
+[#summary]
+== 요약
+
+아래 수치는 중앙값이며, 이 머신과 이 핸들러에만 해당한다.
+
+* 단순 텍스트와 작은 JSON 객체는 Jetty 위의 Spider Silk가 Spring MVC보다 초당 약 1.45배 많은 요청을 처리한다.
+같은 컨테이너인 Tomcat 위에서는 그 차이가 약 1.25배다.
+* 직렬화기가 대부분의 일을 하는 레코드 100개의 JSON 목록은 Spider Silk가 Jackson을 쓰는 Spring MVC보다 초당 2%~5% 많은 요청을 처리한다.
+* Spider Silk의 기본 엔진인 jte로 렌더링한 페이지는 Thymeleaf를 쓰는 Spring MVC보다 초당 약 3.2배 많은 요청을 처리한다.
+양쪽 모두 Thymeleaf를 쓰면 두 프레임워크는 5% 이내로 차이가 난다.
+* JVM 프로세스는 Jetty 위의 Spider Silk가 312 ms, Spring Boot가 923 ms에 부팅하며, 그 시점의 상주 메모리는 116 MB 대 216 MB다.
+* GraalVM 네이티브 이미지로는 Spider Silk가 48 ms, Spring MVC가 50 ms에 부팅하며, 이미지 빌드에는 각각 89초와 105초가 걸린다.
+네이티브 이미지는 모든 케이스에서 JVM보다 초당 23%~85% 적은 요청을 처리한다.
+
+[#targets]
+== 측정 대상
+
+=== 대상 서버
+
+다섯 서버를 각자 별도 프로세스에서 측정했다.
+
+[cols="2,3,3",options="header"]
+|===
+| 대상 | 스택 | 런타임
+
+| `spider-silk-jetty`
+| Spider Silk, 임베디드 Jetty 12.1.13, jte 3.2.4 또는 Thymeleaf 3.1.5
+| JVM
+
+| `spider-silk-tomcat`
+| Spider Silk, 임베디드 Tomcat 11.0.26 위의 `spider-silk-tomcat`, jte 3.2.4 또는 Thymeleaf 3.1.5
+| JVM
+
+| `spring-mvc`
+| Spring Boot 4.1.1 (Spring Framework 7.0.9), Spring MVC, 임베디드 Tomcat 11.0.24, Jackson 3.1.5, Thymeleaf 3.1.5
+| JVM
+
+| `spider-silk-jetty-native`
+| `spider-silk-jetty`와 같은 애플리케이션
+| GraalVM 네이티브 이미지
+
+| `spring-mvc-native`
+| `spring-mvc`와 같은 애플리케이션, AOT 처리를 거침
+| GraalVM 네이티브 이미지
+|===
+
+Spring Boot는 기본 설정으로 실행한다: 설정한 프로퍼티가 없으며, Tomcat, Jackson, Thymeleaf는 스타터가 가져오는 그대로다.
+Spider Silk도 인자로 고르는 서버와 템플릿 엔진 외에는 기본 설정으로 실행한다.
+두 서버 모두 최대 200개의 플랫폼 스레드 풀을 쓰며, 어느 쪽도 가상 스레드를 쓰지 않는다.
+
+Spider Silk의 네이티브 이미지는 Jetty용으로만 빌드했다.
+
+=== 케이스
+
+각 케이스는 두 프레임워크에서 같은 본문을 반환하는 `GET` 하나다.
+
+[cols="2,1,4,4,1",options="header"]
+|===
+| 케이스 | 경로 | Spider Silk | Spring MVC | 본문
+
+| `text`
+| `/text`
+| `WebResponse.text("Hello, World!")`
+| `text/plain`으로 `String`을 반환하는 `@GetMapping`
+| 13 B
+
+| `json`
+| `/json`
+| `WebResponse.json(new Message(...), MESSAGE)`, 손으로 쓴 `JsonWriter`
+| `Message` 레코드를 반환하는 `@RestController`, Jackson이 씀
+| 27 B
+
+| `json-list`
+| `/items`
+| `JsonWriter.list`를 쓰는 `WebResponse.json(items, ITEMS)`
+| `List<Item>`을 반환하는 `@RestController`, Jackson이 씀
+| 10,490 B
+
+| `template-jte`
+| `/fortunes`
+| `WebResponse.template("fortunes", model)`, 사전 컴파일한 jte
+| 없음
+| 1,177 B
+
+| `template-thymeleaf`
+| `/fortunes`
+| `WebResponse.template("fortunes", model)`, `ThymeleafTemplates`
+| 뷰 이름을 반환하는 `@Controller`, Spring Boot의 Thymeleaf 뷰 리졸버
+| 1,178 B
+|===
+
+`json-list` 본문은 필드 다섯 개짜리 레코드 100개이며, 두 프레임워크는 이를 바이트 단위까지 똑같이 보낸다.
+`/fortunes` 페이지는 TechEmpower 벤치마크의 fortune 12개를 담은 표이며, 그중 하나는 HTML 이스케이프가 필요하고 하나는 일본어다.
+두 Thymeleaf 페이지는 같은 템플릿 파일이며 같은 바이트로 렌더링된다.
+jte 페이지는 빈 줄, 그리고 텍스트 안의 ``"``와 ``'``를 이스케이프하지 않는다는 점이 다르며, 이는 HTML이 허용하는 형태다.
+핸들러가 응답하는 값은 모두 시작할 때 한 번 만들어 두므로, 요청은 데이터가 아니라 프레임워크, 직렬화기, 렌더러를 측정한다.
+
+=== 측정 방법
+
+``benchmark/run.sh``가 전체 실행을 이끈다.
+
+. ``native-build.sh``가 두 애플리케이션을 번갈아 가며, 깨끗한 프로젝트에서 각 네이티브 이미지를 세 번씩 빌드한다.
+. 1분을 쉰 뒤, ``startup.sh``가 각 대상을 열 번씩 시작하며, 매 시작 전에 3초를 쉰다.
+이 스크립트는 프로세스를 띄우기 직전부터 ``/text``의 첫 ``200``까지를 10 ms 간격으로 폴링해 재고, 그 시점의 프로세스 상주 메모리를 읽는다.
+. 이어서 각 케이스마다 새 프로세스를 띄운다: 20초 워밍업, 30초 측정 후 프로세스를 멈춘다.
+. 한 라운드는 모든 케이스를 한 번씩, 케이스별로 모든 대상에 걸쳐 실행하며, 세 라운드를 차례로 실행한다.
+따라서 열이 오르며 느려지는 머신은 그 편차를 마지막 대상이 아니라 모든 대상에 고르게 나눈다.
+
+최대 부하 상태에서 이전 프로세스가 멈춘 직후에 시작한 프로세스는 부팅이 최대 1.5배까지 느리므로, 부팅 시간은 부하 케이스와 따로 잰다.
+
+부하는 https://github.com/wg/wrk[wrk] 4.1.0이 루프백으로 스레드 4개와 keep-alive 연결 64개를 써서 건다.
+서버는 성능 코어 네 개인 CPU 0~3에, wrk는 저전력 효율 코어 네 개인 CPU 4~7에 고정한다.
+모든 JVM과 네이티브 이미지에는 ``-Xms1g -Xmx1g``를 준다.
+JVM은 Temurin 25이며 기본 컬렉터인 G1을 쓴다.
+네이티브 이미지는 GraalVM CE 25.2.4로 빌드하며, 이 배포판의 컬렉터는 Serial GC뿐이다.
+
+보고하는 처리량과 각 지연 시간 백분위수는 세 라운드의 중앙값을 각각 따로 구한 것이다.
+라운드 간 모든 케이스의 처리량은 중앙값에서 12% 이내에 머물렀다.
+8%를 넘은 세 케이스는 모두 두 번째 라운드에서 나왔다: `spider-silk-jetty`와 `spider-silk-jetty-native`의 `json-list`, 그리고 `spring-mvc-native`의 `json`이다.
+실행 중 실패한 요청은 없었다.
+
+[#machine]
+=== 머신
+
+[cols="1,3"]
+|===
+| 머신 | Lenovo ThinkPad X1 Carbon Gen 13, AC 전원 연결
+| CPU | Intel Core Ultra 7 258V (Lunar Lake): 최대 4.8 GHz 성능 코어 4개와 최대 3.7 GHz 저전력 효율 코어 4개, 8스레드, L3 캐시 12 MiB
+| 메모리 | 30 GiB (32 GB LPDDR5X)
+| OS | Ubuntu 24.04.5 LTS, Linux 6.17.0-1032-oem
+| CPU 클럭 | `powersave` 거버너, `balanced` 플랫폼 프로파일
+| JVM | Eclipse Temurin 25 (25+36-LTS)
+| 네이티브 이미지 | GraalVM CE 25.2.4 (native-image 25.0.4)
+| 빌드 | Gradle 9.5.1
+| 부하 생성기 | wrk 4.1.0 (Ubuntu 패키지 `wrk` 4.1.0-4build2)
+|===
+
+실행 중에도 데스크톱 세션은 켜져 있었으며, 웹 브라우저, 터미널, Dropbox, 유휴 상태의 로컬 텍스트 음성 변환 서버가 열려 있었고, 이들은 쉬는 동안 CPU 하나의 몇 퍼센트를 쓴다.
+
+[#results]
+== 결과
+
+=== 처리량과 지연 시간
+
+처리량은 초당 요청 수다.
+지연 시간은 wrk가 요청을 보낸 때부터 응답을 받을 때까지 잰 시간이며, 단위는 밀리초다.
+CPU는 측정 동안 서버 자신이 쓴 CPU 시간이며, 400%는 측정 내내 코어 네 개가 바빴다는 뜻이다.
+
+[cols="2,3,>2,>1,>1,>1,>1",options="header"]
+|===
+| 케이스 | 대상 | 초당 요청 수 | p50 | p90 | p99 | CPU
+
+.5+| `text`
+| `spider-silk-jetty` | 213,891 | 0.31 | 0.57 | 1.04 | 383%
+| `spider-silk-tomcat` | 180,468 | 0.32 | 0.55 | 0.75 | 294%
+| `spring-mvc` | 145,592 | 0.41 | 0.60 | 1.01 | 311%
+| `spider-silk-jetty-native` | 161,750 | 0.41 | 0.75 | 1.54 | 376%
+| `spring-mvc-native` | 97,852 | 0.61 | 0.94 | 2.50 | 330%
+
+.5+| `json`
+| `spider-silk-jetty` | 212,094 | 0.31 | 0.57 | 1.03 | 383%
+| `spider-silk-tomcat` | 182,384 | 0.31 | 0.54 | 0.75 | 296%
+| `spring-mvc` | 146,067 | 0.41 | 0.58 | 0.99 | 314%
+| `spider-silk-jetty-native` | 162,382 | 0.41 | 0.75 | 1.54 | 375%
+| `spring-mvc-native` | 93,028 | 0.63 | 0.97 | 2.56 | 322%
+
+.5+| `json-list`
+| `spider-silk-jetty` | 77,530 | 0.86 | 1.40 | 2.15 | 387%
+| `spider-silk-tomcat` | 75,808 | 0.83 | 1.05 | 1.54 | 365%
+| `spring-mvc` | 73,986 | 0.86 | 1.07 | 1.51 | 367%
+| `spider-silk-jetty-native` | 50,389 | 1.30 | 2.22 | 3.39 | 376%
+| `spring-mvc-native` | 10,941 | 4.67 | 17.25 | 58.87 | 388%
+
+.3+| `template-jte`
+| `spider-silk-jetty` | 162,826 | 0.41 | 0.73 | 1.28 | 382%
+| `spider-silk-tomcat` | 147,622 | 0.41 | 0.60 | 1.03 | 311%
+| `spider-silk-jetty-native` | 116,123 | 0.57 | 1.01 | 1.86 | 374%
+
+.5+| `template-thymeleaf`
+| `spider-silk-jetty` | 52,301 | 1.27 | 2.07 | 3.22 | 388%
+| `spider-silk-tomcat` | 53,390 | 1.18 | 1.49 | 2.42 | 374%
+| `spring-mvc` | 50,719 | 1.25 | 1.58 | 2.37 | 373%
+| `spider-silk-jetty-native` | 23,246 | 2.82 | 4.95 | 8.04 | 371%
+| `spring-mvc-native` | 27,725 | 2.13 | 3.65 | 7.04 | 370%
+|===
+
+아래 비율은 Spider Silk의 처리량을 Spring MVC의 처리량으로 나눈 값이므로, 1보다 크면 Spider Silk가 앞선다.
+
+[cols="2,>1,>1,>1",options="header"]
+|===
+| 케이스 | Jetty 대 Spring MVC | Tomcat 대 Spring MVC | 네이티브 대 네이티브
+
+| `text` | 1.47 | 1.24 | 1.65
+| `json` | 1.45 | 1.25 | 1.75
+| `json-list` | 1.05 | 1.02 | 4.61
+| Spider Silk의 jte 대 Spring MVC의 Thymeleaf | 3.21 | 2.91 | 4.19
+| 양쪽 모두 Thymeleaf | 1.03 | 1.05 | 0.84
+|===
+
+=== 부팅 시간과 메모리
+
+부팅 시간은 프로세스를 띄우기 직전부터 첫 ``200``까지를 열 번 잰 값의 중앙값이다.
+메모리는 그 시점의 프로세스 상주 메모리(RSS)다.
+
+[cols="3,>1,>1,>1,>1",options="header"]
+|===
+| 대상 | 부팅 시간 (중앙값) | 최소 | 최대 | 상주 메모리
+
+| `spider-silk-jetty` | 312 ms | 306 ms | 316 ms | 116 MB
+| `spider-silk-tomcat` | 361 ms | 355 ms | 381 ms | 117 MB
+| `spring-mvc` | 923 ms | 911 ms | 1,014 ms | 216 MB
+| `spider-silk-jetty-native` | 48 ms | 23 ms | 51 ms | 37 MB
+| `spring-mvc-native` | 50 ms | 46 ms | 64 ms | 74 MB
+|===
+
+Spring Boot 자신의 로그는 JVM에서 ``Started SpringMvcBenchmark in 0.73 seconds``, 네이티브 이미지에서 ``in 0.03 seconds``를 보고한다.
+표와의 차이는 JVM 자체의 기동 시간과 첫 응답까지의 시간이다.
+
+부하 중 JVM 프로세스는 760~880 MB를 차지했으며, 그 대부분은 ``-Xms1g``가 확보하는 1 GiB 힙이다.
+네이티브 이미지는 70~280 MB를 차지했으며, ``json-list``에서 가장 많았다.
+
+=== 네이티브 이미지 빌드
+
+각 애플리케이션을 깨끗한 프로젝트에서 세 번씩 빌드했다.
+빌드 시간은 애플리케이션 컴파일, 해당하는 경우 Spring의 AOT 처리, ``native-image`` 실행을 포함한다.
+애플리케이션이 의존하는 Spider Silk 모듈은 이미 컴파일되어 있었으므로 포함하지 않는다.
+
+[cols="2,>1,>1,>1,>1",options="header"]
+|===
+| 애플리케이션 | 빌드 (중앙값) | `native-image` 단독 | `native-image` 최대 메모리 | 바이너리
+
+| Spider Silk | 88.9 s | 87 s | 4.1 GiB | 63.6 MB
+| Spring MVC | 105.1 s | 101 s | 4.1 GiB | 73.9 MB
+|===
+
+``native-image``는 두 애플리케이션 모두에서 CPU 여덟 개를 약 6.5의 부하로 썼다.
+JVM 애플리케이션의 의존성은 Spider Silk가 9.5 MB, Spring MVC가 21 MB다.
+
+[#reading]
+== 결과 해석
+
+`text`와 `json` 케이스는 본문이 아주 작으므로 프레임워크가 요청에 더하는 비용을 잰다.
+같은 컨테이너인 Tomcat 위에서 Spider Silk는 Spring MVC보다 초당 24%~25% 많은 요청을 처리한다.
+두 프레임워크는 요청마다 하는 일이 다르다.
+Spider Silk에서 서블릿부터 핸들러까지의 경로는 스택 프레임 두 개이며, Spring MVC는 요청마다 핸들러 매핑, 인자 리졸버, 반환값 핸들러, 메시지 컨버터를 거친다.
+Jetty는 여기에 16%~19%를 더한다.
+또한 이 64개 연결에서 코어 네 개를 계속 바쁘게 쓴 서버는 Jetty뿐이며, 두 Tomcat 대상은 약 300%에 머물렀다.
+
+`json-list` 케이스에서는 격차가 2%~5%로 줄어드는데, 10 KB 문서는 프레임워크가 아니라 직렬화기의 일이기 때문이다.
+``JsonWriter.list``는 문서 전체를 메모리에 트리로 만든 뒤에야 쓰기 시작하며(xref:json.adoc#_where_this_stops_being_enough[JSON]), Jackson은 각 필드를 응답에 곧바로 쓴다.
+이어서 Spider Silk는 트리를 UTF-8로 바이트 배열에 한 번 쓰며, 그 배열이 곧 본문이다.
+이 크기의 문서에서는 두 방식의 비용이 JVM 위에서 거의 같다.
+큰 문서를 보내는 애플리케이션에는 다른 두 경로가 있다: xref:large-json.adoc[대용량 JSON과 NDJSON]의 스트리밍 라이터, 그리고 xref:json-interop.adoc[외부 JSON 바인딩]을 통한 Jackson 같은 바인딩 라이브러리다.
+둘 다 여기서는 측정하지 않았다.
+
+템플릿 케이스에서는 프레임워크보다 엔진의 비중이 크다.
+jte는 템플릿을 컴파일된 Java로 실행하며, 템플릿을 해석하고 표현식 언어로 모델을 읽는 Thymeleaf보다 이 페이지를 약 세 배 빠르게 렌더링한다.
+양쪽 모두 Thymeleaf를 쓰면 프레임워크의 몫이 충분히 작아서 두 프레임워크가 5% 이내로 차이 난다.
+
+네이티브 이미지는 부팅 시간과 메모리를 얻는 대신 처리량을 내준다.
+네이티브 이미지는 JIT가 모으는 프로파일 없이 미리 컴파일된 코드를 G1 대신 GraalVM CE의 Serial GC 위에서 실행한다.
+할당이 많은 케이스가 가장 크게 손해를 본다: ``json-list``에서 ``spring-mvc-native``는 같은 애플리케이션이 JVM에서 처리하는 양의 15%를 처리하며, p99는 59 ms다.
+Thymeleaf는 Spider Silk의 네이티브 이미지가 Spring보다 느린 유일한 케이스다.
+두 프레임워크는 Thymeleaf의 표현식을 다르게 평가한다: Spider Silk의 모듈은 ``Fortune``을 리플렉션으로 읽는 OGNL로, Spring의 통합 모듈은 SpEL로 평가한다.
+Oracle GraalVM은 G1 컬렉터와 프로파일 기반 최적화를 제공하며, 이들은 이 비용의 일부를 겨냥한다.
+둘 다 여기서는 측정하지 않았다.
+
+[#limits]
+== 한계
+
+* 클라이언트와 서버가 한 노트북에서 루프백으로 통신하므로, 네트워크 지연도 네트워크 병목도 없다.
+* CPU의 두 절반은 성능이 다르다: 서버는 성능 코어에서, wrk는 효율 코어에서 실행됐다.
+wrk는 가장 빠른 케이스도 따라잡았으므로, 처리량을 정한 것은 wrk가 아니라 서버다.
+* wrk는 한 연결에서 이전 응답이 도착한 뒤에야 다음 요청을 보내므로, 백분위수에는 요청이 느린 요청 뒤에서 기다렸을 시간이 빠져 있다(coordinated omission).
+이 백분위수는 대상끼리 비교하기 위한 것이며, 서비스 수준 목표와 비교하기 위한 것이 아니다.
+* CPU는 `powersave` 거버너와 `balanced` 프로파일로 실행됐으므로, 클럭이 부하와 온도에 따라 오르내렸다.
+번갈아 실행한 라운드가 그 편차를 모든 대상에 고르게 나눈다.
+* 핸들러가 I/O를 하지 않으므로, 이 수치는 프레임워크, 직렬화기, 템플릿 엔진만을 잰다.
+데이터베이스를 기다리는 애플리케이션은 요청 시간의 대부분을 거기서 쓰며, 위의 차이는 그만큼 줄어든다.
+* Jetty 대상의 응답은 Tomcat 대상의 응답보다 26바이트 길며, 대부분은 ``Server: Jetty(12.1.13)`` 헤더다.
+
+[#reproducing]
+== 실행 재현
+
+``benchmark/`` 디렉터리에 두 애플리케이션과 스크립트가 있으며, 그 ``README.md``에 설정이 나열되어 있다.
+이 디렉터리는 루트 빌드를 포함하는 독립된 Gradle 빌드이므로, Spider Silk 쪽은 이 디렉터리가 놓인 작업 트리의 모듈로 실행된다.
+
+[source,bash]
+----
+sudo apt install wrk # or: brew install wrk
+sdk install java 25.2.4-graalce # for the native images
+GRAALVM_HOME=~/.sdkman/candidates/java/25.2.4-graalce benchmark/run.sh
+----
+
+실행은 ``benchmark/results/<timestamp>/``에 원시 CSV 파일, wrk 출력, 각 서버의 로그, 케이스마다의 응답 표본, 머신 설명을 쓴다.
+``benchmark/summarize.sh``는 그 디렉터리를 위의 표로 줄인다.
+``GRAALVM_HOME``이 없으면 JVM 대상만 측정한다.
+전체 실행은 이 머신에서 약 75분이 걸린다.
+``ROUNDS=1 BUILD_ROUNDS=1 STARTS=3 WARMUP=5s DURATION=10s``로는 약 15분 만에 대략적인 그림을 얻는다.

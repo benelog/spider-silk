@@ -9,3 +9,5 @@ node_modules/
 .secrets/
 # claude plugin eval writes each run here.
 evals/results/
+# benchmark/run.sh writes each run here.
+benchmark/results/

@@ -225,3 +225,23 @@ The repository is a Codex plugin marketplace as well, so Codex installs it with 
 codex plugin marketplace add {project-repo}
 codex plugin add spider-silk@spider-silk
 ----
+
+== Performance
+In the xref:benchmark.adoc[benchmark] in the appendix, Spider Silk on Jetty answers small responses about 1.45 times as fast as Spring MVC, and its JVM process starts in a third of the time.
+The benchmark ran both frameworks on one laptop with the same JVM and the same load, against Spring Boot 4.1 with Spring MVC, Jackson, and Thymeleaf on its defaults.
+
+[cols="3,>2,>2",options="header"]
+|===
+| Measure | Spider Silk (Jetty) | Spring MVC
+
+| Plain text, requests/s | 213,891 | 145,592
+| Small JSON object, requests/s | 212,094 | 146,067
+| JSON list of 100 records, requests/s | 77,530 | 73,986
+| HTML page, requests/s (jte vs. Thymeleaf) | 162,826 | 50,719
+| Startup on the JVM | 312 ms | 923 ms
+| Startup as a GraalVM native image | 48 ms | 50 ms
+|===
+
+At the JSON list, where the serializer does most of the work, Spider Silk answers about 5% more than Spring MVC with Jackson.
+With Thymeleaf on both sides, the two render a page within 5% of each other, so the margin on the HTML page is jte's.
+The appendix covers the method, the machine, the native images, and the limits of these numbers.

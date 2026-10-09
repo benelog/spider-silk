@@ -44,3 +44,4 @@
 ** xref:reflection-scope.adoc[The Scope of "No Reflection"]
 ** xref:example-flashcard.adoc[Example: Flashcard]
 ** xref:agent-skill.adoc[The Agent Skill]
+** xref:benchmark.adoc[Appendix: Benchmark]

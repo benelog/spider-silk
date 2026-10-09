@@ -1,0 +1,305 @@
+= Appendix: Performance Benchmark
+:navtitle: Appendix: Benchmark
+
+This appendix reports one run of the benchmark in the repository's `benchmark/` directory, which measures Spider Silk against Spring MVC on the same machine, with the same JVM and the same load.
+The run took place on 2026-10-09 on the laptop described under <<machine>>, against `main` at commit `fa300ce`, 143 commits after the 1.1.0 release, with the change that has `WebResponse.json` answer with `Bytes` applied on top.
+
+[#summary]
+== Summary
+
+The numbers below are medians, and they hold for this machine and these handlers only.
+
+* Plain text and a small JSON object answer about 1.45 times as many requests per second on Spider Silk with Jetty as on Spring MVC.
+On the same container, Tomcat, the margin is about 1.25 times.
+* A JSON list of 100 records, where the serializer does most of the work, answers 2% to 5% more requests per second on Spider Silk than on Spring MVC with Jackson.
+* A page rendered with jte, Spider Silk's default engine, answers about 3.2 times as many requests per second as Spring MVC with Thymeleaf.
+With Thymeleaf on both sides, the two are within 5% of each other.
+* A JVM process starts in 312 ms on Spider Silk with Jetty and in 923 ms on Spring Boot, and holds 116 MB against 216 MB of resident memory at that point.
+* As GraalVM native images, Spider Silk starts in 48 ms and Spring MVC in 50 ms, and building the image takes 89 s and 105 s respectively.
+The native images answer fewer requests per second than the JVM in every case, by 23% to 85%.
+
+[#targets]
+== What was measured
+
+=== Targets
+
+Five servers were measured, each in a process of its own.
+
+[cols="2,3,3",options="header"]
+|===
+| Target | Stack | Runtime
+
+| `spider-silk-jetty`
+| Spider Silk, embedded Jetty 12.1.13, jte 3.2.4 or Thymeleaf 3.1.5
+| JVM
+
+| `spider-silk-tomcat`
+| Spider Silk, `spider-silk-tomcat` on embedded Tomcat 11.0.26, jte 3.2.4 or Thymeleaf 3.1.5
+| JVM
+
+| `spring-mvc`
+| Spring Boot 4.1.1 (Spring Framework 7.0.9), Spring MVC, embedded Tomcat 11.0.24, Jackson 3.1.5, Thymeleaf 3.1.5
+| JVM
+
+| `spider-silk-jetty-native`
+| the same application as `spider-silk-jetty`
+| GraalVM native image
+
+| `spring-mvc-native`
+| the same application as `spring-mvc`, AOT-processed
+| GraalVM native image
+|===
+
+Spring Boot runs with its defaults: no property is set, and Tomcat, Jackson, and Thymeleaf are what the starters bring.
+Spider Silk runs with its defaults too, apart from the server and the template engine its arguments pick.
+Both servers have a pool of at most 200 platform threads, and neither uses virtual threads.
+
+The native image of Spider Silk was built for Jetty only.
+
+=== Cases
+
+Each case is one `GET` that returns the same body on both frameworks.
+
+[cols="2,1,4,4,1",options="header"]
+|===
+| Case | Path | Spider Silk | Spring MVC | Body
+
+| `text`
+| `/text`
+| `WebResponse.text("Hello, World!")`
+| `@GetMapping` returning a `String` as `text/plain`
+| 13 B
+
+| `json`
+| `/json`
+| `WebResponse.json(new Message(...), MESSAGE)`, a hand-written `JsonWriter`
+| `@RestController` returning a `Message` record, written by Jackson
+| 27 B
+
+| `json-list`
+| `/items`
+| `WebResponse.json(items, ITEMS)`, with `JsonWriter.list`
+| `@RestController` returning a `List<Item>`, written by Jackson
+| 10,490 B
+
+| `template-jte`
+| `/fortunes`
+| `WebResponse.template("fortunes", model)`, jte precompiled
+| none
+| 1,177 B
+
+| `template-thymeleaf`
+| `/fortunes`
+| `WebResponse.template("fortunes", model)`, `ThymeleafTemplates`
+| `@Controller` returning a view name, Spring Boot's Thymeleaf view resolver
+| 1,178 B
+|===
+
+The `json-list` body is 100 records of five fields each, and the two frameworks send it byte for byte the same.
+The `/fortunes` page is a table of the 12 fortunes from the TechEmpower benchmark, one of which needs HTML escaping and one of which is Japanese.
+The two Thymeleaf pages are the same template file and render to the same bytes.
+The jte page differs in its blank lines, and in leaving `"` and `'` unescaped in text, which HTML allows.
+Every value a handler answers with is built once at startup, so a request measures the framework, the serializer, and the renderer, and not the data.
+
+=== Method
+
+`benchmark/run.sh` drives the whole run.
+
+. `native-build.sh` builds each native image three times from a clean project, alternating between the two applications.
+. After a minute's pause, `startup.sh` starts each target ten times with three seconds of quiet before each start.
+It times the start from before the process launches to the first `200` from `/text`, polling every 10 ms, and reads the process's resident memory at that moment.
+. Each case then gets a fresh process: 20 seconds of warm-up, then 30 seconds of measurement, then the process stops.
+. A round runs every case once, case by case, each across every target, and three rounds run in turn.
+A machine that slows down as it heats up therefore spreads the drift over every target instead of the last one.
+
+Startup is timed apart from the load cases because a process started right after the previous one stopped under full load starts up to half again as slow.
+
+The load is https://github.com/wg/wrk[wrk] 4.1.0 with 4 threads and 64 keep-alive connections over loopback.
+The server is pinned to CPUs 0 to 3, the four performance cores, and wrk to CPUs 4 to 7, the four low-power efficiency cores.
+Every JVM and every native image gets `-Xms1g -Xmx1g`.
+The JVM is Temurin 25 with its default collector, G1.
+The native images come from GraalVM CE 25.2.4, whose only collector is the Serial GC.
+
+The reported throughput and each latency percentile are medians of the three rounds, taken separately.
+Across the rounds, the throughput of every case stayed within 12% of its median.
+The three cases beyond 8% all fell in the second round: `json-list` on `spider-silk-jetty` and `spider-silk-jetty-native`, and `json` on `spring-mvc-native`.
+No request failed in the run.
+
+[#machine]
+=== Machine
+
+[cols="1,3"]
+|===
+| Machine | Lenovo ThinkPad X1 Carbon Gen 13, on AC power
+| CPU | Intel Core Ultra 7 258V (Lunar Lake): 4 performance cores at up to 4.8 GHz and 4 low-power efficiency cores at up to 3.7 GHz, 8 threads, 12 MiB L3 cache
+| Memory | 30 GiB (32 GB LPDDR5X)
+| OS | Ubuntu 24.04.5 LTS, Linux 6.17.0-1032-oem
+| CPU frequency | `powersave` governor, `balanced` platform profile
+| JVM | Eclipse Temurin 25 (25+36-LTS)
+| Native image | GraalVM CE 25.2.4 (native-image 25.0.4)
+| Build | Gradle 9.5.1
+| Load generator | wrk 4.1.0 (Ubuntu package `wrk` 4.1.0-4build2)
+|===
+
+The desktop session stayed up during the run, with a web browser, a terminal, Dropbox, and an idle local text-to-speech server open, which use a few percent of one CPU at rest.
+
+[#results]
+== Results
+
+=== Throughput and latency
+
+Throughput is requests per second.
+Latency is the time wrk measured from sending a request to receiving its response, in milliseconds.
+CPU is the server's own CPU time during the measurement, where 400% means four cores busy throughout.
+
+[cols="2,3,>2,>1,>1,>1,>1",options="header"]
+|===
+| Case | Target | Requests/s | p50 | p90 | p99 | CPU
+
+.5+| `text`
+| `spider-silk-jetty` | 213,891 | 0.31 | 0.57 | 1.04 | 383%
+| `spider-silk-tomcat` | 180,468 | 0.32 | 0.55 | 0.75 | 294%
+| `spring-mvc` | 145,592 | 0.41 | 0.60 | 1.01 | 311%
+| `spider-silk-jetty-native` | 161,750 | 0.41 | 0.75 | 1.54 | 376%
+| `spring-mvc-native` | 97,852 | 0.61 | 0.94 | 2.50 | 330%
+
+.5+| `json`
+| `spider-silk-jetty` | 212,094 | 0.31 | 0.57 | 1.03 | 383%
+| `spider-silk-tomcat` | 182,384 | 0.31 | 0.54 | 0.75 | 296%
+| `spring-mvc` | 146,067 | 0.41 | 0.58 | 0.99 | 314%
+| `spider-silk-jetty-native` | 162,382 | 0.41 | 0.75 | 1.54 | 375%
+| `spring-mvc-native` | 93,028 | 0.63 | 0.97 | 2.56 | 322%
+
+.5+| `json-list`
+| `spider-silk-jetty` | 77,530 | 0.86 | 1.40 | 2.15 | 387%
+| `spider-silk-tomcat` | 75,808 | 0.83 | 1.05 | 1.54 | 365%
+| `spring-mvc` | 73,986 | 0.86 | 1.07 | 1.51 | 367%
+| `spider-silk-jetty-native` | 50,389 | 1.30 | 2.22 | 3.39 | 376%
+| `spring-mvc-native` | 10,941 | 4.67 | 17.25 | 58.87 | 388%
+
+.3+| `template-jte`
+| `spider-silk-jetty` | 162,826 | 0.41 | 0.73 | 1.28 | 382%
+| `spider-silk-tomcat` | 147,622 | 0.41 | 0.60 | 1.03 | 311%
+| `spider-silk-jetty-native` | 116,123 | 0.57 | 1.01 | 1.86 | 374%
+
+.5+| `template-thymeleaf`
+| `spider-silk-jetty` | 52,301 | 1.27 | 2.07 | 3.22 | 388%
+| `spider-silk-tomcat` | 53,390 | 1.18 | 1.49 | 2.42 | 374%
+| `spring-mvc` | 50,719 | 1.25 | 1.58 | 2.37 | 373%
+| `spider-silk-jetty-native` | 23,246 | 2.82 | 4.95 | 8.04 | 371%
+| `spring-mvc-native` | 27,725 | 2.13 | 3.65 | 7.04 | 370%
+|===
+
+The ratios below divide Spider Silk's throughput by Spring MVC's, so a value above 1 favors Spider Silk.
+
+[cols="2,>1,>1,>1",options="header"]
+|===
+| Case | Jetty vs. Spring MVC | Tomcat vs. Spring MVC | Native vs. native
+
+| `text` | 1.47 | 1.24 | 1.65
+| `json` | 1.45 | 1.25 | 1.75
+| `json-list` | 1.05 | 1.02 | 4.61
+| Spider Silk's jte vs. Spring MVC's Thymeleaf | 3.21 | 2.91 | 4.19
+| Thymeleaf on both sides | 1.03 | 1.05 | 0.84
+|===
+
+=== Startup and memory
+
+Startup is the median of ten starts, from before the process launches to its first `200`.
+Memory is the process's resident set size at that moment.
+
+[cols="3,>1,>1,>1,>1",options="header"]
+|===
+| Target | Startup (median) | Fastest | Slowest | Resident memory
+
+| `spider-silk-jetty` | 312 ms | 306 ms | 316 ms | 116 MB
+| `spider-silk-tomcat` | 361 ms | 355 ms | 381 ms | 117 MB
+| `spring-mvc` | 923 ms | 911 ms | 1,014 ms | 216 MB
+| `spider-silk-jetty-native` | 48 ms | 23 ms | 51 ms | 37 MB
+| `spring-mvc-native` | 50 ms | 46 ms | 64 ms | 74 MB
+|===
+
+Spring Boot's own log reports `Started SpringMvcBenchmark in 0.73 seconds` on the JVM and `in 0.03 seconds` as a native image.
+The difference from the table is the JVM's own startup and the time to the first answer.
+
+Under load, a JVM process held 760 to 880 MB, most of it the 1 GiB heap that `-Xms1g` reserves.
+The native images held 70 to 280 MB, the most under `json-list`.
+
+=== Native image builds
+
+Each application was built three times from a clean project.
+The build time covers compiling the application, running Spring's AOT processing where there is one, and running `native-image`.
+The Spider Silk modules the application depends on were already compiled and are not counted.
+
+[cols="2,>1,>1,>1,>1",options="header"]
+|===
+| Application | Build (median) | `native-image` alone | `native-image` peak memory | Binary
+
+| Spider Silk | 88.9 s | 87 s | 4.1 GiB | 63.6 MB
+| Spring MVC | 105.1 s | 101 s | 4.1 GiB | 73.9 MB
+|===
+
+`native-image` used all eight CPUs, at a load of about 6.5, for both applications.
+The JVM applications' dependencies come to 9.5 MB for Spider Silk and 21 MB for Spring MVC.
+
+[#reading]
+== Reading the results
+
+The `text` and `json` cases measure what a framework adds to a request, since the body is tiny.
+On the same container, Tomcat, Spider Silk answers 24% to 25% more requests per second than Spring MVC.
+The two differ in the work done per request.
+Spider Silk's path from the servlet to the handler is two stack frames, while Spring MVC resolves a handler mapping, argument resolvers, return-value handlers, and message converters on every request.
+Jetty adds another 16% to 19% on top.
+It is also the only server that kept four cores busy at these 64 connections, while both Tomcat targets stayed at about 300%.
+
+The `json-list` case narrows the gap to 2% to 5%, because a 10 KB document is the serializer's work rather than the framework's.
+`JsonWriter.list` builds the whole document as a tree in memory before writing any of it (xref:json.adoc#_where_this_stops_being_enough[JSON]), while Jackson writes each field straight to the response.
+Spider Silk then writes the tree once, as UTF-8 into a byte array, and that array is the body.
+For a document of this size, the two approaches cost about the same on the JVM.
+An application that sends large documents has two other paths: the streaming writer in xref:large-json.adoc[Large JSON and NDJSON], and a binding library such as Jackson through xref:json-interop.adoc[External JSON Binding].
+Neither was measured here.
+
+The template cases show the engine outweighing the framework.
+jte runs a template as compiled Java, and renders this page about three times as fast as Thymeleaf, which interprets the template and reads the model through an expression language.
+With Thymeleaf on both sides, the framework's share is small enough that the two land within 5% of each other.
+
+The native images give up throughput for startup and memory.
+They run code compiled ahead of time without the profile a JIT collects, on GraalVM CE's Serial GC instead of G1.
+The allocation-heavy cases suffer most: `spring-mvc-native` under `json-list` answers 15% of what the same application does on the JVM, with a p99 of 59 ms.
+Thymeleaf is the one case where Spider Silk's native image is slower than Spring's.
+The two evaluate Thymeleaf's expressions differently: Spider Silk's module through OGNL, which reads `Fortune` by reflection, and Spring's integration through SpEL.
+Oracle GraalVM offers the G1 collector and profile-guided optimization, which aim at part of this cost.
+Neither was measured here.
+
+[#limits]
+== Limits
+
+* Client and server share one laptop and talk over loopback, so there is no network latency and no network bottleneck.
+* The two halves of the CPU differ: the server ran on performance cores and wrk on efficiency cores.
+wrk kept up with the fastest case, so the server, not wrk, set the throughput.
+* wrk sends the next request on a connection only after the previous response arrives, so its percentiles omit the time a request would have waited behind a slow one (coordinated omission).
+The percentiles compare the targets with each other, not with a service-level objective.
+* The CPU ran under the `powersave` governor and the `balanced` profile, so its clock rose and fell with load and temperature.
+The interleaved rounds spread that drift over every target.
+* The handlers do no I/O, so the numbers measure the framework, the serializer, and the template engine only.
+An application that waits on a database spends most of a request there, and the differences above shrink accordingly.
+* A response from a Jetty target is 26 bytes longer than one from a Tomcat target, mostly for its `Server: Jetty(12.1.13)` header.
+
+[#reproducing]
+== Reproducing the run
+
+The `benchmark/` directory holds both applications and the scripts, and its `README.md` lists the settings.
+It is a Gradle build of its own that includes the root build, so the Spider Silk side runs the modules of the working tree it sits in.
+
+[source,bash]
+----
+sudo apt install wrk # or: brew install wrk
+sdk install java 25.2.4-graalce # for the native images
+GRAALVM_HOME=~/.sdkman/candidates/java/25.2.4-graalce benchmark/run.sh
+----
+
+The run writes `benchmark/results/<timestamp>/` with the raw CSV files, the wrk output, each server's log, a sample response of every case, and the description of the machine.
+`benchmark/summarize.sh` reduces that directory to the tables above.
+Without `GRAALVM_HOME`, the run measures the JVM targets only.
+The full run takes about 75 minutes on this machine.
+`ROUNDS=1 BUILD_ROUNDS=1 STARTS=3 WARMUP=5s DURATION=10s` gives a rough picture in about 15 minutes.

@@ -1,0 +1,8 @@
+{
+  "reflection": [
+    {
+      "type": "benchmark.spidersilk.Fortune",
+      "allPublicMethods": true
+    }
+  ]
+}

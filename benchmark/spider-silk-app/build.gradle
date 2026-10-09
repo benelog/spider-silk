@@ -1,0 +1,39 @@
+plugins {
+    id 'gg.jte.gradle' version '3.2.4'
+    id 'org.graalvm.buildtools.native' version '1.1.13'
+}
+
+// No version: the included root build answers for these coordinates.
+dependencies {
+    implementation 'net.benelog.spidersilk:spider-silk-core'
+    implementation 'net.benelog.spidersilk:spider-silk-tomcat'
+    implementation 'net.benelog.spidersilk:spider-silk-thymeleaf'
+    jteGenerate 'gg.jte:jte-native-resources:3.2.4'
+}
+
+// Precompiled, as the manual recommends for production. The extension writes
+// the reflection config native-image needs to load the generated classes.
+jte {
+    sourceDirectory = file('src/main/jte').toPath()
+    contentType = gg.jte.ContentType.Html
+    generate()
+    jteExtension 'gg.jte.nativeimage.NativeResourcesExtension'
+}
+
+application {
+    mainClass = 'benchmark.spidersilk.SpiderSilkBenchmark'
+}
+
+// `nativeCompile` builds build/native/nativeCompile/spider-silk-app with the
+// GraalVM that GRAALVM_HOME points at.
+graalvmNative {
+    metadataRepository {
+        enabled = true
+    }
+    binaries {
+        main {
+            buildArgs.add('--no-fallback')
+            resources.includedPatterns.add('thymeleaf/.*')
+        }
+    }
+}

@@ -44,3 +44,4 @@
 ** xref:reflection-scope.adoc["리플렉션 없음"의 범위]
 ** xref:example-flashcard.adoc[예제: Flashcard]
 ** xref:agent-skill.adoc[에이전트 스킬]
+** xref:benchmark.adoc[부록: 벤치마크]
