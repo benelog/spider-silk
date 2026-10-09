@@ -57,7 +57,7 @@
     <jte.version>3.2.4</jte.version>
     <maven-compiler.version>3.13.0</maven-compiler.version>
     <jib.version>3.5.2</jib.version>
-    <native-buildtools.version>1.1.13</native-buildtools.version>
+    <native-buildtools.version>1.1.14</native-buildtools.version>
     <jib-native-image-extension.version>0.1.0</jib-native-image-extension.version>
 
     <!-- An application that wants distinct JVM and native images writes
