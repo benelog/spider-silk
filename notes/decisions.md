@@ -1489,7 +1489,7 @@ Rejected: keeping `Text` and building the string from bytes, which keeps one of 
 
 ### 76. `JsonOutput` and `JsonInput` are the engine, and a mapping is a lambda over them or a codec the build generates
 
-Every document goes through one byte-level writer and one byte-level pull parser, and a mapping is either written against them or generated from the type by `spider-silk-json-processor`.
+Every document goes through one byte-level writer and one byte-level pull parser, and a mapping is either written against them or generated from the type by `silk-json-processor`.
 The tree of decision 75 stayed as a value type, and stopped being the way out and in.
 
 - **The tree was the cost.**
@@ -1509,21 +1509,52 @@ The tree of decision 75 stayed as a value type, and stopped being the way out an
   - A string is scanned a word at a time for a byte it cannot hold as itself, a short integer is counted and converted with three multiplications, and a key is written with two stores.
   - Reading the list went from 13.0 µs to fastjson2's 6.0 µs this way, and writing it from 7.0 µs to 5.2 µs.
   - fastjson2's lead on the way out is the strings: it reads a `String`'s own bytes, where core copies the characters out with `getChars` and checks each one.
+- **A number with a fraction is converted from its digits and to them, with no string made.**
+  - A significand up to 2^53 with a power of ten from -22 to 22 takes one multiplication or division (Clinger), the rest of 19 digits takes Eisel-Lemire's 128-bit product, and only a longer number or an undecided rounding goes to `Double.parseDouble`.
+  - Reading 100 places with three such numbers each went from 12.6 µs and 43.9 KB to 5.3 µs and 11.1 KB, against fastjson2's 5.2 µs and Jackson's 24.7 µs.
+  - `readFloat` rounds once from the digits, since `(float) readDouble()` rounds twice and can land on the wrong float.
+  - On the way out, Giulietti's Schubfach, the algorithm of `Double.toString` since JDK 19, finds the shortest decimal, and its digits are laid out in the buffer eight to a word.
+  - Writing the places went from 16.5 µs and 35.6 KB to 9.3 µs and 8.5 KB, against fastjson2's 9.4 µs and Jackson's 19.2 µs.
+  - `value(float)` writes the text of `Float.toString`, since the `double` a float widens to writes `0.1f` as `0.10000000149011612`.
 - **The processor is a module of its own, and ships nothing.**
   - It runs inside javac, and the code it writes calls the type's own accessors and constructor, so decision 8's rule holds: no reflection, no registry, no `ServiceLoader`, and no native-image entry.
   - The vocabulary is Jakarta JSON Binding's, read by qualified name, so the processor depends on the API no more than the runtime does, and a type annotated for Yasson keeps its annotations.
   - `@JsonBound(Other.class)` on a mixin binds a type the web tier does not own, which is how the example binds `DeckSummary` without the domain importing the framework: decision 8's seam, kept.
   - Declaration order, not JSON-B's lexicographical default, and a component is required unless it is `@Nullable` or an `Optional`, which is decision 34's contract carried into the generated code.
 - **The rename decision 33 held against generated code is now an option.**
-  `-Aspidersilk.json.names=explicit` fails the build on a property without a `@JsonbProperty` name, and the manual states the trade either way.
+  `-Asilkjson.names=explicit` fails the build on a property without a `@JsonbProperty` name, and the manual states the trade either way.
 - **The body is kept as bytes**, and `bodyJson` parses them as they arrived, so a malformed UTF-8 sequence is a 400 rather than a replacement character in a value.
 - **A `Bytes` body carries its length on every method**, which decision 75 left to HEAD alone, so a 10 KB answer no longer goes out chunked.
 
 Rejected: a registry from `Class` to codec in core, which is `json(Object)` with the reflection taken out and the lookup by name left in.
 Rejected: generating on top of jackson-core, as avaje-jsonb does, since its generator wrote the same list in 13.7 µs.
 Rejected: an output that writes a generated codec's bytes unchecked, which wrote the list 5% faster than the checked calls and would let a codec write a document that is not JSON.
+Rejected: writing a double's digits from a table of pairs, which wrote the places in 10.0 µs against the word's 9.3 µs.
+Rejected: counting a number's digits eight at a time, which read the places in 5.7 µs to 6.1 µs against the byte loop's 5.3 µs, since a run of two to six digits ends before a word pays.
 Rejected: `String.getBytes` for a string's bytes, since into a new array it allocates per string and measured slower, and into the buffer it cannot tell a character past Latin-1 from the byte it is cut down to.
 Rejected: `@JsonbVisibility`, `@JsonbNumberFormat`, and the JSON-P serializers, each a compile error that says so, since the first takes a reflective strategy and the others a runtime the generated code does not have.
+
+## 77 · A JSON library of its own
+
+### 77. The JSON engine is `silk-json`, a module tied to nothing, which core is built on
+
+The engine, the tree, the writers and readers, and `@JsonBound` moved out of `spider-silk-core` into `silk-json`, under the group and the package `net.benelog.silkjson`, and the processor became `silk-json-processor`.
+Core depends on it, and it needs nothing but the JDK at run time.
+
+- **It is worth having on its own.**
+  - It reads at fastjson2's speed with neither `sun.misc.Unsafe` nor reflection, generates codecs from the JSON-B annotations, and runs in a native image with no configuration (decision 76), which serves an application on any framework.
+  - The package had no tie to the web already, apart from two types.
+    `JsonSink` and `JsonStreamWriter` frame a streamed answer, so they went to `net.benelog.spidersilk`, beside `StreamWriter`.
+- **The name is the library's, not the framework's.**
+  - `spider-silk-json` would read as a part of the framework, and keep the library out of applications that are not Spider Silk ones.
+  - `silk-json` says what it is and where it comes from, and no artifact on Maven Central had the name.
+  - The package moved in the release that already breaks `JsonWriter` and `JsonReader`, so an application changes its imports once.
+- **It stays in this repository until its API settles.**
+  - A faster `readDouble`, the JSON-P and JSON-B runtimes, and `@JsonbTypeInfo` are still ahead, and a change across two repositories is released twice.
+  - It is released with the framework, at the framework's version, and a repository of its own can start a version line of its own.
+
+Rejected: `spider-silk-json`, which names the framework rather than the library.
+Rejected: a repository of its own now, which doubles the release, the manual, and the benchmark while the API still moves.
 
 ## Rejected — decisions, with the reason
 

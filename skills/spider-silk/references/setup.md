@@ -5,6 +5,7 @@ Releases are published to Maven Central, so neither Gradle nor Maven needs a rep
 The snippets below write `1.1.0`, the release this skill was written against.
 SKILL.md has the rule for checking it before it reaches a build file.
 The group id, the package root, and the `Automatic-Module-Name` are all `net.benelog.spidersilk`.
+The JSON library core is built on, `silk-json`, and its processor are the exception: they are `net.benelog.silkjson`, since the library is usable on its own.
 
 ## Gradle
 
@@ -45,7 +46,7 @@ Four groups. Only core is required; add anything else only when the application 
 
 | Artifact | What it adds | Note |
 |---|---|---|
-| `spider-silk-core` | The framework: routing, request/response, JSON, jte templates, static files, SSE, embedded Jetty | The only required module |
+| `spider-silk-core` | The framework: routing, request/response, JSON, jte templates, static files, SSE, embedded Jetty | The only required module; brings `silk-json` (`net.benelog.silkjson`), whose types the JSON API is |
 | `spider-silk-test` | `WebTest` harness and `TestRequest` | Test scope only |
 
 ### Extensions (optional)
@@ -65,7 +66,7 @@ Add one only when the user wants what it names instead of, or beside, the core d
 | `spider-silk-jetty-websocket` | `WebSockets`: WebSocket endpoints beside the routes | Jetty-only by design |
 | `spider-silk-openapi` | `OpenApi.document(...)`: an OpenAPI 3.1 document from `app.routes()` | Depends on core only |
 | `spider-silk-opentelemetry-agent` | Spans of the OpenTelemetry Java agent named after the matched route (`GET /decks/{deckId}`, not `GET /*`) | Not a dependency: the jar goes to `-Dotel.javaagent.extensions`, with no code in the app |
-| `spider-silk-json-processor` | Generated JSON codecs for types annotated `@JsonBound` (see content.md) | `annotationProcessor` scope, plus `compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'` for the annotations; `spiderSilk { json() }` adds both; nothing at run time |
+| `silk-json-processor` (group `net.benelog.silkjson`) | Generated JSON codecs for types annotated `@JsonBound` (see content.md) | `annotationProcessor` scope, plus `compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'` for the annotations; `spiderSilk { json() }` adds both; nothing at run time |
 
 The exclusions are optional; they only keep an unused server or engine off the classpath.
 
@@ -113,7 +114,7 @@ pluginManagement {
 ```
 
 `spiderSilk { jte() }` sets up jte precompilation (templates under `src/main/resources/jte` become classes at build time) plus jte's native-image resources extension.
-`spiderSilk { json() }` puts `spider-silk-json-processor` on the `annotationProcessor` path and `jakarta.json.bind-api` on the compile classpath; the Maven parent puts the processor on every child's compiler path, and a child adds the API itself with `<scope>provided</scope>`.
+`spiderSilk { json() }` puts `silk-json-processor` on the `annotationProcessor` path and `jakarta.json.bind-api` on the compile classpath; the Maven parent puts the processor on every child's compiler path, and a child adds the API itself with `<scope>provided</scope>`.
 `-Pnative` re-aims the Jib tasks at the GraalVM binary on a `distroless/base` image, tagged `:native`.
 
 ## The Maven parent (same conventions by inheritance)

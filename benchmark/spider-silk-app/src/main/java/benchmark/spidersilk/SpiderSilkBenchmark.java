@@ -7,8 +7,8 @@ import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.JteTemplates;
 import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.JsonCodec;
-import net.benelog.spidersilk.json.JsonWriter;
+import net.benelog.silkjson.JsonCodec;
+import net.benelog.silkjson.JsonWriter;
 import net.benelog.spidersilk.thymeleaf.ThymeleafTemplates;
 import net.benelog.spidersilk.tomcat.TomcatServer;
 

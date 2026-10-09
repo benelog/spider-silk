@@ -70,7 +70,7 @@ It also attaches jte's native-resources extension, which emits the reflection co
 == spiderSilk.json()
 
 `json()` is the other opt-in, for an application that binds its types with xref:json-codegen.adoc[generated JSON codecs].
-It puts `spider-silk-json-processor`, at the plugin's own version, on javac's `annotationProcessor` path, and adds `jakarta.json.bind-api` to the compile classpath, where its annotations are read and never needed again.
+It puts `silk-json-processor`, at the plugin's own version, on javac's `annotationProcessor` path, and adds `jakarta.json.bind-api` to the compile classpath, where its annotations are read and never needed again.
 Nothing reaches the runtime classpath.
 
 == What the plugin pins

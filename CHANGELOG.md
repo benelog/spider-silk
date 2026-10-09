@@ -16,7 +16,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   `JettyServer.multipart(null)` sets it, and a parameter read of a multipart request then answers from the query string, as on Tomcat and Undertow.
 - `spider-silk-core`: `req.session()` answers a `WebSession`, with `get(key)`, `get(key, type)`, `set(key, value)`, `remove(key)`, and `invalidate()`.
   Asking for it starts no session.
-- `spider-silk-core`: `JsonObject.getString(key, default)`, `getLong(key, default)`, `getDouble(key, default)`, `getBoolean(key, default)`, `getObjectOrNull(key)`, and `getArrayOrNull(key)`.
+- `silk-json`: `JsonObject.getString(key, default)`, `getLong(key, default)`, `getDouble(key, default)`, `getBoolean(key, default)`, `getObjectOrNull(key)`, and `getArrayOrNull(key)`.
   They follow the absence rule `WebRequest` follows: the plain name requires the value, a default as the last argument makes it optional, and `OrNull` answers null.
 - `spider-silk-core`: `app.bodyLimits(BodyLimits)` bounds what `body()` and `bodyJson()` hold (`maxBytes`) and what one `bodyNdjson` line holds (`maxNdjsonLineBytes`), in bytes counted as they arrive, and answers 413 beyond them.
   `BodyLimits.unlimited()` lifts both, and `bodyStream()` and `bodyReader()` are never limited.
@@ -24,17 +24,21 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   `Model.of(...)` builds one from up to ten key and value pairs, as `Map.of` does, and takes a null value.
   `Map.of("message", req.flashed("message"))` threw `NullPointerException` and answered 500 whenever no flash was waiting.
   `model.with(key, value)` answers a model with one more entry, and `model.asMap()` answers the entries as a read-only map.
-- `spider-silk-core`: `JsonReader.object(fromObject)` builds a reader of a JSON object from a function of its `JsonObject`, so a reader calls `asObject()` once rather than once per field.
-- `spider-silk-core`: `JsonOutput` and `JsonInput`, the byte-level engine every JSON goes through.
+- `silk-json`: `JsonReader.object(fromObject)` builds a reader of a JSON object from a function of its `JsonObject`, so a reader calls `asObject()` once rather than once per field.
+- `silk-json`: `JsonOutput` and `JsonInput`, the byte-level engine every JSON goes through.
   A `JsonOutput` writes UTF-8 straight into a buffer, in memory or to a stream, through `object()`, `array()`, `end()`, `put`, `name`, `value`, `values`, and `newline()`.
   A `JsonInput` reads a document's bytes one value at a time, through `object()`, `array()`, `nextKey()`, `nextKeyIs`, `nextElement()`, `keyIs`, `key()`, the `read` methods, `readValue()`, `skipValue()`, and `end()`, and builds no string of the document first.
   `JsonKey.of(name)` encodes a member name once for both.
-- `spider-silk-core`: `JsonWriter.tree(toTree)`, `JsonReader.tree(fromTree)`, `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, and `reader.fromJsonBytes(utf8)`.
-- `spider-silk-core`: `JsonOutput.value(BigDecimal)` and `value(BigInteger)` write a decimal with every digit, and `JsonInput.readNumber()` answers a number's own text.
-- `spider-silk-core`: `@JsonBound`, the annotation that has `spider-silk-json-processor` generate a type's `JsonCodec`, and names the type a mixin stands in for.
-- `spider-silk-json-processor`: a new module, an annotation processor that generates `<Type>Json.CODEC` for every type annotated `@JsonBound` from its components, fields, and accessors and the `jakarta.json.bind` annotations on them: `@JsonbProperty`, `@JsonbTransient`, `@JsonbNillable`, `@JsonbPropertyOrder`, `@JsonbCreator`, `@JsonbDateFormat`, and `@JsonbTypeAdapter`.
+- `silk-json`: `JsonWriter.tree(toTree)`, `JsonReader.tree(fromTree)`, `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, and `reader.fromJsonBytes(utf8)`.
+- `silk-json`: `JsonOutput.value(BigDecimal)` and `value(BigInteger)` write a decimal with every digit, and `JsonInput.readNumber()` answers a number's own text.
+- `silk-json`: `JsonInput.readFloat()` reads a number as the nearest `float`, rounded once from its digits, as `Float.parseFloat` reads it.
+  A generated codec reads a `float` or a `Float` property through it.
+- `silk-json`: `JsonOutput.value(float)` and `put(key, float)` write a `float` as `Float.toString` writes it, so `0.1f` goes out as `0.1` rather than as the `double` it widens to.
+  A generated codec writes a `float` or a `Float` property through it.
+- `silk-json`: `@JsonBound`, the annotation that has `silk-json-processor` generate a type's `JsonCodec`, and names the type a mixin stands in for.
+- `silk-json-processor`: a new module, an annotation processor that generates `<Type>Json.CODEC` for every type annotated `@JsonBound` from its components, fields, and accessors and the `jakarta.json.bind` annotations on them: `@JsonbProperty`, `@JsonbTransient`, `@JsonbNillable`, `@JsonbPropertyOrder`, `@JsonbCreator`, `@JsonbDateFormat`, and `@JsonbTypeAdapter`.
   The generated code calls the type's own accessors and constructor, with no reflection, no registry, and nothing for a native image.
-  A component is required unless it is `@Nullable` or an `Optional`, and `-Aspidersilk.json.names=explicit` makes a property without a `@JsonbProperty` name a compile error.
+  A component is required unless it is `@Nullable` or an `Optional`, and `-Asilkjson.names=explicit` makes a property without a `@JsonbProperty` name a compile error.
 - `spider-silk-gradle-plugin`: `spiderSilk { json() }` puts the processor on the `annotationProcessor` path and `jakarta.json.bind-api` on the compile classpath.
 - `spider-silk-maven-parent`: the processor is on the compiler's processor path for every child.
 - `benchmark`: a `json-post` case, in which each request sends the 100 records of `json-list` as a body, and `json-bench`, a JMH microbenchmark of the serializer and the parser alone against Jackson and fastjson2.
@@ -44,16 +48,20 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 
 ### Changed
 
-- `spider-silk-core`: `JsonWriter<T>` is `(value, out) -> ...`, writing straight into a `JsonOutput`, where it used to return a `JsonValue` tree.
+- `silk-json`: the JSON API is a module of its own, which needs nothing but the JDK at run time, in the package `net.benelog.silkjson`, where it was `net.benelog.spidersilk.json` in `spider-silk-core`.
+  Core depends on it, so an application has it as before, and an import of `net.benelog.spidersilk.json.Json` becomes `net.benelog.silkjson.Json`.
+  An application that is not a Spider Silk one takes `net.benelog.silkjson:silk-json` alone.
+- `spider-silk-core`: `JsonSink` and `JsonStreamWriter` are in `net.benelog.spidersilk`, beside `StreamWriter`, since a streamed answer is the framework's.
+- `silk-json`: `JsonWriter<T>` is `(value, out) -> ...`, writing straight into a `JsonOutput`, where it used to return a `JsonValue` tree.
   A writer that builds a tree is `JsonWriter.tree(value -> Json.object()...)`, and `out.object().put(...).end()` is the tree-free form of the same mapping.
-- `spider-silk-core`: `JsonReader<T>` reads from a `JsonInput`, where it used to take a `JsonValue`.
+- `silk-json`: `JsonReader<T>` reads from a `JsonInput`, where it used to take a `JsonValue`.
   `JsonReader.object(fromObject)` reads as before, a lambda over the whole value is `JsonReader.tree(json -> ...)`, and `JsonReader.list` reads the elements one at a time.
 - `spider-silk-core`: `JsonSink.write(value, writer)` is a method of the sink rather than a default, and `jsonArray` and `ndjson` write every value into one buffer that goes to the container as it fills, with no byte array per value.
 - `spider-silk-core`: `bodyJson()` and `bodyJson(reader)` parse the body's bytes as they arrived, with no string of the body made first, unless the request declared a charset other than UTF-8.
   A malformed UTF-8 sequence inside a string is a 400, where it used to read as U+FFFD.
   `body()` keeps the bytes and decodes them on the first call.
-- `spider-silk-core`: `Json.parse` reports a failure's position as `Near character N` counted over the document's characters, from bytes as from text.
-- `spider-silk-core`: `JsonException` has a public constructor, so a reader of your own and a generated codec throw it directly.
+- `silk-json`: `Json.parse` reports a failure's position as `Near character N` counted over the document's characters, from bytes as from text.
+- `silk-json`: `JsonException` has a public constructor, so a reader of your own and a generated codec throw it directly.
 - `spider-silk-core`: a `Text` or `Bytes` body answers with `Content-Length` on every method, where a body past the container's buffer used to go out chunked.
 - `spider-silk-core`: `WebResponse.removeCookie(name)` is `WebResponse.expireCookie(name)`.
   It adds a `Set-Cookie` with `Max-Age=0` that tells the browser to delete the cookie, and does not take back a cookie this response set.
@@ -75,9 +83,9 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `spider-silk-core`: `app.guards()` is `app.hooks()`, and the sealed `Guard` is `Hook`.
   `Guard.Error` is `Hook.StatusPage`, and `Guard.ResponseFilter` is `Hook.EveryResponse`.
 - `spider-silk-core`: `RequestCompletion.failure()` and `failed()` are `writeFailure()` and `writeFailed()`, and `exception()` is `thrown()`.
-- `spider-silk-core`: `Json.JsonValue`, `Json.JsonObject`, `Json.JsonArray`, `Json.JsonPrimitive`, and `Json.JsonException` are top-level types in `net.benelog.spidersilk.json`.
-- `spider-silk-core`: `RequestCompletion.thrown()` and `writeFailure()` are a `Throwable`, since an `Error` is reported through them too.
+- `silk-json`: `Json.JsonValue`, `Json.JsonObject`, `Json.JsonArray`, `Json.JsonPrimitive`, and `Json.JsonException` are top-level types in `net.benelog.silkjson`.
   `Json.obj()` and `Json.arr()` are `Json.object()` and `Json.array()`.
+- `spider-silk-core`: `RequestCompletion.thrown()` and `writeFailure()` are a `Throwable`, since an `Error` is reported through them too.
 - `spider-silk-core`: the `WebResponse.Stream` body is `WebResponse.Streamed`.
 - `spider-silk-core`: `app.server()`, the running server, is `app.runningServer()`.
 - `spider-silk-core`: a path pattern containing whitespace is rejected at registration with an `IllegalArgumentException`.
@@ -88,9 +96,9 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   `body()` reads the request through `getInputStream()` rather than `getReader()`, so `raw().getReader()` after it throws `IllegalStateException`.
 - `spider-silk-core`: a path pattern that binds one variable name twice, such as `/tenants/{id}/items/{id}` or `/files/{id}/{id*}`, is rejected at registration with an `IllegalArgumentException`.
   The later value used to overwrite the earlier one; the check covers routes, route-group prefixes, filter paths, and `Cors.forPath`.
-- `spider-silk-core`: `Json.parse`, and so `bodyJson`, accepts only RFC 8259 syntax.
+- `silk-json`: `Json.parse`, and so `bodyJson`, accepts only RFC 8259 syntax.
   The numbers `01`, `+1`, `.5`, and `1.`, raw control characters inside strings, whitespace other than space, tab, LF, and CR, and non-ASCII hex digits in `\u` escapes are a `JsonException`, which `bodyJson` answers with 400.
-- `spider-silk-core`: `Json.parse` reads an integer outside the range of a long as a number, which `asDouble` answers and `asLong` rejects.
+- `silk-json`: `Json.parse` reads an integer outside the range of a long as a number, which `asDouble` answers and `asLong` rejects.
   It used to be a `JsonException` reporting "Number out of range".
 - `spider-silk-core`: `attachment(name)` writes a name outside printable ASCII, or one holding a quote or a backslash, as RFC 6266's `filename*` beside an escaped ASCII fallback.
   A control character in the name throws `IllegalArgumentException`.
@@ -102,7 +110,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 ### Removed
 
 - `spider-silk-core`: `WebRequest.sessionAttr`, `setSessionAttr`, `removeSessionAttr`, and `invalidateSession`, replaced by `req.session()`.
-- `spider-silk-core`: `JsonObject.optString`, `optLong`, `optDouble`, `optBoolean`, `optObject`, and `optArray`, replaced by the getters above.
+- `silk-json`: `JsonObject.optString`, `optLong`, `optDouble`, `optBoolean`, `optObject`, and `optArray`, replaced by the getters above.
 
 ### Fixed
 

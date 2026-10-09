@@ -7,10 +7,10 @@ import java.util.Map;
 import java.util.Objects;
 
 import net.benelog.spidersilk.Route;
-import net.benelog.spidersilk.json.Json;
-import net.benelog.spidersilk.json.JsonArray;
-import net.benelog.spidersilk.json.JsonObject;
-import net.benelog.spidersilk.json.JsonValue;
+import net.benelog.silkjson.Json;
+import net.benelog.silkjson.JsonArray;
+import net.benelog.silkjson.JsonObject;
+import net.benelog.silkjson.JsonValue;
 
 /**
  * {@link net.benelog.spidersilk.App#routes()} as an OpenAPI 3.1 document.

@@ -1,7 +1,7 @@
 = The Scope of "No Reflection"
 :navtitle: The Scope of "No Reflection"
 
-The principle applies to the *framework core*: routing, parameter extraction, and JSON handling use no reflection anywhere.
+The principle applies to the *framework core* and to xref:json.adoc#silk-json[silk-json], the JSON library core is built on: routing, parameter extraction, and JSON handling use no reflection anywhere.
 
 The default template engine sits right at the boundary, so how far its reflection reaches is worth stating exactly.
 jte compiles every template to a Java class, so `${deck.title}` runs as a compiled method call.
@@ -19,11 +19,11 @@ Jetty binds an endpoint's callbacks by taking a `MethodHandle` to each, cached p
 That is the one class Jetty looks up.
 A `WebSocketHandler` an application writes is reached through an interface call and is never reflected over.
 
-The codecs xref:json-codegen.adoc[`spider-silk-json-processor`] generates stay on core's side of the rule.
+The codecs xref:json-codegen.adoc[`silk-json-processor`] generates stay on core's side of the rule.
 The processor runs inside javac, the code it writes calls the type's own accessors and constructor, and nothing is looked up by name at run time, which is the same trade jte makes for templates.
 A JSON binding library an application adds is on the same terms as a template module: take it and you have taken its reflection with it.
 Jackson and Gson read and write fields reflectively, so every bound type needs an entry in a xref:native-image.adoc[native image] config.
-avaje-jsonb generates an adapter per type at compile time and needs none, as core's own codecs need none.
+avaje-jsonb generates an adapter per type at compile time and needs none, as silk-json's codecs need none.
 Core is not involved in a library either way: xref:json-interop.adoc[the seam] is `WebResponse.rawJson(String)` and `req.bodyStream()`, and an application that stays on the hand-written writers or the generated codecs keeps its wire format reflection-free.
 
 The example project's repositories choose spring-jdbc's `DataClassRowMapper`, which constructs the domain records reflectively.

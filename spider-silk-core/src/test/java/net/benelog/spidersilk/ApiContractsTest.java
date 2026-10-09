@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
-import net.benelog.spidersilk.json.JsonReader;
+import net.benelog.silkjson.JsonReader;
 import net.benelog.spidersilk.test.TestRequest;
 import net.benelog.spidersilk.test.WebTest;
 
@@ -90,7 +90,7 @@ class ApiContractsTest {
     void rawJsonIsSentAsItIsAndJsonBuildsFromATree() {
         App app = new App()
                 .get("/raw", req -> WebResponse.rawJson("{\"status\":\"up\"}"))
-                .get("/tree", req -> WebResponse.json(net.benelog.spidersilk.json.Json.object().put("message", "hi")));
+                .get("/tree", req -> WebResponse.json(net.benelog.silkjson.Json.object().put("message", "hi")));
 
         WebTest.test(app, client -> {
             assertThat(client.get("/raw").body()).isEqualTo("{\"status\":\"up\"}");

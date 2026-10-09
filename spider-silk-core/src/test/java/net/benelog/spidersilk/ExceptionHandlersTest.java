@@ -4,8 +4,8 @@ import java.net.http.HttpResponse;
 
 import org.junit.jupiter.api.Test;
 
-import net.benelog.spidersilk.json.Json;
-import net.benelog.spidersilk.json.JsonException;
+import net.benelog.silkjson.Json;
+import net.benelog.silkjson.JsonException;
 import net.benelog.spidersilk.test.WebTest;
 
 import static org.assertj.core.api.Assertions.assertThat;

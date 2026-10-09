@@ -249,6 +249,7 @@ The JVM applications' dependencies come to 9.5 MB for Spider Silk and 21 MB for 
 === The serializer and the parser alone
 
 `benchmark/json-bench` measures the JSON engine with no HTTP around it, on the documents the HTTP cases send: the 100 records of `json-list` and the 27-byte object of `json`.
+It also measures 100 places with three numbers each that have a fraction, which no HTTP case sends.
 It ran on 2026-10-10 on the same machine, on AC power with the `performance` platform profile.
 It measured the working tree with the generated codecs applied, under JMH 1.37 with two forks of five warm-up and five measured iterations of a second each, pinned to CPUs 0 to 3, with `-Xms1g -Xmx1g`.
 Each cell is the average time per operation and the bytes allocated per operation, the latter from JMH's `gc` profiler.
@@ -258,31 +259,49 @@ Each cell is the average time per operation and the bytes allocated per operatio
 | Operation | Through | Time | Allocation
 
 .5+| Write the 100 records (10,490 B)
-| the `Json.object()` tree, as `JsonWriter.tree` | 8.6 µs | 24.1 KB
+| the `Json.object()` tree, as `JsonWriter.tree` | 8.5 µs | 24.1 KB
 | a hand-written `JsonWriter` | 6.6 µs | 11.3 KB
-| the generated codec | 5.2 µs | 10.7 KB
-| Jackson 3.1 | 11.6 µs | 19.7 KB
-| fastjson2 2.0.57 | 4.4 µs | 10.7 KB
+| the generated codec | 5.4 µs | 10.7 KB
+| Jackson 3.1 | 11.8 µs | 19.7 KB
+| fastjson2 2.0.57 | 4.6 µs | 10.7 KB
 
 .4+| Read the 100 records
-| a hand-written `JsonReader.object` | 14.4 µs | 37.8 KB
-| the generated codec | 6.0 µs | 17.6 KB
-| Jackson 3.1 | 24.2 µs | 52.8 KB
-| fastjson2 2.0.57 | 6.0 µs | 24.8 KB
+| a hand-written `JsonReader.object` | 14.0 µs | 37.8 KB
+| the generated codec | 6.1 µs | 17.6 KB
+| Jackson 3.1 | 24.5 µs | 52.8 KB
+| fastjson2 2.0.57 | 6.1 µs | 24.8 KB
 
 .3+| Write the 27-byte object
-| the generated codec | 25 ns | 224 B
-| Jackson 3.1 | 133 ns | 496 B
-| fastjson2 2.0.57 | 28 ns | 216 B
+| the generated codec | 24 ns | 224 B
+| Jackson 3.1 | 138 ns | 496 B
+| fastjson2 2.0.57 | 27 ns | 216 B
+
+.3+| Write the 100 places (8,263 B)
+| the generated codec | 9.3 µs | 8.5 KB
+| Jackson 3.1 | 19.2 µs | 50.1 KB
+| fastjson2 2.0.57 | 9.4 µs | 17.6 KB
+
+.3+| Read the 100 places
+| the generated codec | 5.3 µs | 11.1 KB
+| Jackson 3.1 | 24.7 µs | 59.6 KB
+| fastjson2 2.0.57 | 5.2 µs | 11.2 KB
 |===
 
-The generated codec writes the list in 45% of Jackson's time and reads it in 25%, with between a third and a half of the allocation, and writes the small object in a fifth of Jackson's time.
+The generated codec writes the list in 46% of Jackson's time and reads it in 25%, with between a third and a half of the allocation, and writes the small object in a sixth of Jackson's time.
 The hand-written writer lands between the tree and the codec: it finds each key among the keys the document has already written, where the codec copies the key from a constant.
-The codec reads the 10 KB document in the time fastjson2 takes, and writes the small object in 90% of it.
+The codec reads the 10 KB document in the time fastjson2 takes, and writes the small object in 89% of it.
 fastjson2 stays ahead writing the 10 KB document, by 1.2 times.
 Most of that lead is in writing the strings.
 fastjson2 reads a `String`'s own bytes through `sun.misc.Unsafe`, which the JDK is retiring and core does not use.
 The codec copies a string's characters out with `getChars` and checks them one at a time.
+Each place has a latitude with four decimals, a longitude with six, and a rating with one.
+The codec reads them in 3% more than fastjson2's time with the same allocation, and in a fifth of Jackson's.
+`readDouble` converts a number from its digits, with one multiplication or division for numbers like these.
+Before it did, it made a string of each number for `Double.parseDouble`, and the same read took 12.6 µs and 43.9 KB.
+Jackson 3 parses a double with its fast parser by default, so turning `USE_FAST_DOUBLE_PARSER` on changed nothing.
+The codec writes the places in fastjson2's time with half its allocation, little more than the document itself, and in under half of Jackson's time.
+`JsonOutput` lays out a double's shortest decimal straight in its buffer, by the algorithm `Double.toString` uses since JDK 19, and writes the same text.
+Before it did, it made a string of each number with `Double.toString` and copied it, and the same write took 16.5 µs and 35.6 KB.
 In the HTTP cases the serializer is a share of the request rather than the whole of it, so the next run is expected to move `json-list` by that share and `json` hardly at all, and `json-post` is where the parser's difference shows.
 
 [#reading]

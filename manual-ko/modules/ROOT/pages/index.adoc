@@ -124,7 +124,7 @@ jte는 모델 값을 리플렉션으로 읽지 않으므로 리플렉션 없음�
 
 === 확장성 있는 모듈 구조
 Spider Silk는 기본 기술 스택 외에도 많이 쓰이는 기술을 사용할 수 있도록 선택 모듈을 제공한다.
-모든 모듈은 ``spider-silk-core``에 의존하고, core는 어느 모듈에도 의존하지 않는다.
+모든 모듈은 ``spider-silk-core``에 의존하고, core는 그 위에 지어진 JSON 라이브러리인 xref:json.adoc#silk-json[`silk-json`] 말고는 어느 모듈에도 의존하지 않는다.
 
 [cols="1,2,4,2",options="header"]
 |===
@@ -134,7 +134,13 @@ Spider Silk는 기본 기술 스택 외에도 많이 쓰이는 기술을 사용�
 | `spider-silk-core`
 | 프레임워크 자체.
 기본 웹 서버는 Jetty, 기본 템플릿 엔진은 jte다.
-| `gg.jte:jte`, 내장 Jetty (`jetty-ee10-servlet`)
+| `gg.jte:jte`, 내장 Jetty (`jetty-ee10-servlet`), `silk-json`
+
+| JSON
+| xref:json.adoc#silk-json[`silk-json`]
+| core가 그 위에 지어진 JSON 라이브러리: 라이터, 리더, 트리, 그리고 ``@JsonBound``.
+독립된 라이브러리이므로 다른 프레임워크 위의 애플리케이션도 쓸 수 있다.
+| 실행 시점에는 JDK만
 
 .2+| 웹 서버
 | xref:tomcat.adoc[`spider-silk-tomcat`]
@@ -187,7 +193,7 @@ Undertow의 정상 종료는 요청을 세므로, 가상 스레드 executor에�
 모듈 사이의 의존 관계는 다음 그림과 같다.
 
 .모듈과 각 모듈의 의존 대상
-image::modules.svg[모든 모듈은 spider-silk-core에 의존한다; 예제 애플리케이션은 core와 openapi에 의존하고, 테스트 범위에서 테스트 하니스와 서버 모듈에 의존한다,link=self]
+image::modules.svg[모든 모듈은 spider-silk-core에 의존하고 core는 silk-json에 의존한다; 예제 애플리케이션은 core와 openapi에 의존하고, 테스트 범위에서 테스트 하니스와 서버 모듈에 의존한다,link=self]
 
 === 개발 도구 생태계 연동
 Spider Silk는 개발 도구 생태계와 조화를 이루도록 테스트, API 문서, 관측, 빌드, AI 코딩 에이전트를 위한 도구를 별도 모듈과 스킬로 제공한다.

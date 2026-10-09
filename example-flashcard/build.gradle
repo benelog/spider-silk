@@ -19,7 +19,7 @@ dependencies {
     // The JSON codecs of NewDeck and DeckSummary are generated at compile
     // time from jakarta.json.bind annotations; neither jar is needed at run time.
     compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'
-    annotationProcessor project(':spider-silk-json-processor')
+    annotationProcessor project(':silk-json-processor')
     implementation 'org.springframework:spring-jdbc:7.0.9'
     implementation 'com.h2database:h2:2.5.250'
     // The application logs through the slf4j API and leaves the backend to the

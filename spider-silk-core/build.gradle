@@ -3,6 +3,9 @@ plugins {
 }
 
 dependencies {
+    // The JSON engine, a library of its own. api: WebRequest.bodyJson and
+    // WebResponse.json take and answer its types.
+    api project(':silk-json')
     compileOnly 'jakarta.servlet:jakarta.servlet-api:6.1.0'
     api 'gg.jte:jte:3.2.4'
     // The embedded server. api, not implementation: JettyServer's customizers

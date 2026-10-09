@@ -22,9 +22,9 @@ import org.jspecify.annotations.Nullable;
 
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.Json;
-import net.benelog.spidersilk.json.JsonValue;
-import net.benelog.spidersilk.json.JsonWriter;
+import net.benelog.silkjson.Json;
+import net.benelog.silkjson.JsonValue;
+import net.benelog.silkjson.JsonWriter;
 
 /**
  * Builds a {@link WebRequest} so a handler can be called directly, with no

@@ -13,9 +13,9 @@ import net.benelog.spidersilk.HttpException;
 import net.benelog.spidersilk.HttpStatus;
 import net.benelog.spidersilk.UploadedFile;
 import net.benelog.spidersilk.WebRequest;
-import net.benelog.spidersilk.json.Json;
-import net.benelog.spidersilk.json.JsonReader;
-import net.benelog.spidersilk.json.JsonWriter;
+import net.benelog.silkjson.Json;
+import net.benelog.silkjson.JsonReader;
+import net.benelog.silkjson.JsonWriter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;

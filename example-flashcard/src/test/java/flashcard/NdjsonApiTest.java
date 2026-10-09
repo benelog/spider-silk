@@ -4,7 +4,7 @@ import java.net.http.HttpResponse;
 
 import org.junit.jupiter.api.Test;
 
-import net.benelog.spidersilk.json.Json;
+import net.benelog.silkjson.Json;
 import net.benelog.spidersilk.test.TestClient;
 import net.benelog.spidersilk.test.WebTest;
 

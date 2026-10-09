@@ -43,7 +43,7 @@ import net.benelog.spidersilk.Handler;
 import net.benelog.spidersilk.HttpException;
 import net.benelog.spidersilk.StaticFiles;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.JsonReader;
+import net.benelog.silkjson.JsonReader;
 
 /**
  * The Jetty and Tomcat acceptance tests, run against Undertow. What core

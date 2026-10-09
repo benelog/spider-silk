@@ -59,7 +59,7 @@ public class SpiderSilkExtension {
      * they are read and never needed again. Nothing is added at run time.
      */
     public void json() {
-        project.getDependencies().add("annotationProcessor", "net.benelog.spidersilk:spider-silk-json-processor:" + VERSION);
+        project.getDependencies().add("annotationProcessor", "net.benelog.silkjson:silk-json-processor:" + VERSION);
         project.getDependencies().add("compileOnly", "jakarta.json.bind:jakarta.json.bind-api:" + JSONB_API_VERSION);
     }
 

@@ -1,7 +1,7 @@
 = JSON
 :navtitle: JSON
 
-코어는 JSON을 직접 만들고 파싱하며, 문서와 Java 타입 사이의 매핑은 직접 작성하는 코드이거나 빌드가 타입에서 생성하는 코드다.
+코어는 이 프로젝트의 JSON 라이브러리인 <<silk-json,silk-json>>으로 JSON을 만들고 파싱하며, 문서와 Java 타입 사이의 매핑은 직접 작성하는 코드이거나 빌드가 타입에서 생성하는 코드다.
 
 == 라이터와 리더
 
@@ -44,7 +44,7 @@ xref:json-codegen.adoc[생성되는 JSON 코덱]은 매핑을 얻는 또 다른 
 ``object()``와 ``array()``는 다음 값으로 컨테이너를 열고, ``end()``는 가장 안쪽 컨테이너를 닫으며, 쉼표는 출력이 알아서 찍는다.
 객체 안에서 멤버는 ``put(key, value)``이거나, ``name(key)`` 뒤에 오는 값이다.
 배열 안에서 각 원소는 ``value(...)``이고, ``values(strings)``는 이터러블의 문자열을 하나씩 더한다.
-``put``과 ``value``는 문자열, long, double, boolean, `BigDecimal`, `BigInteger`, `JsonValue`, 또는 자기 라이터를 가진 다른 값을 받으므로, 라이터는 서로 조합된다:
+``put``과 ``value``는 문자열, long, double, float, boolean, `BigDecimal`, `BigInteger`, `JsonValue`, 또는 자기 라이터를 가진 다른 값을 받으므로, 라이터는 서로 조합된다:
 
 [source,java]
 ----
@@ -57,7 +57,9 @@ static final JsonWriter<Card> CARD = (card, out) -> out.object()
 ----
 
 null인 문자열은 JSON ``null``로 쓰이고, 라이터와 함께 건네진 null 값도 마찬가지다.
-NaN이거나 무한대인 ``double``은 ``JsonException``을 던지는데, JSON에는 둘 중 어느 것의 문법도 없기 때문이다.
+``double``은 같은 ``double``로 다시 읽히는 가장 짧은 십진수, 곧 ``Double.toString``이 답하는 텍스트로 나가고, ``float``은 ``Float.toString``이 답하는 텍스트로 나간다.
+``0.1f``는 ``0.1``로 쓰이며, 넓혀진 ``double``의 ``0.10000000149011612``로 쓰이지 않는다.
+NaN이거나 무한대인 ``double``이나 ``float``은 ``JsonException``을 던지는데, JSON에는 둘 중 어느 것의 문법도 없기 때문이다.
 객체 밖의 ``put``이나 열린 것이 없는 ``end()``처럼 자리에 맞지 않는 호출은 ``IllegalStateException``을 던진다.
 
 ``writer.toJson(value)``와 ``writer.toJsonBytes(value)``는 테스트, SSE 이벤트, 로그 한 줄을 위해 문서를 답한다.
@@ -117,6 +119,11 @@ static final JsonReader<Deck> DECK_IN = in -> {
 ``reader.fromJson(text)``와 ``reader.fromJsonBytes(utf8)``는 그 값 하나만 담고 뒤에 아무것도 없는 문서를 읽는다.
 실패는 ``Near character 12: Not a JSON string: a number``처럼 입력이 어디에 있는지 밝힌다.
 
+``readDouble()``은 숫자의 텍스트에 ``Double.parseDouble``이 답하는 ``double``을 답하고, ``readFloat()``는 ``Float.parseFloat``이 답하는 ``float``을 답한다.
+둘 다 숫자를 제자리에서 변환하며, 문자열을 만들지 않고 한 번만 반올림한다.
+``(float) readDouble()``은 두 번 반올림하므로, ``1.00000017881393432617187499``처럼 두 float의 한가운데에 조금 못 미치는 숫자에서 한 비트 어긋난다.
+가장 큰 ``double``이나 ``float``을 넘는 숫자는 ``Number out of range``로 거부되고, 가장 작은 값보다 0에 가까운 숫자는 부호를 지닌 0으로 읽힌다: ``-0``은 ``-0.0``으로 읽힌다.
+
 == 값 읽기
 
 ``getString``은 키가 없거나 값의 타입이 틀리면 ``JsonException``을 던지고, ``req.bodyJson(reader)``는 이를 400으로 바꾼다.
@@ -172,3 +179,29 @@ xref:large-json.adoc[대용량 JSON과 NDJSON]은 대신 값을 하나씩 쓰고
 
 매핑을 손으로 작성하거나 타입에서 생성하는 것은 코어가 코어를 위해 내린 결정이지, 애플리케이션을 위한 결정이 아니다.
 소유하지 않은 와이어 포맷을 가진 애플리케이션은 나가는 쪽의 ``WebResponse.rawJson(String)``과 들어오는 쪽의 `req.bodyStream()` 또는 ``req.bodyReader()``를 통해 라이브러리로 객체를 바인딩할 수 있다: xref:json-interop.adoc[외부 JSON 바인딩].
+
+[#silk-json]
+== 단독으로 쓰는 silk-json
+
+이 페이지에서 ``req.bodyJson``과 ``WebResponse.json``을 뺀 모든 것은 ``silk-json``이며, 이는 코어가 그 위에 지어진 JSON 라이브러리로서 실행 시점에 JDK 말고는 아무것도 필요로 하지 않는다.
+그 타입들은 ``net.benelog.silkjson`` 패키지에 있으며, 코어를 가진 애플리케이션은 이 타입들도 함께 가진다.
+Spider Silk 애플리케이션이 아닌 애플리케이션은 이 라이브러리만 가져다 쓴다:
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation '{silk-json-group}:silk-json:{project-version}'
+}
+----
+
+[source,xml,subs="attributes+"]
+----
+<dependency>
+  <groupId>{silk-json-group}</groupId>
+  <artifactId>silk-json</artifactId>
+  <version>{project-version}</version>
+</dependency>
+----
+
+xref:json-codegen.adoc#setup[생성되는 JSON 코덱]은 그 프로세서인 ``silk-json-processor``를 같은 방식으로 더한다.
+이 라이브러리는 프레임워크와 함께, 프레임워크의 버전으로 릴리스되며, 독립된 라이브러리로 읽히도록 자신의 이름을 가진다.

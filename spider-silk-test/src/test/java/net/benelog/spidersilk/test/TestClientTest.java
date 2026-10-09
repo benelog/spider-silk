@@ -9,8 +9,8 @@ import org.junit.jupiter.api.Test;
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.Json;
-import net.benelog.spidersilk.json.JsonValue;
+import net.benelog.silkjson.Json;
+import net.benelog.silkjson.JsonValue;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

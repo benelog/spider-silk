@@ -1,6 +1,6 @@
 package benchmark.json;
 
-import net.benelog.spidersilk.json.JsonBound;
+import net.benelog.silkjson.JsonBound;
 
 @JsonBound
 public record Item(long id, String name, String description, int quantity, boolean available) {

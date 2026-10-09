@@ -1,7 +1,7 @@
 = 생성되는 JSON 코덱
 :navtitle: 생성되는 JSON 코덱
 
-``spider-silk-json-processor``는 ``@JsonBound``가 붙은 모든 타입의 ``JsonCodec``을 컴파일 시점에 그 타입 자신의 선언으로부터 생성한다.
+``silk-json-processor``는 ``@JsonBound``가 붙은 모든 타입의 ``JsonCodec``을 컴파일 시점에 그 타입 자신의 선언으로부터 생성한다.
 코덱은 타입 곁의 상수 ``<Type>Json.CODEC``이며, 핸들러는 손으로 작성한 라이터를 지명하듯 그것을 지명한다.
 리플렉션으로 들여다보는 것도, 스스로 등록하는 것도 없으며, 네이티브 이미지에는 그 타입에 대한 항목이 필요 없다.
 
@@ -23,7 +23,7 @@ app.post("/api/decks", req -> {
 ----
 
 생성된 클래스는 나가는 길에 레코드의 접근자를, 들어오는 길에 정규 생성자를 부르며, 각 키는 ``JsonKey``로 한 번만 인코딩한다.
-이 클래스는 빌드 디렉터리 아래의 Java 소스로서 다른 소스처럼 읽을 수 있고, 코어 외에는 아무것에도 의존하지 않는다.
+이 클래스는 빌드 디렉터리 아래의 Java 소스로서 다른 소스처럼 읽을 수 있고, xref:json.adoc#silk-json[silk-json] 외에는 아무것에도 의존하지 않는다.
 
 [#setup]
 == 설정
@@ -33,7 +33,7 @@ app.post("/api/decks", req -> {
 [source,groovy,subs="attributes+"]
 ----
 dependencies {
-    annotationProcessor '{project-group}:spider-silk-json-processor:{project-version}'
+    annotationProcessor '{silk-json-group}:silk-json-processor:{project-version}'
     compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'
 }
 ----
@@ -44,7 +44,7 @@ xref:gradle-plugin.adoc#json[Gradle 플러그인]은 ``spiderSilk { json() }``�
 == 애너테이션
 
 어휘는 Jakarta JSON Binding의 것이므로, 다른 JSON-B 구현을 위해 애너테이션을 붙인 타입은 그 애너테이션을 그대로 쓴다.
-``@JsonBound``는 코어 자신의 유일한 애너테이션이며, 코덱이 생성된다는 것만을 말한다.
+``@JsonBound``는 silk-json 자신의 유일한 애너테이션이며, 코덱이 생성된다는 것만을 말한다.
 
 [cols="2,4",options="header"]
 |===
@@ -122,11 +122,11 @@ xref:example-flashcard.adoc[예제 애플리케이션]은 ``DeckSummary``를 이
 
 프로퍼티의 와이어 위 이름은 ``@JsonbProperty``가 달리 말하지 않는 한 Java 이름이므로, 컴포넌트 이름을 바꾸면 멤버 이름도 바뀐다.
 손으로 작성한 라이터는 누군가 고칠 때만 와이어 포맷이 바뀌며, xref:reflection-scope.adoc[리플렉션 없음 장]은 그 약속이 왜 중요한지 밝힌다.
-모든 이름을 적어 두길 원하는 빌드는 프로세서에 ``-Aspidersilk.json.names=explicit`` 옵션을 넘기며, 그러면 ``@JsonbProperty`` 이름이 없는 프로퍼티는 컴파일 에러가 된다:
+모든 이름을 적어 두길 원하는 빌드는 프로세서에 ``-Asilkjson.names=explicit`` 옵션을 넘기며, 그러면 ``@JsonbProperty`` 이름이 없는 프로퍼티는 컴파일 에러가 된다:
 
 [source,groovy]
 ----
 tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs.add('-Aspidersilk.json.names=explicit')
+    options.compilerArgs.add('-Asilkjson.names=explicit')
 }
 ----

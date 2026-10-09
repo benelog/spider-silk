@@ -35,7 +35,7 @@ import net.benelog.spidersilk.BodyLimits;
 import net.benelog.spidersilk.Handler;
 import net.benelog.spidersilk.HttpException;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.JsonReader;
+import net.benelog.silkjson.JsonReader;
 
 class JettyServerTest {
 

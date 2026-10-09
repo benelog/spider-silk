@@ -82,7 +82,7 @@ Hello, silk
 | 모듈 | 내용
 
 | `spider-silk-core`
-| jte 템플릿과 내장 Jetty를 포함한 프레임워크
+| jte 템플릿, 내장 Jetty, 그리고 프레임워크가 그 위에 지어진 JSON 라이브러리인 xref:json.adoc#silk-json[silk-json]을 포함한 프레임워크
 
 | `spider-silk-test`
 | 테스트 범위의 xref:testing.adoc[``WebTest``와 `TestRequest`]
@@ -142,7 +142,7 @@ Hello, silk
 | `spider-silk-maven-parent`
 | xref:maven-parent.adoc[Maven], 부모 POM으로 쓴다
 
-| `spider-silk-json-processor`
+| `silk-json-processor`
 | 어느 빌드 도구에서든 javac이 애너테이션 프로세서로 실행한다: ``@JsonBound``가 붙은 타입의 xref:json-codegen.adoc[생성되는 JSON 코덱]이며, 런타임에는 아무것도 더하지 않는다
 |===
 
@@ -171,4 +171,5 @@ Hello, silk
 |===
 
 xref:gradle-plugin.adoc[Gradle 플러그인]은 같은 id인 ``{project-group}``으로 적용되고, xref:maven-parent.adoc[Maven 부모 POM]은 ``{project-group}:spider-silk-maven-parent``다.
+독립된 라이브러리인 xref:json.adoc#silk-json[silk-json]은 자신의 문자열인 `{silk-json-group}` 아래에서 같은 규칙을 따른다: 아티팩트 ``{silk-json-group}:silk-json``과 ``{silk-json-group}:silk-json-processor``, 패키지 루트 ``{silk-json-group}``, 그리고 프로세서의 ``{silk-json-group}.processor``다.
 https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[결정 32]가 그 근거를 제시한다.

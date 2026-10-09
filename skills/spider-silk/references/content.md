@@ -9,7 +9,7 @@ Build trees inline with `Json.object()`, or name the mapping as a `JsonWriter<T>
 A writer writes straight into the `JsonOutput` it is handed, with no tree in between:
 
 ```java
-import net.benelog.spidersilk.json.*;
+import net.benelog.silkjson.*;
 
 static final JsonWriter<Deck> DECK = (deck, out) -> out.object()
         .put("id", deck.id())
@@ -48,12 +48,12 @@ app.post("/api/decks", req -> {
 
 ### Generated codecs
 
-`@JsonBound` on a record or class has `spider-silk-json-processor` generate `<Type>Json.CODEC`, a `JsonCodec<Type>`, at compile time: no reflection, no registry, nothing for a native image.
+`@JsonBound` on a record or class has `silk-json-processor` generate `<Type>Json.CODEC`, a `JsonCodec<Type>`, at compile time: no reflection, no registry, nothing for a native image.
 The handler names it like any writer: `WebResponse.json(deck, DeckJson.CODEC)`, `req.bodyJson(DeckJson.CODEC)`.
 
 ```java
 import jakarta.json.bind.annotation.JsonbProperty;
-import net.benelog.spidersilk.json.JsonBound;
+import net.benelog.silkjson.JsonBound;
 
 @JsonBound
 public record Deck(long id, @JsonbProperty("deck_name") String name, @Nullable String note) { }
@@ -62,11 +62,11 @@ public record Deck(long id, @JsonbProperty("deck_name") String name, @Nullable S
 interface DeckSummaryWire { @JsonbProperty("card_count") long cardCount(); }
 ```
 
-- Setup: `spiderSilk { json() }` with the Gradle plugin, or `annotationProcessor 'net.benelog.spidersilk:spider-silk-json-processor:1.1.0'` plus `compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'`; the Maven parent adds the processor for every child, and the API goes in as `provided`. Nothing at run time.
+- Setup: `spiderSilk { json() }` with the Gradle plugin, or `annotationProcessor 'net.benelog.silkjson:silk-json-processor:1.1.0'` plus `compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'`; the Maven parent adds the processor for every child, and the API goes in as `provided`. Nothing at run time.
 - Vocabulary: the standard `jakarta.json.bind.annotation` set — `@JsonbProperty`, `@JsonbTransient`, `@JsonbNillable`, `@JsonbPropertyOrder`, `@JsonbCreator`, `@JsonbDateFormat`, `@JsonbTypeAdapter`. `@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`/`Deserializer`, and `@JsonbTypeInfo` are compile errors.
 - Types: primitives and boxes, String, BigDecimal/BigInteger, UUID, URI, enums (by name), `java.time` (ISO text), Optional/OptionalInt/Long/Double, List/Set/Collection/Iterable, `Map<String, V>`, `JsonValue`, and other `@JsonBound` types, nested freely. Anything else: annotate it `@JsonBound` or adapt it with `@JsonbTypeAdapter`.
 - Reading is strict: a record component or creator parameter is required unless `@Nullable` or `Optional`; missing or `null` -> `JsonException` -> 400. Unknown members are skipped. Setter/field properties keep the class's default when absent. Null properties are omitted on output unless `@JsonbNillable`; order is declaration order unless `@JsonbPropertyOrder`.
-- `-Aspidersilk.json.names=explicit` (a javac arg) makes a property without `@JsonbProperty` a compile error, for a build that wants every wire name written down.
+- `-Asilkjson.names=explicit` (a javac arg) makes a property without `@JsonbProperty` a compile error, for a build that wants every wire name written down.
 
 ### Answers too large to hold
 

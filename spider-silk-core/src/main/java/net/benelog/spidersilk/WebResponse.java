@@ -21,12 +21,10 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.CheckReturnValue;
 import org.jspecify.annotations.Nullable;
 
-import net.benelog.spidersilk.json.Json;
-import net.benelog.spidersilk.json.JsonOutput;
-import net.benelog.spidersilk.json.JsonSink;
-import net.benelog.spidersilk.json.JsonStreamWriter;
-import net.benelog.spidersilk.json.JsonValue;
-import net.benelog.spidersilk.json.JsonWriter;
+import net.benelog.silkjson.Json;
+import net.benelog.silkjson.JsonOutput;
+import net.benelog.silkjson.JsonValue;
+import net.benelog.silkjson.JsonWriter;
 
 /**
  * The answer a {@link Handler} returns: a status, headers, cookies, and a body.

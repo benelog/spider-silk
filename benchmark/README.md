@@ -7,7 +7,7 @@ The manual's [Performance Benchmark](../manual/modules/ROOT/pages/benchmark.adoc
 
 - `spider-silk-app/`: the Spider Silk application, on Jetty or Tomcat, rendering with jte or Thymeleaf, with its JSON through the codecs generated from its records.
 - `spring-mvc-app/`: the Spring Boot application, with Spring MVC, Jackson, and Thymeleaf on Spring Boot's defaults.
-- `json-bench/`: a JMH microbenchmark of the JSON serializer and parser alone, on the documents the HTTP cases send, against Jackson and fastjson2.
+- `json-bench/`: a JMH microbenchmark of the JSON serializer and parser alone, on the documents the HTTP cases send and on a document of decimals, against Jackson and fastjson2.
 - `items.json`: the 100 records the `json-list` case answers with, which the `json-post` case sends as a body through `post-items.lua`.
 - `run.sh`: runs the whole benchmark through the scripts below, starts a fresh process per case, warms it up, measures it with [wrk](https://github.com/wg/wrk), and writes `results/<timestamp>/`.
 - `native-build.sh`: builds both applications as GraalVM native images from a clean project and times each build.
@@ -45,6 +45,7 @@ Close other heavy programs first: the numbers are only comparable within one run
 ## The JSON microbenchmark
 
 `json-bench` measures the serializer and the parser with no HTTP around them: the tree, a hand-written writer, the generated codec, Jackson, and fastjson2, each writing or reading the same 100 records and the same 27-byte object.
+The `Places` cases write and read 100 places with a latitude, a longitude, and a rating each, which measures the numbers with a fraction that the records have none of.
 
 ```bash
 ../gradlew -p json-bench installDist

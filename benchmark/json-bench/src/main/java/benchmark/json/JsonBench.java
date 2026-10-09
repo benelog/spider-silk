@@ -6,10 +6,10 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import com.alibaba.fastjson2.JSON;
-import net.benelog.spidersilk.json.Json;
-import net.benelog.spidersilk.json.JsonCodec;
-import net.benelog.spidersilk.json.JsonReader;
-import net.benelog.spidersilk.json.JsonWriter;
+import net.benelog.silkjson.Json;
+import net.benelog.silkjson.JsonCodec;
+import net.benelog.silkjson.JsonReader;
+import net.benelog.silkjson.JsonWriter;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -28,6 +28,8 @@ import tools.jackson.databind.json.JsonMapper;
  * its 27-byte json case, written and read four ways: through the tree
  * ({@code Json.object()}), through a hand-written writer and reader, through
  * the codec generated from the record, and through Jackson and fastjson2.
+ * 100 places, each with three numbers that have a fraction, measure the
+ * numbers the records have none of.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -38,6 +40,7 @@ import tools.jackson.databind.json.JsonMapper;
 public class JsonBench {
 
     static final List<Item> ITEMS = items();
+    static final List<Place> PLACES = places();
     static final Message MESSAGE = new Message("Hello, World!");
 
     /** The tree, built the way the manual's first example builds one. */
@@ -66,15 +69,19 @@ public class JsonBench {
     static final JsonWriter<List<Item>> ITEMS_WRITER = JsonWriter.list(ITEM_WRITER);
     static final JsonReader<List<Item>> ITEMS_READER = JsonReader.list(ITEM_READER);
     static final JsonCodec<List<Item>> ITEMS_GENERATED = JsonCodec.list(ItemJson.CODEC);
+    static final JsonCodec<List<Place>> PLACES_GENERATED = JsonCodec.list(PlaceJson.CODEC);
 
     final JsonMapper jackson = JsonMapper.builder().build();
     final TypeReference<List<Item>> listType = new TypeReference<>() { };
+    final TypeReference<List<Place>> placesType = new TypeReference<>() { };
 
     byte[] listBytes;
+    byte[] placesBytes;
 
     @Setup
     public void setup() {
         listBytes = ITEMS_GENERATED.toJsonBytes(ITEMS);
+        placesBytes = PLACES_GENERATED.toJsonBytes(PLACES);
     }
 
     private static List<Item> items() {
@@ -83,6 +90,16 @@ public class JsonBench {
             items.add(new Item(i, "item-" + i, "The \"description\" of item " + i, i * 7 % 50, i % 3 != 0));
         }
         return List.copyOf(items);
+    }
+
+    /** Coordinates with four and six decimals and a rating with one, each the shortest form of its double. */
+    private static List<Place> places() {
+        List<Place> places = new ArrayList<>();
+        for (int i = 1; i <= 100; i++) {
+            places.add(new Place(i, "place-" + i, (375665 + i * 137) / 10_000.0, (126978000 + i * 4321) / 1_000_000.0,
+                    (30 + i % 21) / 10.0));
+        }
+        return List.copyOf(places);
     }
 
     // ---- the list of 100 records, 10 KB ----
@@ -132,6 +149,38 @@ public class JsonBench {
         return JSON.parseArray(listBytes, Item.class);
     }
 
+    // ---- the list of 100 places, three decimals each ----
+
+    @Benchmark
+    public byte[] writePlaces_generated() {
+        return PLACES_GENERATED.toJsonBytes(PLACES);
+    }
+
+    @Benchmark
+    public byte[] writePlaces_jackson() {
+        return jackson.writeValueAsBytes(PLACES);
+    }
+
+    @Benchmark
+    public byte[] writePlaces_fastjson2() {
+        return JSON.toJSONBytes(PLACES);
+    }
+
+    @Benchmark
+    public List<Place> readPlaces_generated() {
+        return PLACES_GENERATED.fromJsonBytes(placesBytes);
+    }
+
+    @Benchmark
+    public List<Place> readPlaces_jackson() {
+        return jackson.readValue(placesBytes, placesType);
+    }
+
+    @Benchmark
+    public List<Place> readPlaces_fastjson2() {
+        return JSON.parseArray(placesBytes, Place.class);
+    }
+
     // ---- one small object, 27 bytes ----
 
     @Benchmark
@@ -149,8 +198,9 @@ public class JsonBench {
         return JSON.toJSONBytes(MESSAGE);
     }
 
-    /** The document the read cases parse, for a look at what is measured. */
+    /** The documents the read cases parse, for a look at what is measured. */
     public static void main(String[] args) {
         System.out.println(new String(ITEMS_GENERATED.toJsonBytes(ITEMS), StandardCharsets.UTF_8));
+        System.out.println(new String(PLACES_GENERATED.toJsonBytes(PLACES), StandardCharsets.UTF_8));
     }
 }

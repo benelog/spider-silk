@@ -1,7 +1,7 @@
 = Generated JSON Codecs
 :navtitle: Generated JSON Codecs
 
-`spider-silk-json-processor` generates a `JsonCodec` for every type annotated `@JsonBound`, at compile time, from the type's own declaration.
+`silk-json-processor` generates a `JsonCodec` for every type annotated `@JsonBound`, at compile time, from the type's own declaration.
 The codec is a constant beside the type, `<Type>Json.CODEC`, and a handler names it the way it names a hand-written writer.
 Nothing is reflected over, nothing registers itself, and a native image needs no entry for the type.
 
@@ -23,7 +23,7 @@ app.post("/api/decks", req -> {
 ----
 
 The generated class calls the record's accessors on the way out and its canonical constructor on the way in, with each key encoded once as a `JsonKey`.
-It is Java source under the build directory, readable like any other, and it depends on nothing beyond core.
+It is Java source under the build directory, readable like any other, and it depends on nothing beyond xref:json.adoc#silk-json[silk-json].
 
 [#setup]
 == Setting it up
@@ -33,7 +33,7 @@ The processor runs inside javac, so a build puts it on the processor path and ad
 [source,groovy,subs="attributes+"]
 ----
 dependencies {
-    annotationProcessor '{project-group}:spider-silk-json-processor:{project-version}'
+    annotationProcessor '{silk-json-group}:silk-json-processor:{project-version}'
     compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'
 }
 ----
@@ -44,7 +44,7 @@ Neither jar is needed at run time: the annotations are read when the codec is ge
 == The annotations
 
 The vocabulary is Jakarta JSON Binding's, so a type annotated for another JSON-B implementation keeps its annotations.
-`@JsonBound` is the one annotation of core's own, and it says only that a codec is generated.
+`@JsonBound` is the one annotation of silk-json's own, and it says only that a codec is generated.
 
 [cols="2,4",options="header"]
 |===
@@ -122,11 +122,11 @@ The xref:example-flashcard.adoc[example application] binds `DeckSummary` this wa
 
 A property's name on the wire is its Java name unless `@JsonbProperty` says otherwise, so renaming a component renames the member.
 A hand-written writer changes the wire format only when someone edits it, and xref:reflection-scope.adoc[the no-reflection chapter] states why that promise matters.
-A build that wants every name written down passes the processor the option `-Aspidersilk.json.names=explicit`, and a property without a `@JsonbProperty` name is then a compile error:
+A build that wants every name written down passes the processor the option `-Asilkjson.names=explicit`, and a property without a `@JsonbProperty` name is then a compile error:
 
 [source,groovy]
 ----
 tasks.withType(JavaCompile).configureEach {
-    options.compilerArgs.add('-Aspidersilk.json.names=explicit')
+    options.compilerArgs.add('-Asilkjson.names=explicit')
 }
 ----

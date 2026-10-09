@@ -61,8 +61,9 @@ tasks.register('verifyVersionReferences') {
     ].collectEntries { [(it): file(it)] }
     def patterns = [
             ~/net\.benelog\.spidersilk:spider-silk-[a-z-]+:([^'"\s]+)['"]/,
+            ~/net\.benelog\.silkjson:silk-json[a-z-]*:([^'"\s]+)['"]/,
             ~/id 'net\.benelog\.spidersilk' version '([^']+)'/,
-            ~/<artifactId>spider-silk-[a-z-]+<\/artifactId>\s*<version>([^<]+)<\/version>/,
+            ~/<artifactId>(?:spider-silk-[a-z-]+|silk-json[a-z-]*)<\/artifactId>\s*<version>([^<]+)<\/version>/,
             ~/project-version: (\S+)/,
             ~/"version": "([^"]+)"/,
             ~/"ref": "v([^"]+)"/,
@@ -121,8 +122,10 @@ tasks.named('check') {
     dependsOn tasks.named('verifyManualAttributes')
 }
 
+// silk-json is a library of its own, under its own group, so an application
+// that is not a spider-silk one takes it with nothing of the framework's name.
 subprojects {
-    group = 'net.benelog.spidersilk'
+    group = project.name.startsWith('silk-json') ? 'net.benelog.silkjson' : 'net.benelog.spidersilk'
 
     repositories {
         mavenCentral()
@@ -153,12 +156,12 @@ configure(subprojects.findAll { it.name != 'spider-silk-maven-parent' }) {
     }
 }
 
-// Published to Maven Central: the framework and its test harness, not the example.
+// Published to Maven Central: the framework, its test harness, and silk-json, not the example.
 configure(subprojects.findAll {
-    it.name in ['spider-silk-core', 'spider-silk-test', 'spider-silk-tomcat',
-            'spider-silk-undertow', 'spider-silk-freemarker', 'spider-silk-handlebars',
+    it.name in ['silk-json', 'silk-json-processor', 'spider-silk-core', 'spider-silk-test',
+            'spider-silk-tomcat', 'spider-silk-undertow', 'spider-silk-freemarker', 'spider-silk-handlebars',
             'spider-silk-thymeleaf', 'spider-silk-jetty-websocket', 'spider-silk-openapi',
-            'spider-silk-json-processor', 'spider-silk-opentelemetry-agent']
+            'spider-silk-opentelemetry-agent']
 }) {
     apply plugin: 'java-library'
     apply plugin: 'maven-publish'
@@ -203,14 +206,18 @@ configure(subprojects.findAll {
     // other module the subpackage it is named for, with a hyphen in the project
     // name standing for the package separator it reads as —
     // spider-silk-jetty-websocket holds net.benelog.spidersilk.jetty.websocket.
+    // silk-json owns net.benelog.silkjson the same way, and silk-json-processor
+    // net.benelog.silkjson.processor.
     jar {
         manifest {
+            def library = project.name.startsWith('silk-json')
+            def root = library ? 'silk-json' : 'spider-silk-core'
+            def packageRoot = library ? 'net.benelog.silkjson' : 'net.benelog.spidersilk'
+            def prefix = library ? 'silk-json-' : 'spider-silk-'
             attributes('Automatic-Module-Name':
-                    project.name == 'spider-silk-core'
-                            ? 'net.benelog.spidersilk'
-                            : 'net.benelog.spidersilk.'
-                                    + project.name.substring('spider-silk-'.length())
-                                            .replace('-', '.'))
+                    project.name == root
+                            ? packageRoot
+                            : packageRoot + '.' + project.name.substring(prefix.length()).replace('-', '.'))
         }
     }
 
@@ -221,7 +228,11 @@ configure(subprojects.findAll {
 
                 pom {
                     name = project.name
-                    description = 'A thin web framework on top of the Jakarta Servlet API, with no reflection.'
+                    // A module that says what it is says so in its own build file,
+                    // which is read after this one, hence the provider.
+                    description.set(project.provider {
+                        project.description ?: 'A thin web framework on top of the Jakarta Servlet API, with no reflection.'
+                    })
                     url = 'https://github.com/benelog/spider-silk'
                     licenses {
                         license {

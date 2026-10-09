@@ -89,8 +89,8 @@
           <configuration>
             <annotationProcessorPaths>
               <path>
-                <groupId>net.benelog.spidersilk</groupId>
-                <artifactId>spider-silk-json-processor</artifactId>
+                <groupId>net.benelog.silkjson</groupId>
+                <artifactId>silk-json-processor</artifactId>
                 <version>1.1.0</version>
               </path>
             </annotationProcessorPaths>

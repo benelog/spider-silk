@@ -1,7 +1,7 @@
 = "리플렉션 없음"의 범위
 :navtitle: "리플렉션 없음"의 범위
 
-이 원칙은 **프레임워크 core**에 적용된다: 라우팅, 파라미터 추출, JSON 처리는 어디에서도 리플렉션을 쓰지 않는다.
+이 원칙은 **프레임워크 core**와, core가 그 위에 지어진 JSON 라이브러리인 xref:json.adoc#silk-json[silk-json]에 적용된다: 라우팅, 파라미터 추출, JSON 처리는 어디에서도 리플렉션을 쓰지 않는다.
 
 기본 템플릿 엔진은 바로 그 경계에 놓여 있으므로, 그 리플렉션이 어디까지 닿는지 정확히 밝혀 둘 가치가 있다.
 jte는 모든 템플릿을 Java 클래스로 컴파일하므로, ``${deck.title}``은 컴파일된 메서드 호출로 실행된다.
@@ -19,11 +19,11 @@ Jetty는 엔드포인트의 콜백 각각에 대한 ``MethodHandle``을 잡아 �
 Jetty가 찾아보는 것은 그 하나의 클래스다.
 애플리케이션이 작성한 ``WebSocketHandler``는 인터페이스 호출로 불리며 결코 리플렉션 대상이 되지 않는다.
 
-xref:json-codegen.adoc[`spider-silk-json-processor`]가 생성하는 코덱은 이 규칙에서 core 쪽에 머문다.
+xref:json-codegen.adoc[`silk-json-processor`]가 생성하는 코덱은 이 규칙에서 core 쪽에 머문다.
 프로세서는 javac 안에서 실행되고, 써내는 코드는 타입 자신의 접근자와 생성자를 부르며, 런타임에 이름으로 찾는 것은 없는데, 이는 jte가 템플릿에서 택한 것과 같은 절충이다.
 애플리케이션이 추가하는 JSON 바인딩 라이브러리는 템플릿 모듈과 같은 조건에 놓인다: 가져오면 그 리플렉션도 함께 가져온 것이다.
 Jackson과 Gson은 필드를 리플렉션으로 읽고 쓰므로, 바인딩되는 모든 타입은 xref:native-image.adoc[네이티브 이미지] 설정에 항목이 필요하다.
-avaje-jsonb는 컴파일 시점에 타입별 어댑터를 생성하므로 core 자신의 코덱처럼 항목이 필요 없다.
+avaje-jsonb는 컴파일 시점에 타입별 어댑터를 생성하므로 silk-json의 코덱처럼 항목이 필요 없다.
 라이브러리에는 어느 쪽이든 core가 관여하지 않는다: xref:json-interop.adoc[이음새(seam)]는 ``WebResponse.rawJson(String)``과 ``req.bodyStream()``이며, 손으로 쓴 라이터나 생성된 코덱에 머무는 애플리케이션은 와이어 포맷을 리플렉션 없이 유지한다.
 
 예제 프로젝트의 리포지토리는 spring-jdbc의 ``DataClassRowMapper``를 택하며, 이는 도메인 레코드를 리플렉션으로 생성한다.

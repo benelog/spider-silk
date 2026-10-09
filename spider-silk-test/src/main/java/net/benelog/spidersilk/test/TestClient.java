@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.StringJoiner;
 import java.util.function.UnaryOperator;
 
-import net.benelog.spidersilk.json.JsonValue;
+import net.benelog.silkjson.JsonValue;
 
 /**
  * An HTTP client aimed at the app under test.

@@ -11,6 +11,8 @@ asciidoc:
   attributes:
     page-lang: en
     project-group: net.benelog.spidersilk
+    # The group of silk-json, the JSON library core is built on, which is a library of its own.
+    silk-json-group: net.benelog.silkjson
     project-version: 1.1.0
     project-repo: benelog/spider-silk
     # What the Gradle plugin pins; kept in step with spider-silk-gradle-plugin/build.gradle.

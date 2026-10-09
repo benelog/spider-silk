@@ -19,7 +19,7 @@ import jakarta.servlet.http.HttpServletRequestWrapper;
 
 import org.junit.jupiter.api.Test;
 
-import net.benelog.spidersilk.json.JsonReader;
+import net.benelog.silkjson.JsonReader;
 import net.benelog.spidersilk.test.TestClient;
 import net.benelog.spidersilk.test.TestRequest;
 import net.benelog.spidersilk.test.WebTest;

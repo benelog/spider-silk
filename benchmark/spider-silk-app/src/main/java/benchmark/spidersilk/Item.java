@@ -1,6 +1,6 @@
 package benchmark.spidersilk;
 
-import net.benelog.spidersilk.json.JsonBound;
+import net.benelog.silkjson.JsonBound;
 
 /** The codec, {@code ItemJson.CODEC}, is generated from the record at compile time. */
 @JsonBound

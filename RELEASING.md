@@ -36,7 +36,7 @@ A version on Central is permanent, so every step before the tag is a check that 
    Check the component list, then press **Publish**.
    **Drop** discards the deployment instead, and the tag can then be deleted and pushed again.
 8. Publication takes up to half an hour.
-   The release is done once `https://repo1.maven.org/maven2/net/benelog/spidersilk/spider-silk-core/x.y.z/` lists the jars.
+   The release is done once `https://repo1.maven.org/maven2/net/benelog/spidersilk/spider-silk-core/x.y.z/` and `https://repo1.maven.org/maven2/net/benelog/silkjson/silk-json/x.y.z/` list the jars.
 
 ## A dry run without Central
 
@@ -48,7 +48,7 @@ The Central Portal's **Publish Component** page accepts that zip by hand for val
 
 These exist already, and are written down for the day one of them has to be replaced.
 
-- **The namespace.** `net.benelog` is verified on the Central Portal by a DNS TXT record on `benelog.net`, which covers `net.benelog.spidersilk`.
+- **The namespace.** `net.benelog` is verified on the Central Portal by a DNS TXT record on `benelog.net`, which covers `net.benelog.spidersilk` and `net.benelog.silkjson`.
   The namespace belongs to the maintainer's portal account, and the portal treats a different sign-in method as a different account, even for the same email.
 - **The signing key.** An Ed25519 key, published to `keyserver.ubuntu.com` so Central can check the signatures.
   Its ASCII-armored private half (`gpg --armor --export-secret-keys <fingerprint>`) is the `SIGNING_KEY` repository secret, and its passphrase is `SIGNING_PASSWORD`.

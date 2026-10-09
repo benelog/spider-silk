@@ -8,8 +8,8 @@ plugins {
 }
 
 dependencies {
-    implementation 'net.benelog.spidersilk:spider-silk-core'
-    annotationProcessor 'net.benelog.spidersilk:spider-silk-json-processor'
+    implementation 'net.benelog.silkjson:silk-json'
+    annotationProcessor 'net.benelog.silkjson:silk-json-processor'
     implementation 'org.openjdk.jmh:jmh-core:1.37'
     annotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
     implementation 'tools.jackson.core:jackson-databind:3.1.5'

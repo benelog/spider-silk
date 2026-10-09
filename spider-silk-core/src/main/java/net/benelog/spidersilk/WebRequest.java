@@ -37,9 +37,9 @@ import jakarta.servlet.http.Part;
 
 import org.jspecify.annotations.Nullable;
 
-import net.benelog.spidersilk.json.Json;
-import net.benelog.spidersilk.json.JsonReader;
-import net.benelog.spidersilk.json.JsonValue;
+import net.benelog.silkjson.Json;
+import net.benelog.silkjson.JsonReader;
+import net.benelog.silkjson.JsonValue;
 
 /**
  * The request side of a handler: what was asked for, and the session it was

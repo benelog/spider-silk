@@ -9,7 +9,7 @@ import jakarta.servlet.http.Cookie;
 
 import org.junit.jupiter.api.Test;
 
-import net.benelog.spidersilk.json.Json;
+import net.benelog.silkjson.Json;
 import net.benelog.spidersilk.test.WebTest;
 
 import static org.assertj.core.api.Assertions.assertThat;

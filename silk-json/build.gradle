@@ -1,0 +1,13 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'JSON for Java with no reflection: a byte-level writer and pull parser, a tree, and codecs generated at compile time.'
+
+// The JDK and nothing else at run time: the only dependency, jspecify's
+// annotations, comes from the root build for every published module.
+dependencies {
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

@@ -1,7 +1,7 @@
 = JSON
 :navtitle: JSON
 
-Core builds and parses JSON itself, and the mapping between a document and a Java type is code you write or code the build generates from the type.
+Core builds and parses JSON with <<silk-json,silk-json>>, the project's own JSON library, and the mapping between a document and a Java type is code you write or code the build generates from the type.
 
 == Writers and readers
 
@@ -44,7 +44,7 @@ xref:json-codegen.adoc[Generated JSON Codecs] is the other way to a mapping: an 
 `object()` and `array()` open a container as the next value, `end()` closes the innermost one, and the commas are the output's business.
 Inside an object a member is `put(key, value)`, or `name(key)` followed by a value.
 Inside an array each element is `value(...)`, and `values(strings)` adds every string of an iterable.
-`put` and `value` take a string, a long, a double, a boolean, a `BigDecimal`, a `BigInteger`, a `JsonValue`, or another value with its own writer, so writers compose:
+`put` and `value` take a string, a long, a double, a float, a boolean, a `BigDecimal`, a `BigInteger`, a `JsonValue`, or another value with its own writer, so writers compose:
 
 [source,java]
 ----
@@ -57,7 +57,9 @@ static final JsonWriter<Card> CARD = (card, out) -> out.object()
 ----
 
 A string that is null is written as JSON `null`, and so is a null value handed over with its writer.
-A `double` that is NaN or an infinity throws `JsonException`, since JSON has no syntax for either.
+A `double` goes out as the shortest decimal that reads back as the same `double`, the text `Double.toString` answers, and a `float` as the text `Float.toString` answers.
+`0.1f` is written as `0.1`, not as the `0.10000000149011612` of the `double` it widens to.
+A `double` or a `float` that is NaN or an infinity throws `JsonException`, since JSON has no syntax for either.
 A call out of place, such as `put` outside an object or `end()` with nothing open, throws `IllegalStateException`.
 
 `writer.toJson(value)` and `writer.toJsonBytes(value)` answer the document for a test, an SSE event, or a log line.
@@ -117,6 +119,11 @@ A generated codec tries the key it declares next this way, so a document written
 `reader.fromJson(text)` and `reader.fromJsonBytes(utf8)` read a document that holds that one value and nothing after it.
 A failure names where the input stands, as in `Near character 12: Not a JSON string: a number`.
 
+`readDouble()` answers the `double` that `Double.parseDouble` answers for the number's text, and `readFloat()` the `float` that `Float.parseFloat` answers.
+Both convert the digits where they stand, with no string made, and round once.
+`(float) readDouble()` rounds twice, and is one bit off for a number just short of halfway between two floats, such as `1.00000017881393432617187499`.
+A number past the largest `double` or `float` is refused as `Number out of range`, and one closer to zero than the smallest reads as zero with its sign: `-0` reads as `-0.0`.
+
 == Reading values
 
 `getString` throws `JsonException` on a missing key or a value of the wrong type, and `req.bodyJson(reader)` turns that into a 400.
@@ -172,3 +179,29 @@ xref:large-json.adoc[Large JSON and NDJSON] writes one value at a time instead, 
 
 Writing the mapping by hand or generating it from the type is core's decision for core, not for the application.
 An application with a wire format it does not own can bind objects with a library instead, through `WebResponse.rawJson(String)` going out and `req.bodyStream()` or `req.bodyReader()` coming in: xref:json-interop.adoc[External JSON Binding].
+
+[#silk-json]
+== silk-json on its own
+
+Everything on this page but `req.bodyJson` and `WebResponse.json` is `silk-json`, a JSON library that core is built on and that needs nothing but the JDK at run time.
+Its types are in the package `net.benelog.silkjson`, and an application that has core has them too.
+An application that is not a Spider Silk one takes the library alone:
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation '{silk-json-group}:silk-json:{project-version}'
+}
+----
+
+[source,xml,subs="attributes+"]
+----
+<dependency>
+  <groupId>{silk-json-group}</groupId>
+  <artifactId>silk-json</artifactId>
+  <version>{project-version}</version>
+</dependency>
+----
+
+xref:json-codegen.adoc#setup[Generated JSON Codecs] adds its processor, `silk-json-processor`, the same way.
+The library is released with the framework, at the framework's version, under a name of its own so that it reads as a library of its own.

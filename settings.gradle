@@ -6,6 +6,10 @@ pluginManagement {
 
 rootProject.name = 'spider-silk'
 
+// silk-json is a JSON library of its own, which needs nothing but the JDK at
+// run time and which spider-silk-core is built on; it lives here until its API settles.
+include 'silk-json'
+include 'silk-json-processor'
 include 'spider-silk-core'
 include 'spider-silk-test'
 include 'spider-silk-tomcat'
@@ -15,7 +19,6 @@ include 'spider-silk-handlebars'
 include 'spider-silk-thymeleaf'
 include 'spider-silk-jetty-websocket'
 include 'spider-silk-openapi'
-include 'spider-silk-json-processor'
 include 'spider-silk-opentelemetry-agent'
 include 'example-flashcard'
 include 'spider-silk-maven-parent'

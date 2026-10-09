@@ -121,7 +121,7 @@ What it does *not* keep is the stronger promise underneath the no-reflection rul
 A generated adapter derives its field names from the record's components, so renaming a component renames a JSON field.
 It does so silently, at compile time, in a build that still succeeds.
 Pinning each name with `@Json.Property("...")` restores the guarantee, and costs about as much typing as the hand-written writer it replaced.
-That is the trade, and core's own generated codec makes it on the same terms, with xref:json-codegen.adoc#names[an option that turns a missing name into a compile error].
+That is the trade, and silk-json's generated codec makes it on the same terms, with xref:json-codegen.adoc#names[an option that turns a missing name into a compile error].
 The application decides which side of that trade it takes.
 
 DSL-JSON's `@CompiledJson` works the same way, with one difference worth knowing.

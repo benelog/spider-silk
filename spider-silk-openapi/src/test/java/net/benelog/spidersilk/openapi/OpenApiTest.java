@@ -7,8 +7,8 @@ import org.junit.jupiter.api.Test;
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.Route;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.JsonArray;
-import net.benelog.spidersilk.json.JsonObject;
+import net.benelog.silkjson.JsonArray;
+import net.benelog.silkjson.JsonObject;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;

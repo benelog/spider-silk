@@ -82,7 +82,7 @@ Every application uses these two.
 | Module | Contents
 
 | `spider-silk-core`
-| The framework, with jte templates and embedded Jetty
+| The framework, with jte templates, embedded Jetty, and xref:json.adoc#silk-json[silk-json], the JSON library it is built on
 
 | `spider-silk-test`
 | xref:testing.adoc[`WebTest` and `TestRequest`], for test scope
@@ -142,7 +142,7 @@ The build modules carry optional packaging conventions, precompiled jte, a Jib i
 | `spider-silk-maven-parent`
 | xref:maven-parent.adoc[Maven], used as the parent POM
 
-| `spider-silk-json-processor`
+| `silk-json-processor`
 | javac on either build tool, as an annotation processor: xref:json-codegen.adoc[Generated JSON Codecs] for the types annotated `@JsonBound`, with nothing added at run time
 |===
 
@@ -171,4 +171,5 @@ It is not published.
 |===
 
 The xref:gradle-plugin.adoc[Gradle plugin] is applied by that same id, `{project-group}`, and the xref:maven-parent.adoc[Maven parent] is `{project-group}:spider-silk-maven-parent`.
+xref:json.adoc#silk-json[silk-json], a library of its own, follows the same rule under a string of its own, `{silk-json-group}`: the artifacts `{silk-json-group}:silk-json` and `{silk-json-group}:silk-json-processor`, the package root `{silk-json-group}`, and `{silk-json-group}.processor` for the processor.
 https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[Decision 32] gives the reasoning.

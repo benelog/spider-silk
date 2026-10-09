@@ -63,7 +63,8 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 * ``file(path)``는 콘텐츠 타입을 이름에서, 길이를 파일에서 읽는다.
   읽을 수 있는 일반 파일이 아닌 경로는 ``UncheckedIOException``을 던지므로, 없는 파일에 대한 404는 핸들러가 직접 작성한다
 * 값을 하나씩 쓰는 본문: 담아 두기에 너무 큰 배열을 위한 `jsonArray(sink -> ...)`, 한 줄에 값 하나를 쓰는 `ndjson(sink -> ...)`.
-  둘 다 내부적으로는 `stream` 본문이며, 라이터는 핸들러 예외 처리 밖에서 실행된다
+  둘 다 내부적으로는 `stream` 본문이며, 라이터는 핸들러 예외 처리 밖에서 실행된다.
+  싱크는 ``JsonSink``이며, 그 ``write(value)``와 ``write(value, writer)``는 각각 값 하나를 쓴다; xref:large-json.adoc[대용량 JSON과 NDJSON]을 참고한다
 * 상태: `empty()`, `empty(HttpStatus)`, `noContent()`, `redirect(location)`, `redirect(location, HttpStatus)`
 * 덧붙이기: `status`, `header`, `withoutHeader(name)`, `contentType`, `vary(field)`, `attachment`, `body`, `cookie(name, value)`, `cookie(name, value, maxAge)`, `cookie(Cookie)`, `expireCookie`
 * 되읽기: `status()`, `header(name)`, `headers()`, `cookies()`, `body()`.
@@ -72,7 +73,9 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 
 ``body()``의 형태와 람다 계열에 대해서는 xref:response.adoc[응답]을 참고한다.
 
-== ``net.benelog.spidersilk.json``이 제공하는 것
+== ``net.benelog.silkjson``이 제공하는 것
+
+이 패키지는 코어가 그 위에 지어진 JSON 라이브러리인 xref:json.adoc#silk-json[silk-json]의 것이다.
 
 * 트리: `Json.object()`, `Json.array()`, `Json.parse(text)`, `Json.parse(utf8)`, 그리고 `JsonObject`, `JsonArray`, ``JsonPrimitive``를 가진 `JsonValue`; xref:json.adoc[JSON]을 참고한다
 * 매핑: ``JsonOutput``을 상대로 하는 람다 `(value, out) -> ...`인 `JsonWriter<T>`; ``JsonInput``을 상대로 하는 람다인 `JsonReader<T>`; 그리고 둘을 한꺼번에 가진 `JsonCodec<T>`.
@@ -80,7 +83,6 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
   `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, ``reader.fromJsonBytes(utf8)``는 요청 밖에서 하나를 실행한다
 * `JsonOutput`: `object()`, `array()`, `end()`, `name(key)`, `put(key, ...)`, `putNull(key)`, `value(...)`, `nullValue()`, `values(strings)`, `newline()`.
   ``JsonOutput.inMemory()``는 ``toBytes()``와 ``toJson()``을 답하고, ``JsonOutput.to(stream)``은 ``flush()``에서 버퍼를 보낸다
-* `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readNumber()`, `readBoolean()`, `readNull()`, `readValue()`, `skipValue()`, `end()`, `error(message)`, 그 바탕은 ``JsonInput.of(utf8)``이나 ``JsonInput.of(text)``다
+* `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readFloat()`, `readNumber()`, `readBoolean()`, `readNull()`, `readValue()`, `skipValue()`, `end()`, `error(message)`, 그 바탕은 ``JsonInput.of(utf8)``이나 ``JsonInput.of(text)``다
 * `JsonKey.of(name)`: `put`, `name`, ``keyIs``를 위해 한 번만 인코딩한 멤버 이름
-* `@JsonBound`: 애너테이션이 붙은 타입이나 그것이 지명한 타입의 코덱을 ``spider-silk-json-processor``가 컴파일 시점에 ``<Type>Json.CODEC``으로 생성한다; xref:json-codegen.adoc[생성되는 JSON 코덱]을 참고한다
-* 스트리밍 응답: ``jsonArray``와 ``ndjson`` 안의 ``JsonSink.write(value)``와 `write(value, writer)`; xref:large-json.adoc[대용량 JSON과 NDJSON]을 참고한다
+* `@JsonBound`: 애너테이션이 붙은 타입이나 그것이 지명한 타입의 코덱을 ``silk-json-processor``가 컴파일 시점에 ``<Type>Json.CODEC``으로 생성한다; xref:json-codegen.adoc[생성되는 JSON 코덱]을 참고한다

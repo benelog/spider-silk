@@ -3,7 +3,7 @@ package flashcard.web;
 import net.benelog.spidersilk.HttpStatus;
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.Json;
+import net.benelog.silkjson.Json;
 
 import flashcard.domain.Deck;
 import flashcard.service.CardService;

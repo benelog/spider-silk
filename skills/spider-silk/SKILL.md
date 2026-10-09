@@ -132,7 +132,7 @@ app.cors(Cors.allowOrigin("https://app.example.com").forPath("/api/*"))
 app.start(8080);
 ```
 
-Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus, Handler, HttpException), `net.benelog.spidersilk.json` (Json, JsonWriter, JsonReader, JsonCodec, JsonOutput, JsonInput, JsonKey, JsonBound), `net.benelog.spidersilk.server` (JettyServer, WebServer).
+Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus, Handler, HttpException), `net.benelog.silkjson` (Json, JsonWriter, JsonReader, JsonCodec, JsonOutput, JsonInput, JsonKey, JsonBound; from silk-json, which core brings), `net.benelog.spidersilk.server` (JettyServer, WebServer).
 
 ## Contracts that hold everywhere
 

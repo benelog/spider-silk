@@ -3,7 +3,7 @@
 ## Design Principles
 
 - **spider-silk-core covers the web tier only.**
-  Routing, parameter extraction, JSON, and templates are the extent of core's territory.
+  Routing, parameter extraction, JSON bodies, and templates are the extent of core's territory.
   Transaction/DB helpers (`Transactions` and the like) belong in example-flashcard (`flashcard.service`), not in core.
   Do not add data-layer dependencies such as spring-jdbc to core's build.gradle.
   (When adding a new feature to core, if it falls outside the web tier — persistence, transactions, scheduling, and so on — propose the example module or a separate module instead.)
@@ -11,14 +11,18 @@
   `spider-silk-tomcat` and `spider-silk-undertow` are `WebServer` implementations for those servers; they depend on core, never the other way round.
   Core's default stays Jetty, and anything server-specific belongs in the matching module rather than behind a flag in core.
   Each server module carries its own copy of the acceptance tests, deliberately: they assert what core promises against that container.
+- **silk-json is a JSON library of its own, and core is built on it.**
+  The engine (`JsonOutput`, `JsonInput`, `JsonKey`), the tree, the writers and readers, and `@JsonBound` live in `silk-json`, in `net.benelog.silkjson` under the group `net.benelog.silkjson`, tied to nothing, so an application that is not a Spider Silk one can take it alone.
+  It needs nothing but the JDK at run time, and it never depends on core: what is the web's, such as `JsonSink` and `bodyJson`, stays in core.
+  It lives in this repository until its API settles.
 - **Test-only code lives in spider-silk-test.**
   The `WebTest` harness is its own module, so core's jar carries no test code.
   Core's tests depend on it (`testImplementation project(':spider-silk-test')`); do not move it back into core.
 - **No reflection.**
-  There is no annotation scanning, no proxies, and no automatic binding in core.
+  There is no annotation scanning, no proxies, and no automatic binding in core or in silk-json.
   Do not make changes that break this principle.
-- **`spider-silk-json-processor` runs inside javac and ships nothing to the runtime.**
-  It generates a `JsonCodec` for each `@JsonBound` type from the type's declaration and the `jakarta.json.bind` annotations, read by qualified name so the processor depends on neither core nor the API.
+- **`silk-json-processor` runs inside javac and ships nothing to the runtime.**
+  It generates a `JsonCodec` for each `@JsonBound` type from the type's declaration and the `jakarta.json.bind` annotations, read by qualified name so the processor depends on neither silk-json nor the API.
   Generated code calls constructors and accessors only: no registry, no `ServiceLoader`, and nothing looked up by name at run time.
 - There is no DI container: `FlashcardContext` assembles the object graph by calling constructors directly.
 

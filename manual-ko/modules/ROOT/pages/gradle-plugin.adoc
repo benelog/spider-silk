@@ -70,7 +70,7 @@ image::build-pipeline.svg[템플릿은 generateJte를 통해 Java 클래스가 �
 == spiderSilk.json()
 
 ``json()``은 또 하나의 옵트인으로, xref:json-codegen.adoc[생성되는 JSON 코덱]으로 타입을 바인딩하는 애플리케이션을 위한 것이다.
-이 메서드는 플러그인 자신의 버전인 ``spider-silk-json-processor``를 javac의 ``annotationProcessor`` 경로에 올리고, ``jakarta.json.bind-api``를 컴파일 클래스패스에 더하는데, 그 애너테이션은 거기서 읽히고 다시는 필요 없다.
+이 메서드는 플러그인 자신의 버전인 ``silk-json-processor``를 javac의 ``annotationProcessor`` 경로에 올리고, ``jakarta.json.bind-api``를 컴파일 클래스패스에 더하는데, 그 애너테이션은 거기서 읽히고 다시는 필요 없다.
 런타임 클래스패스에는 아무것도 닿지 않는다.
 
 == 플러그인이 고정하는 것

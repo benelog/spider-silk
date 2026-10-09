@@ -74,7 +74,7 @@ Jib과 ``native-maven-plugin``에 따로 설정해도 동작은 하지만, 두 �
 [#json]
 == 생성되는 JSON 코덱
 
-부모 POM은 모든 자식의 컴파일러 프로세서 경로에 ``spider-silk-json-processor``를 올리며, 이는 ``spiderSilk { json() }``의 대응물이다.
+부모 POM은 모든 자식의 컴파일러 프로세서 경로에 ``silk-json-processor``를 올리며, 이는 ``spiderSilk { json() }``의 대응물이다.
 컴파일러 플러그인은 모든 빌드에서 실행되므로 선언이 필요 없고, ``@JsonBound``가 붙은 타입이 없는 자식에서는 아무 비용도 들지 않는다.
 ``jakarta.json.bind`` 애너테이션을 쓰는 자식은 API를 ``provided`` 스코프로 직접 더하는데, 애너테이션은 컴파일 시점에 읽히고 다시는 필요 없기 때문이다:
 
@@ -105,6 +105,6 @@ xref:native-image.adoc#container[네이티브 이미지 장]이 그 전환을 �
 
 == 부모 POM이 고정하는 것
 
-부모 POM의 버전은 부모 POM이 관리하는 도구의 버전을 고정한다: jte {jte-version}, Jib {jib-maven-version}(Maven 플러그인은 업스트림에서 Gradle 플러그인의 {jib-version}보다 뒤처진다), GraalVM 빌드 도구 {graalvm-buildtools-version}, 그리고 부모 POM 자신의 버전인 ``spider-silk-json-processor``다.
+부모 POM의 버전은 부모 POM이 관리하는 도구의 버전을 고정한다: jte {jte-version}, Jib {jib-maven-version}(Maven 플러그인은 업스트림에서 Gradle 플러그인의 {jib-version}보다 뒤처진다), GraalVM 빌드 도구 {graalvm-buildtools-version}, 그리고 부모 POM 자신의 버전인 ``silk-json-processor``다.
 이 도구들의 버전 올림은 부모 POM 릴리스로 이루어진다.
 Gradle 쪽과 마찬가지로 여기서 순수한 Maven을 넘어서는 것은 없다: 모든 컨벤션은 부모 POM 자체에서 읽을 수 있으며, 블록을 직접 소유하려는 빌드는 그 블록을 복사해 가고 상속을 끊는다.
