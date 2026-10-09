@@ -8,6 +8,7 @@ dependencies {
     implementation 'net.benelog.spidersilk:spider-silk-core'
     implementation 'net.benelog.spidersilk:spider-silk-tomcat'
     implementation 'net.benelog.spidersilk:spider-silk-thymeleaf'
+    annotationProcessor 'net.benelog.spidersilk:spider-silk-json-processor'
     jteGenerate 'gg.jte:jte-native-resources:3.2.4'
 }
 

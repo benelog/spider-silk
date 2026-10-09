@@ -1,0 +1,21 @@
+// The JSON microbenchmark: the serializer and the parser alone, with no HTTP
+// around them, against Jackson and fastjson2 on the same documents the HTTP
+// cases send. `../gradlew -p json-bench installDist`, then
+// `json-bench/build/install/json-bench/bin/json-bench`; the README has the
+// settings the appendix reports.
+plugins {
+    id 'java'
+}
+
+dependencies {
+    implementation 'net.benelog.spidersilk:spider-silk-core'
+    annotationProcessor 'net.benelog.spidersilk:spider-silk-json-processor'
+    implementation 'org.openjdk.jmh:jmh-core:1.37'
+    annotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
+    implementation 'tools.jackson.core:jackson-databind:3.1.5'
+    implementation 'com.alibaba.fastjson2:fastjson2:2.0.57'
+}
+
+application {
+    mainClass = 'org.openjdk.jmh.Main'
+}

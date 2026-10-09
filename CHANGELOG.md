@@ -37,6 +37,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   A component is required unless it is `@Nullable` or an `Optional`, and `-Aspidersilk.json.names=explicit` makes a property without a `@JsonbProperty` name a compile error.
 - `spider-silk-gradle-plugin`: `spiderSilk { json() }` puts the processor on the `annotationProcessor` path and `jakarta.json.bind-api` on the compile classpath.
 - `spider-silk-maven-parent`: the processor is on the compiler's processor path for every child.
+- `benchmark`: a `json-post` case, in which each request sends the 100 records of `json-list` as a body, and `json-bench`, a JMH microbenchmark of the serializer and the parser alone against Jackson and fastjson2.
 - `spider-silk-opentelemetry-agent`: an extension of the OpenTelemetry Java agent that reports the route a request matched as the server span's `http.route`.
   A span is named `GET /decks/{deckId}` where the agent named every request `GET /*`.
 - `spider-silk-test`: `TestClient.putJson(path, json)` and `patchJson(path, json)` send JSON as `postJson` does, and all three take a `String` or a `JsonValue`.

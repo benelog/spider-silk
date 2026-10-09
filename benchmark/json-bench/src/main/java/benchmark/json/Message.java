@@ -1,4 +1,4 @@
-package benchmark.spidersilk;
+package benchmark.json;
 
 import net.benelog.spidersilk.json.JsonBound;
 

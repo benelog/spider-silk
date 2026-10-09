@@ -101,6 +101,9 @@ The two Thymeleaf pages are the same template file and render to the same bytes.
 The jte page differs in its blank lines, and in leaving `"` and `'` unescaped in text, which HTML allows.
 Every value a handler answers with is built once at startup, so a request measures the framework, the serializer, and the renderer, and not the data.
 
+Since that run, the Spider Silk application answers `json` and `json-list` through the codecs generated from its records, and a `json-post` case sends the 100 records of `json-list` as the body of a `POST /items` on both frameworks, so that the parser is measured as the serializer is.
+Both wait for the next run of the whole benchmark, and <<json-microbenchmark>> measures the serializer and the parser on their own.
+
 === Method
 
 `benchmark/run.sh` drives the whole run.
@@ -242,6 +245,46 @@ The Spider Silk modules the application depends on were already compiled and are
 `native-image` used all eight CPUs, at a load of about 6.5, for both applications.
 The JVM applications' dependencies come to 9.5 MB for Spider Silk and 21 MB for Spring MVC.
 
+[#json-microbenchmark]
+=== The serializer and the parser alone
+
+`benchmark/json-bench` measures the JSON engine with no HTTP around it, on the documents the HTTP cases send: the 100 records of `json-list` and the 27-byte object of `json`.
+It ran on 2026-10-10 on the same machine, on AC power with the `performance` platform profile.
+It measured the working tree with the generated codecs applied, under JMH 1.37 with two forks of five warm-up and five measured iterations of a second each, pinned to CPUs 0 to 3, with `-Xms1g -Xmx1g`.
+Each cell is the average time per operation and the bytes allocated per operation, the latter from JMH's `gc` profiler.
+
+[cols="2,3,>1,>1",options="header"]
+|===
+| Operation | Through | Time | Allocation
+
+.5+| Write the 100 records (10,490 B)
+| the `Json.object()` tree, as `JsonWriter.tree` | 8.6 µs | 24.1 KB
+| a hand-written `JsonWriter` | 6.6 µs | 11.3 KB
+| the generated codec | 5.2 µs | 10.7 KB
+| Jackson 3.1 | 11.6 µs | 19.7 KB
+| fastjson2 2.0.57 | 4.4 µs | 10.7 KB
+
+.4+| Read the 100 records
+| a hand-written `JsonReader.object` | 14.4 µs | 37.8 KB
+| the generated codec | 6.0 µs | 17.6 KB
+| Jackson 3.1 | 24.2 µs | 52.8 KB
+| fastjson2 2.0.57 | 6.0 µs | 24.8 KB
+
+.3+| Write the 27-byte object
+| the generated codec | 25 ns | 224 B
+| Jackson 3.1 | 133 ns | 496 B
+| fastjson2 2.0.57 | 28 ns | 216 B
+|===
+
+The generated codec writes the list in 45% of Jackson's time and reads it in 25%, with between a third and a half of the allocation, and writes the small object in a fifth of Jackson's time.
+The hand-written writer lands between the tree and the codec: it finds each key among the keys the document has already written, where the codec copies the key from a constant.
+The codec reads the 10 KB document in the time fastjson2 takes, and writes the small object in 90% of it.
+fastjson2 stays ahead writing the 10 KB document, by 1.2 times.
+Most of that lead is in writing the strings.
+fastjson2 reads a `String`'s own bytes through `sun.misc.Unsafe`, which the JDK is retiring and core does not use.
+The codec copies a string's characters out with `getChars` and checks them one at a time.
+In the HTTP cases the serializer is a share of the request rather than the whole of it, so the next run is expected to move `json-list` by that share and `json` hardly at all, and `json-post` is where the parser's difference shows.
+
 [#reading]
 == Reading the results
 
@@ -253,9 +296,10 @@ Jetty adds another 16% to 19% on top.
 It is also the only server that kept four cores busy at these 64 connections, while both Tomcat targets stayed at about 300%.
 
 The `json-list` case narrows the gap to 2% to 5%, because a 10 KB document is the serializer's work rather than the framework's.
-`JsonWriter.list` builds the whole document as a tree in memory before writing any of it (xref:json.adoc#_where_this_stops_being_enough[JSON]), while Jackson writes each field straight to the response.
-Spider Silk then writes the tree once, as UTF-8 into a byte array, and that array is the body.
+At that commit, `JsonWriter.list` built the whole document as a tree in memory before writing any of it, while Jackson wrote each field straight to the response.
+Spider Silk then wrote the tree once, as UTF-8 into a byte array, and that array was the body.
 For a document of this size, the two approaches cost about the same on the JVM.
+The tree has since gone: a writer puts each member straight into the output, and <<json-microbenchmark>> measures what that changed.
 An application that sends large documents has two other paths: the streaming writer in xref:large-json.adoc[Large JSON and NDJSON], and a binding library such as Jackson through xref:json-interop.adoc[External JSON Binding].
 Neither was measured here.
 
@@ -300,6 +344,14 @@ GRAALVM_HOME=~/.sdkman/candidates/java/25.2.4-graalce benchmark/run.sh
 
 The run writes `benchmark/results/<timestamp>/` with the raw CSV files, the wrk output, each server's log, a sample response of every case, and the description of the machine.
 `benchmark/summarize.sh` reduces that directory to the tables above.
+The microbenchmark runs on its own, from the `benchmark/` directory:
+
+[source,bash]
+----
+../gradlew -p json-bench installDist
+taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench -jvmArgs "-Xms1g -Xmx1g" -prof gc
+----
+
 Without `GRAALVM_HOME`, the run measures the JVM targets only.
 The full run takes about 75 minutes on this machine.
 `ROUNDS=1 BUILD_ROUNDS=1 STARTS=3 WARMUP=5s DURATION=10s` gives a rough picture in about 15 minutes.

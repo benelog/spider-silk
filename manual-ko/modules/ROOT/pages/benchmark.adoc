@@ -101,6 +101,9 @@ Spider Silk의 네이티브 이미지는 Jetty용으로만 빌드했다.
 jte 페이지는 빈 줄, 그리고 텍스트 안의 ``"``와 ``'``를 이스케이프하지 않는다는 점이 다르며, 이는 HTML이 허용하는 형태다.
 핸들러가 응답하는 값은 모두 시작할 때 한 번 만들어 두므로, 요청은 데이터가 아니라 프레임워크, 직렬화기, 렌더러를 측정한다.
 
+그 실행 이후 Spider Silk 애플리케이션은 `json`과 ``json-list``를 레코드에서 생성한 코덱으로 응답하며, `json-post` 케이스는 두 프레임워크 모두에서 ``json-list``의 레코드 100개를 `POST /items`의 본문으로 보내어 직렬화기를 재듯 파서를 잰다.
+둘 다 벤치마크 전체의 다음 실행을 기다리며, <<json-microbenchmark>>는 직렬화기와 파서만을 따로 잰다.
+
 === 측정 방법
 
 ``benchmark/run.sh``가 전체 실행을 이끈다.
@@ -242,6 +245,46 @@ Spring Boot 자신의 로그는 JVM에서 ``Started SpringMvcBenchmark in 0.73 s
 ``native-image``는 두 애플리케이션 모두에서 CPU 여덟 개를 약 6.5의 부하로 썼다.
 JVM 애플리케이션의 의존성은 Spider Silk가 9.5 MB, Spring MVC가 21 MB다.
 
+[#json-microbenchmark]
+=== 직렬화기와 파서만 따로
+
+``benchmark/json-bench``는 HTTP 없이 JSON 엔진만을 HTTP 케이스가 보내는 문서로 잰다: ``json-list``의 레코드 100개와 ``json``의 27바이트 객체다.
+측정은 2026-10-10에 같은 머신에서, AC 전원과 `performance` 플랫폼 프로파일로 실행했다.
+생성 코덱을 적용한 작업 트리를 대상으로, JMH 1.37로 포크 둘, 포크마다 각 1초짜리 워밍업 다섯 번과 측정 다섯 번, CPU 0~3에 고정, ``-Xms1g -Xmx1g``로 쟀다.
+각 칸은 연산당 평균 시간과 연산당 할당 바이트이며, 후자는 JMH의 `gc` 프로파일러가 잰 값이다.
+
+[cols="2,3,>1,>1",options="header"]
+|===
+| 연산 | 경로 | 시간 | 할당
+
+.5+| 레코드 100개 쓰기 (10,490 B)
+| ``JsonWriter.tree``로 쓴 ``Json.object()`` 트리 | 8.6 µs | 24.1 KB
+| 손으로 작성한 `JsonWriter` | 6.6 µs | 11.3 KB
+| 생성된 코덱 | 5.2 µs | 10.7 KB
+| Jackson 3.1 | 11.6 µs | 19.7 KB
+| fastjson2 2.0.57 | 4.4 µs | 10.7 KB
+
+.4+| 레코드 100개 읽기
+| 손으로 작성한 `JsonReader.object` | 14.4 µs | 37.8 KB
+| 생성된 코덱 | 6.0 µs | 17.6 KB
+| Jackson 3.1 | 24.2 µs | 52.8 KB
+| fastjson2 2.0.57 | 6.0 µs | 24.8 KB
+
+.3+| 27바이트 객체 쓰기
+| 생성된 코덱 | 25 ns | 224 B
+| Jackson 3.1 | 133 ns | 496 B
+| fastjson2 2.0.57 | 28 ns | 216 B
+|===
+
+생성된 코덱은 목록을 Jackson 시간의 45%에 쓰고 25%에 읽으며, 할당은 3분의 1에서 절반 사이이고, 작은 객체는 Jackson 시간의 5분의 1에 쓴다.
+손으로 작성한 라이터는 트리와 코덱 사이에 놓이는데, 코덱이 상수에서 키를 복사하는 자리에서 라이터는 문서가 이미 쓴 키들 가운데서 키를 찾기 때문이다.
+코덱은 10 KB 문서를 fastjson2가 걸리는 시간에 읽고, 작은 객체는 그 90%의 시간에 쓴다.
+fastjson2는 10 KB 문서 쓰기에서 1.2배로 여전히 앞선다.
+그 우위의 대부분은 문자열을 쓰는 데서 나온다.
+fastjson2는 ``String``의 바이트를 ``sun.misc.Unsafe``로 직접 읽는데, JDK는 이를 거두어들이는 중이고 코어는 쓰지 않는다.
+코덱은 문자열의 문자를 ``getChars``로 복사해 내고 하나씩 검사한다.
+HTTP 케이스에서 직렬화기는 요청의 전부가 아니라 한 몫이므로, 다음 실행에서 ``json-list``는 그 몫만큼 움직이고 ``json``은 거의 움직이지 않을 것이며, 파서의 차이가 드러나는 곳은 ``json-post``다.
+
 [#reading]
 == 결과 해석
 
@@ -253,9 +296,10 @@ Jetty는 여기에 16%~19%를 더한다.
 또한 이 64개 연결에서 코어 네 개를 계속 바쁘게 쓴 서버는 Jetty뿐이며, 두 Tomcat 대상은 약 300%에 머물렀다.
 
 `json-list` 케이스에서는 격차가 2%~5%로 줄어드는데, 10 KB 문서는 프레임워크가 아니라 직렬화기의 일이기 때문이다.
-``JsonWriter.list``는 문서 전체를 메모리에 트리로 만든 뒤에야 쓰기 시작하며(xref:json.adoc#_where_this_stops_being_enough[JSON]), Jackson은 각 필드를 응답에 곧바로 쓴다.
-이어서 Spider Silk는 트리를 UTF-8로 바이트 배열에 한 번 쓰며, 그 배열이 곧 본문이다.
+그 커밋에서 ``JsonWriter.list``는 문서 전체를 메모리에 트리로 만든 뒤에야 쓰기 시작했고, Jackson은 각 필드를 응답에 곧바로 썼다.
+이어서 Spider Silk는 트리를 UTF-8로 바이트 배열에 한 번 썼으며, 그 배열이 곧 본문이었다.
 이 크기의 문서에서는 두 방식의 비용이 JVM 위에서 거의 같다.
+그 뒤 트리는 사라졌다: 라이터는 각 멤버를 출력에 곧바로 쓰며, 그것이 무엇을 바꿨는지는 <<json-microbenchmark>>가 잰다.
 큰 문서를 보내는 애플리케이션에는 다른 두 경로가 있다: xref:large-json.adoc[대용량 JSON과 NDJSON]의 스트리밍 라이터, 그리고 xref:json-interop.adoc[외부 JSON 바인딩]을 통한 Jackson 같은 바인딩 라이브러리다.
 둘 다 여기서는 측정하지 않았다.
 
@@ -300,6 +344,14 @@ GRAALVM_HOME=~/.sdkman/candidates/java/25.2.4-graalce benchmark/run.sh
 
 실행은 ``benchmark/results/<timestamp>/``에 원시 CSV 파일, wrk 출력, 각 서버의 로그, 케이스마다의 응답 표본, 머신 설명을 쓴다.
 ``benchmark/summarize.sh``는 그 디렉터리를 위의 표로 줄인다.
+마이크로벤치마크는 ``benchmark/`` 디렉터리에서 따로 실행한다:
+
+[source,bash]
+----
+../gradlew -p json-bench installDist
+taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench -jvmArgs "-Xms1g -Xmx1g" -prof gc
+----
+
 ``GRAALVM_HOME``이 없으면 JVM 대상만 측정한다.
 전체 실행은 이 머신에서 약 75분이 걸린다.
 ``ROUNDS=1 BUILD_ROUNDS=1 STARTS=3 WARMUP=5s DURATION=10s``로는 약 15분 만에 대략적인 그림을 얻는다.

@@ -8,3 +8,4 @@ includeBuild('..')
 
 include 'spider-silk-app'
 include 'spring-mvc-app'
+include 'json-bench'

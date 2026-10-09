@@ -7,7 +7,7 @@ import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.JteTemplates;
 import net.benelog.spidersilk.Model;
 import net.benelog.spidersilk.WebResponse;
-import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonCodec;
 import net.benelog.spidersilk.json.JsonWriter;
 import net.benelog.spidersilk.thymeleaf.ThymeleafTemplates;
 import net.benelog.spidersilk.tomcat.TomcatServer;
@@ -16,21 +16,22 @@ import net.benelog.spidersilk.tomcat.TomcatServer;
  * The Spider Silk side of the benchmark.
  *
  * <p>The first argument picks the server ({@code jetty} or {@code tomcat}) and
- * the second the template engine ({@code jte} or {@code thymeleaf}).
+ * the second the template engine ({@code jte} or {@code thymeleaf}). The JSON
+ * goes through the codecs generated from {@link Item} and {@link Message};
+ * {@code ITEM_WRITER} is the same mapping written by hand, kept for the
+ * {@code json-bench} microbenchmark's comparison.
  */
 public final class SpiderSilkBenchmark {
 
-    static final JsonWriter<Message> MESSAGE = message -> Json.object()
-            .put("message", message.message());
-
-    static final JsonWriter<Item> ITEM = item -> Json.object()
+    static final JsonWriter<Item> ITEM_WRITER = (item, out) -> out.object()
             .put("id", item.id())
             .put("name", item.name())
             .put("description", item.description())
             .put("quantity", item.quantity())
-            .put("available", item.available());
+            .put("available", item.available())
+            .end();
 
-    static final JsonWriter<List<Item>> ITEMS = JsonWriter.list(ITEM);
+    static final JsonCodec<List<Item>> ITEMS = JsonCodec.list(ItemJson.CODEC);
 
     private SpiderSilkBenchmark() {
     }
@@ -41,8 +42,9 @@ public final class SpiderSilkBenchmark {
 
         App app = new App();
         app.get("/text", req -> WebResponse.text("Hello, World!"));
-        app.get("/json", req -> WebResponse.json(new Message("Hello, World!"), MESSAGE));
+        app.get("/json", req -> WebResponse.json(new Message("Hello, World!"), MessageJson.CODEC));
         app.get("/items", req -> WebResponse.json(Data.ITEMS, ITEMS));
+        app.post("/items", req -> WebResponse.text(String.valueOf(req.bodyJson(ITEMS).size())));
         app.get("/fortunes", req -> WebResponse.template("fortunes", Model.of("fortunes", Data.FORTUNES)));
 
         if (templates.equals("thymeleaf")) {

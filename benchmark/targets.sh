@@ -15,8 +15,10 @@ SPRING_MVC_JVM="$JAVA $JVM_OPTS -cp spring-mvc-app/build/install/spring-mvc-app/
 SPIDER_SILK_NATIVE="spider-silk-app/build/native/nativeCompile/spider-silk-app $NATIVE_OPTS"
 SPRING_MVC_NATIVE="spring-mvc-app/build/native/nativeCompile/spring-mvc-app $NATIVE_OPTS"
 
-# target | case | command | path
-# Spider Silk's arguments pick the server and the template engine.
+# target | case | command | path | wrk script (report.lua when left out)
+# Spider Silk's arguments pick the server and the template engine. A case
+# under post-items.lua sends items.json as a POST body; run.sh fetches its
+# sample response with the same body.
 # startup.sh starts each target with the command of its text case.
 CASES="
 spider-silk-jetty|text|$SPIDER_SILK_JVM jetty jte|/text
@@ -34,6 +36,11 @@ spider-silk-tomcat|json-list|$SPIDER_SILK_JVM tomcat jte|/items
 spring-mvc|json-list|$SPRING_MVC_JVM|/items
 spider-silk-jetty-native|json-list|$SPIDER_SILK_NATIVE jetty jte|/items
 spring-mvc-native|json-list|$SPRING_MVC_NATIVE|/items
+spider-silk-jetty|json-post|$SPIDER_SILK_JVM jetty jte|/items|post-items.lua
+spider-silk-tomcat|json-post|$SPIDER_SILK_JVM tomcat jte|/items|post-items.lua
+spring-mvc|json-post|$SPRING_MVC_JVM|/items|post-items.lua
+spider-silk-jetty-native|json-post|$SPIDER_SILK_NATIVE jetty jte|/items|post-items.lua
+spring-mvc-native|json-post|$SPRING_MVC_NATIVE|/items|post-items.lua
 spider-silk-jetty|template-jte|$SPIDER_SILK_JVM jetty jte|/fortunes
 spider-silk-tomcat|template-jte|$SPIDER_SILK_JVM tomcat jte|/fortunes
 spider-silk-jetty-native|template-jte|$SPIDER_SILK_NATIVE jetty jte|/fortunes

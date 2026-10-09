@@ -64,20 +64,25 @@ cpu_ticks() {
 trap stop_server EXIT
 
 for round in $(seq "$ROUNDS"); do
-    while IFS='|' read -r target case command path; do
+    while IFS='|' read -r target case command path script; do
         [ -z "$target" ] && continue
         [[ "$target|$case" =~ $ONLY ]] || continue
         included "$target" || continue
         url="http://127.0.0.1:$PORT$path"
+        script=${script:-report.lua}
         echo "round $round: $target $case"
 
         start_server "$command" "$OUT/logs/$round-$target-$case.log"
-        curl -s -D - "$url" > "$OUT/responses/$target-$case.txt"
+        if [ "$script" = report.lua ]; then
+            curl -s -D - "$url" > "$OUT/responses/$target-$case.txt"
+        else
+            curl -s -D - -H 'Content-Type: application/json' --data-binary @items.json "$url" > "$OUT/responses/$target-$case.txt"
+        fi
 
-        taskset -c "$CLIENT_CPUS" "$WRK" -t"$THREADS" -c"$CONNECTIONS" -d"$WARMUP" "$url" > /dev/null
+        taskset -c "$CLIENT_CPUS" "$WRK" -t"$THREADS" -c"$CONNECTIONS" -d"$WARMUP" -s "$script" "$url" > /dev/null
         ticks=$(cpu_ticks "$PID")
         seconds_start=$(date +%s%N)
-        result=$(taskset -c "$CLIENT_CPUS" "$WRK" -t"$THREADS" -c"$CONNECTIONS" -d"$DURATION" -s report.lua "$url" \
+        result=$(taskset -c "$CLIENT_CPUS" "$WRK" -t"$THREADS" -c"$CONNECTIONS" -d"$DURATION" -s "$script" "$url" \
             | tee "$OUT/logs/$round-$target-$case.wrk" | awk '/^RESULT/ { $1 = ""; print }')
         # 400 means four cores busy for the whole measurement.
         server_cpu=$(awk -v t="$(( $(cpu_ticks "$PID") - ticks ))" -v hz="$(getconf CLK_TCK)" \
