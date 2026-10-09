@@ -612,4 +612,96 @@ class JsonTest {
         assertThat(Json.parse("1e-400").asDouble()).isEqualTo(0.0);
         assertThat(Json.parse("1e308").asDouble()).isEqualTo(1e308);
     }
+
+    /**
+     * A key a document has written once is copied as the bytes it was
+     * written as. The copy has to be the same bytes whatever the key needed:
+     * an escape, a character outside ASCII, or nothing.
+     */
+    @Test
+    void aKeyRepeatedAcrossObjectsIsWrittenTheSameEachTime() {
+        JsonArray array = Json.array();
+        for (int i = 0; i < 3; i++) {
+            array.add(Json.object().put("plain", i).put("이름", "값").put("say \"hi\"\n", true));
+        }
+
+        String one = "{\"plain\":%d,\"이름\":\"값\",\"say \\\"hi\\\"\\n\":true}";
+        assertThat(array.toJson()).isEqualTo("[" + one.formatted(0) + "," + one.formatted(1) + "," + one.formatted(2) + "]");
+        assertThat(new String(array.toJsonBytes(), java.nio.charset.StandardCharsets.UTF_8)).isEqualTo(array.toJson());
+    }
+
+    /** A key built at run time is an equal string but not the same one, and is written by its value. */
+    @Test
+    void equalKeysThatAreDifferentStringsAreWrittenAlike() {
+        JsonArray array = Json.array()
+                .add(Json.object().put("key", 1))
+                .add(Json.object().put(new String("key"), 2))
+                .add(Json.object().put("ke" + "y".repeat(Integer.parseInt("1")), 3));
+
+        assertThat(array.toJson()).isEqualTo("[{\"key\":1},{\"key\":2},{\"key\":3}]");
+    }
+
+    @Test
+    void wholeNumbersAreWrittenAsLongWritesThem() {
+        JsonArray array = Json.array();
+        long[] numbers = {0, 7, -7, 9, 10, 99, 100, -100, Integer.MAX_VALUE, Integer.MIN_VALUE,
+                999_999_999_999_999_999L, 1_000_000_000_000_000_000L, Long.MAX_VALUE, Long.MIN_VALUE};
+        StringBuilder expected = new StringBuilder("[");
+        for (long n : numbers) {
+            array.add(n);
+            expected.append(expected.length() > 1 ? "," : "").append(n);
+        }
+
+        assertThat(array.toJson()).isEqualTo(expected.append(']').toString());
+    }
+
+    /** Past 16 members an object looks keys up through an index, which must agree with the order kept. */
+    @Test
+    void aLargeObjectKeepsItsOrderAndReplacesInPlace() {
+        JsonObject object = Json.object();
+        for (int i = 0; i < 40; i++) {
+            object.put("k" + i, i);
+        }
+        object.put("k3", "three").put("k30", "thirty").put("k40", 40);
+
+        assertThat(object.size()).isEqualTo(41);
+        assertThat(object.keys().get(3)).isEqualTo("k3");
+        assertThat(object.getString("k3")).isEqualTo("three");
+        assertThat(object.getString("k30")).isEqualTo("thirty");
+        assertThat(object.getLong("k39")).isEqualTo(39);
+        assertThat(object.has("k41")).isFalse();
+        assertThat(Json.parse(object.toJson()).asObject().keys()).isEqualTo(object.keys());
+    }
+
+    /** A string or a number put by a builder reads back as a JsonValue like any other. */
+    @Test
+    void aBuiltValueReadsBackAsAJsonValue() {
+        JsonObject object = Json.object().put("s", "text").put("n", 3).put("d", 1.5).put("b", false).putNull("z");
+        JsonArray array = Json.array().add("text").add(3).add(1.5);
+
+        assertThat(object.get("s").isString()).isTrue();
+        assertThat(object.get("n").asLong()).isEqualTo(3);
+        assertThat(object.get("d").asDouble()).isEqualTo(1.5);
+        assertThat(object.get("z").isNull()).isTrue();
+        assertThat(object.iterator().next().getValue().asString()).isEqualTo("text");
+        assertThat(array.get(1).asLong()).isEqualTo(3);
+        assertThat(array.values()).extracting(JsonValue::toJson).containsExactly("\"text\"", "3", "1.5");
+        assertThat(array.iterator().next().asString()).isEqualTo("text");
+        assertThatThrownBy(() -> object.get("n").asString()).isInstanceOf(JsonException.class);
+    }
+
+    /**
+     * A thread keeps the buffer of its last document, up to a size: a large
+     * document is written into one of its own, and the next small one into
+     * the kept buffer, from its start.
+     */
+    @Test
+    void aSmallDocumentAfterALargeOneHoldsOnlyItself() {
+        String large = "x".repeat(200_000);
+
+        assertThat(Json.array().add("first").toJson()).isEqualTo("[\"first\"]");
+        assertThat(Json.array().add(large).toJson()).isEqualTo("[\"" + large + "\"]");
+        assertThat(Json.array().add("after").toJson()).isEqualTo("[\"after\"]");
+        assertThat(Json.array().add(large).add(large).toJsonBytes()).hasSize(400_007);
+    }
 }

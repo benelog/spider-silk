@@ -1,5 +1,7 @@
 package net.benelog.spidersilk.json;
 
+import java.nio.charset.StandardCharsets;
+
 /**
  * A parsed or built JSON value: an object, an array, or a primitive.
  *
@@ -9,12 +11,22 @@ package net.benelog.spidersilk.json;
  */
 public sealed interface JsonValue permits JsonObject, JsonArray, JsonPrimitive {
 
-    void write(StringBuilder sb);
+    /** Appends the value's JSON text. */
+    default void write(StringBuilder sb) {
+        sb.append(toJson());
+    }
 
     default String toJson() {
-        StringBuilder sb = new StringBuilder();
-        write(sb);
-        return sb.toString();
+        return new String(toJsonBytes(), StandardCharsets.UTF_8);
+    }
+
+    /**
+     * The value's JSON text, encoded as UTF-8: what a response body carries.
+     * It is written as bytes in the first place, so asking for them costs no
+     * string and no second pass to encode one.
+     */
+    default byte[] toJsonBytes() {
+        return JsonOutput.utf8(this);
     }
 
     default JsonObject asObject() {

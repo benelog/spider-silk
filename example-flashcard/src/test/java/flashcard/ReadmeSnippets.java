@@ -1,5 +1,6 @@
 package flashcard;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -325,6 +326,7 @@ class ReadmeSnippets {
 
         assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
         assertThat(response.header("Location")).isEqualTo("/api/decks/1");
-        assertThat(((WebResponse.Text) response.body()).content()).isEqualTo("{\"id\":1}");
+        assertThat(new String(((WebResponse.Bytes) response.body()).data(), StandardCharsets.UTF_8))
+                .isEqualTo("{\"id\":1}");
     }
 }

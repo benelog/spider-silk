@@ -1,10 +1,12 @@
 package net.benelog.spidersilk.json;
 
-import java.util.Collections;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
 
 import org.jspecify.annotations.Nullable;
 
@@ -18,28 +20,96 @@ import org.jspecify.annotations.Nullable;
  */
 public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, JsonValue>> {
 
-    private final Map<String, JsonValue> members = new LinkedHashMap<>();
+    /**
+     * How many members an object holds before a lookup goes through an index
+     * rather than a scan of its keys. Most objects are records of a handful of
+     * fields, and for those two arrays are a third of what a map costs to
+     * build, and a scan finds a key as fast as a hash does.
+     */
+    private static final int INDEXED_FROM = 16;
+
+    /*
+     * The members in the order they were put, read directly by JsonOutput. A
+     * string or a number put by a builder is held as it is, a String, a Long,
+     * or a Double, and wrapped as a JsonPrimitive only when it is read: most
+     * built objects are written and never read, and an object of five fields
+     * then costs three allocations instead of seven. Everything else is a
+     * JsonValue.
+     */
+    String[] keys = new String[8];
+    Object[] values = new Object[8];
+    int size;
+
+    /** Each key's position, once the object has grown past {@link #INDEXED_FROM} members. */
+    private @Nullable Map<String, Integer> index;
+
+    public JsonObject() {
+    }
 
     public JsonObject put(String key, @Nullable String value) {
-        return put(key, value == null ? JsonPrimitive.NULL : new JsonPrimitive(value));
+        return member(key, value == null ? JsonPrimitive.NULL : value);
     }
 
     public JsonObject put(String key, long value) {
-        return put(key, new JsonPrimitive(value));
+        return member(key, value);
     }
 
     /** Throws {@link JsonException} for NaN and for an infinity, which JSON has no syntax for. */
     public JsonObject put(String key, double value) {
-        return put(key, new JsonPrimitive(Json.finite(value)));
+        return member(key, Json.finite(value));
     }
 
     public JsonObject put(String key, boolean value) {
-        return put(key, value ? JsonPrimitive.TRUE : JsonPrimitive.FALSE);
+        return member(key, value ? JsonPrimitive.TRUE : JsonPrimitive.FALSE);
     }
 
+    /** Replaces the value of a key that is already there, which keeps its place in the order. */
     public JsonObject put(String key, @Nullable JsonValue value) {
-        members.put(key, value == null ? JsonPrimitive.NULL : value);
+        return member(key, value == null ? JsonPrimitive.NULL : value);
+    }
+
+    /** Puts a JsonValue, or a String, a Long, or a Double held as it is. */
+    private JsonObject member(String key, Object member) {
+        Objects.requireNonNull(key, "key");
+        int at = indexOf(key);
+        if (at >= 0) {
+            values[at] = member;
+            return this;
+        }
+        if (size == keys.length) {
+            keys = Arrays.copyOf(keys, size * 2);
+            values = Arrays.copyOf(values, size * 2);
+        }
+        keys[size] = key;
+        values[size] = member;
+        if (index != null) {
+            index.put(key, size);
+        } else if (size + 1 == INDEXED_FROM) {
+            index = new HashMap<>();
+            for (int i = 0; i <= size; i++) {
+                index.put(keys[i], i);
+            }
+        }
+        size++;
         return this;
+    }
+
+    private int indexOf(String key) {
+        if (index != null) {
+            Integer at = index.get(key);
+            return at == null ? -1 : at;
+        }
+        for (int i = 0; i < size; i++) {
+            if (keys[i].equals(key)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private @Nullable JsonValue member(String key) {
+        int at = indexOf(key);
+        return at < 0 ? null : JsonPrimitive.wrap(values[at]);
     }
 
     public JsonObject putNull(String key) {
@@ -47,22 +117,22 @@ public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, J
     }
 
     public boolean has(String key) {
-        return members.containsKey(key);
+        return indexOf(key) >= 0;
     }
 
     /** How many members the object has. */
     public int size() {
-        return members.size();
+        return size;
     }
 
     /** The keys, in document order, as a list that cannot be modified. */
     public List<String> keys() {
-        return List.copyOf(members.keySet());
+        return List.of(Arrays.copyOf(keys, size));
     }
 
     /** Throws {@link JsonException} when the key is missing. */
     public JsonValue get(String key) {
-        JsonValue value = members.get(key);
+        JsonValue value = member(key);
         if (value == null) {
             throw new JsonException("Missing key in JSON object: " + key);
         }
@@ -99,25 +169,25 @@ public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, J
      * The same shape as {@code req.param(name, defaultValue)}.
      */
     public String getString(String key, String defaultValue) {
-        JsonValue value = members.get(key);
+        JsonValue value = member(key);
         return (value == null || value.isNull()) ? defaultValue : value.asString();
     }
 
     /** An optional number: the default when the key is missing or the value is JSON null. */
     public long getLong(String key, long defaultValue) {
-        JsonValue value = members.get(key);
+        JsonValue value = member(key);
         return (value == null || value.isNull()) ? defaultValue : value.asLong();
     }
 
     /** An optional number: the default when the key is missing or the value is JSON null. */
     public double getDouble(String key, double defaultValue) {
-        JsonValue value = members.get(key);
+        JsonValue value = member(key);
         return (value == null || value.isNull()) ? defaultValue : value.asDouble();
     }
 
     /** An optional boolean: the default when the key is missing or the value is JSON null. */
     public boolean getBoolean(String key, boolean defaultValue) {
-        JsonValue value = members.get(key);
+        JsonValue value = member(key);
         return (value == null || value.isNull()) ? defaultValue : value.asBoolean();
     }
 
@@ -127,7 +197,7 @@ public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, J
      * The same shape as {@code req.paramOrNull(name)}.
      */
     public @Nullable JsonObject getObjectOrNull(String key) {
-        JsonValue value = members.get(key);
+        JsonValue value = member(key);
         return (value == null || value.isNull()) ? null : value.asObject();
     }
 
@@ -136,29 +206,30 @@ public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, J
      * null, and a {@link JsonException} when it is present and not an array.
      */
     public @Nullable JsonArray getArrayOrNull(String key) {
-        JsonValue value = members.get(key);
+        JsonValue value = member(key);
         return (value == null || value.isNull()) ? null : value.asArray();
     }
 
     /** Members in document order, read-only: setValue throws rather than reaching the object. */
     @Override
     public Iterator<Map.Entry<String, JsonValue>> iterator() {
-        return Collections.unmodifiableMap(members).entrySet().iterator();
-    }
+        return new Iterator<>() {
+            private int next;
 
-    @Override
-    public void write(StringBuilder sb) {
-        sb.append('{');
-        boolean first = true;
-        for (var entry : members.entrySet()) {
-            if (!first) {
-                sb.append(',');
+            @Override
+            public boolean hasNext() {
+                return next < size;
             }
-            first = false;
-            Json.writeString(sb, entry.getKey());
-            sb.append(':');
-            entry.getValue().write(sb);
-        }
-        sb.append('}');
+
+            @Override
+            public Map.Entry<String, JsonValue> next() {
+                if (next >= size) {
+                    throw new NoSuchElementException();
+                }
+                Map.Entry<String, JsonValue> entry = Map.entry(keys[next], JsonPrimitive.wrap(values[next]));
+                next++;
+                return entry;
+            }
+        };
     }
 }

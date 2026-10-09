@@ -88,6 +88,7 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 72 | jte is the default engine, with its costs against the other engines that compile | ✅ shipped |
 | 73 | A template takes an immutable `Model`, and a `Map` comes out only at the engine's edge | ✅ shipped |
 | 74 | `spider-silk-opentelemetry-agent`: the matched route as the span's `http.route` | ✅ shipped |
+| 75 | `WebResponse.json` answers with `Bytes`, written as UTF-8 straight from the tree | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
 The exception, 15b, is a decision rather than a gap.
@@ -604,7 +605,7 @@ Binary-compatibility tooling needs a released baseline, so it belongs to the rel
 ### 33. Streamed JSON and NDJSON, on the `Stream` body already there
 
 `jsonArray(sink -> ...)` and `ndjson(sink -> ...)` write elements as they are produced, and `req.bodyNdjson(reader)` reads them the same way.
-`WebResponse.json(list, JsonWriter.list(w))` holds a large answer in memory twice, as a tree and as a string, which suits an answer that fits but not an export.
+`WebResponse.json(list, JsonWriter.list(w))` holds a large answer in memory twice, as a tree and as its bytes, which suits an answer that fits but not an export.
 
 - **No new `Body` kind.**
   Both are a `WebResponse.stream(...)` body from two static factories that supply the framing.
@@ -1456,6 +1457,32 @@ The instrumentation came over from Spider Sense, so the core method it advises a
 Rejected: an instrumentation in the agent's own repository, whose release cadence the framework would not control.
 Rejected: a `beforeRoute` filter that sets the route through the OpenTelemetry API, which every application would have to register against an attribute the agent owns.
 Rejected: making `withRoute` public, which would freeze an internal seam for one consumer.
+
+## 75 · A JSON body is the bytes it was written as
+
+### 75. `WebResponse.json` answers with `Bytes`, written as UTF-8 straight from the tree
+
+The tree is written once, as UTF-8 into a byte array, and that array is the body.
+The benchmark's list of 100 records answered 0.6 times what Spring MVC with Jackson did, and now answers 1.05 times as much on Jetty and 1.02 times on Tomcat.
+
+- **The string went.**
+  - The tree became a `StringBuilder` filled a character at a time, then a `String`, then the servlet encoded it again.
+  - A body of 10 KB cost 114 KB of allocation and 24 µs, against Jackson's 440 B and 9 µs.
+  - `rawJson(String)` keeps `Text`, since its text is the caller's.
+  - A test that cast a JSON body to `Text` casts it to `Bytes` and reads it as UTF-8, a break taken on purpose.
+- **A built object holds a string or a number as it is.**
+  - `JsonObject` is two arrays instead of a `LinkedHashMap`, and grows an index past 16 members.
+  - `put(key, "x")` stores the `String`, and a read wraps it in a `JsonPrimitive`, so a record of five fields costs three allocations instead of about a dozen.
+- **The writer is package-private `JsonOutput`, with no `String.charAt` in its loops.**
+  - `charAt` has one profile for the process, and once a string outside Latin-1 passes through it, every loop calling it compiles slower.
+  - A string is copied once with `getChars` and checked in that array.
+  - A key repeated across the objects of one document is encoded once and copied after that.
+- **A platform thread keeps its buffer, up to 64 KB, as a plain `byte[]` in a `ThreadLocal`.**
+  - The next document neither grows nor zeroes it, and a container that undeploys the application holds none of its classes.
+  - A virtual thread keeps nothing, since it lives for one task.
+
+Rejected: writing straight to the servlet's stream, which needs a new `Body` kind and leaves a test nothing to assert on.
+Rejected: keeping `Text` and building the string from bytes, which keeps one of the two copies and the second encoding pass.
 
 ## Rejected — decisions, with the reason
 

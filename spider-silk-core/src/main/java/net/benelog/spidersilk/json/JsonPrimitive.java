@@ -19,12 +19,12 @@ public final class JsonPrimitive implements JsonValue {
         return value;
     }
 
-    @Override
-    public void write(StringBuilder sb) {
-        if (value instanceof String s) {
-            Json.writeString(sb, s);
-        } else {
-            sb.append(value); // null, true/false, numbers
-        }
+    /**
+     * A member or an element as a JsonValue: itself when it is one, and a
+     * primitive around it when it is a String, a Long, or a Double that a
+     * builder put in as it is.
+     */
+    static JsonValue wrap(Object held) {
+        return held instanceof JsonValue value ? value : new JsonPrimitive(held);
     }
 }

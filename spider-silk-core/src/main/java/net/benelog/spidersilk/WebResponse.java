@@ -1,11 +1,9 @@
 package net.benelog.spidersilk;
 
-import java.io.BufferedWriter;
+import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.io.UncheckedIOException;
-import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -192,9 +190,14 @@ public final class WebResponse {
         return of(new Text(json)).contentType("application/json");
     }
 
-    /** A JSON document built as a tree. */
+    /**
+     * A JSON document built as a tree. The body is {@link Bytes}, the UTF-8
+     * the tree is written as: a document goes to the client as it was
+     * written, with no string between the tree and the socket. A test reads it
+     * back with {@code new String(((WebResponse.Bytes) response.body()).data(), UTF_8)}.
+     */
     public static WebResponse json(JsonValue value) {
-        return rawJson(value.toJson());
+        return of(new Bytes(value.toJsonBytes())).contentType("application/json");
     }
 
     /** A value written as JSON through a hand-written writer. */
@@ -216,7 +219,7 @@ public final class WebResponse {
      * }</pre>
      *
      * <p>What this buys is memory: {@code json(list, JsonWriter.list(w))} builds
-     * every element as a tree and then one string holding all of them, so a
+     * every element as a tree and then one byte array holding all of them, so a
      * large answer is held twice before a byte of it is sent. Here the largest
      * thing alive is one element.
      *
@@ -229,11 +232,11 @@ public final class WebResponse {
     public static WebResponse jsonArray(JsonStreamWriter writer) {
         Objects.requireNonNull(writer, "writer");
         return stream("application/json", out -> {
-            Writer text = textWriter(out);
-            ArraySink sink = new ArraySink(text);
+            OutputStream buffered = buffered(out);
+            ArraySink sink = new ArraySink(buffered);
             writer.write(sink);
             sink.close();
-            text.flush();
+            buffered.flush();
         });
     }
 
@@ -264,9 +267,9 @@ public final class WebResponse {
     public static WebResponse ndjson(JsonStreamWriter writer) {
         Objects.requireNonNull(writer, "writer");
         return stream("application/x-ndjson", out -> {
-            Writer text = textWriter(out);
-            writer.write(new LinesSink(text));
-            text.flush();
+            OutputStream buffered = buffered(out);
+            writer.write(new LinesSink(buffered));
+            buffered.flush();
         });
     }
 
@@ -845,21 +848,21 @@ public final class WebResponse {
     }
 
     /**
-     * The response body is bytes and JSON is text, and the elements arrive one
-     * at a time — so the encoder is buffered rather than encoding each element
-     * on its own.
+     * Each element arrives as its UTF-8 bytes, already encoded, and most are
+     * small, so they are gathered into one buffer rather than handed to the
+     * container one element at a time.
      */
-    private static Writer textWriter(OutputStream out) {
-        return new BufferedWriter(new OutputStreamWriter(out, StandardCharsets.UTF_8), 8192);
+    private static OutputStream buffered(OutputStream out) {
+        return new BufferedOutputStream(out, 8192);
     }
 
     /** Framing for {@link #jsonArray}: the brackets, and a comma between elements. */
     private static final class ArraySink implements JsonSink {
 
-        private final Writer out;
+        private final OutputStream out;
         private boolean started;
 
-        ArraySink(Writer out) {
+        ArraySink(OutputStream out) {
             this.out = out;
         }
 
@@ -868,7 +871,7 @@ public final class WebResponse {
             try {
                 out.write(started ? ',' : '[');
                 started = true;
-                out.write(value.toJson());
+                out.write(value.toJsonBytes());
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
             }
@@ -876,23 +879,26 @@ public final class WebResponse {
 
         /** An array nothing was written to is still an array: {@code []}. */
         void close() throws IOException {
-            out.write(started ? "]" : "[]");
+            if (!started) {
+                out.write('[');
+            }
+            out.write(']');
         }
     }
 
     /** Framing for {@link #ndjson}: a newline after every value, including the last. */
     private static final class LinesSink implements JsonSink {
 
-        private final Writer out;
+        private final OutputStream out;
 
-        LinesSink(Writer out) {
+        LinesSink(OutputStream out) {
             this.out = out;
         }
 
         @Override
         public void write(JsonValue value) {
             try {
-                out.write(value.toJson());
+                out.write(value.toJsonBytes());
                 out.write('\n');
             } catch (IOException e) {
                 throw new UncheckedIOException(e);

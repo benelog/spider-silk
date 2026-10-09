@@ -1,5 +1,6 @@
 package net.benelog.spidersilk;
 
+import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -8,6 +9,7 @@ import jakarta.servlet.http.Cookie;
 
 import org.junit.jupiter.api.Test;
 
+import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.test.WebTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -295,6 +297,18 @@ class WebResponseTest {
         assertThat(template.name()).isEqualTo("decks");
         assertThat(template.model()).isEqualTo(Model.of("title", "Decks", "message", null));
         assertThat(response.header("Content-Type")).isEqualTo("text/html; charset=UTF-8");
+    }
+
+    /** A JSON document goes out as the UTF-8 it was written as, and raw JSON as the text it was given. */
+    @Test
+    void aJsonBodyIsItsUtf8Bytes() {
+        WebResponse built = WebResponse.json(Json.object().put("name", "스페인어"));
+        WebResponse raw = WebResponse.rawJson("{\"name\":\"스페인어\"}");
+
+        assertThat(built.header("Content-Type")).isEqualTo("application/json");
+        assertThat(((WebResponse.Bytes) built.body()).data())
+                .isEqualTo("{\"name\":\"스페인어\"}".getBytes(StandardCharsets.UTF_8));
+        assertThat(((WebResponse.Text) raw.body()).content()).isEqualTo("{\"name\":\"스페인어\"}");
     }
 
     /** A null body is refused where it is passed, not while it is written. */

@@ -24,7 +24,7 @@ public interface JsonWriter<T> {
     /** A writer for a list, built from the writer for one element. */
     static <T> JsonWriter<List<T>> list(JsonWriter<T> element) {
         return values -> {
-            JsonArray array = Json.array();
+            JsonArray array = new JsonArray(values.size());
             for (T value : values) {
                 array.add(element.write(value));
             }
