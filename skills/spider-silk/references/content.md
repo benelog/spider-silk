@@ -4,15 +4,18 @@ Contents: [JSON](#json) · [Large answers and NDJSON](#answers-too-large-to-hold
 
 ## JSON
 
-No reflection, so no automatic serialization: the wire format is code you write with `net.benelog.spidersilk.json.Json`.
-Build trees inline, or name the mapping as a `JsonWriter<T>` / `JsonReader<T>` lambda so it is reused:
+No reflection, so no automatic serialization: the wire format is code you write, or code the build generates from the type (below).
+Build trees inline with `Json.object()`, or name the mapping as a `JsonWriter<T>` / `JsonReader<T>` lambda so it is reused.
+A writer writes straight into the `JsonOutput` it is handed, with no tree in between:
 
 ```java
 import net.benelog.spidersilk.json.*;
 
-static final JsonWriter<Deck> DECK = deck -> Json.object()
+static final JsonWriter<Deck> DECK = (deck, out) -> out.object()
         .put("id", deck.id())
-        .put("name", deck.name());
+        .put("name", deck.name())
+        .array("tags").values(deck.tags()).end()
+        .end();
 static final JsonWriter<List<Deck>> DECKS = JsonWriter.list(DECK);
 
 record NewDeck(String name) { }
@@ -26,7 +29,9 @@ app.post("/api/decks", req -> {
 });
 ```
 
-- A reader of an object is `JsonReader.object(object -> ...)`: it takes the object once, so each field reads straight off it (`object.getString("text")`, never `json.asObject()` per field), and a body that is not an object is a 400. `JsonReader.list(element)` reads an array.
+- A writer is `(value, out) -> ...`: `out.object()`/`out.array()` open, `put(key, v)` writes a member, `value(v)` an element, `end()` closes; `put`/`value` take a String, long, double, boolean, BigDecimal, JsonValue, or a value with its own writer (`put("deck", card.deck(), DECK)`). A writer that builds a tree is `JsonWriter.tree(v -> Json.object()...)`. Never `deck -> Json.object()...` as a `JsonWriter`: that no longer compiles.
+- A reader of an object is `JsonReader.object(object -> ...)`: it takes the object once, so each field reads straight off it (`object.getString("text")`, never `json.asObject()` per field), and a body that is not an object is a 400. `JsonReader.list(element)` reads an array, `JsonReader.tree(json -> ...)` any other shape. A raw lambda `json -> json.asObject()...` does not compile: a `JsonReader` reads a `JsonInput`.
+- `writer.toJson(value)` / `writer.toJsonBytes(value)` and `reader.fromJson(text)` run a mapping outside a request (tests, SSE events).
 - `getString`/`getLong`/... throw `JsonException` (an `IllegalArgumentException`) on a missing key or wrong type, and `req.bodyJson(reader)` turns that or a `DateTimeException` into a 400: a handler gets a whole value or none. `asLong`/`getLong` reject `1.5` rather than truncating it.
 - For keys allowed to be absent: `getString`/`getLong`/`getDouble`/`getBoolean` with a default as the last argument answer that default, for a missing key and an explicit JSON `null` alike. `getObjectOrNull`/`getArrayOrNull` answer `null` on the same terms, since a container has no literal default to name.
 - `isString()`/`isNumber()`/`isBoolean()`, beside `isNull()`, tell a primitive's type without a try/catch; `instanceof JsonObject` and `instanceof JsonArray` do it for the containers.
@@ -39,7 +44,29 @@ app.post("/api/decks", req -> {
   }
   ```
 - `JsonCodec<T>` is writer and reader at once for types that travel both ways: `JsonCodec.of(writer, reader)`, `JsonCodec.list(codec)`.
-- The conventional home for an app's wire format is one `Codecs` class of static writer/reader lambdas.
+- The conventional home for an app's wire format is one `Codecs` class of static writer/reader lambdas and generated codec constants.
+
+### Generated codecs
+
+`@JsonBound` on a record or class has `spider-silk-json-processor` generate `<Type>Json.CODEC`, a `JsonCodec<Type>`, at compile time: no reflection, no registry, nothing for a native image.
+The handler names it like any writer: `WebResponse.json(deck, DeckJson.CODEC)`, `req.bodyJson(DeckJson.CODEC)`.
+
+```java
+import jakarta.json.bind.annotation.JsonbProperty;
+import net.benelog.spidersilk.json.JsonBound;
+
+@JsonBound
+public record Deck(long id, @JsonbProperty("deck_name") String name, @Nullable String note) { }
+
+@JsonBound(DeckSummary.class) // a mixin: binds a type you do not own, generated beside the mixin as DeckSummaryJson
+interface DeckSummaryWire { @JsonbProperty("card_count") long cardCount(); }
+```
+
+- Setup: `spiderSilk { json() }` with the Gradle plugin, or `annotationProcessor 'net.benelog.spidersilk:spider-silk-json-processor:1.1.0'` plus `compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'`; the Maven parent adds the processor for every child, and the API goes in as `provided`. Nothing at run time.
+- Vocabulary: the standard `jakarta.json.bind.annotation` set — `@JsonbProperty`, `@JsonbTransient`, `@JsonbNillable`, `@JsonbPropertyOrder`, `@JsonbCreator`, `@JsonbDateFormat`, `@JsonbTypeAdapter`. `@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`/`Deserializer`, and `@JsonbTypeInfo` are compile errors.
+- Types: primitives and boxes, String, BigDecimal/BigInteger, UUID, URI, enums (by name), `java.time` (ISO text), Optional/OptionalInt/Long/Double, List/Set/Collection/Iterable, `Map<String, V>`, `JsonValue`, and other `@JsonBound` types, nested freely. Anything else: annotate it `@JsonBound` or adapt it with `@JsonbTypeAdapter`.
+- Reading is strict: a record component or creator parameter is required unless `@Nullable` or `Optional`; missing or `null` -> `JsonException` -> 400. Unknown members are skipped. Setter/field properties keep the class's default when absent. Null properties are omitted on output unless `@JsonbNillable`; order is declaration order unless `@JsonbPropertyOrder`.
+- `-Aspidersilk.json.names=explicit` (a javac arg) makes a property without `@JsonbProperty` a compile error, for a build that wants every wire name written down.
 
 ### Answers too large to hold
 
@@ -76,7 +103,7 @@ app.post("/api/decks/{deckId}/cards.ndjson", req -> {
   A line over 1MB answers 413 naming the line, refused as soon as it outgrows the limit; the number of lines is not limited. `app.bodyLimits(BodyLimits.defaults().maxNdjsonLineBytes(...))` changes it.
 - Prefer NDJSON over an array for bulk data: each line stands alone, so a consumer acts on record one without waiting for the last, and a cut-off transfer leaves whole records rather than an unclosed document.
   It is bulk transfer, not live events — [SSE](#server-sent-events) is the one that flushes per event and reconnects.
-- There is no streaming *parser*: `bodyJson()` builds the whole tree, because a tree is what a hand-written `JsonReader` reads, under the 1MB body limit (`app.bodyLimits(...)` raises it).
+- `bodyJson(reader)` holds the body as bytes under the 1MB body limit (`app.bodyLimits(...)` raises it); a generated codec or a reader written against `JsonInput` reads it one value at a time, `JsonReader.object` builds the tree of the object.
   For a single document too large to hold, the answer is NDJSON.
 
 ### Binding JSON with another library
@@ -93,8 +120,8 @@ NewDeck body = MAPPER.readValue(req.bodyStream(), NewDeck.class);
 NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
 ```
 
-- Never route a library's output through `JsonWriter<T>`: it returns a `JsonValue`, so the document would be re-parsed the moment the library finished writing it.
-- A body is read one way: as the text `body()` keeps (so `bodyJson()` and a second `body()` see the whole body, even after a filter read it), or unread through `bodyStream()`, `bodyReader()`, or `bodyNdjson()`.
+- Never route a library's output through `JsonWriter<T>`: it writes values, not text, so the document would be parsed only to be written again.
+- A body is read one way: as the bytes `body()` keeps (so `bodyJson()` and a second `body()` see the whole body, even after a filter read it), or unread through `bodyStream()`, `bodyReader()`, or `bodyNdjson()`.
   Mixing the two throws `IllegalStateException` whichever comes second, and the stream and the reader exclude each other too.
 - A form-encoded POST is spent by its first `param()` read, since the container parses the form by reading the body.
   `bodyStream()` afterwards answers an empty stream rather than throwing, and a body read as bytes first leaves `formParamOrNull()` with no fields.

@@ -19,10 +19,12 @@ Jetty는 엔드포인트의 콜백 각각에 대한 ``MethodHandle``을 잡아 �
 Jetty가 찾아보는 것은 그 하나의 클래스다.
 애플리케이션이 작성한 ``WebSocketHandler``는 인터페이스 호출로 불리며 결코 리플렉션 대상이 되지 않는다.
 
+xref:json-codegen.adoc[`spider-silk-json-processor`]가 생성하는 코덱은 이 규칙에서 core 쪽에 머문다.
+프로세서는 javac 안에서 실행되고, 써내는 코드는 타입 자신의 접근자와 생성자를 부르며, 런타임에 이름으로 찾는 것은 없는데, 이는 jte가 템플릿에서 택한 것과 같은 절충이다.
 애플리케이션이 추가하는 JSON 바인딩 라이브러리는 템플릿 모듈과 같은 조건에 놓인다: 가져오면 그 리플렉션도 함께 가져온 것이다.
 Jackson과 Gson은 필드를 리플렉션으로 읽고 쓰므로, 바인딩되는 모든 타입은 xref:native-image.adoc[네이티브 이미지] 설정에 항목이 필요하다.
-avaje-jsonb는 컴파일 시점에 타입별 어댑터를 생성하므로 항목이 필요 없으며, 이는 jte가 템플릿에서 택한 것과 같은 절충이다.
-어느 쪽이든 core는 관여하지 않는다: xref:json-interop.adoc[이음새(seam)]는 ``WebResponse.rawJson(String)``과 ``req.bodyStream()``이며, 손으로 쓴 라이터에 머무는 애플리케이션은 와이어 포맷을 리플렉션 없이 유지한다.
+avaje-jsonb는 컴파일 시점에 타입별 어댑터를 생성하므로 core 자신의 코덱처럼 항목이 필요 없다.
+라이브러리에는 어느 쪽이든 core가 관여하지 않는다: xref:json-interop.adoc[이음새(seam)]는 ``WebResponse.rawJson(String)``과 ``req.bodyStream()``이며, 손으로 쓴 라이터나 생성된 코덱에 머무는 애플리케이션은 와이어 포맷을 리플렉션 없이 유지한다.
 
 예제 프로젝트의 리포지토리는 spring-jdbc의 ``DataClassRowMapper``를 택하며, 이는 도메인 레코드를 리플렉션으로 생성한다.
 이는 프레임워크가 아니라 예제의 선택이며, 경계가 어디를 지나는지 보여주기 위해 의도적으로 유지한 것이다.

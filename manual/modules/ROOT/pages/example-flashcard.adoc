@@ -23,7 +23,7 @@ The wrapped block is exactly the transaction scope.
 
 JSON API::
 Beyond the features of ch07-jdbc-plus, a JSON API (`/api/decks`, `/api/decks/\{id}/cards`) sits on the same service layer to show the framework's REST support.
-Its wire format is in `flashcard.web.Codecs` as hand-written `JsonWriter`/`JsonReader` lambdas.
+Its wire format is in `flashcard.web.Codecs`, as hand-written `JsonWriter`/`JsonReader` lambdas and as two xref:json-codegen.adoc[generated codecs]: the `NewDeck` body record carries `@JsonBound`, and the domain record `DeckSummary` is bound through a mixin in the same class.
 
 Introspection::
 `/_routes` lists every route, and `/openapi.json` is the same list as an OpenAPI 3.1 document.

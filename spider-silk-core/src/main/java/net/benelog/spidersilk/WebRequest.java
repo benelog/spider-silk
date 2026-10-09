@@ -86,6 +86,9 @@ public final class WebRequest {
      */
     static final String BODY_ATTRIBUTE = "net.benelog.spidersilk.body";
 
+    /** The body's text, decoded once from the bytes {@link #BODY_ATTRIBUTE} holds. */
+    private static final String BODY_TEXT_ATTRIBUTE = "net.benelog.spidersilk.body.text";
+
     /** What {@link #BODY_ATTRIBUTE} holds when it holds no text. */
     private enum BodyMarker {
         /** The body went out through {@link #bodyStream()}. */
@@ -991,9 +994,18 @@ public final class WebRequest {
      * back, and is not tracked.
      */
     public String body() {
+        return bodyText(bodyBytes());
+    }
+
+    /**
+     * The body's bytes, read once up to the limit and kept for the rest of the
+     * request, on the terms of {@link #body()}. The text is decoded from them
+     * when it is asked for, and a JSON body is parsed from them as they are.
+     */
+    private byte[] bodyBytes() {
         Object read = req.getAttribute(BODY_ATTRIBUTE);
-        if (read instanceof String text) {
-            return text;
+        if (read instanceof byte[] bytes) {
+            return bytes;
         }
         if (read == BodyMarker.TOO_LARGE) {
             throw bodyTooLarge();
@@ -1002,30 +1014,55 @@ public final class WebRequest {
             throw bodyUnreadable("");
         }
         if (read != null) {
-            // Anything but the text is the marker handOver(...) left.
+            // Anything but the bytes is the marker handOver(...) left.
             throw new IllegalStateException("The body was already handed over unread, through"
                     + " bodyStream(), bodyReader(), or bodyNdjson(), so body() cannot read it as text");
         }
-        String text = readBody();
-        req.setAttribute(BODY_ATTRIBUTE, text);
+        byte[] bytes = readBody();
+        req.setAttribute(BODY_ATTRIBUTE, bytes);
+        return bytes;
+    }
+
+    /** The bytes decoded once, with the charset the request declared, and kept beside them. */
+    private String bodyText(byte[] bytes) {
+        Object kept = req.getAttribute(BODY_TEXT_ATTRIBUTE);
+        if (kept instanceof String text) {
+            return text;
+        }
+        String text = new String(bytes, bodyCharset());
+        req.setAttribute(BODY_TEXT_ATTRIBUTE, text);
         return text;
     }
 
     /**
-     * Reads the bytes up to the limit and decodes them once, with the charset
-     * the reader would have used. Counting bytes rather than characters is what
-     * bounds memory for every charset alike, and is what Content-Length counts.
-     * At most one byte past the limit is read, which is how a body one byte over
-     * is told apart from one exactly at it. The charset is settled before any
-     * of it, so a body in one this JVM cannot decode is refused unread.
+     * The body as UTF-8, which is what it arrived as unless the request
+     * declared another charset, and then its text encoded again. The JSON
+     * parser reads UTF-8 bytes, and RFC 8259 expects a JSON text exchanged
+     * between systems to be UTF-8 in the first place.
      */
-    private String readBody() {
+    private byte[] bodyUtf8() {
+        byte[] bytes = bodyBytes();
+        if (StandardCharsets.UTF_8.equals(bodyCharset())) {
+            return bytes;
+        }
+        return bodyText(bytes).getBytes(StandardCharsets.UTF_8);
+    }
+
+    /**
+     * Reads the bytes up to the limit. Counting bytes rather than characters
+     * is what bounds memory for every charset alike, and is what
+     * Content-Length counts. At most one byte past the limit is read, which is
+     * how a body one byte over is told apart from one exactly at it. The
+     * charset is settled before any of it, so a body in one this JVM cannot
+     * decode is refused unread.
+     */
+    private byte[] readBody() {
         int max = limits.maxBytes();
         if (req.getContentLengthLong() > max) {
             // Refused on the header alone: nothing is read that would be thrown away.
             throw refuseBody();
         }
-        Charset charset = bodyCharset();
+        bodyCharset();
         try {
             InputStream in = req.getInputStream();
             ByteArrayOutputStream bytes = new ByteArrayOutputStream(bodyCapacity(max));
@@ -1042,7 +1079,7 @@ public final class WebRequest {
                 }
                 bytes.write(chunk, 0, read);
             }
-            return bytes.toString(charset);
+            return bytes.toByteArray();
         } catch (IOException e) {
             throw refuseUnreadable(e);
         }
@@ -1149,7 +1186,7 @@ public final class WebRequest {
         if (read == BodyMarker.UNREADABLE) {
             throw bodyUnreadable("");
         }
-        if (read instanceof String) {
+        if (read instanceof byte[]) {
             throw new IllegalStateException("The body was already read as text by body() or bodyJson(),"
                     + " so " + asked + " has nothing left to hand over. Read the text again with body()");
         }
@@ -1181,12 +1218,13 @@ public final class WebRequest {
     /**
      * Parses the body as JSON. Responds with 400 on invalid syntax.
      *
-     * <p>It parses the text {@link #body()} keeps, so a filter that read the
-     * body first does not leave this with nothing to parse.
+     * <p>It parses the bytes {@link #body()} keeps, as they arrived, so a
+     * filter that read the body first does not leave this with nothing to
+     * parse, and no string of the body is made on the way.
      */
     public JsonValue bodyJson() {
         try {
-            return Json.parse(body());
+            return Json.parse(bodyUtf8());
         } catch (IllegalArgumentException e) {
             throw new HttpException(HttpStatus.BAD_REQUEST, "Request body is not valid JSON: " + e.getMessage());
         }
@@ -1201,9 +1239,9 @@ public final class WebRequest {
      * matching the parameter parser contract. Other exceptions remain server errors.
      */
     public <T> T bodyJson(JsonReader<T> reader) {
-        JsonValue json = bodyJson();
+        byte[] utf8 = bodyUtf8();
         try {
-            return reader.read(json);
+            return reader.fromJsonBytes(utf8);
         } catch (IllegalArgumentException | DateTimeException e) {
             throw new HttpException(HttpStatus.BAD_REQUEST, "Request body was rejected: " + e.getMessage());
         }
@@ -1300,20 +1338,26 @@ public final class WebRequest {
      */
     public <T> Stream<T> bodyNdjson(JsonReader<T> reader) {
         handOver(BodyMarker.NDJSON);
+        Charset charset = bodyCharset();
         NdjsonLines lines;
         try {
-            lines = new NdjsonLines(req.getInputStream(), bodyCharset(), limits.maxNdjsonLineBytes(),
+            lines = new NdjsonLines(req.getInputStream(), limits.maxNdjsonLineBytes(),
                     this::refuseLine, this::refuseUnreadable);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
-        AtomicLong line = new AtomicLong();
-        return StreamSupport.stream(lines, false).<T>mapMulti((text, values) -> {
-            long number = line.incrementAndGet();
-            if (!isJsonBlank(text)) {
-                values.accept(readLine(text, number, reader));
+        AtomicLong count = new AtomicLong();
+        return StreamSupport.stream(lines, false).<T>mapMulti((line, values) -> {
+            long number = count.incrementAndGet();
+            if (!isJsonBlank(line)) {
+                values.accept(readLine(utf8(line, charset), number, reader));
             }
         });
+    }
+
+    /** A line as UTF-8: as it arrived, unless the body declared another charset, and then its text encoded again. */
+    private static byte[] utf8(byte[] line, Charset charset) {
+        return StandardCharsets.UTF_8.equals(charset) ? line : new String(line, charset).getBytes(StandardCharsets.UTF_8);
     }
 
     /**
@@ -1321,10 +1365,9 @@ public final class WebRequest {
      * LF. {@link String#isBlank()} is Java's whitespace, so a line of a form
      * feed or an em space was skipped where the parser refuses the character.
      */
-    private static boolean isJsonBlank(String text) {
-        for (int i = 0; i < text.length(); i++) {
-            char c = text.charAt(i);
-            if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
+    private static boolean isJsonBlank(byte[] line) {
+        for (byte b : line) {
+            if (b != ' ' && b != '\t' && b != '\r' && b != '\n') {
                 return false;
             }
         }
@@ -1338,9 +1381,9 @@ public final class WebRequest {
                         .formatted(number, limits.maxNdjsonLineBytes()));
     }
 
-    private static <T> T readLine(String text, long number, JsonReader<T> reader) {
+    private static <T> T readLine(byte[] utf8, long number, JsonReader<T> reader) {
         try {
-            return reader.read(Json.parse(text));
+            return reader.fromJsonBytes(utf8);
         } catch (IllegalArgumentException | DateTimeException e) {
             throw new HttpException(HttpStatus.BAD_REQUEST,
                     "Line %d of the NDJSON body was rejected: %s".formatted(number, e.getMessage()));

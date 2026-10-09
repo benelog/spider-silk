@@ -130,7 +130,7 @@ Hello, silk
 
 === 빌드
 
-빌드 모듈은 선택적인 패키징 관례를 담는다: 미리 컴파일한 jte, Jib 이미지, 네이티브 빌드.
+빌드 모듈은 선택적인 패키징 관례인 미리 컴파일한 jte, Jib 이미지, 네이티브 빌드와, JSON 코덱 생성기를 담는다.
 
 [cols="2,3",options="header"]
 |===
@@ -141,6 +141,9 @@ Hello, silk
 
 | `spider-silk-maven-parent`
 | xref:maven-parent.adoc[Maven], 부모 POM으로 쓴다
+
+| `spider-silk-json-processor`
+| 어느 빌드 도구에서든 javac이 애너테이션 프로세서로 실행한다: ``@JsonBound``가 붙은 타입의 xref:json-codegen.adoc[생성되는 JSON 코덱]이며, 런타임에는 아무것도 더하지 않는다
 |===
 
 === 예제

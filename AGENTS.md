@@ -17,6 +17,9 @@
 - **No reflection.**
   There is no annotation scanning, no proxies, and no automatic binding in core.
   Do not make changes that break this principle.
+- **`spider-silk-json-processor` runs inside javac and ships nothing to the runtime.**
+  It generates a `JsonCodec` for each `@JsonBound` type from the type's declaration and the `jakarta.json.bind` annotations, read by qualified name so the processor depends on neither core nor the API.
+  Generated code calls constructors and accessors only: no registry, no `ServiceLoader`, and nothing looked up by name at run time.
 - There is no DI container: `FlashcardContext` assembles the object graph by calling constructors directly.
 
 ## Code Style

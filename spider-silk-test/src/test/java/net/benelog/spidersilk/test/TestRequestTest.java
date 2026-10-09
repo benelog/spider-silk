@@ -14,6 +14,7 @@ import net.benelog.spidersilk.HttpStatus;
 import net.benelog.spidersilk.UploadedFile;
 import net.benelog.spidersilk.WebRequest;
 import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonReader;
 import net.benelog.spidersilk.json.JsonWriter;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -148,7 +149,7 @@ class TestRequestTest {
 
     @Test
     void jsonBodyTakesTheApplicationsOwnWriter() {
-        JsonWriter<NewDeck> writer = deck -> Json.object().put("name", deck.name());
+        JsonWriter<NewDeck> writer = (deck, out) -> out.object().put("name", deck.name()).end();
 
         WebRequest request = TestRequest.post("/api/decks")
                 .jsonBody(new NewDeck("Spanish"), writer)
@@ -295,7 +296,7 @@ class TestRequestTest {
                 .build();
 
         assertThatExceptionOfType(HttpException.class)
-                .isThrownBy(() -> request.bodyJson(json -> json.asObject().getString("name")))
+                .isThrownBy(() -> request.bodyJson(JsonReader.object(object -> object.getString("name"))))
                 .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
     }
 

@@ -4,6 +4,11 @@ import gg.jte.ContentType;
 import gg.jte.gradle.JteExtension;
 import org.gradle.api.Project;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.util.Properties;
+
 import javax.inject.Inject;
 
 /**
@@ -14,6 +19,12 @@ public class SpiderSilkExtension {
 
     /** Kept in step with the jte the plugin's build pins, and with spider-silk-core's. */
     static final String JTE_VERSION = "3.2.4";
+
+    /** The jakarta.json.bind API whose annotations the generated codecs read. */
+    static final String JSONB_API_VERSION = "3.0.1";
+
+    /** The plugin's own version, which is the version of the framework jars it adds. */
+    static final String VERSION = version();
 
     private final Project project;
 
@@ -38,5 +49,30 @@ public class SpiderSilkExtension {
         jte.generate();
         jte.jteExtension("gg.jte.nativeimage.NativeResourcesExtension");
         project.getDependencies().add("jteGenerate", "gg.jte:jte-native-resources:" + JTE_VERSION);
+    }
+
+    /**
+     * Generated JSON codecs, the way the manual's JSON chapter sets them up:
+     * the annotation processor on javac's processor path, so every type
+     * annotated {@code @JsonBound} gets its codec at compile time, and the
+     * {@code jakarta.json.bind} annotations on the compile classpath, where
+     * they are read and never needed again. Nothing is added at run time.
+     */
+    public void json() {
+        project.getDependencies().add("annotationProcessor", "net.benelog.spidersilk:spider-silk-json-processor:" + VERSION);
+        project.getDependencies().add("compileOnly", "jakarta.json.bind:jakarta.json.bind-api:" + JSONB_API_VERSION);
+    }
+
+    private static String version() {
+        Properties properties = new Properties();
+        try (InputStream in = SpiderSilkExtension.class.getResourceAsStream("version.properties")) {
+            if (in == null) {
+                throw new IllegalStateException("version.properties is missing from the plugin jar");
+            }
+            properties.load(in);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+        return properties.getProperty("version");
     }
 }

@@ -25,12 +25,35 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   `Map.of("message", req.flashed("message"))` threw `NullPointerException` and answered 500 whenever no flash was waiting.
   `model.with(key, value)` answers a model with one more entry, and `model.asMap()` answers the entries as a read-only map.
 - `spider-silk-core`: `JsonReader.object(fromObject)` builds a reader of a JSON object from a function of its `JsonObject`, so a reader calls `asObject()` once rather than once per field.
+- `spider-silk-core`: `JsonOutput` and `JsonInput`, the byte-level engine every JSON goes through.
+  A `JsonOutput` writes UTF-8 straight into a buffer, in memory or to a stream, through `object()`, `array()`, `end()`, `put`, `name`, `value`, `values`, and `newline()`.
+  A `JsonInput` reads a document's bytes one value at a time, through `object()`, `array()`, `nextKey()`, `nextKeyIs`, `nextElement()`, `keyIs`, `key()`, the `read` methods, `readValue()`, `skipValue()`, and `end()`, and builds no string of the document first.
+  `JsonKey.of(name)` encodes a member name once for both.
+- `spider-silk-core`: `JsonWriter.tree(toTree)`, `JsonReader.tree(fromTree)`, `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, and `reader.fromJsonBytes(utf8)`.
+- `spider-silk-core`: `JsonOutput.value(BigDecimal)` and `value(BigInteger)` write a decimal with every digit, and `JsonInput.readNumber()` answers a number's own text.
+- `spider-silk-core`: `@JsonBound`, the annotation that has `spider-silk-json-processor` generate a type's `JsonCodec`, and names the type a mixin stands in for.
+- `spider-silk-json-processor`: a new module, an annotation processor that generates `<Type>Json.CODEC` for every type annotated `@JsonBound` from its components, fields, and accessors and the `jakarta.json.bind` annotations on them: `@JsonbProperty`, `@JsonbTransient`, `@JsonbNillable`, `@JsonbPropertyOrder`, `@JsonbCreator`, `@JsonbDateFormat`, and `@JsonbTypeAdapter`.
+  The generated code calls the type's own accessors and constructor, with no reflection, no registry, and nothing for a native image.
+  A component is required unless it is `@Nullable` or an `Optional`, and `-Aspidersilk.json.names=explicit` makes a property without a `@JsonbProperty` name a compile error.
+- `spider-silk-gradle-plugin`: `spiderSilk { json() }` puts the processor on the `annotationProcessor` path and `jakarta.json.bind-api` on the compile classpath.
+- `spider-silk-maven-parent`: the processor is on the compiler's processor path for every child.
 - `spider-silk-opentelemetry-agent`: an extension of the OpenTelemetry Java agent that reports the route a request matched as the server span's `http.route`.
   A span is named `GET /decks/{deckId}` where the agent named every request `GET /*`.
 - `spider-silk-test`: `TestClient.putJson(path, json)` and `patchJson(path, json)` send JSON as `postJson` does, and all three take a `String` or a `JsonValue`.
 
 ### Changed
 
+- `spider-silk-core`: `JsonWriter<T>` is `(value, out) -> ...`, writing straight into a `JsonOutput`, where it used to return a `JsonValue` tree.
+  A writer that builds a tree is `JsonWriter.tree(value -> Json.object()...)`, and `out.object().put(...).end()` is the tree-free form of the same mapping.
+- `spider-silk-core`: `JsonReader<T>` reads from a `JsonInput`, where it used to take a `JsonValue`.
+  `JsonReader.object(fromObject)` reads as before, a lambda over the whole value is `JsonReader.tree(json -> ...)`, and `JsonReader.list` reads the elements one at a time.
+- `spider-silk-core`: `JsonSink.write(value, writer)` is a method of the sink rather than a default, and `jsonArray` and `ndjson` write every value into one buffer that goes to the container as it fills, with no byte array per value.
+- `spider-silk-core`: `bodyJson()` and `bodyJson(reader)` parse the body's bytes as they arrived, with no string of the body made first, unless the request declared a charset other than UTF-8.
+  A malformed UTF-8 sequence inside a string is a 400, where it used to read as U+FFFD.
+  `body()` keeps the bytes and decodes them on the first call.
+- `spider-silk-core`: `Json.parse` reports a failure's position as `Near character N` counted over the document's characters, from bytes as from text.
+- `spider-silk-core`: `JsonException` has a public constructor, so a reader of your own and a generated codec throw it directly.
+- `spider-silk-core`: a `Text` or `Bytes` body answers with `Content-Length` on every method, where a body past the container's buffer used to go out chunked.
 - `spider-silk-core`: `WebResponse.removeCookie(name)` is `WebResponse.expireCookie(name)`.
   It adds a `Set-Cookie` with `Max-Age=0` that tells the browser to delete the cookie, and does not take back a cookie this response set.
 - `spider-silk-core`: `new StaticFiles(classpathRoot)` is `StaticFiles.classpath(classpathRoot)`, beside `StaticFiles.directory(path)`.

@@ -125,7 +125,7 @@ Cookies are copied on the way in and on the way out of `cookies()`, and a templa
 ```java
 // Bodies
 WebResponse.html(page); WebResponse.text(s); WebResponse.bytes("application/pdf", pdf);
-WebResponse.rawJson(text); WebResponse.json(jsonValue); WebResponse.json(value, writer); // rawJson: text that is JSON already
+WebResponse.rawJson(text); WebResponse.json(jsonValue); WebResponse.json(value, writer); // rawJson: text that is JSON already; the writer may be a generated DeckJson.CODEC
 WebResponse.jsonArray(sink -> ...); WebResponse.ndjson(sink -> ...); // written a value at a time, see content.md
 WebResponse.template("deck"); // name carries no extension
 WebResponse.template("deck", Model.of("deck", deck));

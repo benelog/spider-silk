@@ -89,6 +89,7 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 73 | A template takes an immutable `Model`, and a `Map` comes out only at the engine's edge | ✅ shipped |
 | 74 | `spider-silk-opentelemetry-agent`: the matched route as the span's `http.route` | ✅ shipped |
 | 75 | `WebResponse.json` answers with `Bytes`, written as UTF-8 straight from the tree | ✅ shipped |
+| 76 | One byte-level JSON engine, with hand-written and generated mappings on top of it | ✅ shipped |
 
 Fifty-eight of the fifty-nine shipped.
 The exception, 15b, is a decision rather than a gap.
@@ -1484,13 +1485,53 @@ The benchmark's list of 100 records answered 0.6 times what Spring MVC with Jack
 Rejected: writing straight to the servlet's stream, which needs a new `Body` kind and leaves a test nothing to assert on.
 Rejected: keeping `Text` and building the string from bytes, which keeps one of the two copies and the second encoding pass.
 
+## 76 · One JSON engine, two ways to state a mapping
+
+### 76. `JsonOutput` and `JsonInput` are the engine, and a mapping is a lambda over them or a codec the build generates
+
+Every document goes through one byte-level writer and one byte-level pull parser, and a mapping is either written against them or generated from the type by `spider-silk-json-processor`.
+The tree of decision 75 stayed as a value type, and stopped being the way out and in.
+
+- **The tree was the cost.**
+  - A list of 100 records took 12.6 µs and 29.8 KB to write through the tree and 25.5 µs and 82 KB to read through it, against Jackson's 12.0 µs and 25.0 µs: level, not ahead.
+  - Written straight into the output and read straight off the input, the same list takes 5.2 µs and 11 KB and 6.0 µs and 18 KB, and the 27-byte object takes 25 ns against Jackson's 133 ns.
+  - fastjson2 writes it in 4.4 µs and reads it in 6.0 µs, with `sun.misc.Unsafe` under both, which the JDK is retiring and core will not take.
+- **`JsonWriter<T>` became `(value, out) -> ...`**, and the fluent form, `out.object().put(...).end()`, keeps the hand-written mapping one lambda long.
+  - `JsonWriter.tree(fn)` keeps the old shape for a mapping that reads better as a tree.
+  - A `JsonReader<T>` reads from the input, `JsonReader.object(fn)` still hands a hand-written reader the tree of one object, and `JsonReader.list` reads elements one at a time.
+- **Keys are matched as bytes.**
+  - `JsonKey.of(name)` holds the member as written, with and without the comma before it, so a generated codec neither escapes a key per record nor makes a string of one per member read.
+  - A generated read tries the key declared next with `nextKeyIs`, which compares comma, quotes, and colon in place, and goes through `nextKey()` only for a key out of that order.
+  - A key repeated across the records of one document is encoded once on the way out and is one string on the way in.
+- **Bytes go in and out eight at a time, through the JDK's byte-array view.**
+  - `MethodHandles.byteArrayViewVarHandle` checks its index as an array access does, and the compiler makes each call one load or one store.
+  - It looks up no class and no member, so decision 8's rule holds, and a native image built from it needs no configuration.
+  - A string is scanned a word at a time for a byte it cannot hold as itself, a short integer is counted and converted with three multiplications, and a key is written with two stores.
+  - Reading the list went from 13.0 µs to fastjson2's 6.0 µs this way, and writing it from 7.0 µs to 5.2 µs.
+  - fastjson2's lead on the way out is the strings: it reads a `String`'s own bytes, where core copies the characters out with `getChars` and checks each one.
+- **The processor is a module of its own, and ships nothing.**
+  - It runs inside javac, and the code it writes calls the type's own accessors and constructor, so decision 8's rule holds: no reflection, no registry, no `ServiceLoader`, and no native-image entry.
+  - The vocabulary is Jakarta JSON Binding's, read by qualified name, so the processor depends on the API no more than the runtime does, and a type annotated for Yasson keeps its annotations.
+  - `@JsonBound(Other.class)` on a mixin binds a type the web tier does not own, which is how the example binds `DeckSummary` without the domain importing the framework: decision 8's seam, kept.
+  - Declaration order, not JSON-B's lexicographical default, and a component is required unless it is `@Nullable` or an `Optional`, which is decision 34's contract carried into the generated code.
+- **The rename decision 33 held against generated code is now an option.**
+  `-Aspidersilk.json.names=explicit` fails the build on a property without a `@JsonbProperty` name, and the manual states the trade either way.
+- **The body is kept as bytes**, and `bodyJson` parses them as they arrived, so a malformed UTF-8 sequence is a 400 rather than a replacement character in a value.
+- **A `Bytes` body carries its length on every method**, which decision 75 left to HEAD alone, so a 10 KB answer no longer goes out chunked.
+
+Rejected: a registry from `Class` to codec in core, which is `json(Object)` with the reflection taken out and the lookup by name left in.
+Rejected: generating on top of jackson-core, as avaje-jsonb does, since its generator wrote the same list in 13.7 µs.
+Rejected: an output that writes a generated codec's bytes unchecked, which wrote the list 5% faster than the checked calls and would let a codec write a document that is not JSON.
+Rejected: `String.getBytes` for a string's bytes, since into a new array it allocates per string and measured slower, and into the buffer it cannot tell a character past Latin-1 from the byte it is cut down to.
+Rejected: `@JsonbVisibility`, `@JsonbNumberFormat`, and the JSON-P serializers, each a compile error that says so, since the first takes a reflective strategy and the others a runtime the generated code does not have.
+
 ## Rejected — decisions, with the reason
 
 These are closed: reopening one changes what the framework is.
 
 | Idea | Why not |
 |---|---|
-| `WebResponse.json(Object)`, `req.bodyAsClass(Foo.class)` | Reflection. The whole point is that the wire format changes only when someone edits it. |
+| `WebResponse.json(Object)`, `req.bodyAsClass(Foo.class)` | Reflection. The whole point is that the wire format changes only when someone edits it. The reflection-free form is decision 76's `json(deck, DeckJson.CODEC)`, a codec named at the call site. |
 | Annotation-driven routing | Reflection, plus scanning. |
 | Renaming `Handler` to `Action` | In MVC frameworks an `Action` is a per-request object populated by reflection, returning a *result name* that XML or an annotation resolves to a view. `Handler` is a stateless function returning the response itself. The name also breaks the suffix rule (`…Handler` answers a request, `…Writer` fills a body) and strands `ExceptionHandler`. `Action` stays a naming convention for classes that implement `Handler`. |
 | A `Controller` interface with `register(App)` in the example | Reading the routes would mean reading every controller. Things that register themselves are the container this framework exists without. |

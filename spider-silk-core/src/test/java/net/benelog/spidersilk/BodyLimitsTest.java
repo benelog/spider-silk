@@ -30,7 +30,7 @@ import net.benelog.spidersilk.test.WebTest;
  */
 class BodyLimitsTest {
 
-    private static final JsonReader<String> NAME = json -> json.asObject().getString("name");
+    private static final JsonReader<String> NAME = JsonReader.object(object -> object.getString("name"));
 
     /** The body's length in characters, so a test can tell bytes from characters. */
     private static App echoLength(BodyLimits limits) {

@@ -6,10 +6,10 @@ package net.benelog.spidersilk.json;
  * NDJSON — belongs to the response that opened the sink, so a writer says only
  * what the next value is.
  *
- * <p>Each value is serialized and handed to the socket as it arrives, which is
- * the point: a million rows never exist as one {@code JsonArray}. Build one
- * element at a time and the memory an answer costs is its largest element, not
- * the whole of it.
+ * <p>Each value is written to the socket as it arrives, which is the point: a
+ * million rows never exist as one {@code JsonArray}. Build one element at a
+ * time and the memory an answer costs is its largest element, not the whole
+ * of it.
  *
  * <pre>{@code
  * WebResponse.ndjson(sink -> cardService.eachCard(deckId, card -> sink.write(card, Codecs.CARD)));
@@ -27,8 +27,6 @@ public interface JsonSink {
     /** Writes one value, already built as a tree. */
     void write(JsonValue value);
 
-    /** Writes one value through a hand-written writer — the usual form. */
-    default <T> void write(T value, JsonWriter<T> writer) {
-        write(writer.write(value));
-    }
+    /** Writes one value through its writer — the usual form. */
+    <T> void write(T value, JsonWriter<T> writer);
 }

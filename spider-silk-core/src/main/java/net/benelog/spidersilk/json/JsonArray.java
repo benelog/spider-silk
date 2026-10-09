@@ -48,8 +48,8 @@ public final class JsonArray implements JsonValue, Iterable<JsonValue> {
         return element(value == null ? JsonPrimitive.NULL : value);
     }
 
-    /** Adds a JsonValue, or a String, a Long, or a Double held as it is. */
-    private JsonArray element(Object element) {
+    /** Adds a JsonValue, or a String, a Long, a Double, or a parsed decimal held as it is. */
+    JsonArray element(Object element) {
         if (size == values.length) {
             values = Arrays.copyOf(values, size * 2);
         }

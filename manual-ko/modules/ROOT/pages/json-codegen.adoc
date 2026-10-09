@@ -1,0 +1,132 @@
+= 생성되는 JSON 코덱
+:navtitle: 생성되는 JSON 코덱
+
+``spider-silk-json-processor``는 ``@JsonBound``가 붙은 모든 타입의 ``JsonCodec``을 컴파일 시점에 그 타입 자신의 선언으로부터 생성한다.
+코덱은 타입 곁의 상수 ``<Type>Json.CODEC``이며, 핸들러는 손으로 작성한 라이터를 지명하듯 그것을 지명한다.
+리플렉션으로 들여다보는 것도, 스스로 등록하는 것도 없으며, 네이티브 이미지에는 그 타입에 대한 항목이 필요 없다.
+
+[source,java]
+----
+@JsonBound
+public record Deck(long id, @JsonbProperty("deck_name") String name, @Nullable String note) {
+}
+----
+
+[source,java]
+----
+app.get("/api/decks/{deckId}", req -> WebResponse.json(service.deck(req.pathParamLong("deckId")), DeckJson.CODEC));
+
+app.post("/api/decks", req -> {
+    Deck deck = req.bodyJson(DeckJson.CODEC); // no id or deck_name -> 400
+    return WebResponse.json(service.create(deck), DeckJson.CODEC).status(HttpStatus.CREATED);
+});
+----
+
+생성된 클래스는 나가는 길에 레코드의 접근자를, 들어오는 길에 정규 생성자를 부르며, 각 키는 ``JsonKey``로 한 번만 인코딩한다.
+이 클래스는 빌드 디렉터리 아래의 Java 소스로서 다른 소스처럼 읽을 수 있고, 코어 외에는 아무것에도 의존하지 않는다.
+
+[#setup]
+== 설정
+
+프로세서는 javac 안에서 실행되므로, 빌드는 프로세서를 프로세서 경로에 올리고 ``jakarta.json.bind`` 애너테이션을 컴파일 클래스패스에 더한다:
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    annotationProcessor '{project-group}:spider-silk-json-processor:{project-version}'
+    compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'
+}
+----
+
+xref:gradle-plugin.adoc#json[Gradle 플러그인]은 ``spiderSilk { json() }``으로 둘 다 더하고, xref:maven-parent.adoc#json[Maven 부모 POM]은 모든 자식의 컴파일러 경로에 프로세서를 올린다.
+어느 jar도 런타임에는 필요 없다: 애너테이션은 코덱을 생성할 때 읽히고 다시는 읽히지 않는다.
+
+== 애너테이션
+
+어휘는 Jakarta JSON Binding의 것이므로, 다른 JSON-B 구현을 위해 애너테이션을 붙인 타입은 그 애너테이션을 그대로 쓴다.
+``@JsonBound``는 코어 자신의 유일한 애너테이션이며, 코덱이 생성된다는 것만을 말한다.
+
+[cols="2,4",options="header"]
+|===
+| 애너테이션 | 생성된 코덱이 하는 일
+
+| `@JsonbProperty("name")`
+| 와이어 위의 멤버 이름을 정한다.
+없으면 이름은 컴포넌트, 필드, 프로퍼티의 이름이다.
+
+| `@JsonbTransient`
+| 양방향 모두에서 프로퍼티를 뺀다.
+이렇게 표시된 레코드 컴포넌트에는 코덱이 null을 건네므로, 원시 타입일 수 없다.
+
+| `@JsonbNillable`
+| 타입 전체나 프로퍼티 하나에서 null 값을 ``null``로 쓴다.
+없으면 null인 프로퍼티는 문서에서 빠진다.
+
+| `@JsonbPropertyOrder({...})`
+| 지명한 프로퍼티를 그 순서대로 먼저 쓰고, 나머지는 선언 순서대로 쓴다.
+
+| `@JsonbCreator`
+| 클래스를 만드는 생성자나 정적 팩토리 메서드를 표시하며, 각 파라미터가 프로퍼티다.
+
+| `@JsonbDateFormat("pattern", locale = "...")`
+| ``java.time`` 값을 ISO-8601 텍스트 대신 그 패턴으로 포맷하고 파싱한다.
+
+| `@JsonbTypeAdapter(MyAdapter.class)`
+| ``new``로 만든 ``JsonbAdapter<Original, Adapted>``를 통해 프로퍼티를 변환한다.
+어댑터에는 공개 무인자 생성자가 필요하며, 프로세서가 이를 검사한다.
+|===
+
+`@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`, `@JsonbTypeDeserializer`, ``@JsonbTypeInfo``는 지원하지 않으며, 각각 그렇게 말하는 컴파일 에러가 된다.
+기본 순서는 선언 순서이며, JSON-B 자체의 기본값은 사전순이다.
+
+== 타입의 모양
+
+레코드는 컴포넌트와 정규 생성자를 통해 바인딩된다.
+클래스는 공개 getter, setter, 공개 필드를 통해 바인딩되고, ``@JsonbCreator``나 공개 무인자 생성자를 통해 만들어진다.
+setter나 필드를 통해 설정되는 프로퍼티는 문서에 없으면 클래스 자신의 기본값을 유지한다.
+
+코덱이 아는 프로퍼티 타입은 원시 타입과 그 박싱 타입, `String`, `BigDecimal`, `BigInteger`, `UUID`, `URI`, 이름으로 쓰이는 enum, ISO-8601 텍스트로 쓰이는 ``java.time`` 타입, `Optional`, `OptionalInt`, `OptionalLong`, `OptionalDouble`, `List`, `Set`, `Collection`, `Iterable`, `Map<String, V>`, ``JsonValue`` 트리, 그리고 ``@JsonBound``가 붙은 다른 모든 타입이다.
+컬렉션의 원소와 맵의 값도 같은 타입들이며, 필요한 만큼 깊이 중첩된다.
+그 밖의 타입은 프로퍼티를 지목하는 컴파일 에러이며, 길은 둘이다: 그 타입에 ``@JsonBound``를 붙이거나, ``@JsonbTypeAdapter``로 변환한다.
+
+== 필수와 선택
+
+들어오는 길에 레코드 컴포넌트나 생성자 파라미터는 그 타입이 값이 없을 수 있다고 말하지 않는 한 필수다.
+어느 라이브러리의 것이든 ``@Nullable``이 붙은 타입은 없거나 null인 멤버를 null로 읽는다.
+``Optional``은 그런 멤버를 비어 있는 것으로 읽는다.
+그 밖의 컴포넌트가 문서에 없거나 ``null``로 있으면 ``JsonException``이며, ``req.bodyJson(codec)``는 이에 400으로 답하는데, 이는 ``pathParamLong``과 같은 계약이다.
+타입에 없는 멤버는 건너뛴다.
+
+이는 없는 프로퍼티를 기본값으로 두는 JSON-B 자체의 기본 동작보다 엄격하며, 이 엄격함은 의도한 것이다: 핸들러는 값 전체를 받거나 아무것도 받지 않는다.
+
+[#mixin]
+== 소유하지 않은 타입 바인딩하기
+
+도메인 레코드나 다른 라이브러리의 타입처럼 애너테이션을 지닐 수 없는 타입은 믹스인을 통해 바인딩한다: ``@JsonBound(Other.class)``가 붙은 타입으로, 같은 이름의 멤버들이 ``Other``의 프로퍼티를 위한 애너테이션을 지닌다.
+코덱은 믹스인 곁의 그 패키지에 ``OtherJson``으로 생성된다.
+
+[source,java]
+----
+@JsonBound(DeckSummary.class)
+interface DeckSummaryWire {
+    @JsonbProperty("card_count") long cardCount();
+}
+
+static final JsonCodec<DeckSummary> DECK_SUMMARY = DeckSummaryJson.CODEC;
+----
+
+xref:example-flashcard.adoc[예제 애플리케이션]은 ``DeckSummary``를 이렇게 바인딩한다: 도메인 레코드는 아무것도 지니지 않고, 웹 계층이 와이어 포맷을 소유한다.
+
+[#names]
+== 와이어 포맷과 이름 바꾸기
+
+프로퍼티의 와이어 위 이름은 ``@JsonbProperty``가 달리 말하지 않는 한 Java 이름이므로, 컴포넌트 이름을 바꾸면 멤버 이름도 바뀐다.
+손으로 작성한 라이터는 누군가 고칠 때만 와이어 포맷이 바뀌며, xref:reflection-scope.adoc[리플렉션 없음 장]은 그 약속이 왜 중요한지 밝힌다.
+모든 이름을 적어 두길 원하는 빌드는 프로세서에 ``-Aspidersilk.json.names=explicit`` 옵션을 넘기며, 그러면 ``@JsonbProperty`` 이름이 없는 프로퍼티는 컴파일 에러가 된다:
+
+[source,groovy]
+----
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs.add('-Aspidersilk.json.names=explicit')
+}
+----

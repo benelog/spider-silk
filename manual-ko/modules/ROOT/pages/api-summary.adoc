@@ -45,7 +45,7 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 * 콘텐츠 협상: ``accepts(types...)``는 제시된 타입 중 호출자가 선호하는 타입으로 응답하고, 어느 것도 받지 않으면 406이다; 파싱된 `Accept` 헤더를 위한 `acceptedTypes()`
 * 클라이언트가 보낸 쿠키: `cookie(name)`, `cookies()`
 * 본문: `body()`, `bodyJson()`, `bodyJson(reader)`(리더가 거부하는 본문에는 400, 한도를 넘는 본문에는 413).
-  텍스트는 한 번 읽어 보관하므로 모든 호출이 본문 전체를 반환한다
+  바이트는 한 번 읽어 보관하므로 모든 호출이 본문 전체를 답하며, ``bodyJson``은 그 바이트를 도착한 그대로 파싱한다
 * 멀티파트 업로드: `file(name)`(없으면 400), `fileOrNull(name)`(없으면 null), 여러 파일을 담은 필드를 위한 `files(name)`, 그리고 컨테이너가 거부한 업로드에는 셋 모두 413이나 400.
   ``UploadedFile``은 `fileName()`, `contentType()`, `size()`, `bytes()`, `text()`, `inputStream()`, ``writeTo(path)``를 제공한다
 * 읽지 않은 본문: ``bodyStream()``과 ``bodyReader()``는 다른 라이브러리의 파서를 위해 본문을 넘겨주며, 둘 다 보관된 텍스트와 섞이지 않는다: 나중에 호출된 쪽이 ``IllegalStateException``을 던진다.
@@ -71,3 +71,16 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
   두 번 보내야 하는 헤더는 ``raw``를 통해 쓴다; xref:response.adoc#headers[헤더]를 참고한다
 
 ``body()``의 형태와 람다 계열에 대해서는 xref:response.adoc[응답]을 참고한다.
+
+== ``net.benelog.spidersilk.json``이 제공하는 것
+
+* 트리: `Json.object()`, `Json.array()`, `Json.parse(text)`, `Json.parse(utf8)`, 그리고 `JsonObject`, `JsonArray`, ``JsonPrimitive``를 가진 `JsonValue`; xref:json.adoc[JSON]을 참고한다
+* 매핑: ``JsonOutput``을 상대로 하는 람다 `(value, out) -> ...`인 `JsonWriter<T>`; ``JsonInput``을 상대로 하는 람다인 `JsonReader<T>`; 그리고 둘을 한꺼번에 가진 `JsonCodec<T>`.
+  `JsonWriter.list`, `JsonWriter.tree`, `JsonReader.object`, `JsonReader.list`, `JsonReader.tree`, `JsonCodec.of`, ``JsonCodec.list``가 이들을 만든다.
+  `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, ``reader.fromJsonBytes(utf8)``는 요청 밖에서 하나를 실행한다
+* `JsonOutput`: `object()`, `array()`, `end()`, `name(key)`, `put(key, ...)`, `putNull(key)`, `value(...)`, `nullValue()`, `values(strings)`, `newline()`.
+  ``JsonOutput.inMemory()``는 ``toBytes()``와 ``toJson()``을 답하고, ``JsonOutput.to(stream)``은 ``flush()``에서 버퍼를 보낸다
+* `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readNumber()`, `readBoolean()`, `readNull()`, `readValue()`, `skipValue()`, `end()`, `error(message)`, 그 바탕은 ``JsonInput.of(utf8)``이나 ``JsonInput.of(text)``다
+* `JsonKey.of(name)`: `put`, `name`, ``keyIs``를 위해 한 번만 인코딩한 멤버 이름
+* `@JsonBound`: 애너테이션이 붙은 타입이나 그것이 지명한 타입의 코덱을 ``spider-silk-json-processor``가 컴파일 시점에 ``<Type>Json.CODEC``으로 생성한다; xref:json-codegen.adoc[생성되는 JSON 코덱]을 참고한다
+* 스트리밍 응답: ``jsonArray``와 ``ndjson`` 안의 ``JsonSink.write(value)``와 `write(value, writer)`; xref:large-json.adoc[대용량 JSON과 NDJSON]을 참고한다

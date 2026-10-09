@@ -138,7 +138,7 @@ class ReadmeSnippets {
                 Json.array().add(Json.object().put("id", 1L).put("name", "English"))));
 
         app.post("/api/decks", req -> {
-            String name = req.bodyJson(json -> json.asObject().getString("name")); // no key -> 400
+            String name = req.bodyJson(JsonReader.object(object -> object.getString("name"))); // no key -> 400
             return WebResponse.json(Json.object().put("name", name)).status(HttpStatus.CREATED);
         });
 
@@ -188,9 +188,10 @@ class ReadmeSnippets {
 
     // ---- blocks 10, 11: JSON writers and readers ----
 
-    static final JsonWriter<Deck> DECK = deck -> Json.object()
+    static final JsonWriter<Deck> DECK = (deck, out) -> out.object()
             .put("id", deck.id())
-            .put("name", deck.name());
+            .put("name", deck.name())
+            .end();
 
     static final JsonWriter<List<Deck>> DECKS = JsonWriter.list(DECK);
 
@@ -205,7 +206,7 @@ class ReadmeSnippets {
             return WebResponse.json(deck, DECK).status(HttpStatus.CREATED);
         });
 
-        JsonCodec<Deck> codec = JsonCodec.of(DECK, json -> new Deck(0, ""));
+        JsonCodec<Deck> codec = JsonCodec.of(DECK, in -> new Deck(0, ""));
         JsonCodec<List<Deck>> listCodec = JsonCodec.list(codec);
     }
 

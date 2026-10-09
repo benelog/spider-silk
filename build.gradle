@@ -145,7 +145,7 @@ configure(subprojects.findAll { it.name != 'spider-silk-maven-parent' }) {
         // Error Prone runs inside javac on every module. Sources the build
         // generates (jte's precompiled templates carry no @Generated) are
         // not this project's to fix, so they are left out of the checks.
-        options.errorprone.excludedPaths = '.*/build/generated-sources/.*'
+        options.errorprone.excludedPaths = '.*/build/generated(-sources)?/.*'
     }
 
     tasks.withType(Test).configureEach {
@@ -158,7 +158,7 @@ configure(subprojects.findAll {
     it.name in ['spider-silk-core', 'spider-silk-test', 'spider-silk-tomcat',
             'spider-silk-undertow', 'spider-silk-freemarker', 'spider-silk-handlebars',
             'spider-silk-thymeleaf', 'spider-silk-jetty-websocket', 'spider-silk-openapi',
-            'spider-silk-opentelemetry-agent']
+            'spider-silk-json-processor', 'spider-silk-opentelemetry-agent']
 }) {
     apply plugin: 'java-library'
     apply plugin: 'maven-publish'

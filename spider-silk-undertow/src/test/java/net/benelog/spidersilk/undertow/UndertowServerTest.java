@@ -52,7 +52,7 @@ import net.benelog.spidersilk.json.JsonReader;
  */
 class UndertowServerTest {
 
-    private static final JsonReader<String> NAME = json -> json.asObject().getString("name");
+    private static final JsonReader<String> NAME = JsonReader.object(object -> object.getString("name"));
 
     private final HttpClient client = HttpClient.newHttpClient();
     private App app;

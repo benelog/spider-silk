@@ -28,7 +28,7 @@ import net.benelog.spidersilk.test.WebTest;
 /** The body as text is read once and kept; the body handed over unread goes out once. */
 class BodyReadsTest {
 
-    private static final JsonReader<String> NAME = json -> json.asObject().getString("name");
+    private static final JsonReader<String> NAME = JsonReader.object(object -> object.getString("name"));
 
     @Test
     void theTextAndTheJsonAreTheSameBodyReadOnce() {

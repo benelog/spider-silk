@@ -12,6 +12,7 @@
 
 * Content
 ** xref:json.adoc[JSON]
+*** xref:json-codegen.adoc[Generated JSON Codecs]
 *** xref:large-json.adoc[Large JSON and NDJSON]
 *** xref:json-interop.adoc[External JSON Binding]
 ** xref:templates.adoc[Templates]

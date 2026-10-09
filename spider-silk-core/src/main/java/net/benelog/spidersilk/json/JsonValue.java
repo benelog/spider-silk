@@ -26,7 +26,7 @@ public sealed interface JsonValue permits JsonObject, JsonArray, JsonPrimitive {
      * string and no second pass to encode one.
      */
     default byte[] toJsonBytes() {
-        return JsonOutput.utf8(this);
+        return JsonOutput.inMemory().value(this).toBytes();
     }
 
     default JsonObject asObject() {

@@ -38,7 +38,7 @@ Spider Silk is built around explicitness, and code that fights this reads as wro
 1. **No reflection.**
    There is no annotation scanning, no proxies, no automatic binding.
    Never introduce annotation-based routing or classpath scanning: those fight the framework itself, and there is no seam for them.
-   JSON mapping is hand-written with the framework's `Json` API — that is a feature, not a gap to fill, so do not reach for a binding library unasked.
+   JSON mapping is explicit: a hand-written `JsonWriter`/`JsonReader` lambda, or a codec the build generates from a `@JsonBound` type — neither reflects, and that is a feature, not a gap to fill, so do not reach for a binding library unasked.
    A library the *application* adds is a different question, and the answer to it is not "no".
    When the user asks for Jackson, Gson, or avaje-jsonb, wire it through the seam that exists for exactly that: `WebResponse.rawJson(String)` on the way out, `req.bodyStream()` or `bodyReader()` on the way in.
    [references/content.md](references/content.md) has the shape.
@@ -108,7 +108,7 @@ app.get("/api/decks", req -> WebResponse.json(
         Json.array().add(Json.object().put("id", 1L).put("name", "English"))));
 
 app.post("/api/decks", req -> {
-    String name = req.bodyJson(json -> json.asObject().getString("name")); // missing key -> 400
+    String name = req.bodyJson(JsonReader.object(object -> object.getString("name"))); // missing key -> 400
     return WebResponse.json(Json.object().put("name", name)).status(HttpStatus.CREATED);
 });
 
@@ -132,7 +132,7 @@ app.cors(Cors.allowOrigin("https://app.example.com").forPath("/api/*"))
 app.start(8080);
 ```
 
-Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus, Handler, HttpException), `net.benelog.spidersilk.json` (Json, JsonWriter, JsonReader, JsonCodec), `net.benelog.spidersilk.server` (JettyServer, WebServer).
+Key packages: `net.benelog.spidersilk` (App, WebRequest, WebResponse, HttpStatus, Handler, HttpException), `net.benelog.spidersilk.json` (Json, JsonWriter, JsonReader, JsonCodec, JsonOutput, JsonInput, JsonKey, JsonBound), `net.benelog.spidersilk.server` (JettyServer, WebServer).
 
 ## Contracts that hold everywhere
 

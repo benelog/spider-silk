@@ -8,14 +8,15 @@ import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Builds a value out of parsed JSON. Like {@link JsonWriter}, the mapping is
- * written by hand and uses no reflection.
+ * Builds a value out of JSON. Like {@link JsonWriter}, the mapping is
+ * written by hand or generated at compile time, and uses no reflection.
  *
  * <p>A reader rejects bad input by throwing {@link IllegalArgumentException}
  * or {@link java.time.DateTimeException}, as parameter parsers do.
- * {@code Json}'s own accessors throw {@link JsonException}, a subtype, for
- * a missing key or a value of the wrong type. {@code req.bodyJson(reader)}
- * turns these into a 400, so a reader never has to return a half-built object.
+ * {@link JsonInput} and the tree's accessors throw {@link JsonException}, a
+ * subtype, for a syntax error, a missing key, or a value of the wrong type.
+ * {@code req.bodyJson(reader)} turns these into a 400, so a reader never has
+ * to return a half-built object.
  *
  * <pre>{@code
  * static final JsonReader<NewDeck> NEW_DECK =
@@ -24,18 +25,20 @@ import org.jspecify.annotations.Nullable;
  * NewDeck body = req.bodyJson(NEW_DECK);
  * }</pre>
  *
- * <p>{@link #object} reads an object, and {@link #list} reads an array. A
- * reader of any other shape is a lambda over the {@link JsonValue} itself.
+ * <p>{@link #object} reads an object as a tree and {@link #list} reads an
+ * array an element at a time, which is how a hand-written reader is usually
+ * built. A reader written straight against the {@link JsonInput}, as a
+ * generated codec is, never builds a tree at all.
  */
 @FunctionalInterface
 public interface JsonReader<T extends @Nullable Object> {
 
-    T read(JsonValue json);
+    T read(JsonInput in);
 
     /**
      * A reader for an object, built from the function that makes the value out
-     * of its fields. The object is taken once, so the function reads each field
-     * straight off it:
+     * of its fields. The object is parsed as a tree and taken once, so the
+     * function reads each field straight off it:
      *
      * <pre>{@code
      * static final JsonReader<CardDraft> CARD_DRAFT = JsonReader.object(object -> new CardDraft(
@@ -48,7 +51,15 @@ public interface JsonReader<T extends @Nullable Object> {
      * {@code req.bodyJson(reader)} answers with 400.
      */
     static <T extends @Nullable Object> JsonReader<T> object(Function<JsonObject, T> fromObject) {
-        return json -> fromObject.apply(json.asObject());
+        return in -> fromObject.apply(in.readValue().asObject());
+    }
+
+    /**
+     * A reader over the whole value as a tree, for a shape that is neither an
+     * object nor a list of one: {@code JsonReader.tree(json -> json.asString())}.
+     */
+    static <T extends @Nullable Object> JsonReader<T> tree(Function<JsonValue, T> fromTree) {
+        return in -> fromTree.apply(in.readValue());
     }
 
     /**
@@ -59,13 +70,29 @@ public interface JsonReader<T extends @Nullable Object> {
      * answered the request with 500.
      */
     static <T extends @Nullable Object> JsonReader<List<T>> list(JsonReader<T> element) {
-        return json -> {
-            JsonArray array = json.asArray();
-            List<T> values = new ArrayList<>(array.size());
-            for (JsonValue value : array) {
-                values.add(element.read(value));
+        return in -> {
+            in.array();
+            List<T> values = new ArrayList<>();
+            while (in.nextElement()) {
+                values.add(element.read(in));
             }
             return Collections.unmodifiableList(values);
         };
+    }
+
+    /** The value read out of a document's text, which must hold that one value and nothing after it. */
+    default T fromJson(String text) {
+        return fromJson(JsonInput.of(text));
+    }
+
+    /** The value read out of a document's UTF-8 bytes. */
+    default T fromJsonBytes(byte[] utf8) {
+        return fromJson(JsonInput.of(utf8));
+    }
+
+    private T fromJson(JsonInput in) {
+        T value = read(in);
+        in.end();
+        return value;
     }
 }

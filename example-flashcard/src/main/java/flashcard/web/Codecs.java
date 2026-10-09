@@ -2,7 +2,8 @@ package flashcard.web;
 
 import java.util.List;
 
-import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonBound;
+import net.benelog.spidersilk.json.JsonCodec;
 import net.benelog.spidersilk.json.JsonReader;
 import net.benelog.spidersilk.json.JsonWriter;
 
@@ -22,36 +23,49 @@ import flashcard.service.CardService.CardDraft;
  *
  * <p>Most of them are write-only — a deck summary goes out and never comes
  * back in — which is why they are {@code JsonWriter}s and not codecs.
+ *
+ * <p>Two of them are generated rather than written: {@link NewDeck} carries
+ * {@code @JsonBound} itself, and {@link DeckSummary}, a domain record that
+ * carries nothing, is bound through the {@link DeckSummaryWire} mixin below.
+ * Either way the codec is a constant handed to the handler, as the
+ * hand-written ones are.
  */
 final class Codecs {
 
     private Codecs() {
     }
 
-    /** The body of {@code POST /api/decks}. */
+    /** The body of {@code POST /api/decks}: its codec, {@code NewDeckJson}, is generated from the record. */
+    @JsonBound
     record NewDeck(String name) {
     }
 
-    static final JsonReader<NewDeck> NEW_DECK =
-            JsonReader.object(object -> new NewDeck(object.getString("name")));
+    static final JsonReader<NewDeck> NEW_DECK = CodecsNewDeckJson.CODEC;
 
-    static final JsonWriter<Deck> DECK = deck -> Json.object()
+    /**
+     * The wire format of a deck summary, stated here in the web tier rather
+     * than on the domain record: the mixin names the type, and would carry a
+     * {@code @JsonbProperty} for any member whose name on the wire differs.
+     */
+    @JsonBound(DeckSummary.class)
+    interface DeckSummaryWire {
+    }
+
+    static final JsonCodec<DeckSummary> DECK_SUMMARY = DeckSummaryJson.CODEC;
+
+    static final JsonWriter<Deck> DECK = (deck, out) -> out.object()
             .put("id", deck.id())
-            .put("name", deck.name());
-
-    static final JsonWriter<DeckSummary> DECK_SUMMARY = summary -> Json.object()
-            .put("id", summary.id())
-            .put("name", summary.name())
-            .put("cardCount", summary.cardCount())
-            .put("dueCount", summary.dueCount());
+            .put("name", deck.name())
+            .end();
 
     static final JsonWriter<List<DeckSummary>> DECK_SUMMARIES = JsonWriter.list(DECK_SUMMARY);
 
-    static final JsonWriter<CardWithTags> CARD = cardWithTags -> Json.object()
+    static final JsonWriter<CardWithTags> CARD = (cardWithTags, out) -> out.object()
             .put("id", cardWithTags.card().id())
             .put("text", cardWithTags.card().text())
             .put("meaning", cardWithTags.card().meaning())
-            .put("tags", Json.array().addAll(cardWithTags.tags()));
+            .array("tags").values(cardWithTags.tags()).end()
+            .end();
 
     static final JsonWriter<List<CardWithTags>> CARDS = JsonWriter.list(CARD);
 
@@ -65,11 +79,12 @@ final class Codecs {
      * decides on — here, explicitly, rather than through whatever a library
      * would have picked.
      */
-    static final JsonWriter<Card> CARD_ROW = card -> Json.object()
+    static final JsonWriter<Card> CARD_ROW = (card, out) -> out.object()
             .put("id", card.id())
             .put("text", card.text())
             .put("meaning", card.meaning())
-            .put("createdAt", card.createdAt().toString());
+            .put("createdAt", card.createdAt().toString())
+            .end();
 
     /**
      * One line of the NDJSON import. {@code meaning} and {@code tags} are

@@ -1,19 +1,20 @@
 = JSON
 :navtitle: JSON
 
-Core builds and parses JSON itself, and the mapping between a document and a Java type is code you write.
+Core builds and parses JSON itself, and the mapping between a document and a Java type is code you write or code the build generates from the type.
 
 == Writers and readers
 
 `JsonWriter<T>` and `JsonReader<T>` name a mapping so that it can be reused.
-`Json.object()` builds a tree inline, which gets repetitive once the same record is serialized in three handlers.
-Both interfaces have a single method, so both are lambdas:
+Both interfaces have a single method, so both are lambdas.
+A writer puts each member straight into the `JsonOutput` it is handed, and a reader takes what it needs out of a `JsonInput`:
 
 [source,java]
 ----
-static final JsonWriter<Deck> DECK = deck -> Json.object()
+static final JsonWriter<Deck> DECK = (deck, out) -> out.object()
         .put("id", deck.id())
-        .put("name", deck.name());
+        .put("name", deck.name())
+        .end();
 
 static final JsonWriter<List<Deck>> DECKS = JsonWriter.list(DECK);
 
@@ -35,9 +36,39 @@ app.post("/api/decks", req -> {
 
 Writers and readers involve no reflection.
 The mapping is code you wrote, so renaming a Java field changes the wire format only if you also edit the mapping.
+xref:json-codegen.adoc[Generated JSON Codecs] is the other way to a mapping: an annotation processor writes the same kind of codec from the type's declaration at compile time, and a handler names it the same way.
 
-`JsonReader.object(fromObject)` builds a reader for a JSON object out of a function of its fields.
-The reader takes the object once, so the function reads each field straight off the `JsonObject`:
+== Writing
+
+`JsonOutput` is where a writer writes: UTF-8 bytes, straight into a buffer, with no tree in between.
+`object()` and `array()` open a container as the next value, `end()` closes the innermost one, and the commas are the output's business.
+Inside an object a member is `put(key, value)`, or `name(key)` followed by a value.
+Inside an array each element is `value(...)`, and `values(strings)` adds every string of an iterable.
+`put` and `value` take a string, a long, a double, a boolean, a `BigDecimal`, a `BigInteger`, a `JsonValue`, or another value with its own writer, so writers compose:
+
+[source,java]
+----
+static final JsonWriter<Card> CARD = (card, out) -> out.object()
+        .put("id", card.id())
+        .put("deck", card.deck(), DECK)
+        .array("tags").values(card.tags()).end()
+        .put("due", card.due().toString())
+        .end();
+----
+
+A string that is null is written as JSON `null`, and so is a null value handed over with its writer.
+A `double` that is NaN or an infinity throws `JsonException`, since JSON has no syntax for either.
+A call out of place, such as `put` outside an object or `end()` with nothing open, throws `IllegalStateException`.
+
+`writer.toJson(value)` and `writer.toJsonBytes(value)` answer the document for a test, an SSE event, or a log line.
+`WebResponse.json(value, writer)` writes it into the bytes the response carries, and a key the document repeats, the keys of a list of records, is encoded once.
+A writer that would rather build a tree with `Json.object()` and `Json.array()` is `JsonWriter.tree(value -> ...)`, and the tree is written through the same output.
+
+== Reading
+
+`JsonInput` is where a reader reads: the document's UTF-8 bytes, one value at a time, with no string of the document made first.
+`JsonReader.object(fromObject)` is the usual reader of an object.
+It parses the object as a tree and takes it once, so the function reads each field straight off the `JsonObject`:
 
 [source,java]
 ----
@@ -48,7 +79,43 @@ static final JsonReader<CardDraft> CARD_DRAFT = JsonReader.object(object -> new 
 ----
 
 A body that is not an object throws `JsonException`, which `req.bodyJson(reader)` answers with 400.
-`JsonReader.list(element)` builds a reader for a JSON array out of the reader for one element, as `JsonWriter.list` does for writers.
+`JsonReader.list(element)` builds a reader for a JSON array out of the reader for one element, as `JsonWriter.list` does for writers, and reads the elements one at a time.
+`JsonReader.tree(fromTree)` reads any other shape through the whole value as a tree.
+
+A reader written against the input itself never builds a tree, which is what a generated codec does.
+`object()` enters an object, `nextKey()` steps to each member and leaves the object when it answers false, and `keyIs(key)` matches the member's name against a `JsonKey` without making a string of it.
+The `read` methods take a value, `readValue()` takes one whole as a tree, and `skipValue()` passes one over:
+
+[source,java]
+----
+static final JsonKey ID = JsonKey.of("id");
+static final JsonKey NAME = JsonKey.of("name");
+
+static final JsonReader<Deck> DECK_IN = in -> {
+    in.object();
+    long id = 0;
+    String name = "";
+    while (in.nextKey()) {
+        if (in.keyIs(ID)) {
+            id = in.readLong();
+        } else if (in.keyIs(NAME)) {
+            name = in.readString();
+        } else {
+            in.skipValue();
+        }
+    }
+    return new Deck(id, name);
+};
+----
+
+`nextKeyIs(key)` moves to the next member only when its key is that one, written as `JsonOutput` writes it, with no whitespace around it.
+It compares the bytes where the key starts with the key's own, colon included, and scans nothing.
+For any other member it answers false and moves nowhere.
+`nextKey()` then reads that member.
+A generated codec tries the key it declares next this way, so a document written from the same declaration is read with none of its keys scanned.
+
+`reader.fromJson(text)` and `reader.fromJsonBytes(utf8)` read a document that holds that one value and nothing after it.
+A failure names where the input stands, as in `Near character 12: Not a JSON string: a number`.
 
 == Reading values
 
@@ -62,8 +129,9 @@ Other reader exceptions remain server errors.
 `bodyJson(reader)` wraps input rejection in `HttpException`, so custom handling of these errors targets that type or the 400 status page.
 A `JsonException` that handler code throws directly is not wrapped, so an exception handler registered for `JsonException` still receives it.
 The parser accepts the syntax of RFC 8259 with no extension, and `bodyJson` answers 400 for anything else.
-A body in a charset this JVM cannot decode answers 415 instead, since its text never reaches the parser.
+A body in a charset this JVM cannot decode answers 415 instead, since its bytes never reach the parser.
 A number such as `01`, `+1`, `.5`, or `1.` is invalid syntax, and so is a control character written into a string without an escape.
+A malformed UTF-8 sequence inside a string is invalid syntax too, rather than a replacement character in the value.
 `asLong` and `getLong` reject a number with a fractional part rather than truncating it: `1.5` is not a long, while `2.0` and `1e3` are whole and read as one.
 The conversion reads the number's own digits rather than the nearest `double`, so `9007199254740993.0` reads as exactly that long and `1.0000000000000001` is rejected as a fraction.
 A parsed number is written back as the same digits, so a tree passed through unchanged, as in `WebResponse.json(req.bodyJson())`, sends the numbers it received.
@@ -95,11 +163,12 @@ The key list is a copy and the members handed to the loop are read-only, so writ
 `JsonCodec<T>` is a writer and a reader at once, for a type that travels both ways.
 `JsonCodec.of(writer, reader)` builds one, and `JsonCodec.list(codec)` gives the list form.
 The writer and the reader are separate interfaces because most types only go out, and a single interface would leave those types with a `read` they cannot implement.
+A generated codec is a `JsonCodec`, so it goes wherever a writer or a reader goes.
 
 == Where this stops being enough
 
-`WebResponse.json(value, writer)` builds the whole document in memory before sending any of it, which an answer of a hundred thousand rows cannot afford.
+`WebResponse.json(value, writer)` writes the whole document into memory before sending any of it, which an answer of a hundred thousand rows cannot afford.
 xref:large-json.adoc[Large JSON and NDJSON] writes one value at a time instead, and reads a body the same way.
 
-Writing the mapping by hand is core's decision for core, not for the application.
+Writing the mapping by hand or generating it from the type is core's decision for core, not for the application.
 An application with a wire format it does not own can bind objects with a library instead, through `WebResponse.rawJson(String)` going out and `req.bodyStream()` or `req.bodyReader()` coming in: xref:json-interop.adoc[External JSON Binding].

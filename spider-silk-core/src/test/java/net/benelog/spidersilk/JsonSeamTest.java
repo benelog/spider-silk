@@ -4,7 +4,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import net.benelog.spidersilk.json.Json;
 import net.benelog.spidersilk.json.JsonReader;
 import net.benelog.spidersilk.json.JsonWriter;
 import net.benelog.spidersilk.test.WebTest;
@@ -19,9 +18,9 @@ class JsonSeamTest {
     }
 
     static final JsonWriter<Deck> DECK =
-            deck -> Json.object().put("id", deck.id()).put("name", deck.name());
+            (deck, out) -> out.object().put("id", deck.id()).put("name", deck.name()).end();
 
-    static final JsonReader<String> DECK_NAME = json -> json.asObject().getString("name");
+    static final JsonReader<String> DECK_NAME = JsonReader.object(object -> object.getString("name"));
 
     @Test
     void aWriterRendersTheResponse() {
@@ -64,7 +63,7 @@ class JsonSeamTest {
     @Test
     void aReaderGivenAShortArrayIsA400() {
         App app = new App().post("/first", req ->
-                WebResponse.text(req.bodyJson(json -> json.asArray().get(0).asString())));
+                WebResponse.text(req.bodyJson(JsonReader.tree(json -> json.asArray().get(0).asString()))));
 
         WebTest.test(app, client -> {
             assertThat(client.postJson("/first", "[]").statusCode()).isEqualTo(400);
@@ -96,7 +95,7 @@ class JsonSeamTest {
     /** A 400 for the wrong type names what it found, and never echoes the body back. */
     @Test
     void aTypeMismatchDoesNotEchoTheBody() {
-        App app = new App().post("/name", req -> WebResponse.text(req.bodyJson(json -> json.asObject().getString("name"))));
+        App app = new App().post("/name", req -> WebResponse.text(req.bodyJson(JsonReader.object(object -> object.getString("name")))));
 
         WebTest.test(app, client -> {
             var array = client.postJson("/name", "[" + "\"secret\",".repeat(100) + "1]");
@@ -109,7 +108,7 @@ class JsonSeamTest {
         });
     }
 
-    static final JsonReader<Long> DECK_ID = json -> json.asObject().getLong("id");
+    static final JsonReader<Long> DECK_ID = JsonReader.object(object -> object.getLong("id"));
 
     /**
      * An identifier is read from its digits, not from the nearest double: a

@@ -2,7 +2,6 @@ package net.benelog.spidersilk;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.charset.Charset;
 import java.util.Arrays;
 import java.util.Spliterator;
 import java.util.Spliterators;
@@ -13,8 +12,8 @@ import java.util.function.LongFunction;
 import org.jspecify.annotations.Nullable;
 
 /**
- * The lines of an NDJSON body, split on the bytes as they arrive so that no
- * line is held past its limit.
+ * The lines of an NDJSON body as bytes, split as they arrive so that no line
+ * is held past its limit.
  *
  * <p>{@code BufferedReader.lines()} finishes a line before anyone can look at
  * it, so a body with no newline at all is one line of any size. This reads a
@@ -27,12 +26,11 @@ import org.jspecify.annotations.Nullable;
  * contains it. A failure is kept and thrown again on every later advance, so
  * a caller that catches it cannot read on from the middle of a refused line.
  */
-final class NdjsonLines extends Spliterators.AbstractSpliterator<String> {
+final class NdjsonLines extends Spliterators.AbstractSpliterator<byte[]> {
 
     private static final int CHUNK = 8192;
 
     private final InputStream in;
-    private final Charset charset;
     private final int maxLineBytes;
     private final LongFunction<RuntimeException> tooLarge;
     private final Function<IOException, RuntimeException> unreadable;
@@ -54,11 +52,10 @@ final class NdjsonLines extends Spliterators.AbstractSpliterator<String> {
      * @param unreadable what to throw for a body the container could not
      *                   finish reading, given its failure
      */
-    NdjsonLines(InputStream in, Charset charset, int maxLineBytes, LongFunction<RuntimeException> tooLarge,
+    NdjsonLines(InputStream in, int maxLineBytes, LongFunction<RuntimeException> tooLarge,
             Function<IOException, RuntimeException> unreadable) {
         super(Long.MAX_VALUE, Spliterator.ORDERED | Spliterator.NONNULL);
         this.in = in;
-        this.charset = charset;
         this.maxLineBytes = maxLineBytes;
         this.tooLarge = tooLarge;
         this.unreadable = unreadable;
@@ -66,14 +63,14 @@ final class NdjsonLines extends Spliterators.AbstractSpliterator<String> {
     }
 
     @Override
-    public boolean tryAdvance(Consumer<? super String> action) {
+    public boolean tryAdvance(Consumer<? super byte[]> action) {
         if (failure != null) {
             throw failure;
         }
         if (ended) {
             return false;
         }
-        String next;
+        byte[] next;
         try {
             next = nextLine();
         } catch (IOException e) {
@@ -92,7 +89,7 @@ final class NdjsonLines extends Spliterators.AbstractSpliterator<String> {
     }
 
     /** The next line, or null at the end of the body. */
-    private @Nullable String nextLine() throws IOException {
+    private byte @Nullable [] nextLine() throws IOException {
         length = 0;
         boolean started = false;
         while (true) {
@@ -134,12 +131,12 @@ final class NdjsonLines extends Spliterators.AbstractSpliterator<String> {
         length += count;
     }
 
-    private String finish() {
+    private byte[] finish() {
         number++;
         int end = length > 0 && line[length - 1] == '\r' ? length - 1 : length;
         if (end > maxLineBytes) {
             throw tooLarge.apply(number);
         }
-        return new String(line, 0, end, charset);
+        return Arrays.copyOf(line, end);
     }
 }

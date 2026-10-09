@@ -12,6 +12,7 @@ plugins {
 
 spiderSilk {
     jte() // precompiled templates; leave out for FreeMarker, Handlebars, or Thymeleaf
+    json() // generated JSON codecs for the types annotated @JsonBound
 }
 
 application {
@@ -61,13 +62,20 @@ image::build-pipeline.svg[The templates become Java classes through generateJte,
 
 == spiderSilk.jte()
 
-`jte()` is the one opt-in, since not every application renders with jte.
+`jte()` is an opt-in, since not every application renders with jte.
 It sets up precompilation exactly as xref:templates.adoc#production[Templates] describes: every template under `src/main/resources/jte` becomes a Java class at build time, so the jar renders without a runtime compiler and a template that does not compile fails the build rather than the request.
 It also attaches jte's native-resources extension, which emits the reflection config a xref:native-image.adoc[native image] needs for the generated template classes.
 
+[#json]
+== spiderSilk.json()
+
+`json()` is the other opt-in, for an application that binds its types with xref:json-codegen.adoc[generated JSON codecs].
+It puts `spider-silk-json-processor`, at the plugin's own version, on javac's `annotationProcessor` path, and adds `jakarta.json.bind-api` to the compile classpath, where its annotations are read and never needed again.
+Nothing reaches the runtime classpath.
+
 == What the plugin pins
 
-The plugin's version fixes the versions of what it applies: jte {jte-version}, Jib {jib-version}, and the GraalVM build tools {graalvm-buildtools-version}.
+The plugin's version fixes the versions of what it applies: jte {jte-version}, Jib {jib-version}, the GraalVM build tools {graalvm-buildtools-version}, and, under `json()`, its own version of the processor with `jakarta.json.bind-api` 3.0.1.
 An upgrade of any of them arrives as a plugin release.
 Each convention the plugin sets is a handful of lines of plain Gradle, and the chapters linked above show the expanded form for a build that would rather own them directly.
 A Maven build inherits the same conventions from a parent POM instead: see xref:maven-parent.adoc[The Maven Parent].

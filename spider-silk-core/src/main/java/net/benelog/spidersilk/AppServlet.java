@@ -706,10 +706,15 @@ public class AppServlet extends HttpServlet {
         }
     }
 
-    /** A body already in memory: a HEAD knows its length without producing it. */
+    /**
+     * A body already in memory: its length is known before a byte of it is
+     * written, so the answer carries a {@code Content-Length} rather than
+     * being chunked once it outgrows the container's buffer, and a HEAD knows
+     * the length without producing the body.
+     */
     private void writeBytes(byte[] data, HttpServletResponse res, boolean head) throws IOException {
+        setLengthIfUnset(res, data.length);
         if (head) {
-            setLengthIfUnset(res, data.length);
             return;
         }
         res.getOutputStream().write(data);

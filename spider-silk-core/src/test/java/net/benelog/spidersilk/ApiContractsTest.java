@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 
+import net.benelog.spidersilk.json.JsonReader;
 import net.benelog.spidersilk.test.TestRequest;
 import net.benelog.spidersilk.test.WebTest;
 
@@ -119,10 +120,10 @@ class ApiContractsTest {
     void datesRejectedByJsonAndNdjsonReadersAreClientErrors() {
         App app = new App()
                 .post("/json", req -> WebResponse.text(req.bodyJson(
-                        json -> LocalDate.parse(json.asObject().getString("date"))).toString()))
+                        JsonReader.object(object -> LocalDate.parse(object.getString("date")))).toString()))
                 .post("/ndjson", req -> {
                     try (var dates = req.bodyNdjson(
-                            json -> LocalDate.parse(json.asObject().getString("date")))) {
+                            JsonReader.object(object -> LocalDate.parse(object.getString("date"))))) {
                         dates.forEach(date -> assertThat(date).isNotNull());
                     }
                     return WebResponse.empty();

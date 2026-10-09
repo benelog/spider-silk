@@ -23,7 +23,7 @@ AOP 대신 서비스가 ``TransactionTemplate``을 얇게 감싼 ``Transactions.
 
 JSON API::
 ch07-jdbc-plus의 기능에 더해, 프레임워크의 REST 지원을 보여 주기 위해 JSON API(`/api/decks`, `/api/decks/\{id}/cards`)가 같은 서비스 계층 위에 얹혀 있다.
-그 와이어 포맷은 ``flashcard.web.Codecs``에 손으로 작성한 `JsonWriter`/`JsonReader` 람다로 들어 있다.
+그 와이어 포맷은 ``flashcard.web.Codecs``에 손으로 작성한 `JsonWriter`/`JsonReader` 람다와 xref:json-codegen.adoc[생성되는 코덱] 둘로 들어 있다: 본문 레코드 ``NewDeck``은 ``@JsonBound``를 지니고, 도메인 레코드 ``DeckSummary``는 같은 클래스의 믹스인을 통해 바인딩된다.
 
 인트로스펙션::
 ``/_routes``는 모든 라우트를 나열하고, ``/openapi.json``은 같은 목록을 OpenAPI 3.1 문서로 낸다.

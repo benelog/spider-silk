@@ -13,7 +13,7 @@ package net.benelog.spidersilk.json;
  */
 public final class JsonException extends IllegalArgumentException {
 
-    JsonException(String message) {
+    public JsonException(String message) {
         super(message);
     }
 }

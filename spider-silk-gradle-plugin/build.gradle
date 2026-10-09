@@ -43,6 +43,14 @@ tasks.withType(JavaCompile).configureEach {
     options.release = 21
 }
 
+// The plugin adds the framework's own jars at its own version, which it
+// reads back from this resource at run time.
+processResources {
+    filesMatching('**/version.properties') {
+        expand(version: project.version)
+    }
+}
+
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
 }

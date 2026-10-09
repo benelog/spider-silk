@@ -240,13 +240,13 @@ public final class TestRequest {
      * the handler agree on the wire format by construction:
      *
      * <pre>{@code
-     * static final JsonWriter<NewDeck> NEW_DECK = deck -> Json.object().put("name", deck.name());
+     * static final JsonWriter<NewDeck> NEW_DECK = (deck, out) -> out.object().put("name", deck.name()).end();
      *
      * TestRequest.post("/api/decks").jsonBody(new NewDeck("Spanish"), NEW_DECK)
      * }</pre>
      */
     public <T> TestRequest jsonBody(T value, JsonWriter<T> writer) {
-        return jsonBody(writer.write(value));
+        return jsonBody(writer.toJson(value));
     }
 
     /**

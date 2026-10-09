@@ -10,7 +10,7 @@ import java.util.List;
  *
  * <pre>{@code
  * static final JsonCodec<Deck> DECK = JsonCodec.of(
- *         deck -> Json.object().put("id", deck.id()).put("name", deck.name()),
+ *         (deck, out) -> out.object().put("id", deck.id()).put("name", deck.name()).end(),
  *         JsonReader.object(object -> new Deck(object.getLong("id"), object.getString("name"))));
  * }</pre>
  */
@@ -20,13 +20,13 @@ public interface JsonCodec<T> extends JsonWriter<T>, JsonReader<T> {
     static <T> JsonCodec<T> of(JsonWriter<T> writer, JsonReader<T> reader) {
         return new JsonCodec<>() {
             @Override
-            public JsonValue write(T value) {
-                return writer.write(value);
+            public void write(T value, JsonOutput out) {
+                writer.write(value, out);
             }
 
             @Override
-            public T read(JsonValue json) {
-                return reader.read(json);
+            public T read(JsonInput in) {
+                return reader.read(in);
             }
         };
     }

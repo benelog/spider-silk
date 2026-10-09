@@ -2,7 +2,7 @@
 :navtitle: External JSON Binding
 
 An application can bind JSON with a library of its own, through a seam of two methods that core already has.
-Core's JSON is hand-written on purpose, but that decision is the framework's to make for core, not for the application.
+Core's JSON is hand-written or generated from the type on purpose, but that decision is the framework's to make for core, not for the application.
 An application with three hundred DTOs, or one whose wire format is generated from a schema it does not own, has a reason to bind objects with a library.
 
 == The seam
@@ -18,11 +18,11 @@ public BufferedReader bodyReader() // the characters, unparsed
 ----
 
 That is the whole integration.
-Do not route another library's output through `JsonWriter<T>`: a `JsonWriter` returns a `JsonValue`, which would mean re-parsing a document the library had just finished writing.
+Do not route another library's output through `JsonWriter<T>`: a `JsonWriter` writes values, not text, so the document the library had just finished writing would be parsed only to be written again.
 The library serializes, and `rawJson(String)` sends what it produced.
 
-A body is read one way: as the text `body()` keeps, or unread through `bodyStream()`, `bodyReader()`, or `bodyNdjson()`.
-`body()` reads the text once and keeps it for the rest of the request, so `bodyJson()` and a second `body()` answer the same body, whichever filter or handler asked first.
+A body is read one way: as the bytes `body()` and `bodyJson()` keep, or unread through `bodyStream()`, `bodyReader()`, or `bodyNdjson()`.
+`body()` reads the bytes once and keeps them for the rest of the request, so `bodyJson()` and a second `body()` answer the same body, whichever filter or handler asked first.
 A request whose text was read throws `IllegalStateException` from `bodyStream()`, `bodyReader()`, and `bodyNdjson()`, since the reader underneath is already at its end.
 A body handed over unread throws `IllegalStateException` from `body()` and `bodyJson()`, since nobody can say how much of it was consumed.
 The stream and the reader exclude each other as well, which is the servlet API's own rule.
@@ -91,7 +91,10 @@ Both are the application's to answer, since core has not been told this body is 
 xref:reflection-scope.adoc[The framework's no-reflection rule] is about core, and a library an application adds answers for itself.
 Jackson and Gson both read and write fields reflectively, which is a real cost under a xref:native-image.adoc[native image]: every bound type needs a reflection entry.
 
-https://avaje.io/jsonb/[avaje-jsonb] is a binder that keeps the runtime free of reflection:
+Core's own answer to a type that should bind itself is xref:json-codegen.adoc[a generated codec]: `@JsonBound` on the type, and the build writes a `JsonCodec` that a handler names like any other.
+A library that generates its code takes the same trade from outside the framework.
+
+https://avaje.io/jsonb/[avaje-jsonb] is such a binder, and keeps the runtime free of reflection:
 
 [source,java]
 ----
@@ -118,8 +121,8 @@ What it does *not* keep is the stronger promise underneath the no-reflection rul
 A generated adapter derives its field names from the record's components, so renaming a component renames a JSON field.
 It does so silently, at compile time, in a build that still succeeds.
 Pinning each name with `@Json.Property("...")` restores the guarantee, and costs about as much typing as the hand-written writer it replaced.
-That is the trade.
-The application decides which side of that trade it takes, and core is not involved either way.
+That is the trade, and core's own generated codec makes it on the same terms, with xref:json-codegen.adoc#names[an option that turns a missing name into a compile error].
+The application decides which side of that trade it takes.
 
 DSL-JSON's `@CompiledJson` works the same way, with one difference worth knowing.
 It keeps a runtime reflection fallback for types the processor did not see, so "no reflection" there is a configuration to hold rather than a property of the build.

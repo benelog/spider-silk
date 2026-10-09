@@ -1,6 +1,5 @@
 package net.benelog.spidersilk;
 
-import java.io.BufferedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
@@ -23,6 +22,7 @@ import com.google.errorprone.annotations.CheckReturnValue;
 import org.jspecify.annotations.Nullable;
 
 import net.benelog.spidersilk.json.Json;
+import net.benelog.spidersilk.json.JsonOutput;
 import net.benelog.spidersilk.json.JsonSink;
 import net.benelog.spidersilk.json.JsonStreamWriter;
 import net.benelog.spidersilk.json.JsonValue;
@@ -200,9 +200,9 @@ public final class WebResponse {
         return of(new Bytes(value.toJsonBytes())).contentType("application/json");
     }
 
-    /** A value written as JSON through a hand-written writer. */
+    /** A value written as JSON through its writer, straight into the bytes the body carries. */
     public static <T> WebResponse json(T value, JsonWriter<T> writer) {
-        return json(writer.write(value));
+        return of(new Bytes(writer.toJsonBytes(value))).contentType("application/json");
     }
 
     /**
@@ -232,11 +232,9 @@ public final class WebResponse {
     public static WebResponse jsonArray(JsonStreamWriter writer) {
         Objects.requireNonNull(writer, "writer");
         return stream("application/json", out -> {
-            OutputStream buffered = buffered(out);
-            ArraySink sink = new ArraySink(buffered);
+            ArraySink sink = new ArraySink(JsonOutput.to(out));
             writer.write(sink);
             sink.close();
-            buffered.flush();
         });
     }
 
@@ -267,9 +265,9 @@ public final class WebResponse {
     public static WebResponse ndjson(JsonStreamWriter writer) {
         Objects.requireNonNull(writer, "writer");
         return stream("application/x-ndjson", out -> {
-            OutputStream buffered = buffered(out);
-            writer.write(new LinesSink(buffered));
-            buffered.flush();
+            JsonOutput json = JsonOutput.to(out);
+            writer.write(new LinesSink(json));
+            json.flush();
         });
     }
 
@@ -848,61 +846,55 @@ public final class WebResponse {
     }
 
     /**
-     * Each element arrives as its UTF-8 bytes, already encoded, and most are
-     * small, so they are gathered into one buffer rather than handed to the
-     * container one element at a time.
+     * Framing for {@link #jsonArray}: the array the elements go into, whose
+     * brackets and commas the output supplies. Each element is written into
+     * the output's buffer, which goes to the container as it fills, so no
+     * element is ever a byte array of its own.
      */
-    private static OutputStream buffered(OutputStream out) {
-        return new BufferedOutputStream(out, 8192);
-    }
-
-    /** Framing for {@link #jsonArray}: the brackets, and a comma between elements. */
     private static final class ArraySink implements JsonSink {
 
-        private final OutputStream out;
-        private boolean started;
+        private final JsonOutput out;
 
-        ArraySink(OutputStream out) {
+        ArraySink(JsonOutput out) {
             this.out = out;
+            out.array();
         }
 
         @Override
         public void write(JsonValue value) {
-            try {
-                out.write(started ? ',' : '[');
-                started = true;
-                out.write(value.toJsonBytes());
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+            out.value(value);
+        }
+
+        @Override
+        public <T> void write(T value, JsonWriter<T> writer) {
+            writer.write(value, out);
         }
 
         /** An array nothing was written to is still an array: {@code []}. */
-        void close() throws IOException {
-            if (!started) {
-                out.write('[');
-            }
-            out.write(']');
+        void close() {
+            out.end();
+            out.flush();
         }
     }
 
     /** Framing for {@link #ndjson}: a newline after every value, including the last. */
     private static final class LinesSink implements JsonSink {
 
-        private final OutputStream out;
+        private final JsonOutput out;
 
-        LinesSink(OutputStream out) {
+        LinesSink(JsonOutput out) {
             this.out = out;
         }
 
         @Override
         public void write(JsonValue value) {
-            try {
-                out.write(value.toJsonBytes());
-                out.write('\n');
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
+            out.value(value).newline();
+        }
+
+        @Override
+        public <T> void write(T value, JsonWriter<T> writer) {
+            writer.write(value, out);
+            out.newline();
         }
     }
 

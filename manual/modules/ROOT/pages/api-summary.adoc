@@ -45,7 +45,7 @@ Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that
 * Content negotiation: `accepts(types...)` answers with the type the caller prefers out of the ones offered, 406 when it will take none of them; `acceptedTypes()` for the parsed `Accept` header
 * Cookies the client sent: `cookie(name)`, `cookies()`
 * Body: `body()`, `bodyJson()`, `bodyJson(reader)` (400 on a body the reader rejects, 413 on a body over the limit).
-  The text is read once and kept, so every call returns the whole body
+  The bytes are read once and kept, so every call answers the whole body, and `bodyJson` parses them as they arrived
 * Multipart uploads: `file(name)` (400 when absent), `fileOrNull(name)` (null when absent), `files(name)` for a field that carries several, and 413 or 400 from all three for an upload the container refuses.
   `UploadedFile` answers `fileName()`, `contentType()`, `size()`, `bytes()`, `text()`, `inputStream()`, and `writeTo(path)`
 * Body, unread: `bodyStream()` and `bodyReader()` hand it over for a parser from another library, and neither mixes with the kept text: whichever goes second throws `IllegalStateException`.
@@ -71,3 +71,16 @@ Tools that read JSpecify, such as NullAway and IntelliJ IDEA, report a null that
   A header that must be sent twice is written through `raw`; see xref:response.adoc#headers[Headers]
 
 See xref:response.adoc[The Response] for the shape of `body()` and the lambda families.
+
+== What `net.benelog.spidersilk.json` provides
+
+* The tree: `Json.object()`, `Json.array()`, `Json.parse(text)`, `Json.parse(utf8)`, and `JsonValue` with `JsonObject`, `JsonArray`, and `JsonPrimitive`; see xref:json.adoc[JSON]
+* Mappings: `JsonWriter<T>`, a lambda `(value, out) -> ...` over a `JsonOutput`; `JsonReader<T>`, a lambda over a `JsonInput`; and `JsonCodec<T>`, both at once.
+  `JsonWriter.list`, `JsonWriter.tree`, `JsonReader.object`, `JsonReader.list`, `JsonReader.tree`, `JsonCodec.of`, and `JsonCodec.list` build them.
+  `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, and `reader.fromJsonBytes(utf8)` run one outside a request
+* `JsonOutput`: `object()`, `array()`, `end()`, `name(key)`, `put(key, ...)`, `putNull(key)`, `value(...)`, `nullValue()`, `values(strings)`, and `newline()`.
+  `JsonOutput.inMemory()` answers `toBytes()` and `toJson()`, and `JsonOutput.to(stream)` sends its buffer on `flush()`
+* `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readNumber()`, `readBoolean()`, `readNull()`, `readValue()`, `skipValue()`, `end()`, and `error(message)`, over `JsonInput.of(utf8)` or `JsonInput.of(text)`
+* `JsonKey.of(name)`: a member name encoded once, for `put`, `name`, and `keyIs`
+* `@JsonBound`: the codec of the annotated type, or of the type it names, generated at compile time as `<Type>Json.CODEC` by `spider-silk-json-processor`; see xref:json-codegen.adoc[Generated JSON Codecs]
+* Streamed answers: `JsonSink.write(value)` and `write(value, writer)` inside `jsonArray` and `ndjson`; see xref:large-json.adoc[Large JSON and NDJSON]

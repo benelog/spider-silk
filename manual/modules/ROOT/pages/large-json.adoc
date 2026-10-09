@@ -3,8 +3,8 @@
 
 `WebResponse.jsonArray(...)` and `WebResponse.ndjson(...)` write elements as they are produced, for an answer too large to hold.
 
-`WebResponse.json(list, JsonWriter.list(CARD))` builds every element as a tree, then one string holding all of them, and only then writes a byte.
-A hundred thousand cards are therefore in memory twice before the client sees the first one.
+`WebResponse.json(list, JsonWriter.list(CARD))` writes every element into one buffer, and only then sends a byte.
+A hundred thousand cards are therefore in memory as one document before the client sees the first one.
 That is the right trade for an answer that fits: it is one line, and the length is known, so the response carries a `Content-Length`.
 It is the wrong one for an answer that does not.
 
@@ -22,10 +22,10 @@ app.get("/api/decks/{deckId}/cards", req -> {
 });
 ----
 
-The response writes the brackets and the commas, so the writer supplies only the next element, and at most one element is held in memory at a time.
+The response writes the brackets and the commas, so the writer supplies only the next element, and the output's buffer goes to the container as it fills, so no element is ever a document of its own.
 An array nothing was written to is still an array: `[]`.
 
-`sink.write(value, writer)` takes the same hand-written `JsonWriter<T>` as everything else.
+`sink.write(value, writer)` takes the same `JsonWriter<T>` as everything else, hand-written or generated.
 Streaming changes how the output is framed, not how a value is mapped.
 Writing throws `UncheckedIOException` rather than a checked `IOException`, so `card -> sink.write(card, CARD)` is an ordinary `Consumer` and fits inside a row callback over a database cursor.
 
@@ -103,8 +103,7 @@ Every caveat follows from that inheritance:
 
 == Reading a single large document
 
-Core has no streaming *parser*.
-`req.bodyJson()` builds the whole tree, because a tree is what a hand-written `JsonReader` reads.
-It reads the body under the 1MB body limit, so a larger document answers 413 unless xref:request.adoc#body-limits[`bodyLimits`] raises the limit.
+`req.bodyJson(reader)` holds the body as bytes under the 1MB body limit, so a larger document answers 413 unless xref:request.adoc#body-limits[`bodyLimits`] raises the limit.
+A reader written against the `JsonInput`, or generated from the type, reads those bytes one value at a time and builds no tree, while `req.bodyJson()` and `JsonReader.object` build the tree a hand-written reader reads.
 For a single JSON document too large to hold, reach for NDJSON: a body of one value per line never needs a streaming parser, however large it is.
 Where the format is not yours to choose, `req.bodyStream()` hands the unread bytes to a streaming parser from another library, as xref:json-interop.adoc[External JSON Binding] describes.

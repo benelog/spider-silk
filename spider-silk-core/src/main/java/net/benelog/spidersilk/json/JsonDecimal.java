@@ -44,6 +44,11 @@ final class JsonDecimal extends Number {
      * whatever zeros surrounded them in the text.
      */
     long exactLong() {
+        return exactLong(text);
+    }
+
+    /** {@link #exactLong()} over a number token's text, which a pull parser holds without the double. */
+    static long exactLong(String text) {
         int exponentAt = Math.max(text.indexOf('e'), text.indexOf('E'));
         String mantissa = exponentAt < 0 ? text : text.substring(0, exponentAt);
         boolean negative = mantissa.startsWith("-");
@@ -66,7 +71,7 @@ final class JsonDecimal extends Number {
             return 0L;
         }
         if (end - start > 19) {
-            throw notAnInteger();
+            throw notAnInteger(text);
         }
 
         if (exponentAt >= 0) {
@@ -76,7 +81,7 @@ final class JsonDecimal extends Number {
             if (magnitude.length() > 18) {
                 // A nonzero mantissa this far from the point is a fraction
                 // below any long, or a whole number beyond one.
-                throw notAnInteger();
+                throw notAnInteger(text);
             }
             long shift = Long.parseLong(magnitude);
             scale += negativeExponent ? shift : -shift;
@@ -84,13 +89,13 @@ final class JsonDecimal extends Number {
         // The last digit is nonzero, so a positive scale leaves a fraction, and
         // nineteen or more places to the left make it 10^19 or more.
         if (scale > 0 || scale < -18) {
-            throw notAnInteger();
+            throw notAnInteger(text);
         }
         BigInteger unscaled = new BigInteger(digits.substring(start, end));
         return new BigDecimal(negative ? unscaled.negate() : unscaled, (int) scale).longValueExact();
     }
 
-    private ArithmeticException notAnInteger() {
+    private static ArithmeticException notAnInteger(String text) {
         return new ArithmeticException("Not an integer: " + text);
     }
 

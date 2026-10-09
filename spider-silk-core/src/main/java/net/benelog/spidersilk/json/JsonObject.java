@@ -68,8 +68,8 @@ public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, J
         return member(key, value == null ? JsonPrimitive.NULL : value);
     }
 
-    /** Puts a JsonValue, or a String, a Long, or a Double held as it is. */
-    private JsonObject member(String key, Object member) {
+    /** Puts a JsonValue, or a String, a Long, a Double, or a parsed decimal held as it is. */
+    JsonObject member(String key, Object member) {
         Objects.requireNonNull(key, "key");
         int at = indexOf(key);
         if (at >= 0) {

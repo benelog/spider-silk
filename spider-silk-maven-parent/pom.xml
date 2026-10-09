@@ -55,6 +55,7 @@
          where upstream allows: Jib's Maven plugin lags its Gradle plugin
          (3.5.2 is the latest on Central against Gradle's 3.5.4). -->
     <jte.version>3.2.4</jte.version>
+    <maven-compiler.version>3.13.0</maven-compiler.version>
     <jib.version>3.5.2</jib.version>
     <native-buildtools.version>1.1.13</native-buildtools.version>
     <jib-native-image-extension.version>0.1.0</jib-native-image-extension.version>
@@ -72,6 +73,29 @@
   <build>
     <pluginManagement>
       <plugins>
+
+        <!-- The spiderSilk { json() } counterpart: the annotation processor on
+             javac's processor path, so a type annotated @JsonBound gets its
+             JSON codec at compile time. It applies to every child, since the
+             compiler plugin runs in every build, and costs nothing where no
+             type is annotated. A child that uses the jakarta.json.bind
+             annotations adds jakarta.json.bind:jakarta.json.bind-api itself,
+             with the provided scope: the annotations are read at compile time
+             and never needed again. -->
+        <plugin>
+          <groupId>org.apache.maven.plugins</groupId>
+          <artifactId>maven-compiler-plugin</artifactId>
+          <version>${maven-compiler.version}</version>
+          <configuration>
+            <annotationProcessorPaths>
+              <path>
+                <groupId>net.benelog.spidersilk</groupId>
+                <artifactId>spider-silk-json-processor</artifactId>
+                <version>1.1.0</version>
+              </path>
+            </annotationProcessorPaths>
+          </configuration>
+        </plugin>
 
         <!-- Declaring jib-maven-plugin opts in: the base image, the port, and
              the layer-friendly defaults come from here, leaving the child the

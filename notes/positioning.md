@@ -38,7 +38,7 @@ The README and the manual lead with this line: a servlet-native web layer with n
 | Handler shape | returns a `WebResponse` | writes to `Context` | returns a body, writes `Response` | writes to `ServerResponse` | returns a value |
 | Reflection at runtime | none | JSON only (Jackson) | JSON only | JSON only | pervasive |
 | DI container | none | none | none | none | yes |
-| JSON | hand-built `Json` tree | `ctx.json(pojo)` | bring your own | JSON-P / JSON-B | Jackson |
+| JSON | a lambda over one byte engine, or a codec generated from the type | `ctx.json(pojo)` | bring your own | JSON-P / JSON-B | Jackson |
 | Templates | jte by default, one-method `TemplateRenderer` seam, FreeMarker/Handlebars/Thymeleaf modules | many, pluggable | many, pluggable | none | many |
 | Server | embedded Jetty, Tomcat, or Undertow, swappable | embedded Jetty | embedded Jetty | Loom-native Níma | Tomcat (or Jetty/Undertow) |
 | Servlet deployable | yes | no | no | no | yes (war) |
@@ -53,7 +53,7 @@ The README and the manual lead with this line: a servlet-native web layer with n
 
 1. **No reflection across the whole request.**
    Javalin and Helidon hand JSON to Jackson or JSON-B, so renaming a record field silently changes the wire format.
-   Here the wire format changes only when someone edits the handler.
+   Here the wire format changes only when someone edits the handler, and a generated codec names its keys from the type, with an option that makes an unnamed one a compile error.
    Templates are the one exception, and each engine answers for itself: jte compiles `${deck.title}` to a method call, while the FreeMarker, Handlebars, and Thymeleaf modules bring their reflection with them.
 2. **A handler answers by returning, so the compiler checks that it answered.**
    - A branch that forgets to respond is a compile error, and a double response cannot be written.
@@ -83,9 +83,9 @@ The README and the manual lead with this line: a servlet-native web layer with n
 
 ## Weaknesses, stated precisely
 
-1. **JSON output is verbose.**
-   `Json.object().put("id", d.id()).put("name", d.name())` per DTO is the biggest ergonomic gap versus a reflective `json(deck)`, and the price of the core principle.
-   `JsonWriter`, `JsonReader`, and `JsonCodec` reduce it to one lambda per type rather than one tree per handler.
+1. **JSON mapping is a choice to make.**
+   A hand-written `JsonWriter` keeps the wire format in the handler's own code, and a generated codec takes it from the type's declaration, so a rename on the type is a rename on the wire unless the build asks for explicit names.
+   Either is one line per type at the call site, where a reflective `json(deck)` is none, and that line is the price of the core principle.
 2. **Static files are never compressed by core itself.**
    - Validators, conditional requests, a hosted path prefix, and a directory on disk all ship.
    - `precompressed()` serves the `.br` or `.gz` a build left beside the asset.

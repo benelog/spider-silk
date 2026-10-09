@@ -3,8 +3,8 @@
 
 ``WebResponse.jsonArray(...)``와 ``WebResponse.ndjson(...)``은 한 번에 담기에 너무 큰 응답을 위해 요소를 만들어지는 대로 쓴다.
 
-``WebResponse.json(list, JsonWriter.list(CARD))``는 모든 요소를 트리로 만들고, 그다음 그 전부를 담은 문자열 하나를 만들고, 그런 뒤에야 바이트를 쓴다.
-따라서 클라이언트가 첫 카드를 보기 전에 십만 장의 카드가 메모리에 두 번 올라간다.
+``WebResponse.json(list, JsonWriter.list(CARD))``는 모든 요소를 버퍼 하나에 쓰고, 그런 뒤에야 바이트를 보낸다.
+따라서 클라이언트가 첫 카드를 보기 전에 십만 장의 카드가 문서 하나로 메모리에 올라간다.
 담을 수 있는 크기의 응답에는 이 방식이 알맞다: 한 줄이면 되고, 길이를 알 수 있으므로 응답에 ``Content-Length``가 붙는다.
 담을 수 없는 응답에는 알맞지 않다.
 
@@ -22,10 +22,10 @@ app.get("/api/decks/{deckId}/cards", req -> {
 });
 ----
 
-대괄호와 쉼표는 응답이 쓰므로, 라이터는 다음 요소만 내놓으면 되고, 메모리에는 한 번에 요소 하나만 올라간다.
+대괄호와 쉼표는 응답이 쓰므로 라이터는 다음 요소만 내놓으면 되고, 출력의 버퍼는 차는 대로 컨테이너로 넘어가므로 어떤 요소도 혼자 문서가 되는 일이 없다.
 아무것도 쓰지 않은 배열도 여전히 배열이다: `[]`.
 
-``sink.write(value, writer)``는 다른 모든 곳과 같은 손으로 작성한 ``JsonWriter<T>``를 받는다.
+``sink.write(value, writer)``는 손으로 작성했든 생성했든 다른 모든 곳과 같은 ``JsonWriter<T>``를 받는다.
 스트리밍은 출력을 감싸는 방식을 바꿀 뿐, 값을 매핑하는 방식은 바꾸지 않는다.
 쓰기는 검사 예외인 ``IOException``이 아니라 ``UncheckedIOException``을 던지므로, ``card -> sink.write(card, CARD)``가 평범한 ``Consumer``가 되어 데이터베이스 커서를 도는 행 콜백 안에 들어갈 수 있다.
 
@@ -103,8 +103,7 @@ app.post("/api/decks/{deckId}/cards.ndjson", req -> {
 
 == 단일 대용량 문서 읽기
 
-코어에는 스트리밍 **파서**가 없다.
-``req.bodyJson()``은 트리 전체를 만드는데, 손으로 작성한 ``JsonReader``가 읽는 것이 트리이기 때문이다.
-본문은 1MB 본문 한도 안에서 읽으므로, 더 큰 문서는 xref:request.adoc#body-limits[`bodyLimits`]로 한도를 올리지 않는 한 413으로 응답한다.
+``req.bodyJson(reader)``는 본문을 1MB 본문 한도 안에서 바이트로 담으므로, 더 큰 문서는 xref:request.adoc#body-limits[`bodyLimits`]로 한도를 올리지 않는 한 413으로 응답한다.
+``JsonInput``을 상대로 작성하거나 타입에서 생성한 리더는 그 바이트를 한 번에 값 하나씩 읽으며 트리를 만들지 않고, ``req.bodyJson()``과 ``JsonReader.object``는 손으로 작성한 리더가 읽는 트리를 만든다.
 담기에 너무 큰 단일 JSON 문서에는 NDJSON을 쓴다: 한 줄에 값 하나씩인 본문은 아무리 커도 스트리밍 파서가 필요 없다.
 포맷을 고를 수 없는 곳에서는 xref:json-interop.adoc[외부 JSON 바인딩]에서 설명하듯 ``req.bodyStream()``이 읽지 않은 바이트를 다른 라이브러리의 스트리밍 파서에 넘겨준다.

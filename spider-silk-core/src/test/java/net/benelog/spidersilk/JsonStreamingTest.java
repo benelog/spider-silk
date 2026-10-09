@@ -25,7 +25,7 @@ class JsonStreamingTest {
     }
 
     static final JsonWriter<Card> CARD =
-            card -> Json.object().put("id", card.id()).put("text", card.text());
+            (card, out) -> out.object().put("id", card.id()).put("text", card.text()).end();
 
     static final JsonReader<Card> READ_CARD =
             JsonReader.object(object -> new Card(object.getLong("id"), object.getString("text")));

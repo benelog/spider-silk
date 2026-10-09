@@ -130,7 +130,7 @@ Add one only when you want what it names instead of, or beside, the core default
 
 === Build
 
-The build modules carry optional packaging conventions: precompiled jte, a Jib image, and a native build.
+The build modules carry optional packaging conventions, precompiled jte, a Jib image, and a native build, and the generator of JSON codecs.
 
 [cols="2,3",options="header"]
 |===
@@ -141,6 +141,9 @@ The build modules carry optional packaging conventions: precompiled jte, a Jib i
 
 | `spider-silk-maven-parent`
 | xref:maven-parent.adoc[Maven], used as the parent POM
+
+| `spider-silk-json-processor`
+| javac on either build tool, as an annotation processor: xref:json-codegen.adoc[Generated JSON Codecs] for the types annotated `@JsonBound`, with nothing added at run time
 |===
 
 === Example

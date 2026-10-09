@@ -103,6 +103,38 @@ class SpiderSilkPluginTest {
     }
 
     @Test
+    void jsonAddsTheProcessorAndTheAnnotationsAtCompileTimeOnly() throws IOException {
+        Files.writeString(projectDir.resolve("build.gradle"), """
+                plugins {
+                    id 'net.benelog.spidersilk'
+                }
+                repositories {
+                    mavenCentral()
+                }
+                spiderSilk {
+                    json()
+                }
+                application {
+                    mainClass = 'scratch.Main'
+                }
+                tasks.register('probe') {
+                    doLast {
+                        println "annotationProcessor=" + configurations.annotationProcessor.dependencies.collect { "$it.group:$it.name:$it.version" }
+                        println "compileOnly=" + configurations.compileOnly.dependencies.collect { "$it.group:$it.name:$it.version" }
+                        println "runtime=" + configurations.runtimeClasspath.allDependencies.collect { "$it.group:$it.name" }
+                    }
+                }
+                """);
+
+        String output = probe().getOutput();
+
+        assertThat(output).contains("annotationProcessor=[net.benelog.spidersilk:spider-silk-json-processor:" + SpiderSilkExtension.VERSION + "]");
+        assertThat(output).contains("compileOnly=[jakarta.json.bind:jakarta.json.bind-api:" + SpiderSilkExtension.JSONB_API_VERSION + "]");
+        assertThat(output).doesNotContain("spider-silk-json-processor]").contains("runtime=[]");
+        assertThat(SpiderSilkExtension.VERSION).matches("\\d+\\.\\d+\\.\\d+(-SNAPSHOT)?");
+    }
+
+    @Test
     void jteWiresPrecompilationAndNativeResources() throws IOException {
         Files.writeString(projectDir.resolve("build.gradle"), """
                 plugins {
