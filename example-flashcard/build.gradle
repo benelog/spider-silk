@@ -26,7 +26,7 @@ dependencies {
     // runtime classpath: Logback here, configured by src/main/resources/logback.xml.
     // Jetty logs through the same API, so its lines follow the same configuration.
     implementation 'org.slf4j:slf4j-api:2.0.19'
-    runtimeOnly 'ch.qos.logback:logback-classic:1.6.4'
+    runtimeOnly 'ch.qos.logback:logback-classic:1.6.5'
 
     testImplementation project(':spider-silk-test')
     testImplementation project(':spider-silk-tomcat')
