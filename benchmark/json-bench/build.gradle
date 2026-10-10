@@ -12,7 +12,7 @@ dependencies {
     annotationProcessor 'net.benelog.silkjson:silk-json-processor'
     implementation 'org.openjdk.jmh:jmh-core:1.37'
     annotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
-    implementation 'tools.jackson.core:jackson-databind:3.1.5'
+    implementation 'tools.jackson.core:jackson-databind:3.2.3'
     implementation 'com.alibaba.fastjson2:fastjson2:2.0.57'
 }
 
