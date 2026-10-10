@@ -1508,7 +1508,8 @@ The tree of decision 75 stayed as a value type, and stopped being the way out an
   - It looks up no class and no member, so decision 8's rule holds, and a native image built from it needs no configuration.
   - A string is scanned a word at a time for a byte it cannot hold as itself, a short integer is counted and converted with three multiplications, and a key is written with two stores.
   - Reading the list went from 13.0 µs to fastjson2's 6.0 µs this way, and writing it from 7.0 µs to 5.2 µs.
-  - fastjson2's lead on the way out is the strings: it reads a `String`'s own bytes, where core copies the characters out with `getChars` and checks each one.
+  - A quote or a backslash is escaped in the loop that writes plain ASCII, and that loop compares each character instead of looking it up in a table, which took writing the list from 5.3 µs to 4.7 µs against fastjson2's 4.5 µs.
+  - fastjson2's lead on the way out is a string with nothing to escape, 4.4 µs against 3.6 µs for the same list, since it reads a `String`'s own bytes where core widens them with `getChars` and narrows them back a character at a time.
 - **A number with a fraction is converted from its digits and to them, with no string made.**
   - A significand up to 2^53 with a power of ten from -22 to 22 takes one multiplication or division (Clinger), the rest of 19 digits takes Eisel-Lemire's 128-bit product, and only a longer number or an undecided rounding goes to `Double.parseDouble`.
   - Reading 100 places with three such numbers each went from 12.6 µs and 43.9 KB to 5.3 µs and 11.1 KB, against fastjson2's 5.2 µs and Jackson's 24.7 µs.
@@ -1531,6 +1532,8 @@ Rejected: generating on top of jackson-core, as avaje-jsonb does, since its gene
 Rejected: an output that writes a generated codec's bytes unchecked, which wrote the list 5% faster than the checked calls and would let a codec write a document that is not JSON.
 Rejected: writing a double's digits from a table of pairs, which wrote the places in 10.0 µs against the word's 9.3 µs.
 Rejected: counting a number's digits eight at a time, which read the places in 5.7 µs to 6.1 µs against the byte loop's 5.3 µs, since a run of two to six digits ends before a word pays.
+Rejected: a pass over the whole string that only flags what needs an escape, before or while writing it, since the JIT compiler of JDK 25 vectorizes neither the narrowing of a `char` to a `byte` nor the flag, and the list took 7.4 µs to 9.2 µs against 5.3 µs.
+Rejected: the escaping loop nested around the plain one, which measured no faster than leaving the rest of the string to the slow loop.
 Rejected: `String.getBytes` for a string's bytes, since into a new array it allocates per string and measured slower, and into the buffer it cannot tell a character past Latin-1 from the byte it is cut down to.
 Rejected: `@JsonbVisibility`, `@JsonbNumberFormat`, and the JSON-P serializers, each a compile error that says so, since the first takes a reflective strategy and the others a runtime the generated code does not have.
 

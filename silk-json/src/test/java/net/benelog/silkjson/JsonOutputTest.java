@@ -341,6 +341,145 @@ class JsonOutputTest {
         assertThatThrownBy(out::flush).isInstanceOf(UncheckedIOException.class).hasMessageContaining("gone");
     }
 
+    /** One character, or a pair, of each kind the string writer tells apart. */
+    private static final String[] PIECES = {"\"", "\\", "\n", "\r", "\t", "\b", "\f", "\u0000", "\u0001", "\u001f",
+            "\u007f", "/", "\u0080", "é", "ÿ", "\u07ff", "\u0800", "한", "\uffff", "😀", "\ud83d", "\ude00"};
+
+    /** Mostly plain ASCII, as most strings are, with a character of another kind now and then. */
+    private static String randomString(Random random, int length) {
+        StringBuilder s = new StringBuilder();
+        while (s.length() < length) {
+            if (random.nextInt(4) == 0) {
+                s.append(PIECES[random.nextInt(PIECES.length)]);
+            } else {
+                s.append((char) random.nextInt(0x20, 0x7F));
+            }
+        }
+        return s.toString();
+    }
+
+    /** A string literal as RFC 8259 has it, written a character at a time: the writer's output is held to this. */
+    private static byte[] reference(String s) {
+        StringBuilder json = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"' -> json.append("\\\"");
+                case '\\' -> json.append("\\\\");
+                case '\n' -> json.append("\\n");
+                case '\r' -> json.append("\\r");
+                case '\t' -> json.append("\\t");
+                case '\b' -> json.append("\\b");
+                case '\f' -> json.append("\\f");
+                default -> {
+                    if (Character.isHighSurrogate(c) && i + 1 < s.length() && Character.isLowSurrogate(s.charAt(i + 1))) {
+                        json.append(c).append(s.charAt(++i));
+                    } else if (c < 0x20 || Character.isSurrogate(c)) {
+                        json.append("\\u%04x".formatted((int) c));
+                    } else {
+                        json.append(c);
+                    }
+                }
+            }
+        }
+        return json.append('"').toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static byte[] concat(byte[]... parts) {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        for (byte[] part : parts) {
+            bytes.writeBytes(part);
+        }
+        return bytes.toByteArray();
+    }
+
+    /** Random strings of every kind of character, as values and as keys, against the reference. */
+    @Test
+    void randomStringsAreWrittenAsTheReferenceWritesThem() {
+        Random random = new Random(20261010);
+        ByteArrayOutputStream streamed = new ByteArrayOutputStream();
+        JsonOutput stream = JsonOutput.to(streamed).array();
+        ByteArrayOutputStream expected = new ByteArrayOutputStream();
+        expected.write('[');
+        for (int n = 0; n < 20_000; n++) {
+            String s = randomString(random, random.nextInt(random.nextInt(8) == 0 ? 200 : 40));
+            byte[] literal = reference(s);
+
+            assertThat(JsonOutput.inMemory().value(s).toBytes()).as("%s", s).isEqualTo(literal);
+            assertThat(JsonOutput.inMemory().object().put(s, 1L).end().toBytes())
+                    .as("%s", s).isEqualTo(concat(new byte[] {'{'}, literal, new byte[] {':', '1', '}'}));
+            stream.value(s);
+            if (n > 0) {
+                expected.write(',');
+            }
+            expected.writeBytes(literal);
+        }
+        stream.end().flush();
+        expected.write(']');
+
+        assertThat(streamed.toByteArray()).isEqualTo(expected.toByteArray());
+    }
+
+    /** Lengths on either side of a word and of two, with the characters that leave the plain run at every place. */
+    @Test
+    void stringsOfEveryLengthNearAWordAreWrittenAsTheReferenceWritesThem() {
+        List<String> strings = new ArrayList<>();
+        for (int length : new int[] {0, 1, 2, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65}) {
+            String plain = "abcdefghijklmnopqrstuvwxyz0123456789".repeat(2).substring(0, length);
+            strings.add(plain);
+            for (String piece : PIECES) {
+                strings.add(piece.repeat(length));
+                for (int at = 0; at < length; at++) {
+                    strings.add(plain.substring(0, at) + piece + plain.substring(at + 1));
+                }
+            }
+        }
+        for (String s : strings) {
+            assertThat(JsonOutput.inMemory().value(s).toBytes()).as("%s", s).isEqualTo(reference(s));
+            assertThat(JsonOutput.inMemory().array().value("v").value(s).end().toBytes())
+                    .as("%s", s).isEqualTo(concat("[\"v\",".getBytes(StandardCharsets.UTF_8), reference(s), new byte[] {']'}));
+        }
+    }
+
+    /**
+     * A string that starts just before the end of the buffer: the room kept for
+     * it holds its plain characters, and its escapes find the buffer full. An
+     * in-memory output on a virtual thread starts with a small buffer of its own,
+     * which grows; a stream output sends its buffer and goes on.
+     */
+    @Test
+    void aStringAcrossTheEndOfTheBufferIsWrittenWhole() throws InterruptedException {
+        List<String> strings = List.of("\"".repeat(40), "a\"b\\c".repeat(10), "plain text".repeat(5) + "\"",
+                "한글과 \"quotes\" 😀".repeat(4), "\n\u0001".repeat(30));
+        List<Throwable> failures = new ArrayList<>();
+        Thread thread = Thread.ofVirtual().start(() -> {
+            try {
+                for (String s : strings) {
+                    for (int filler = 0; filler < 600; filler++) {
+                        String before = "x".repeat(filler);
+                        assertThat(JsonOutput.inMemory().array().value(before).value(s).end().toBytes())
+                                .isEqualTo(concat(new byte[] {'['}, reference(before), new byte[] {','}, reference(s), new byte[] {']'}));
+                    }
+                }
+            } catch (Throwable e) {
+                failures.add(e);
+            }
+        });
+        thread.join();
+        assertThat(failures).isEmpty();
+
+        for (String s : strings) {
+            for (int filler = 8100; filler < 8200; filler++) {
+                String before = "x".repeat(filler);
+                ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+                JsonOutput.to(bytes).array().value(before).value(s).end().flush();
+
+                assertThat(bytes.toByteArray())
+                        .isEqualTo(concat(new byte[] {'['}, reference(before), new byte[] {','}, reference(s), new byte[] {']'}));
+            }
+        }
+    }
+
     @Test
     void aJsonKeyIsWrittenAsItsNameWouldBe() {
         JsonKey plain = JsonKey.of("plain");

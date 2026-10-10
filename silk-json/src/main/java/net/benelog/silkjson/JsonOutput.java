@@ -38,8 +38,9 @@ import org.jspecify.annotations.Nullable;
  * the whole process, and once any string held outside Latin-1 has gone
  * through it, Korean text in a request or a log line, every loop calling it
  * takes the slower path; the loop over an array has no such path to take.
- * Only the rare characters, an escape or a character outside ASCII, leave the
- * first loop. That is where a long document spends its time.
+ * A quote or a backslash is escaped in that loop, and only the rare
+ * characters, a control character or a character outside ASCII, leave it.
+ * That loop is where a long document spends its time.
  */
 public final class JsonOutput {
 
@@ -627,6 +628,14 @@ public final class JsonOutput {
      * written as itself it reached the client as {@code ?}, and the value read
      * back differed from the one written. A valid pair is written as the one
      * character it encodes.
+     *
+     * <p>The first loop writes plain ASCII and escapes a quote or a backslash
+     * as it goes, each escape moving the characters after it one byte further
+     * on; only a control character or a character outside ASCII leaves it for
+     * {@link #rest}. It checks a character with comparisons rather than a
+     * table, which costs a load per character. The room kept for the string
+     * holds no escape, so an escape that finds the buffer full makes room for
+     * the worst of what is left: every character escaped.
      */
     private void string(String s) {
         int length = s.length();
@@ -638,13 +647,23 @@ public final class JsonOutput {
         s.getChars(0, length, chars, 0);
         ensure(length + 2);
         byte[] buf = this.buf;
-        int at = pos + 1;
+        int at = pos + 1; // character i goes to at + i, and at moves on by one with each escape
         buf[pos] = '"';
         int i = 0;
         for (; i < length; i++) {
             char c = chars[i];
-            if (c >= 0x80 || !PLAIN[c]) {
-                break;
+            if (c >= 0x80 || c < 0x20 || c == '"' || c == '\\') {
+                if (c != '"' && c != '\\') {
+                    break;
+                }
+                if (at + length + 2 > buf.length) {
+                    pos = at + i;
+                    ensure(2 * (length - i) + 1);
+                    buf = this.buf;
+                    at = pos - i;
+                }
+                buf[at + i] = '\\';
+                at++;
             }
             buf[at + i] = (byte) c;
         }
@@ -660,7 +679,7 @@ public final class JsonOutput {
     }
 
     /**
-     * The rest of a string from its first character that is not plain ASCII.
+     * The rest of a string from its first control character or character outside ASCII.
      * Three bytes are reserved for every character left, which covers all but
      * a backslash-u escape; that one reserves its own.
      */
@@ -819,9 +838,13 @@ public final class JsonOutput {
 
     /** Room for that many more bytes: a stream output sends what it holds first, and either grows the buffer if it must. */
     private void ensure(int bytes) {
-        if (bytes <= buf.length - pos) {
-            return;
+        if (bytes > buf.length - pos) {
+            makeRoom(bytes);
         }
+    }
+
+    /** What {@link #ensure} does when the buffer is short, apart from it so that the check is inlined where it is made. */
+    private void makeRoom(int bytes) {
         if (stream != null && pos > 0) {
             try {
                 stream.write(buf, 0, pos);

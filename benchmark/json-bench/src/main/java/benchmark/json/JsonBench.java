@@ -29,7 +29,8 @@ import tools.jackson.databind.json.JsonMapper;
  * ({@code Json.object()}), through a hand-written writer and reader, through
  * the codec generated from the record, and through Jackson and fastjson2.
  * 100 places, each with three numbers that have a fraction, measure the
- * numbers the records have none of.
+ * numbers the records have none of. The same records with nothing to escape,
+ * and with Korean strings, tell the paths a string can take apart.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -40,6 +41,8 @@ import tools.jackson.databind.json.JsonMapper;
 public class JsonBench {
 
     static final List<Item> ITEMS = items();
+    static final List<Item> PLAIN_ITEMS = plainItems();
+    static final List<Item> KOREAN_ITEMS = koreanItems();
     static final List<Place> PLACES = places();
     static final Message MESSAGE = new Message("Hello, World!");
 
@@ -92,6 +95,24 @@ public class JsonBench {
         return List.copyOf(items);
     }
 
+    /** The same records with nothing to escape in their strings. */
+    private static List<Item> plainItems() {
+        List<Item> items = new ArrayList<>();
+        for (int i = 1; i <= 100; i++) {
+            items.add(new Item(i, "item-" + i, "The description of item " + i, i * 7 % 50, i % 3 != 0));
+        }
+        return List.copyOf(items);
+    }
+
+    /** The same records with Korean strings, which are written as three bytes a character. */
+    private static List<Item> koreanItems() {
+        List<Item> items = new ArrayList<>();
+        for (int i = 1; i <= 100; i++) {
+            items.add(new Item(i, "품목-" + i, "품목 " + i + "의 설명", i * 7 % 50, i % 3 != 0));
+        }
+        return List.copyOf(items);
+    }
+
     /** Coordinates with four and six decimals and a rating with one, each the shortest form of its double. */
     private static List<Place> places() {
         List<Place> places = new ArrayList<>();
@@ -127,6 +148,28 @@ public class JsonBench {
     @Benchmark
     public byte[] writeList_fastjson2() {
         return JSON.toJSONBytes(ITEMS);
+    }
+
+    // ---- the same records with nothing to escape, and in Korean ----
+
+    @Benchmark
+    public byte[] writePlainList_generated() {
+        return ITEMS_GENERATED.toJsonBytes(PLAIN_ITEMS);
+    }
+
+    @Benchmark
+    public byte[] writePlainList_fastjson2() {
+        return JSON.toJSONBytes(PLAIN_ITEMS);
+    }
+
+    @Benchmark
+    public byte[] writeKoreanList_generated() {
+        return ITEMS_GENERATED.toJsonBytes(KOREAN_ITEMS);
+    }
+
+    @Benchmark
+    public byte[] writeKoreanList_fastjson2() {
+        return JSON.toJSONBytes(KOREAN_ITEMS);
     }
 
     @Benchmark

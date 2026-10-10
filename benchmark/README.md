@@ -46,6 +46,7 @@ Close other heavy programs first: the numbers are only comparable within one run
 
 `json-bench` measures the serializer and the parser with no HTTP around them: the tree, a hand-written writer, the generated codec, Jackson, and fastjson2, each writing or reading the same 100 records and the same 27-byte object.
 The `Places` cases write and read 100 places with a latitude, a longitude, and a rating each, which measures the numbers with a fraction that the records have none of.
+The `PlainList` and `KoreanList` cases write the same records through the generated codec and fastjson2, once with nothing to escape and once with Korean strings, which tells apart the paths a string can take.
 
 ```bash
 ../gradlew -p json-bench installDist
