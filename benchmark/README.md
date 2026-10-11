@@ -47,6 +47,8 @@ Close other heavy programs first: the numbers are only comparable within one run
 `json-bench` measures the serializer and the parser with no HTTP around them: the tree, a hand-written writer, the generated codec, Jackson, and fastjson2, each writing or reading the same 100 records and the same 27-byte object.
 The `Places` cases write and read 100 places with a latitude, a longitude, and a rating each, which measures the numbers with a fraction that the records have none of.
 The `PlainList` and `KoreanList` cases write the same records through the generated codec and fastjson2, once with nothing to escape and once with Korean strings, which tells apart the paths a string can take.
+The `KoreanList`, `ReversedList`, and `LongStringList` cases read the same records in Korean, with their keys in reverse order, and with a description of 200 characters, and `writeLongStringList` writes the last of them.
+The documents those reads take are made in a `@State` that only they use, since a document set up for every case would train the JIT compiler on strings that the other cases never see.
 
 ```bash
 ../gradlew -p json-bench installDist

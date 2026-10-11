@@ -1510,6 +1510,11 @@ The tree of decision 75 stayed as a value type, and stopped being the way out an
   - Reading the list went from 13.0 µs to fastjson2's 6.0 µs this way, and writing it from 7.0 µs to 5.2 µs.
   - A quote or a backslash is escaped in the loop that writes plain ASCII, and that loop compares each character instead of looking it up in a table, which took writing the list from 5.3 µs to 4.7 µs against fastjson2's 4.5 µs.
   - fastjson2's lead on the way out is a string with nothing to escape, 4.4 µs against 3.6 µs for the same list, since it reads a `String`'s own bytes where core widens them with `getChars` and narrows them back a character at a time.
+- **Each kind of string and key then got a path of its own (2026-10-11).**
+  - A string outside ASCII is checked and decoded into chars in one pass, its ASCII prefix widened unchecked, which took reading the list in Korean from 11.0 µs to 5.6 µs against fastjson2's 7.9 µs.
+  - A generated read chains the declared keys first, and `keyIndex` switches on `JsonInput.keyHead()`, the four bytes where the next member stands, which took reading the list from 6.0 µs to 5.5 µs and reading it with its keys reversed from 9.5 µs to 8.0 µs.
+  - `put(JsonKey, ...)` checks the state once and writes key and value, a number below 1000 goes out with one store, and a three-byte character with one `putInt`, which took the list with nothing to escape from 4.4 µs to 4.2 µs and the Korean one from 4.4 µs to 4.0 µs.
+  - A string of 64 characters or more is narrowed by the `US_ASCII` encoder, which stops at the first character past ASCII, and checked a word at a time, which took writing 100 records with a 200-character description from 15.0 µs to 8.6 µs and costs the list 2% to 2.5%.
 - **A number with a fraction is converted from its digits and to them, with no string made.**
   - A significand up to 2^53 with a power of ten from -22 to 22 takes one multiplication or division (Clinger), the rest of 19 digits takes Eisel-Lemire's 128-bit product, and only a longer number or an undecided rounding goes to `Double.parseDouble`.
   - Reading 100 places with three such numbers each went from 12.6 µs and 43.9 KB to 5.3 µs and 11.1 KB, against fastjson2's 5.2 µs and Jackson's 24.7 µs.
@@ -1534,6 +1539,8 @@ Rejected: writing a double's digits from a table of pairs, which wrote the place
 Rejected: counting a number's digits eight at a time, which read the places in 5.7 µs to 6.1 µs against the byte loop's 5.3 µs, since a run of two to six digits ends before a word pays.
 Rejected: a pass over the whole string that only flags what needs an escape, before or while writing it, since the JIT compiler of JDK 25 vectorizes neither the narrowing of a `char` to a `byte` nor the flag, and the list took 7.4 µs to 9.2 µs against 5.3 µs.
 Rejected: the escaping loop nested around the plain one, which measured no faster than leaving the rest of the string to the slow loop.
+Rejected: decoding in one pass only a string whose ASCII prefix is under 16 bytes, which measured the same or slower than widening the prefix on every shape (8.1 µs against 6.9 µs with Korean at the tail).
+Rejected: splitting the slow writing loop into a hot one for one- to three-byte characters and the rest, which on top of `putInt` wrote the Korean list in 3.95 µs against 3.97 µs, within the noise.
 Rejected: `String.getBytes` for a string's bytes, since into a new array it allocates per string and measured slower, and into the buffer it cannot tell a character past Latin-1 from the byte it is cut down to.
 Rejected: `@JsonbVisibility`, `@JsonbNumberFormat`, and the JSON-P serializers, each a compile error that says so, since the first takes a reflective strategy and the others a runtime the generated code does not have.
 

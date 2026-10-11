@@ -1,24 +1,9 @@
 # 남은 작업
 
-2026-10-11에 silk-json 성능 작전 2-1~2-5를 작업 트리에 적용한 뒤 남은 일이다.
+2026-10-11에 silk-json 성능 작전 2-1~2-5를 커밋하고 부록 수치와 결정 76을 갱신한 뒤 남은 일이다.
 수치, 기각한 변형, 작전의 세부는 `notes/json-performance-tuning.md`에 있고, 이 파일은 할 일의 목록만 적는다.
 
-## 1. 커밋
-
-- 작업 트리의 변경은 아직 커밋하지 않았다(`AGENTS.md`: 커밋은 지시를 기다린다).
-- 범위는 silk-json(`JsonInput`, `JsonOutput`, `LittleEndian`과 테스트), silk-json-processor(`CodecSource`와 테스트), `benchmark/json-bench`의 `JsonBench`, 매뉴얼 `json.adoc`·`api-summary.adoc`(영문·한국어), `CHANGELOG.md`, `notes/json-performance-tuning.md`다.
-- 커밋을 나눈다면 라이브러리와 프로세서, 벤치마크, 문서의 셋이 자연스럽다.
-
-## 2. 부록과 결정 기록 (작전 4단계)
-
-- 부록 `benchmark.adoc`의 마이크로벤치 절은 아직 2026-10-10 수치다.
-  갱신하려면 `-prof gc`를 붙여 트리·손 라이터·Jackson 케이스까지 전체를 다시 잰다(약 1시간).
-- 새 케이스(한글·역순·200자 읽기, 200자 쓰기)를 표에 더하고, "fastjson2 stays ahead ..." 같은 문장을 새 수치로 고친다.
-- 작전 4단계의 문장을 더한다: `--sun-misc-unsafe-memory-access=deny`에서 fastjson2가 초기화되지 않는다는 행, JDK 24 이상의 경고, 네이티브 이미지에서 fast path를 끈다는 문장(미측정 표시), JEP 471·498의 상태.
-- 영문과 `manual-ko`를 같은 커밋으로 고친다.
-- `notes/decisions.md` 결정 76에 2-1~2-5를 한두 줄로, 기각한 변형(접두어 길이 가드, `rest()` 분할)을 `Rejected:` 줄로 남긴다.
-
-## 3. 빌린 버퍼 본문 (작전 3단계)
+## 1. 빌린 버퍼 본문 (작전 3단계)
 
 - 목표는 HTTP 경로에서 JSON 본문의 마지막 `Arrays.copyOf`를 없애는 것이다.
   사용자가 2026-10-10에 core의 `WebResponse.Bytes` 변경을 승인했다.
@@ -27,7 +12,7 @@
 - 문서화된 테스트 패턴 `((WebResponse.Bytes) response.body()).data()`가 바뀌는 곳(`response.adoc` 영문·한국어, `skills/spider-silk/references/testing.md`, `ReadmeSnippets`, `ApiControllerTest`, `WebResponseTest`, `ResponseBodiesTest`)을 같은 커밋에 고친다.
 - 측정은 `writeList_stream` 행과 HTTP `json-list`의 요청당 할당이다.
 
-## 4. 측정판의 나머지 (작전 0단계)
+## 2. 측정판의 나머지 (작전 0단계)
 
 - `readPythonList`(`json.dumps` 구분자), `readPrettyList`(들여쓰기), `readBigIdList`(13자리·18자리), `writeList_stream`(`nullOutputStream`)을 두 라이브러리 모두에 더한다.
 - fastjson2 쪽에 `-Dfastjson2.creator=reflect`인 readList·writeList 짝을 더한다.
@@ -37,7 +22,7 @@
 - 새 문서는 그 케이스만 쓰는 `@State`에서 만든다.
   공통 `@Setup`에서 만들면 다른 케이스의 JIT 프로파일이 바뀐다.
 
-## 5. 남은 격차
+## 3. 남은 격차
 
 - `writeList` +2~2.5%: 2-5를 얹은 뒤의 회귀이고 원인을 찾지 못했다.
   인라인 결정은 전후가 같았으므로, `string()`의 길이 분기를 호출자 쪽으로 옮기는 변형이나 async-profiler로 본다.
@@ -48,11 +33,11 @@
   체인이 한 번 끊긴 객체는 다음 키부터 `keyIndex`를 먼저 부르는 변형을 잰다.
 - 긴 문자열 읽기 1.26배: fastjson2가 `IMPL_LOOKUP`으로 묶은 JDK 내부 메서드의 몫이라 공개 API로는 닫기 어렵다고 본다.
 
-## 6. 보조 후보 (작전 2-6)
+## 4. 보조 후보 (작전 2-6)
 
 - 8~15자리 정수 `readLong`의 두 워드 읽기, 0~1자 문자열 표, enum 상수의 바이트 사전 계산, 한 바이트 미리 읽기.
 - 각자의 벤치마크 행을 먼저 만든다.
 
-## 7. 기계 상태
+## 5. 기계 상태
 
 - 측정을 위해 2026-10-11에 전원 프로파일을 `balanced`에서 `performance`로 바꿨고(`powerprofilesctl set performance`), 그대로 두었다.
