@@ -123,9 +123,9 @@ A document that lists its keys in another order then has them found in place too
 
 A string from a fixed set, such as an enum constant's name, is held as a `JsonKey` too.
 `JsonKey.names(Level.values())` encodes each constant's name once, in the order of the ordinals.
-`out.put(key, names[level.ordinal()])` copies the quoted name, and `in.readOneOf(names)` answers the index of the name that comes next, compared in place with no string made.
+`out.put(key, names[level.ordinal()])` and `out.value(names[level.ordinal()])` copy the quoted name, and `in.readOneOf(names)` answers the index of the name that comes next, compared in place with no string made.
 A value that is none of them is refused with `JsonException`.
-A generated codec writes and reads an enum property this way.
+A generated codec writes and reads an enum this way, wherever it stands: a property, an `Optional`, a collection element, or a map value.
 
 `reader.fromJson(text)` and `reader.fromJsonBytes(utf8)` read a document that holds that one value and nothing after it.
 A failure names where the input stands, as in `Near character 12: Not a JSON string: a number`.

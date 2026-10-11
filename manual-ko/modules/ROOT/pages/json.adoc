@@ -123,9 +123,9 @@ pretty printer나 Python의 ``json.dumps``가 쓰듯 키 앞이나 쉼표 뒤에
 
 enum 상수의 이름처럼 정해진 집합에서 오는 문자열도 ``JsonKey``로 둔다.
 ``JsonKey.names(Level.values())``는 각 상수의 이름을 서수 순서대로 한 번씩 인코딩한다.
-``out.put(key, names[level.ordinal()])``는 따옴표로 감싼 이름을 복사하고, ``in.readOneOf(names)``는 다음에 오는 이름을 문자열을 만들지 않고 제자리에서 비교해 그 인덱스를 답한다.
+``out.put(key, names[level.ordinal()])``와 ``out.value(names[level.ordinal()])``는 따옴표로 감싼 이름을 복사하고, ``in.readOneOf(names)``는 다음에 오는 이름을 문자열을 만들지 않고 제자리에서 비교해 그 인덱스를 답한다.
 어느 이름도 아닌 값은 ``JsonException``으로 거부한다.
-생성된 코덱은 enum 프로퍼티를 이렇게 쓰고 읽는다.
+생성된 코덱은 enum이 어디에 있든 이렇게 쓰고 읽는다: 프로퍼티, ``Optional``, 컬렉션 원소, 맵 값이다.
 
 ``reader.fromJson(text)``와 ``reader.fromJsonBytes(utf8)``는 그 값 하나만 담고 뒤에 아무것도 없는 문서를 읽는다.
 실패는 ``Near character 12: Not a JSON string: a number``처럼 입력이 어디에 있는지 밝힌다.

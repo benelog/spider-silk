@@ -144,7 +144,8 @@ class JsonProcessorTest {
                 "example.Card", "package example;" + IMPORTS + """
                         @JsonBound
                         public record Card(String text, List<Tag> tags, Set<Integer> scores, Map<String, Tag> byName,
-                                List<@Nullable String> notes, Optional<String> hint, OptionalInt weight, Level level,
+                                List<@Nullable String> notes, Optional<String> hint, OptionalInt weight, Level level, List<Level> path,
+                                Map<String, Level> byStep,
                                 LocalDate due, @JsonbDateFormat("dd/MM/yyyy") LocalDate reviewed, BigDecimal price,
                                 UUID uuid, JsonValue raw, Instant at, Duration took, short small, byte tiny, float ratio, char initial) {
                         }
@@ -152,7 +153,8 @@ class JsonProcessorTest {
         JsonCodec<Object> card = codec(result, "example.CardJson");
 
         String document = "{\"text\":\"t\",\"tags\":[{\"label\":\"a\"},{\"label\":\"b\"}],\"scores\":[1,2],\"byName\":{\"x\":{\"label\":\"c\"}},"
-                + "\"notes\":[\"n\",null],\"hint\":\"h\",\"weight\":3,\"level\":\"HARD\",\"due\":\"2026-10-09\",\"reviewed\":\"09/10/2026\","
+                + "\"notes\":[\"n\",null],\"hint\":\"h\",\"weight\":3,\"level\":\"HARD\",\"path\":[\"EASY\",\"HARD\"],"
+                + "\"byStep\":{\"one\":\"EASY\"},\"due\":\"2026-10-09\",\"reviewed\":\"09/10/2026\","
                 + "\"price\":1.50,\"uuid\":\"123e4567-e89b-12d3-a456-426614174000\",\"raw\":{\"k\":[1,true,null]},"
                 + "\"at\":\"2026-10-09T12:00:00Z\",\"took\":\"PT1H\",\"small\":7,\"tiny\":-1,\"ratio\":0.5,\"initial\":\"c\"}";
         Object read = card.fromJson(document);
@@ -160,7 +162,8 @@ class JsonProcessorTest {
         assertThat(card.toJson(read)).isEqualTo(document);
         assertThat(read.toString()).contains("tags=[Tag[label=a], Tag[label=b]]").contains("scores=[1, 2]")
                 .contains("byName={x=Tag[label=c]}").contains("notes=[n, null]").contains("hint=Optional[h]")
-                .contains("weight=OptionalInt[3]").contains("level=HARD").contains("due=2026-10-09")
+                .contains("weight=OptionalInt[3]").contains("level=HARD").contains("path=[EASY, HARD]")
+                .contains("byStep={one=EASY}").contains("due=2026-10-09")
                 .contains("reviewed=2026-10-09").contains("price=1.50").contains("at=2026-10-09T12:00:00Z")
                 .contains("took=PT1H").contains("small=7").contains("tiny=-1").contains("ratio=0.5").contains("initial=c");
 
@@ -169,14 +172,19 @@ class JsonProcessorTest {
         assertThat(sparseRead.toString()).contains("hint=Optional.empty").contains("weight=OptionalInt.empty");
         assertThat(card.toJson(sparseRead)).doesNotContain("hint").doesNotContain("weight");
 
-        assertThatThrownBy(() -> card.fromJson(document.replace("\"HARD\"", "\"MEDIUM\"")))
+        assertThatThrownBy(() -> card.fromJson(document.replace("\"level\":\"HARD\"", "\"level\":\"MEDIUM\"")))
                 .isInstanceOf(JsonException.class).hasMessageContaining("Not a name this value takes: MEDIUM");
-        assertThat(card.fromJson(document.replace("\"HARD\"", "\"\\u0048ARD\"")).toString()).contains("level=HARD");
+        assertThatThrownBy(() -> card.fromJson(document.replace("[\"EASY\",", "[\"MEDIUM\",")))
+                .isInstanceOf(JsonException.class).hasMessageContaining("Not a name this value takes: MEDIUM");
+        assertThat(card.fromJson(document.replace("\"HARD\"", "\"\\u0048ARD\"")).toString())
+                .contains("level=HARD").contains("path=[EASY, HARD]");
         assertThat(result.generated("example.CardJson"))
-                .contains("private static final example.Level[] C_level = example.Level.values();")
-                .contains("JsonKey.names(C_level);")
-                .contains("out.put(K_level, V_level[p_level.ordinal()]);")
-                .contains("C_level[in.readOneOf(V_level)]");
+                .containsOnlyOnce("private static final example.Level[] C_Level = example.Level.values();")
+                .contains("JsonKey.names(C_Level);")
+                .contains("out.put(K_level, V_Level[p_level.ordinal()]);")
+                .contains("out.value(V_Level[element.ordinal()]);")
+                .contains("C_Level[in.readOneOf(V_Level)]")
+                .doesNotContain("Level.valueOf").doesNotContain(".name()");
         assertThatThrownBy(() -> card.fromJson(document.replace("\"2026-10-09\"", "\"yesterday\"")))
                 .isInstanceOf(java.time.DateTimeException.class);
         assertThatThrownBy(() -> card.fromJson(document.replace("\"small\":7", "\"small\":70000")))

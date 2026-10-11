@@ -362,17 +362,7 @@ public final class JsonOutput {
      */
     public JsonOutput put(JsonKey key, JsonKey value) {
         memberKey(key, OBJECT);
-        int length = value.firstLength - 1; // the quoted name, without its colon
-        if (length > 16) {
-            words(value.first, length);
-        } else {
-            ensure(16);
-            byte[] buf = this.buf;
-            int at = pos;
-            LittleEndian.putLong(buf, at, value.first0);
-            LittleEndian.putLong(buf, at + 8, value.first1);
-            pos = at + length;
-        }
+        quotedName(value);
         return this;
     }
 
@@ -389,6 +379,16 @@ public final class JsonOutput {
     }
 
     // ---- values ----
+
+    /**
+     * A name encoded once, such as an enum constant's from {@link JsonKey#names},
+     * as the next value: a string copied as a key is, with no string to check.
+     */
+    public JsonOutput value(JsonKey name) {
+        beforeValue();
+        quotedName(name);
+        return this;
+    }
 
     /** A string as the next value, or JSON null for a null string. */
     public JsonOutput value(@Nullable String value) {
@@ -942,6 +942,21 @@ public final class JsonOutput {
         }
         ensure(1);
         buf[pos++] = '"';
+    }
+
+    /** The name's bytes, quoted and without the colon a key carries. */
+    private void quotedName(JsonKey name) {
+        int length = name.firstLength - 1;
+        if (length > 16) {
+            words(name.first, length);
+        } else {
+            ensure(16);
+            byte[] buf = this.buf;
+            int at = pos;
+            LittleEndian.putLong(buf, at, name.first0);
+            LittleEndian.putLong(buf, at + 8, name.first1);
+            pos = at + length;
+        }
     }
 
     /** How many of so many ASCII bytes at that index come before the first control character. */

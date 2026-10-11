@@ -2,6 +2,7 @@ package net.benelog.silkjson.processor;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -46,6 +47,9 @@ final class CodecSource {
     private final BoundType type;
     private final StringBuilder helpers = new StringBuilder();
     private int helperCount;
+
+    /** The enums the codec writes or reads, by qualified name, each with the name of its tables. */
+    private final Map<String, String> enums = new LinkedHashMap<>();
     private boolean readShort;
     private boolean readByte;
     private boolean readChar;
@@ -76,14 +80,11 @@ final class CodecSource {
             source.append("    private static final ").append(JSON).append("JsonKey K_").append(property.name)
                     .append(" = ").append(JSON).append("JsonKey.of(").append(literal(property.jsonName)).append(");\n");
         }
-        for (Property property : type.properties) {
-            String constants = enumOf(property);
-            if (constants != null) {
-                source.append("    private static final ").append(constants).append("[] C_").append(property.name)
-                        .append(" = ").append(constants).append(".values();\n");
-                source.append("    private static final ").append(JSON).append("JsonKey[] V_").append(property.name)
-                        .append(" = ").append(JSON).append("JsonKey.names(C_").append(property.name).append(");\n");
-            }
+        for (Map.Entry<String, String> constants : enums.entrySet()) {
+            source.append("    private static final ").append(constants.getKey()).append("[] C_").append(constants.getValue())
+                    .append(" = ").append(constants.getKey()).append(".values();\n");
+            source.append("    private static final ").append(JSON).append("JsonKey[] V_").append(constants.getValue())
+                    .append(" = ").append(JSON).append("JsonKey.names(C_").append(constants.getValue()).append(");\n");
         }
         for (Property property : type.properties) {
             if (property.dateFormat != null) {
@@ -188,26 +189,28 @@ final class CodecSource {
         out.append("        }\n");
     }
 
-    /**
-     * The enum a property holds, itself or in an {@code Optional}, or null: such
-     * a property has its constants and their names encoded once, {@code C_}
-     * and {@code V_}, and is written and read through them with no string.
-     */
-    private static @Nullable String enumOf(Property property) {
-        TypeMirror type = TypeNames.is(property.type, "java.util.Optional") ? TypeNames.argument(property.type, 0)
-                : property.type;
-        if (property.adapter == null && type.getKind() == TypeKind.DECLARED
-                && ((DeclaredType) type).asElement().getKind() == ElementKind.ENUM) {
-            return TypeNames.qualifiedName((DeclaredType) type);
-        }
-        return null;
+    private static boolean isEnum(TypeMirror type) {
+        return type.getKind() == TypeKind.DECLARED && ((DeclaredType) type).asElement().getKind() == ElementKind.ENUM;
     }
 
-    /** Whether the type is the enum whose tables the property has. */
-    private static boolean isEnumOf(Property property, TypeMirror type) {
-        String constants = enumOf(property);
-        return constants != null && type.getKind() == TypeKind.DECLARED
-                && constants.equals(TypeNames.qualifiedName((DeclaredType) type));
+    /**
+     * The name of the tables of an enum the codec writes or reads, wherever it
+     * stands: its constants and their names encoded once, {@code C_} and
+     * {@code V_}, through which it is written and read with no string. The
+     * name is the enum's own, numbered when two enums share it.
+     */
+    private String enumTables(DeclaredType type) {
+        String qualified = TypeNames.qualifiedName(type);
+        String tables = enums.get(qualified);
+        if (tables == null) {
+            String simple = TypeNames.flatName((TypeElement) type.asElement());
+            tables = simple;
+            for (int n = 2; enums.containsValue(tables); n++) {
+                tables = simple + n;
+            }
+            enums.put(qualified, tables);
+        }
+        return tables;
     }
 
     /**
@@ -227,8 +230,8 @@ final class CodecSource {
         if (fused) {
             return "out.put(" + key + ", " + expr + ");";
         }
-        if (property != null && isEnumOf(property, type)) {
-            return "out.put(" + key + ", V_" + property.name + "[" + expr + ".ordinal()]);";
+        if (isEnum(type)) {
+            return "out.put(" + key + ", V_" + enumTables((DeclaredType) type) + "[" + expr + ".ordinal()]);";
         }
         return "out.name(" + key + ");\n" + pad(indent) + writeValue(type, expr, property, indent);
     }
@@ -267,7 +270,7 @@ final class CodecSource {
         }
         Element element = type.asElement();
         if (element.getKind() == ElementKind.ENUM) {
-            return "out.value(" + expr + ".name());";
+            return "out.value(V_" + enumTables(type) + "[" + expr + ".ordinal()]);";
         }
         if (name.equals("java.util.Optional")) {
             TypeMirror inner = TypeNames.argument(type, 0);
@@ -686,10 +689,8 @@ final class CodecSource {
         }
         Element element = type.asElement();
         if (element.getKind() == ElementKind.ENUM) {
-            if (property != null && isEnumOf(property, type)) {
-                return "C_" + property.name + "[in.readOneOf(V_" + property.name + ")]";
-            }
-            return name + ".valueOf(in.readString())";
+            String tables = enumTables(type);
+            return "C_" + tables + "[in.readOneOf(V_" + tables + ")]";
         }
         if (name.equals("java.util.Optional")) {
             TypeMirror inner = TypeNames.argument(type, 0);
