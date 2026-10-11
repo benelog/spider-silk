@@ -48,6 +48,7 @@ Close other heavy programs first: the numbers are only comparable within one run
 The `Places` cases write and read 100 places with a latitude, a longitude, and a rating each, which measures the numbers with a fraction that the records have none of.
 The `PlainList` and `KoreanList` cases write the same records through the generated codec and fastjson2, once with nothing to escape and once with Korean strings, which tells apart the paths a string can take.
 The `KoreanList`, `ReversedList`, and `LongStringList` cases read the same records in Korean, with their keys in reverse order, and with a description of 200 characters, and `writeLongStringList` writes the last of them.
+`writeLongKoreanList` writes the records with a description of 200 Korean characters.
 The `PythonList` and `PrettyList` cases read the same records spaced out, with the separators of Python's `json.dumps` and indented by two spaces, `BigIdList` reads them with ids of 13 and 18 digits, and `ShortStringList` with strings of no character or one.
 The `Orders` cases write and read 100 orders whose status is an enum.
 `writeList_stream` writes the records into the thread's buffer and sends them to a stream with no copy, as a JSON response body is sent, beside fastjson2's `JSON.writeTo`.
@@ -60,3 +61,15 @@ taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench -jvmArgs "-Xms
 ```
 
 Each case runs in two forks of five warm-up and five measured iterations of a second, pinned to the server CPUs, and `-prof gc` reports the bytes allocated per operation beside the time.
+
+### In a native image
+
+JMH forks a JVM for each case, so it cannot run in a GraalVM native image.
+`NativeBench` runs twelve of the cases with no JMH around them: a warm-up of three seconds and ten measured rounds of one second each, reporting the median round.
+`native-bench.sh` builds it as a native image, with the reachability metadata fastjson2 needs recorded first by the tracing agent on a quick JVM run:
+
+```bash
+GRAALVM_HOME=~/.sdkman/candidates/java/25.2.4-graalce json-bench/native-bench.sh
+taskset -c 0-3 json-bench/build/native-bench
+taskset -c 0-3 java -Xms1g -Xmx1g -cp "json-bench/build/install/json-bench/lib/*" benchmark.json.NativeBench # the same cases on the JVM
+```

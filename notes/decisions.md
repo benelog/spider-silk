@@ -1560,6 +1560,12 @@ Rejected: writing an enum as `put(key, constant.name())`, which measured the sam
 Rejected: giving the short-string loop a body apart from the long-string branch, which wrote the list in 4.77 µs against 4.82 µs; the 2% the long path had cost the list no longer shows (4.68 µs without it, 4.72 µs with it).
 Rejected: a string's bytes from `getBytes(UTF_8)`, checked a word at a time and copied, which wrote the plain list in 4.37 µs against 4.33 µs.
 Rejected: carrying only the first eight digits of a long integer into the scanning loop, which read the 18-digit ids in 6.1 µs against two words' 5.9 µs.
+Rejected: copying a string's Latin-1 bytes with `MemorySegment.setString` and checking them a word at a time, final since Java 22 and in reach once Java 25 became the floor (decision 79).
+Under 64 characters it wrote the list in 5.43 µs against 4.91 µs and the 27-byte object in 36 ns against 28 ns, the call's own cost outweighing the copy it saves.
+From 64 on it wrote the long descriptions in 7.05 µs to 7.13 µs against 6.70 µs to 6.85 µs, where the `US_ASCII` encoder already narrows through an intrinsic.
+Rejected: a switch on a hash of the key's head, a multiplication and a shift into a table twice the heads' size, which the compiler makes a jump table where it makes a search of the heads themselves.
+It read the reversed records in the same 7.35 µs, and the indented and the `json.dumps` ones 3% to 4% slower.
+Rejected: passing an indent's spaces eight at a time once the first whitespace byte is past, which read the indented records 7% slower and the `json.dumps` ones 17% slower, since a run of whitespace in a document is a newline and a few spaces, or one space.
 Rejected: `@JsonbVisibility`, `@JsonbNumberFormat`, and the JSON-P serializers, each a compile error that says so, since the first takes a reflective strategy and the others a runtime the generated code does not have.
 
 ## 77 · A JSON library of its own

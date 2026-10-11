@@ -2,21 +2,22 @@
 :navtitle: 부록: 벤치마크
 
 이 부록은 리포지토리의 `benchmark/` 디렉터리에 있는 벤치마크를 한 번 실행한 결과를 보고하며, 이 벤치마크는 Spider Silk와 Spring MVC를 같은 머신에서 같은 JVM과 같은 부하로 측정한다.
-측정은 2026-10-09에 <<machine>>에 기술한 노트북에서, 1.1.0 릴리스 이후 143개 커밋을 지난 `main` 브랜치의 커밋 `fa300ce`에 `WebResponse.json`이 `Bytes`로 응답하게 하는 변경을 더한 코드를 대상으로 했다.
+측정은 2026-10-11에 <<machine>>에 기술한 노트북에서, 1.1.0 릴리스 이후 159개 커밋을 지난 `main` 브랜치의 커밋 `11b9a13`에 Java 25를 요구하게 하는 변경을 더한 코드를 대상으로 했다.
 
 [#summary]
 == 요약
 
 아래 수치는 중앙값이며, 이 머신과 이 핸들러에만 해당한다.
 
-* 단순 텍스트와 작은 JSON 객체는 Jetty 위의 Spider Silk가 Spring MVC보다 초당 약 1.45배 많은 요청을 처리한다.
-같은 컨테이너인 Tomcat 위에서는 그 차이가 약 1.25배다.
-* 직렬화기가 대부분의 일을 하는 레코드 100개의 JSON 목록은 Spider Silk가 Jackson을 쓰는 Spring MVC보다 초당 2%~5% 많은 요청을 처리한다.
-* Spider Silk의 기본 엔진인 jte로 렌더링한 페이지는 Thymeleaf를 쓰는 Spring MVC보다 초당 약 3.2배 많은 요청을 처리한다.
+* 단순 텍스트는 Jetty 위의 Spider Silk가 Spring MVC보다 초당 약 1.43배 많은 요청을 처리하며, 작은 JSON 객체는 약 1.27배를 처리한다.
+같은 컨테이너인 Tomcat 위에서는 그 차이가 약 1.27배와 1.10배다.
+* 직렬화기가 대부분의 일을 하는 레코드 100개의 JSON 목록은 Jetty 위의 Spider Silk가 Jackson을 쓰는 Spring MVC보다 초당 1.71배 많은 요청을 처리하며, Tomcat 위에서는 1.42배를 처리한다.
+* 파서가 대부분의 일을 하는, 같은 목록을 요청 본문에서 읽는 케이스는 어느 컨테이너에서든 Spider Silk가 초당 약 2배 많은 요청을 처리한다.
+* Spider Silk의 기본 엔진인 jte로 렌더링한 페이지는 Thymeleaf를 쓰는 Spring MVC보다 초당 약 3.3배 많은 요청을 처리한다.
 양쪽 모두 Thymeleaf를 쓰면 두 프레임워크는 5% 이내로 차이가 난다.
-* JVM 프로세스는 Jetty 위의 Spider Silk가 312 ms, Spring Boot가 923 ms에 부팅하며, 그 시점의 상주 메모리는 116 MB 대 216 MB다.
-* GraalVM 네이티브 이미지로는 Spider Silk가 48 ms, Spring MVC가 50 ms에 부팅하며, 이미지 빌드에는 각각 89초와 105초가 걸린다.
-네이티브 이미지는 모든 케이스에서 JVM보다 초당 23%~85% 적은 요청을 처리한다.
+* JVM 프로세스는 Jetty 위의 Spider Silk가 295 ms, Spring Boot가 908 ms에 부팅하며, 그 시점의 상주 메모리는 117 MB 대 216 MB다.
+* GraalVM 네이티브 이미지로는 Spider Silk가 24 ms, Spring MVC가 37 ms에 부팅하며, 이미지 빌드에는 각각 72초와 87초가 걸린다.
+네이티브 이미지는 모든 케이스에서 JVM보다 초당 25%~86% 적은 요청을 처리한다.
 
 [#targets]
 == 측정 대상
@@ -58,7 +59,7 @@ Spider Silk의 네이티브 이미지는 Jetty용으로만 빌드했다.
 
 === 케이스
 
-각 케이스는 두 프레임워크에서 같은 본문을 반환하는 `GET` 하나다.
+각 케이스는 두 프레임워크에서 같은 응답을 받는 요청 하나다.
 
 [cols="2,1,4,4,1",options="header"]
 |===
@@ -72,15 +73,21 @@ Spider Silk의 네이티브 이미지는 Jetty용으로만 빌드했다.
 
 | `json`
 | `/json`
-| `WebResponse.json(new Message(...), MESSAGE)`, 손으로 쓴 `JsonWriter`
+| `WebResponse.json(new Message(...), MessageJson.CODEC)`, 생성된 코덱
 | `Message` 레코드를 반환하는 `@RestController`, Jackson이 씀
 | 27 B
 
 | `json-list`
 | `/items`
-| `JsonWriter.list`를 쓰는 `WebResponse.json(items, ITEMS)`
+| 생성된 코덱의 `JsonCodec.list`를 쓰는 `WebResponse.json(items, ITEMS)`
 | `List<Item>`을 반환하는 `@RestController`, Jackson이 씀
 | 10,490 B
+
+| `json-post`
+| `/items`
+| `POST`에서 `req.bodyJson(ITEMS)`, 개수를 텍스트로 응답
+| `@RequestBody List<Item>`을 받는 `@PostMapping`, Jackson이 읽음
+| 10,490 B 수신, 3 B 송신
 
 | `template-jte`
 | `/fortunes`
@@ -96,13 +103,11 @@ Spider Silk의 네이티브 이미지는 Jetty용으로만 빌드했다.
 |===
 
 `json-list` 본문은 필드 다섯 개짜리 레코드 100개이며, 두 프레임워크는 이를 바이트 단위까지 똑같이 보낸다.
+`json-post` 케이스는 그 문서를 `POST /items`의 본문으로 보내며, 두 프레임워크는 이를 레코드로 읽고 그 개수로 응답한다.
 `/fortunes` 페이지는 TechEmpower 벤치마크의 fortune 12개를 담은 표이며, 그중 하나는 HTML 이스케이프가 필요하고 하나는 일본어다.
 두 Thymeleaf 페이지는 같은 템플릿 파일이며 같은 바이트로 렌더링된다.
 jte 페이지는 빈 줄, 그리고 텍스트 안의 ``"``와 ``'``를 이스케이프하지 않는다는 점이 다르며, 이는 HTML이 허용하는 형태다.
 핸들러가 응답하는 값은 모두 시작할 때 한 번 만들어 두므로, 요청은 데이터가 아니라 프레임워크, 직렬화기, 렌더러를 측정한다.
-
-그 실행 이후 Spider Silk 애플리케이션은 `json`과 ``json-list``를 레코드에서 생성한 코덱으로 응답하며, `json-post` 케이스는 두 프레임워크 모두에서 ``json-list``의 레코드 100개를 `POST /items`의 본문으로 보내어 직렬화기를 재듯 파서를 잰다.
-둘 다 벤치마크 전체의 다음 실행을 기다리며, <<json-microbenchmark>>는 직렬화기와 파서만을 따로 잰다.
 
 === 측정 방법
 
@@ -124,8 +129,11 @@ JVM은 Temurin 25이며 기본 컬렉터인 G1을 쓴다.
 네이티브 이미지는 GraalVM CE 25.2.4로 빌드하며, 이 배포판의 컬렉터는 Serial GC뿐이다.
 
 보고하는 처리량과 각 지연 시간 백분위수는 세 라운드의 중앙값을 각각 따로 구한 것이다.
-라운드 간 모든 케이스의 처리량은 중앙값에서 12% 이내에 머물렀다.
-8%를 넘은 세 케이스는 모두 두 번째 라운드에서 나왔다: `spider-silk-jetty`와 `spider-silk-jetty-native`의 `json-list`, 그리고 `spring-mvc-native`의 `json`이다.
+라운드 간 대부분 케이스의 처리량은 중앙값에서 10% 이내에 머물렀다.
+`spider-silk-jetty`는 한 라운드에서 `text`의 중앙값보다 36% 높았고, `json-list`, `json-post`, `template-jte`에서 13%~17% 높았다.
+`spider-silk-jetty-native`는 `json`과 `template-jte`에서 중앙값보다 17% 높았다.
+`spring-mvc-native`는 `json-list`에서 중앙값보다 13% 높았고 `text`에서 10% 낮았다.
+세 라운드의 중앙값은 그런 라운드를 걸러 낸다.
 실행 중 실패한 요청은 없었다.
 
 [#machine]
@@ -137,7 +145,7 @@ JVM은 Temurin 25이며 기본 컬렉터인 G1을 쓴다.
 | CPU | Intel Core Ultra 7 258V (Lunar Lake): 최대 4.8 GHz 성능 코어 4개와 최대 3.7 GHz 저전력 효율 코어 4개, 8스레드, L3 캐시 12 MiB
 | 메모리 | 30 GiB (32 GB LPDDR5X)
 | OS | Ubuntu 24.04.5 LTS, Linux 6.17.0-1032-oem
-| CPU 클럭 | `powersave` 거버너, `balanced` 플랫폼 프로파일
+| CPU 클럭 | `powersave` 거버너, `performance` 플랫폼 프로파일
 | JVM | Eclipse Temurin 25 (25+36-LTS)
 | 네이티브 이미지 | GraalVM CE 25.2.4 (native-image 25.0.4)
 | 빌드 | Gradle 9.5.1
@@ -160,37 +168,44 @@ CPU는 측정 동안 서버 자신이 쓴 CPU 시간이며, 400%는 측정 내�
 | 케이스 | 대상 | 초당 요청 수 | p50 | p90 | p99 | CPU
 
 .5+| `text`
-| `spider-silk-jetty` | 213,891 | 0.31 | 0.57 | 1.04 | 383%
-| `spider-silk-tomcat` | 180,468 | 0.32 | 0.55 | 0.75 | 294%
-| `spring-mvc` | 145,592 | 0.41 | 0.60 | 1.01 | 311%
-| `spider-silk-jetty-native` | 161,750 | 0.41 | 0.75 | 1.54 | 376%
-| `spring-mvc-native` | 97,852 | 0.61 | 0.94 | 2.50 | 330%
+| `spider-silk-jetty` | 255,705 | 0.26 | 0.48 | 0.86 | 381%
+| `spider-silk-tomcat` | 226,397 | 0.25 | 0.47 | 0.60 | 286%
+| `spring-mvc` | 178,797 | 0.33 | 0.51 | 0.82 | 301%
+| `spider-silk-jetty-native` | 191,616 | 0.35 | 0.66 | 1.36 | 370%
+| `spring-mvc-native` | 128,198 | 0.47 | 0.73 | 1.93 | 312%
 
 .5+| `json`
-| `spider-silk-jetty` | 212,094 | 0.31 | 0.57 | 1.03 | 383%
-| `spider-silk-tomcat` | 182,384 | 0.31 | 0.54 | 0.75 | 296%
-| `spring-mvc` | 146,067 | 0.41 | 0.58 | 0.99 | 314%
-| `spider-silk-jetty-native` | 162,382 | 0.41 | 0.75 | 1.54 | 375%
-| `spring-mvc-native` | 93,028 | 0.63 | 0.97 | 2.56 | 322%
+| `spider-silk-jetty` | 253,830 | 0.26 | 0.49 | 0.83 | 380%
+| `spider-silk-tomcat` | 220,661 | 0.25 | 0.47 | 0.61 | 288%
+| `spring-mvc` | 200,313 | 0.29 | 0.52 | 0.77 | 283%
+| `spider-silk-jetty-native` | 190,022 | 0.35 | 0.66 | 1.34 | 370%
+| `spring-mvc-native` | 113,463 | 0.51 | 0.82 | 2.08 | 313%
 
 .5+| `json-list`
-| `spider-silk-jetty` | 77,530 | 0.86 | 1.40 | 2.15 | 387%
-| `spider-silk-tomcat` | 75,808 | 0.83 | 1.05 | 1.54 | 365%
-| `spring-mvc` | 73,986 | 0.86 | 1.07 | 1.51 | 367%
-| `spider-silk-jetty-native` | 50,389 | 1.30 | 2.22 | 3.39 | 376%
-| `spring-mvc-native` | 10,941 | 4.67 | 17.25 | 58.87 | 388%
+| `spider-silk-jetty` | 158,868 | 0.42 | 0.72 | 1.12 | 380%
+| `spider-silk-tomcat` | 131,754 | 0.45 | 0.65 | 1.05 | 325%
+| `spring-mvc` | 92,680 | 0.67 | 0.88 | 1.22 | 346%
+| `spider-silk-jetty-native` | 97,681 | 0.68 | 1.13 | 1.77 | 377%
+| `spring-mvc-native` | 13,630 | 3.95 | 10.04 | 35.09 | 387%
+
+.5+| `json-post`
+| `spider-silk-jetty` | 112,858 | 0.59 | 0.98 | 1.59 | 382%
+| `spider-silk-tomcat` | 109,506 | 0.56 | 0.78 | 1.29 | 333%
+| `spring-mvc` | 54,958 | 1.15 | 1.43 | 2.20 | 373%
+| `spider-silk-jetty-native` | 74,379 | 0.89 | 1.56 | 2.63 | 367%
+| `spring-mvc-native` | 7,473 | 8.60 | 21.11 | 36.41 | 345%
 
 .3+| `template-jte`
-| `spider-silk-jetty` | 162,826 | 0.41 | 0.73 | 1.28 | 382%
-| `spider-silk-tomcat` | 147,622 | 0.41 | 0.60 | 1.03 | 311%
-| `spider-silk-jetty-native` | 116,123 | 0.57 | 1.01 | 1.86 | 374%
+| `spider-silk-jetty` | 197,862 | 0.34 | 0.61 | 1.09 | 377%
+| `spider-silk-tomcat` | 183,579 | 0.32 | 0.52 | 0.81 | 300%
+| `spider-silk-jetty-native` | 138,690 | 0.48 | 0.88 | 1.66 | 367%
 
 .5+| `template-thymeleaf`
-| `spider-silk-jetty` | 52,301 | 1.27 | 2.07 | 3.22 | 388%
-| `spider-silk-tomcat` | 53,390 | 1.18 | 1.49 | 2.42 | 374%
-| `spring-mvc` | 50,719 | 1.25 | 1.58 | 2.37 | 373%
-| `spider-silk-jetty-native` | 23,246 | 2.82 | 4.95 | 8.04 | 371%
-| `spring-mvc-native` | 27,725 | 2.13 | 3.65 | 7.04 | 370%
+| `spider-silk-jetty` | 63,519 | 1.05 | 1.75 | 2.72 | 381%
+| `spider-silk-tomcat` | 62,444 | 1.00 | 1.29 | 2.07 | 357%
+| `spring-mvc` | 60,331 | 1.04 | 1.39 | 2.03 | 353%
+| `spider-silk-jetty-native` | 28,378 | 2.33 | 4.10 | 6.71 | 368%
+| `spring-mvc-native` | 33,346 | 1.77 | 3.04 | 5.24 | 365%
 |===
 
 아래 비율은 Spider Silk의 처리량을 Spring MVC의 처리량으로 나눈 값이므로, 1보다 크면 Spider Silk가 앞선다.
@@ -199,11 +214,12 @@ CPU는 측정 동안 서버 자신이 쓴 CPU 시간이며, 400%는 측정 내�
 |===
 | 케이스 | Jetty 대 Spring MVC | Tomcat 대 Spring MVC | 네이티브 대 네이티브
 
-| `text` | 1.47 | 1.24 | 1.65
-| `json` | 1.45 | 1.25 | 1.75
-| `json-list` | 1.05 | 1.02 | 4.61
-| Spider Silk의 jte 대 Spring MVC의 Thymeleaf | 3.21 | 2.91 | 4.19
-| 양쪽 모두 Thymeleaf | 1.03 | 1.05 | 0.84
+| `text` | 1.43 | 1.27 | 1.49
+| `json` | 1.27 | 1.10 | 1.67
+| `json-list` | 1.71 | 1.42 | 7.17
+| `json-post` | 2.05 | 1.99 | 9.95
+| Spider Silk의 jte 대 Spring MVC의 Thymeleaf | 3.28 | 3.04 | 4.16
+| 양쪽 모두 Thymeleaf | 1.05 | 1.04 | 0.85
 |===
 
 === 부팅 시간과 메모리
@@ -215,18 +231,18 @@ CPU는 측정 동안 서버 자신이 쓴 CPU 시간이며, 400%는 측정 내�
 |===
 | 대상 | 부팅 시간 (중앙값) | 최소 | 최대 | 상주 메모리
 
-| `spider-silk-jetty` | 312 ms | 306 ms | 316 ms | 116 MB
-| `spider-silk-tomcat` | 361 ms | 355 ms | 381 ms | 117 MB
-| `spring-mvc` | 923 ms | 911 ms | 1,014 ms | 216 MB
-| `spider-silk-jetty-native` | 48 ms | 23 ms | 51 ms | 37 MB
-| `spring-mvc-native` | 50 ms | 46 ms | 64 ms | 74 MB
+| `spider-silk-jetty` | 295 ms | 294 ms | 346 ms | 117 MB
+| `spider-silk-tomcat` | 345 ms | 342 ms | 359 ms | 117 MB
+| `spring-mvc` | 908 ms | 905 ms | 923 ms | 216 MB
+| `spider-silk-jetty-native` | 24 ms | 22 ms | 25 ms | 37 MB
+| `spring-mvc-native` | 37 ms | 36 ms | 53 ms | 74 MB
 |===
 
-Spring Boot 자신의 로그는 JVM에서 ``Started SpringMvcBenchmark in 0.73 seconds``, 네이티브 이미지에서 ``in 0.03 seconds``를 보고한다.
+Spring Boot 자신의 로그는 JVM에서 ``Started SpringMvcBenchmark in 0.73 seconds``, 네이티브 이미지에서 ``in 0.025 seconds``를 보고한다.
 표와의 차이는 JVM 자체의 기동 시간과 첫 응답까지의 시간이다.
 
-부하 중 JVM 프로세스는 760~880 MB를 차지했으며, 그 대부분은 ``-Xms1g``가 확보하는 1 GiB 힙이다.
-네이티브 이미지는 70~280 MB를 차지했으며, ``json-list``에서 가장 많았다.
+부하 중 JVM 프로세스는 760~890 MB를 차지했으며, 그 대부분은 ``-Xms1g``가 확보하는 1 GiB 힙이다.
+네이티브 이미지는 60~360 MB를 차지했으며, ``spring-mvc-native``의 ``json-post``에서 가장 많았다.
 
 === 네이티브 이미지 빌드
 
@@ -238,22 +254,22 @@ Spring Boot 자신의 로그는 JVM에서 ``Started SpringMvcBenchmark in 0.73 s
 |===
 | 애플리케이션 | 빌드 (중앙값) | `native-image` 단독 | `native-image` 최대 메모리 | 바이너리
 
-| Spider Silk | 88.9 s | 87 s | 4.1 GiB | 63.6 MB
-| Spring MVC | 105.1 s | 101 s | 4.1 GiB | 73.9 MB
+| Spider Silk | 72.2 s | 70 s | 4.2 GiB | 63.6 MB
+| Spring MVC | 87.3 s | 84 s | 4.0 GiB | 73.9 MB
 |===
 
 ``native-image``는 두 애플리케이션 모두에서 CPU 여덟 개를 약 6.5의 부하로 썼다.
-JVM 애플리케이션의 의존성은 Spider Silk가 9.5 MB, Spring MVC가 21 MB다.
+JVM 애플리케이션의 의존성은 Spider Silk가 9.6 MB, Spring MVC가 21 MB다.
 
 [#json-microbenchmark]
 === 직렬화기와 파서만 따로
 
 ``benchmark/json-bench``는 HTTP 없이 JSON 엔진만을 HTTP 케이스가 보내는 문서로 잰다: ``json-list``의 레코드 100개와 ``json``의 27바이트 객체다.
 소수부가 있는 숫자를 셋씩 가진 장소 100개와 상태가 enum인 주문 100개도 재는데, 이를 보내는 HTTP 케이스는 없다.
-같은 레코드 100개를 더 여러 형태로도 잰다: 이스케이프할 것이 없는 것, 문자열이 한글인 것, 키가 역순인 것, 설명이 200자인 것, Python의 ``json.dumps``와 pretty printer가 쓰듯 공백을 넣은 것, id가 13자리와 18자리인 것, 문자열이 0~1자인 것이다.
+같은 레코드 100개를 더 여러 형태로도 잰다: 이스케이프할 것이 없는 것, 문자열이 한글인 것, 키가 역순인 것, 설명이 영어와 한글로 200자인 것, Python의 ``json.dumps``와 pretty printer가 쓰듯 공백을 넣은 것, id가 13자리와 18자리인 것, 문자열이 0~1자인 것이다.
 역순 키와 공백을 넣은 키는 다른 프로그램이 쓴 문서를, 긴 설명은 상품 페이지 같은 산문을 대표한다.
 측정은 2026-10-11에 같은 머신에서, AC 전원과 `performance` 플랫폼 프로파일로 실행했다.
-커밋 ``5f067c8`` 위에 변경을 얹은 silk-json을 대상으로, JMH 1.37로 포크 둘, 포크마다 각 1초짜리 워밍업 다섯 번과 측정 다섯 번, CPU 0~3에 고정, ``-Xms1g -Xmx1g``, Temurin 25로 쟀다.
+커밋 ``11b9a13`` 위에 변경을 얹어 Java 25용으로 컴파일한 silk-json을 대상으로, JMH 1.37로 포크 둘, 포크마다 각 1초짜리 워밍업 다섯 번과 측정 다섯 번, CPU 0~3에 고정, ``-Xms1g -Xmx1g``, Temurin 25로 쟀다.
 각 칸은 연산당 평균 시간과 연산당 할당 바이트이며, 후자는 JMH의 `gc` 프로파일러가 잰 값이다.
 
 [cols="2,3,>1,>1",options="header"]
@@ -263,7 +279,7 @@ JVM 애플리케이션의 의존성은 Spider Silk가 9.5 MB, Spring MVC가 21 M
 .6+| 레코드 100개 쓰기 (10,490 B)
 | ``JsonWriter.tree``로 쓴 ``Json.object()`` 트리 | 8.0 µs | 24.1 KB
 | 손으로 작성한 `JsonWriter` | 5.9 µs | 11.3 KB
-| 생성된 코덱 | 4.8 µs | 10.7 KB
+| 생성된 코덱 | 4.7 µs | 10.7 KB
 | Jackson 3.1 | 11.8 µs | 19.7 KB
 | fastjson2 2.0.57 | 4.6 µs | 10.7 KB
 | fastjson2 2.0.57, `creator=reflect` | 5.7 µs | 10.7 KB
@@ -273,27 +289,31 @@ JVM 애플리케이션의 의존성은 Spider Silk가 9.5 MB, Spring MVC가 21 M
 | fastjson2 2.0.57, `JSON.writeTo` | 3.6 µs | 184 B
 
 .2+| 이스케이프할 것이 없는 레코드 100개 쓰기 (10,090 B)
-| 생성된 코덱 | 4.3 µs | 10.3 KB
-| fastjson2 2.0.57 | 3.7 µs | 10.3 KB
+| 생성된 코덱 | 4.2 µs | 10.3 KB
+| fastjson2 2.0.57 | 3.6 µs | 10.3 KB
 
 .2+| 한글 레코드 100개 쓰기 (9,590 B)
-| 생성된 코덱 | 4.1 µs | 9.8 KB
+| 생성된 코덱 | 4.0 µs | 9.8 KB
 | fastjson2 2.0.57 | 3.6 µs | 9.8 KB
 
 .2+| 설명이 200자인 레코드 100개 쓰기 (27,498 B)
 | 생성된 코덱 | 6.8 µs | 28.4 KB
 | fastjson2 2.0.57 | 6.3 µs | 27.7 KB
 
+.2+| 설명이 한글 200자인 레코드 100개 쓰기 (54,516 B)
+| 생성된 코덱 | 23.0 µs | 55.4 KB
+| fastjson2 2.0.57 | 37.0 µs | 54.7 KB
+
 .2+| 주문 100개 쓰기 (5,985 B)
 | 생성된 코덱 | 2.4 µs | 6.2 KB
 | fastjson2 2.0.57 | 2.7 µs | 6.2 KB
 
 .5+| 레코드 100개 읽기
-| 손으로 작성한 `JsonReader.object` | 14.3 µs | 37.8 KB
-| 생성된 코덱 | 5.4 µs | 17.6 KB
-| Jackson 3.1 | 23.9 µs | 52.8 KB
-| fastjson2 2.0.57 | 6.2 µs | 24.8 KB
-| fastjson2 2.0.57, `creator=reflect` | 24.0 µs | 111.2 KB
+| 손으로 작성한 `JsonReader.object` | 14.2 µs | 37.8 KB
+| 생성된 코덱 | 5.6 µs | 17.6 KB
+| Jackson 3.1 | 23.7 µs | 52.8 KB
+| fastjson2 2.0.57 | 6.1 µs | 24.8 KB
+| fastjson2 2.0.57, `creator=reflect` | 24.5 µs | 111.2 KB
 
 .2+| 한글 레코드 100개 읽기
 | 생성된 코덱 | 5.7 µs | 23.1 KB
@@ -301,57 +321,57 @@ JVM 애플리케이션의 의존성은 Spider Silk가 9.5 MB, Spring MVC가 21 M
 
 .2+| 키가 역순인 레코드 100개 읽기
 | 생성된 코덱 | 7.3 µs | 17.6 KB
-| fastjson2 2.0.57 | 6.2 µs | 24.8 KB
+| fastjson2 2.0.57 | 6.3 µs | 24.8 KB
 
 .2+| ``json.dumps``가 공백을 넣은 레코드 100개 읽기 (11,489 B)
-| 생성된 코덱 | 6.6 µs | 17.6 KB
-| fastjson2 2.0.57 | 6.9 µs | 24.8 KB
+| 생성된 코덱 | 6.7 µs | 17.6 KB
+| fastjson2 2.0.57 | 7.0 µs | 24.8 KB
 
 .2+| 들여쓴 레코드 100개 읽기 (14,091 B)
-| 생성된 코덱 | 8.7 µs | 17.6 KB
-| fastjson2 2.0.57 | 7.9 µs | 24.8 KB
+| 생성된 코덱 | 9.0 µs | 17.6 KB
+| fastjson2 2.0.57 | 8.1 µs | 24.8 KB
 
 .2+| 설명이 200자인 레코드 100개 읽기
-| 생성된 코덱 | 6.5 µs | 34.3 KB
-| fastjson2 2.0.57 | 5.2 µs | 34.4 KB
+| 생성된 코덱 | 6.6 µs | 34.3 KB
+| fastjson2 2.0.57 | 5.4 µs | 34.4 KB
 
 .2+| id가 13자리인 레코드 100개 읽기
 | 생성된 코덱 | 5.9 µs | 17.6 KB
-| fastjson2 2.0.57 | 7.0 µs | 24.8 KB
+| fastjson2 2.0.57 | 6.9 µs | 24.8 KB
 
 .2+| id가 18자리인 레코드 100개 읽기
-| 생성된 코덱 | 5.9 µs | 17.6 KB
+| 생성된 코덱 | 6.0 µs | 17.6 KB
 | fastjson2 2.0.57 | 7.3 µs | 24.8 KB
 
 .2+| 문자열이 0~1자인 레코드 100개 읽기 (6,956 B)
 | 생성된 코덱 | 2.8 µs | 5.5 KB
-| fastjson2 2.0.57 | 3.8 µs | 14.8 KB
+| fastjson2 2.0.57 | 3.9 µs | 14.8 KB
 
 .2+| 주문 100개 읽기
-| 생성된 코덱 | 3.0 µs | 9.5 KB
-| fastjson2 2.0.57 | 3.1 µs | 9.6 KB
+| 생성된 코덱 | 3.1 µs | 9.5 KB
+| fastjson2 2.0.57 | 3.2 µs | 9.6 KB
 
 .3+| 27바이트 객체 쓰기
-| 생성된 코덱 | 26 ns | 232 B
-| Jackson 3.1 | 136 ns | 496 B
-| fastjson2 2.0.57 | 28 ns | 216 B
+| 생성된 코덱 | 25 ns | 232 B
+| Jackson 3.1 | 135 ns | 496 B
+| fastjson2 2.0.57 | 27 ns | 216 B
 
 .3+| 장소 100개 쓰기 (8,263 B)
-| 생성된 코덱 | 9.5 µs | 8.5 KB
-| Jackson 3.1 | 19.7 µs | 50.1 KB
-| fastjson2 2.0.57 | 9.7 µs | 17.6 KB
+| 생성된 코덱 | 9.4 µs | 8.5 KB
+| Jackson 3.1 | 20.1 µs | 50.1 KB
+| fastjson2 2.0.57 | 9.5 µs | 17.6 KB
 
 .3+| 장소 100개 읽기
-| 생성된 코덱 | 4.9 µs | 11.1 KB
-| Jackson 3.1 | 25.7 µs | 59.6 KB
-| fastjson2 2.0.57 | 5.4 µs | 11.2 KB
+| 생성된 코덱 | 5.1 µs | 11.1 KB
+| Jackson 3.1 | 26.6 µs | 59.7 KB
+| fastjson2 2.0.57 | 5.3 µs | 11.2 KB
 |===
 
-생성된 코덱은 목록을 Jackson 시간의 41%에 쓰고 23%에 읽으며, 할당은 3분의 1에서 절반 사이이고, 작은 객체는 Jackson 시간의 5분의 1이 안 되는 시간에 쓴다.
+생성된 코덱은 목록을 Jackson 시간의 40%에 쓰고 24%에 읽으며, 할당은 3분의 1에서 절반 사이이고, 작은 객체는 Jackson 시간의 5분의 1이 안 되는 시간에 쓴다.
 손으로 작성한 라이터는 트리와 코덱 사이에 놓이는데, 코덱이 상수에서 키를 복사하는 자리에서 라이터는 문서가 이미 쓴 키들 가운데서 키를 찾기 때문이다.
-코덱은 10 KB 문서를 fastjson2 시간의 88%에 읽고, 작은 객체는 그 93%의 시간에 쓴다.
-fastjson2는 10 KB 문서 쓰기에서 5% 차이로 여전히 앞선다.
-그 우위는 문자열을 쓰는 데서 나오며, 이스케이프할 문자열이 없는 곳에서 더 벌어진다: 평범한 레코드에서 1.16배, 한글 레코드에서 1.12배다.
+코덱은 10 KB 문서를 fastjson2 시간의 92%에 읽고, 작은 객체는 그 92%의 시간에 쓴다.
+fastjson2는 10 KB 문서 쓰기에서 3% 차이로 여전히 앞선다.
+그 우위는 문자열을 쓰는 데서 나오며, 이스케이프할 문자열이 없는 곳에서 더 벌어진다: 평범한 레코드에서 1.17배, 한글 레코드에서 1.11배다.
 fastjson2는 ``String``의 바이트를 ``sun.misc.Unsafe``로 직접 읽는데, JDK는 이를 거두어들이는 중이고 코어는 쓰지 않는다.
 코덱은 문자열의 문자를 ``getChars``로 복사해 내고 하나씩 검사한다.
 올바른 라이터라면 설 수 없는 바닥, 곧 문자열의 바이트를 아무 검사 없이 복사하는 쓰기는 평범한 레코드를 2.7 µs에 써서 fastjson2의 3.7 µs보다 빠르다.
@@ -362,7 +382,7 @@ JDK 25의 JIT 컴파일러는 ``char``를 ``byte``로 좁히는 루프를 벡터
 코덱은 멤버의 키와 값을 호출 하나, ``put(JsonKey, ...)``로 쓰며, 이 호출은 라이터의 상태를 한 번 검사한다.
 1000 미만의 수는 저장 한 번으로, 한글 음절 같은 3바이트 문자는 4바이트 저장 한 번으로 쓴다.
 이전 빌드와 연달아 재면, 이로써 평범한 레코드가 4.4 µs에서 4.2 µs로, 한글 레코드가 4.4 µs에서 4.0 µs로 줄었다.
-릴리스가 대상으로 삼는 JDK인 Temurin 21에서도 비율은 같다: fastjson2는 평범한 레코드를 1.15배, 한글 레코드를 1.13배 빠르게 쓰고, 코덱은 목록을 fastjson2 시간의 88%에 읽는다.
+릴리스가 Java 25를 요구하기 전에 대상으로 삼던 Temurin 21에서도 비율은 같았다: fastjson2는 평범한 레코드를 1.15배, 한글 레코드를 1.13배 빠르게 쓰고, 코덱은 목록을 fastjson2 시간의 88%에 읽는다.
 
 64자 이상의 문자열은 다른 경로를 탄다.
 JDK의 ``US_ASCII`` 인코더가 JIT 컴파일러의 인트린식으로 이를 버퍼에 좁혀 쓴다.
@@ -371,6 +391,9 @@ JDK의 ``US_ASCII`` 인코더가 JIT 컴파일러의 인트린식으로 이를 �
 인코더는 ASCII 밖의 첫 문자에서 멈추고, 문자열의 나머지는 한 문자씩 쓰는 루프로 간다.
 이전 빌드들과 연달아 재면, 이로써 설명이 긴 레코드가 15.0 µs에서 8.6 µs로, 다시 6.9 µs로 줄었다.
 fastjson2는 여전히 이를 1.08배 빠르게 쓴다.
+한글로 된 긴 설명은 코덱이 fastjson2 시간의 62%에 쓴다.
+Java 25에는 문자열의 Latin-1 바이트를 ``char``로 넓히지 않고 복사하는 유일한 공개 호출인 ``MemorySegment.setString``이 있다.
+이를 거쳐 복사하고 바이트를 8개씩 검사하면 10 KB 목록 쓰기가 4.9 µs에서 5.4 µs로, 긴 설명 쓰기가 6.8 µs에서 7.1 µs로 느려졌으므로, 코덱은 이를 쓰지 않는다.
 코덱은 이 문서에 0.7 KB를 더 할당하는데, 문서마다 한 번 만드는 인코더와 그 둘레의 버퍼 둘이다.
 평범한 문자열은 Temurin 21, Temurin 25, GraalVM의 JIT 컴파일러 모두에서 약 16자부터 이 경로가 이득이다.
 이스케이프가 있는 문자열은 컴파일러에 따라 48자에서 96자부터야 이득이고, 기준값 64는 그 둘 사이에 있다.
@@ -378,7 +401,8 @@ fastjson2는 여전히 이를 1.08배 빠르게 쓴다.
 
 enum 상수는 ``JsonKey``로 한 번만 인코딩한 이름으로 쓰고 읽는다.
 이름은 키처럼 복사해 쓰고, 읽을 때는 문자열을 만들지 않고 제자리에서 비교한다.
-이전 빌드와 연달아 재면, 이로써 주문 쓰기가 2.9 µs에서 2.4 µs로, 읽기가 4.6 µs에서 3.0 µs로 줄어 fastjson2 시간의 89%와 95%가 됐다.
+이전 빌드와 연달아 재면, 이로써 주문 쓰기가 2.9 µs에서 2.4 µs로, 읽기가 4.6 µs에서 3.0 µs로 줄었고, 지금은 fastjson2 시간의 91%와 96%다.
+생성된 코덱은 enum이 어디에 있든 이렇게 한다: 프로퍼티, ``Optional``, 컬렉션 원소, 맵 값이다.
 
 코덱은 한글 레코드를 fastjson2 시간의 72%에 읽는다.
 ASCII 밖의 바이트가 있는 문자열은 같은 패스에서 검사하며 문자로 디코드하고, 그 앞의 ASCII는 검사 없이 넓힌다.
@@ -388,17 +412,18 @@ fastjson2는 이를 검사하지 않는다: 과잉 길이 시퀀스나 UTF-8로 
 그 순서를 벗어난 키는 다음 멤버가 있는 자리의 4바이트로 switch해서 찾으며, 이 4바이트는 ``JsonInput.keyHead()``가 읽는다.
 이전 빌드와 연달아 재면, 이로써 목록이 6.0 µs에서 5.5 µs로, 역순 목록이 9.5 µs에서 8.0 µs로 줄었다.
 문서가 선언 순서를 한 번 벗어나면 그 뒤의 키는 곧장 그 switch로 가며, 이로써 역순 레코드가 7.2 µs가 됐다.
-fastjson2는 여전히 이를 1.19배 빠르게 읽는다.
+fastjson2는 여전히 이를 1.17배 빠르게 읽는다.
 읽기는 키 앞과 쉼표 뒤의 공백도 건너뛰며, 쉼표 하나와 공백 하나를 먼저 확인한다.
-이전 빌드와 연달아 재면, 이로써 ``json.dumps``가 공백을 넣은 레코드가 10.0 µs에서 6.6 µs로 줄어 fastjson2 시간의 95%가 됐고, 들여쓴 레코드가 11.6 µs에서 8.6 µs로 줄어 fastjson2의 1.10배가 됐다.
+이전 빌드와 연달아 재면, 이로써 ``json.dumps``가 공백을 넣은 레코드가 10.0 µs에서 6.6 µs로 줄어 fastjson2 시간의 95%가 됐고, 들여쓴 레코드가 11.6 µs에서 8.6 µs로 줄었다.
+이번 실행에서 들여쓴 레코드는 fastjson2 시간의 1.11배가 걸렸다.
 8~16자리 정수는 두 워드로 읽으며, 이로써 18자리 id가 6.5 µs에서 5.9 µs로 줄었다.
-코덱은 13자리와 18자리 id를 fastjson2 시간의 84%와 81%에 읽는다.
-빈 문자열과 한 글자 문자열은 할당 없이 표에서 꺼내며, 이로써 그런 문자열을 가진 레코드가 3.4 µs와 13.9 KB에서 2.8 µs와 5.5 KB로 줄어 fastjson2 시간의 74%가 됐다.
-fastjson2는 긴 설명도 1.25배 빠르게 읽는다.
+코덱은 13자리와 18자리 id를 fastjson2 시간의 86%와 83%에 읽는다.
+빈 문자열과 한 글자 문자열은 할당 없이 표에서 꺼내며, 이로써 그런 문자열을 가진 레코드가 3.4 µs와 13.9 KB에서 2.8 µs와 5.5 KB로 줄어 fastjson2 시간의 73%가 됐다.
+fastjson2는 긴 설명도 1.21배 빠르게 읽는다.
 fastjson2는 ``sun.misc.Unsafe``를 거쳐 묶은 JDK 내부 메서드로 문자열의 끝을 찾고 ``String``을 만들며, 공개 API에는 이에 맞먹는 것이 없다.
 
 장소마다 소수 넷째 자리까지의 위도, 여섯째 자리까지의 경도, 첫째 자리까지의 평점이 있다.
-코덱은 이를 fastjson2 시간의 92%에 같은 할당으로 읽고, Jackson 시간의 5분의 1에 읽는다.
+코덱은 이를 fastjson2 시간의 96%에 같은 할당으로 읽고, Jackson 시간의 5분의 1에 읽는다.
 ``readDouble``은 숫자를 그 자릿수에서 변환하며, 이런 숫자에는 곱셈이나 나눗셈 한 번이면 된다.
 그 전에는 숫자마다 문자열을 만들어 ``Double.parseDouble``에 넘겼고, 같은 읽기에 12.6 µs와 43.9 KB가 들었다.
 Jackson 3는 기본으로 빠른 파서로 double을 파싱하므로, ``USE_FAST_DOUBLE_PARSER``를 켜도 달라지는 것이 없었다.
@@ -418,29 +443,56 @@ JDK 24 이상에서는 첫 호출이 ``sun.misc.Unsafe``의 메서드가 앞으�
 JEP 471과 JEP 498이 정한 순서는 경고, 기본값으로 거부, 제거다.
 JDK 26과 JDK 27의 기본값은 아직 경고이고, 거부를 기본값으로 삼거나 메서드를 제거하는 JEP는 아직 없다.
 ``VarHandle``로 옮겨 가는 fastjson2의 2.1.x 브랜치는 2026년 2월 이후 변경이 없다.
-JVM에서 ``-Dfastjson2.creator=reflect``를 주면 fastjson2는 실행 중에 클래스를 만들지 않으며, 목록을 평소의 네 배인 24.0 µs와 111.2 KB에 읽고 5.7 µs에 쓴다.
+JVM에서 ``-Dfastjson2.creator=reflect``를 주면 fastjson2는 실행 중에 클래스를 만들지 않으며, 목록을 평소의 네 배인 24.5 µs와 111.2 KB에 읽고 5.7 µs에 쓴다.
 GraalVM 네이티브 이미지에서 fastjson2는 ``String`` fast path와 생성 클래스를 끄고 리플렉션으로 바인딩하며, 이를 위해 바인딩하는 타입마다 reachability 메타데이터가 필요하다.
-이는 소스에서 읽은 것이고 측정하지 않았다.
-silk-json도 네이티브 이미지에서 측정하지 않았으므로, 이 부록은 그곳에서 어느 라이브러리가 더 빠르다고도 말하지 않는다.
-HTTP 케이스에서 직렬화기는 요청의 전부가 아니라 한 몫이므로, 다음 실행에서 ``json-list``는 그 몫만큼 움직이고 ``json``은 거의 움직이지 않을 것이며, 파서의 차이가 드러나는 곳은 ``json-post``다.
+fastjson2 2.0.57은 GraalVM CE 25.2.4에서 jar에 든 설정만으로는 네이티브 이미지로 빌드되지 않는다.
+그 설정은 ``JSONFactory``를 비롯한 몇 클래스를 빌드 시 초기화하고, 그 클래스들이 붙든 객체는 설정이 실행 시로 남겨 둔 클래스에 닿으며, ``native-image``는 이를 거부한다.
+패키지 전체를 빌드 시 초기화해 빌드한 이미지는 레코드를 잘못 읽는다: ``"available":false``는 ``syntax error : 102``로 실패하고 ``true``는 읽힌다.
+fastjson2는 ``false``를 ``sun.misc.Unsafe``로 읽는데, 그 바이트 배열 오프셋은 ``JDKUtils``가 이미지를 빌드한 JVM에서 계산한 값이다.
+그 오프셋은 16이고, 이미지 자신의 값은 12다.
+``JDKUtils``는 fastjson2 자신의 설정이 빌드 시 초기화하는 클래스 가운데 하나이므로, 빌드되는 어떤 이미지에서도 오프셋이 틀린다.
+silk-json은 배열의 ``VarHandle`` 뷰로 읽으며, 이 뷰는 오프셋을 들고 있지 않다.
+
+``json-bench/native-bench.sh``는 케이스 여섯 개를 GraalVM CE 25.2.4의 기본값으로 네이티브 이미지로 빌드하고, ``NativeBench``가 JMH 없이 잰다: 3초 워밍업 뒤 1초 라운드 열 번의 중앙값이다.
+같은 측정기를 Temurin 25에서 돌린 것이 JVM 열이다.
+
+[cols="3,>1,>1",options="header"]
+|===
+| 연산, 생성된 코덱 | 네이티브 이미지 | JVM
+
+| 레코드 100개 쓰기 | 12.2 µs | 4.6 µs
+| 한글 레코드 100개 쓰기 | 9.7 µs | 4.5 µs
+| 장소 100개 쓰기 | 12.9 µs | 9.6 µs
+| 레코드 100개 읽기 | 10.5 µs | 5.6 µs
+| 한글 레코드 100개 읽기 | 10.8 µs | 6.5 µs
+| 장소 100개 읽기 | 9.6 µs | 5.1 µs
+|===
+
+네이티브 이미지는 JVM 시간의 1.3배에서 2.6배가 걸리며, HTTP 케이스의 네이티브 이미지가 JVM보다 적은 요청에 응답하는 것과 같은 방향이다.
+fastjson2는 이미지가 문서를 잘못 읽었으므로 표에서 뺐다.
+HTTP 케이스에서 직렬화기와 파서는 각 요청의 한 몫이며, <<reading>>이 이를 처리량과 견준다.
 
 [#reading]
 == 결과 해석
 
 `text`와 `json` 케이스는 본문이 아주 작으므로 프레임워크가 요청에 더하는 비용을 잰다.
-같은 컨테이너인 Tomcat 위에서 Spider Silk는 Spring MVC보다 초당 24%~25% 많은 요청을 처리한다.
+같은 컨테이너인 Tomcat 위에서 Spider Silk는 Spring MVC보다 `text`에서 초당 27%, `json`에서 10% 많은 요청을 처리한다.
 두 프레임워크는 요청마다 하는 일이 다르다.
 Spider Silk에서 서블릿부터 핸들러까지의 경로는 스택 프레임 두 개이며, Spring MVC는 요청마다 핸들러 매핑, 인자 리졸버, 반환값 핸들러, 메시지 컨버터를 거친다.
-Jetty는 여기에 16%~19%를 더한다.
+Jetty는 여기에 13%~15%를 더한다.
 또한 이 64개 연결에서 코어 네 개를 계속 바쁘게 쓴 서버는 Jetty뿐이며, 두 Tomcat 대상은 약 300%에 머물렀다.
 
-`json-list` 케이스에서는 격차가 2%~5%로 줄어드는데, 10 KB 문서는 프레임워크가 아니라 직렬화기의 일이기 때문이다.
-그 커밋에서 ``JsonWriter.list``는 문서 전체를 메모리에 트리로 만든 뒤에야 쓰기 시작했고, Jackson은 각 필드를 응답에 곧바로 썼다.
-이어서 Spider Silk는 트리를 UTF-8로 바이트 배열에 한 번 썼으며, 그 배열이 곧 본문이었다.
-이 크기의 문서에서는 두 방식의 비용이 JVM 위에서 거의 같다.
-그 뒤 트리는 사라졌다: 라이터는 각 멤버를 출력에 곧바로 쓰며, 그것이 무엇을 바꿨는지는 <<json-microbenchmark>>가 잰다.
+`json-list` 케이스에서는 격차가 Jetty에서 1.71배, Tomcat에서 1.42배로 벌어지는데, 10 KB 문서는 프레임워크가 아니라 직렬화기의 일이기 때문이다.
+생성된 코덱은 문서를 스레드의 버퍼에 쓰며, ``WebResponse.json``은 그 버퍼에서 복사 없이 본문을 보낸다.
+<<json-microbenchmark>>는 같은 목록에서 코덱이 Jackson 시간의 40%를 쓴다고 잰다.
+2026-10-09의 실행에서는 ``JsonWriter.list``가 문서 전체를 트리로 만든 뒤에야 쓰기 시작했고, 격차는 2%~5%였다.
 큰 문서를 보내는 애플리케이션에는 다른 두 경로가 있다: xref:large-json.adoc[대용량 JSON과 NDJSON]의 스트리밍 라이터, 그리고 xref:json-interop.adoc[외부 JSON 바인딩]을 통한 Jackson 같은 바인딩 라이브러리다.
 둘 다 여기서는 측정하지 않았다.
+
+`json-post` 케이스는 파서를 재며, 어느 컨테이너에서든 Spider Silk가 Spring MVC보다 초당 약 2배 많은 요청을 처리한다.
+생성된 코덱은 트리도 리플렉션도 없이 본문의 바이트를 곧바로 레코드로 읽는다.
+<<json-microbenchmark>>는 같은 목록에서 코덱이 Jackson 시간의 24%를 쓴다고 잰다.
+여기서는 파싱이 컨테이너보다 무거우므로 Jetty와 Tomcat이 서로 3% 이내로 차이 난다.
 
 템플릿 케이스에서는 프레임워크보다 엔진의 비중이 크다.
 jte는 템플릿을 컴파일된 Java로 실행하며, 템플릿을 해석하고 표현식 언어로 모델을 읽는 Thymeleaf보다 이 페이지를 약 세 배 빠르게 렌더링한다.
@@ -448,7 +500,8 @@ jte는 템플릿을 컴파일된 Java로 실행하며, 템플릿을 해석하고
 
 네이티브 이미지는 부팅 시간과 메모리를 얻는 대신 처리량을 내준다.
 네이티브 이미지는 JIT가 모으는 프로파일 없이 미리 컴파일된 코드를 G1 대신 GraalVM CE의 Serial GC 위에서 실행한다.
-할당이 많은 케이스가 가장 크게 손해를 본다: ``json-list``에서 ``spring-mvc-native``는 같은 애플리케이션이 JVM에서 처리하는 양의 15%를 처리하며, p99는 59 ms다.
+할당이 많은 케이스가 가장 크게 손해를 본다: ``spring-mvc-native``는 같은 애플리케이션이 JVM에서 처리하는 양의 ``json-list``에서 15%, ``json-post``에서 14%를 처리하며, p99는 35 ms와 36 ms다.
+Spider Silk의 네이티브 이미지는 같은 케이스에서 JVM 처리량의 62%와 66%를 유지하며, 이는 <<json-microbenchmark>>의 코덱 시간과 같은 방향이다.
 Thymeleaf는 Spider Silk의 네이티브 이미지가 Spring보다 느린 유일한 케이스다.
 두 프레임워크는 Thymeleaf의 표현식을 다르게 평가한다: Spider Silk의 모듈은 ``Fortune``을 리플렉션으로 읽는 OGNL로, Spring의 통합 모듈은 SpEL로 평가한다.
 Oracle GraalVM은 G1 컬렉터와 프로파일 기반 최적화를 제공하며, 이들은 이 비용의 일부를 겨냥한다.
@@ -462,7 +515,7 @@ Oracle GraalVM은 G1 컬렉터와 프로파일 기반 최적화를 제공하며,
 wrk는 가장 빠른 케이스도 따라잡았으므로, 처리량을 정한 것은 wrk가 아니라 서버다.
 * wrk는 한 연결에서 이전 응답이 도착한 뒤에야 다음 요청을 보내므로, 백분위수에는 요청이 느린 요청 뒤에서 기다렸을 시간이 빠져 있다(coordinated omission).
 이 백분위수는 대상끼리 비교하기 위한 것이며, 서비스 수준 목표와 비교하기 위한 것이 아니다.
-* CPU는 `powersave` 거버너와 `balanced` 프로파일로 실행됐으므로, 클럭이 부하와 온도에 따라 오르내렸다.
+* CPU는 `powersave` 거버너와 `performance` 프로파일로 실행됐으므로, 클럭은 여전히 부하와 온도에 따라 오르내렸다.
 번갈아 실행한 라운드가 그 편차를 모든 대상에 고르게 나눈다.
 * 핸들러가 I/O를 하지 않으므로, 이 수치는 프레임워크, 직렬화기, 템플릿 엔진만을 잰다.
 데이터베이스를 기다리는 애플리케이션은 요청 시간의 대부분을 거기서 쓰며, 위의 차이는 그만큼 줄어든다.

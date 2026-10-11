@@ -57,6 +57,7 @@ public class JsonBench {
     static final List<Item> PLAIN_ITEMS = plainItems();
     static final List<Item> KOREAN_ITEMS = koreanItems();
     static final List<Item> LONG_ITEMS = longItems();
+    static final List<Item> LONG_KOREAN_ITEMS = longKoreanItems();
     static final List<Item> SHORT_ITEMS = shortItems();
     static final List<Place> PLACES = places();
     static final List<Order> ORDERS = orders();
@@ -288,6 +289,17 @@ public class JsonBench {
         return List.copyOf(items);
     }
 
+    /** The same records with a description of 200 characters in Korean. */
+    private static List<Item> longKoreanItems() {
+        String prose = "상품 페이지나 이슈 트래커가 쓰는 식으로 쓴 품목의 긴 설명이다: 숫자와 쉼표, 괄호(따옴표는 없다)가 섞인 평범한 문장들. ";
+        List<Item> items = new ArrayList<>();
+        for (int i = 1; i <= 100; i++) {
+            String description = (i + ". " + prose.repeat(4)).substring(0, 200);
+            items.add(new Item(i, "item-" + i, description, i * 7 % 50, i % 3 != 0));
+        }
+        return List.copyOf(items);
+    }
+
     /** The same records with strings of no character or one: a code, a flag, a field left empty. */
     private static List<Item> shortItems() {
         List<Item> items = new ArrayList<>();
@@ -422,6 +434,16 @@ public class JsonBench {
     @Benchmark
     public byte[] writeLongStringList_fastjson2() {
         return JSON.toJSONBytes(LONG_ITEMS);
+    }
+
+    @Benchmark
+    public byte[] writeLongKoreanList_generated() {
+        return ITEMS_GENERATED.toJsonBytes(LONG_KOREAN_ITEMS);
+    }
+
+    @Benchmark
+    public byte[] writeLongKoreanList_fastjson2() {
+        return JSON.toJSONBytes(LONG_KOREAN_ITEMS);
     }
 
     @Benchmark

@@ -2,21 +2,22 @@
 :navtitle: Appendix: Benchmark
 
 This appendix reports one run of the benchmark in the repository's `benchmark/` directory, which measures Spider Silk against Spring MVC on the same machine, with the same JVM and the same load.
-The run took place on 2026-10-09 on the laptop described under <<machine>>, against `main` at commit `fa300ce`, 143 commits after the 1.1.0 release, with the change that has `WebResponse.json` answer with `Bytes` applied on top.
+The run took place on 2026-10-11 on the laptop described under <<machine>>, against `main` at commit `11b9a13`, 159 commits after the 1.1.0 release, with the changes that require Java 25 applied on top.
 
 [#summary]
 == Summary
 
 The numbers below are medians, and they hold for this machine and these handlers only.
 
-* Plain text and a small JSON object answer about 1.45 times as many requests per second on Spider Silk with Jetty as on Spring MVC.
-On the same container, Tomcat, the margin is about 1.25 times.
-* A JSON list of 100 records, where the serializer does most of the work, answers 2% to 5% more requests per second on Spider Silk than on Spring MVC with Jackson.
-* A page rendered with jte, Spider Silk's default engine, answers about 3.2 times as many requests per second as Spring MVC with Thymeleaf.
+* Plain text answers about 1.43 times as many requests per second on Spider Silk with Jetty as on Spring MVC, and a small JSON object about 1.27 times.
+On the same container, Tomcat, the margins are about 1.27 and 1.10 times.
+* A JSON list of 100 records, where the serializer does most of the work, answers 1.71 times as many requests per second on Spider Silk with Jetty as on Spring MVC with Jackson, and 1.42 times on Tomcat.
+* The same list read from a request body, where the parser does most of the work, answers about twice as many requests per second on Spider Silk, on either container.
+* A page rendered with jte, Spider Silk's default engine, answers about 3.3 times as many requests per second as Spring MVC with Thymeleaf.
 With Thymeleaf on both sides, the two are within 5% of each other.
-* A JVM process starts in 312 ms on Spider Silk with Jetty and in 923 ms on Spring Boot, and holds 116 MB against 216 MB of resident memory at that point.
-* As GraalVM native images, Spider Silk starts in 48 ms and Spring MVC in 50 ms, and building the image takes 89 s and 105 s respectively.
-The native images answer fewer requests per second than the JVM in every case, by 23% to 85%.
+* A JVM process starts in 295 ms on Spider Silk with Jetty and in 908 ms on Spring Boot, and holds 117 MB against 216 MB of resident memory at that point.
+* As GraalVM native images, Spider Silk starts in 24 ms and Spring MVC in 37 ms, and building the image takes 72 s and 87 s respectively.
+The native images answer fewer requests per second than the JVM in every case, by 25% to 86%.
 
 [#targets]
 == What was measured
@@ -58,7 +59,7 @@ The native image of Spider Silk was built for Jetty only.
 
 === Cases
 
-Each case is one `GET` that returns the same body on both frameworks.
+Each case is one request that gets the same answer on both frameworks.
 
 [cols="2,1,4,4,1",options="header"]
 |===
@@ -72,15 +73,21 @@ Each case is one `GET` that returns the same body on both frameworks.
 
 | `json`
 | `/json`
-| `WebResponse.json(new Message(...), MESSAGE)`, a hand-written `JsonWriter`
+| `WebResponse.json(new Message(...), MessageJson.CODEC)`, the generated codec
 | `@RestController` returning a `Message` record, written by Jackson
 | 27 B
 
 | `json-list`
 | `/items`
-| `WebResponse.json(items, ITEMS)`, with `JsonWriter.list`
+| `WebResponse.json(items, ITEMS)`, with `JsonCodec.list` of the generated codec
 | `@RestController` returning a `List<Item>`, written by Jackson
 | 10,490 B
+
+| `json-post`
+| `/items`
+| `req.bodyJson(ITEMS)` on a `POST`, answering the count as text
+| `@PostMapping` taking a `@RequestBody List<Item>`, read by Jackson
+| 10,490 B in, 3 B out
 
 | `template-jte`
 | `/fortunes`
@@ -96,13 +103,11 @@ Each case is one `GET` that returns the same body on both frameworks.
 |===
 
 The `json-list` body is 100 records of five fields each, and the two frameworks send it byte for byte the same.
+The `json-post` case sends that document as the body of a `POST /items`, and both frameworks read it into records and answer with their number.
 The `/fortunes` page is a table of the 12 fortunes from the TechEmpower benchmark, one of which needs HTML escaping and one of which is Japanese.
 The two Thymeleaf pages are the same template file and render to the same bytes.
 The jte page differs in its blank lines, and in leaving `"` and `'` unescaped in text, which HTML allows.
 Every value a handler answers with is built once at startup, so a request measures the framework, the serializer, and the renderer, and not the data.
-
-Since that run, the Spider Silk application answers `json` and `json-list` through the codecs generated from its records, and a `json-post` case sends the 100 records of `json-list` as the body of a `POST /items` on both frameworks, so that the parser is measured as the serializer is.
-Both wait for the next run of the whole benchmark, and <<json-microbenchmark>> measures the serializer and the parser on their own.
 
 === Method
 
@@ -124,8 +129,11 @@ The JVM is Temurin 25 with its default collector, G1.
 The native images come from GraalVM CE 25.2.4, whose only collector is the Serial GC.
 
 The reported throughput and each latency percentile are medians of the three rounds, taken separately.
-Across the rounds, the throughput of every case stayed within 12% of its median.
-The three cases beyond 8% all fell in the second round: `json-list` on `spider-silk-jetty` and `spider-silk-jetty-native`, and `json` on `spring-mvc-native`.
+Across the rounds, the throughput of most cases stayed within 10% of its median.
+`spider-silk-jetty` ran 36% above its median under `text` in one round, and 13% to 17% above it under `json-list`, `json-post`, and `template-jte`.
+`spider-silk-jetty-native` ran 17% above its median under `json` and `template-jte`.
+`spring-mvc-native` ran 13% above its median under `json-list` and 10% below it under `text`.
+The median of three rounds sets such a round aside.
 No request failed in the run.
 
 [#machine]
@@ -137,7 +145,7 @@ No request failed in the run.
 | CPU | Intel Core Ultra 7 258V (Lunar Lake): 4 performance cores at up to 4.8 GHz and 4 low-power efficiency cores at up to 3.7 GHz, 8 threads, 12 MiB L3 cache
 | Memory | 30 GiB (32 GB LPDDR5X)
 | OS | Ubuntu 24.04.5 LTS, Linux 6.17.0-1032-oem
-| CPU frequency | `powersave` governor, `balanced` platform profile
+| CPU frequency | `powersave` governor, `performance` platform profile
 | JVM | Eclipse Temurin 25 (25+36-LTS)
 | Native image | GraalVM CE 25.2.4 (native-image 25.0.4)
 | Build | Gradle 9.5.1
@@ -160,37 +168,44 @@ CPU is the server's own CPU time during the measurement, where 400% means four c
 | Case | Target | Requests/s | p50 | p90 | p99 | CPU
 
 .5+| `text`
-| `spider-silk-jetty` | 213,891 | 0.31 | 0.57 | 1.04 | 383%
-| `spider-silk-tomcat` | 180,468 | 0.32 | 0.55 | 0.75 | 294%
-| `spring-mvc` | 145,592 | 0.41 | 0.60 | 1.01 | 311%
-| `spider-silk-jetty-native` | 161,750 | 0.41 | 0.75 | 1.54 | 376%
-| `spring-mvc-native` | 97,852 | 0.61 | 0.94 | 2.50 | 330%
+| `spider-silk-jetty` | 255,705 | 0.26 | 0.48 | 0.86 | 381%
+| `spider-silk-tomcat` | 226,397 | 0.25 | 0.47 | 0.60 | 286%
+| `spring-mvc` | 178,797 | 0.33 | 0.51 | 0.82 | 301%
+| `spider-silk-jetty-native` | 191,616 | 0.35 | 0.66 | 1.36 | 370%
+| `spring-mvc-native` | 128,198 | 0.47 | 0.73 | 1.93 | 312%
 
 .5+| `json`
-| `spider-silk-jetty` | 212,094 | 0.31 | 0.57 | 1.03 | 383%
-| `spider-silk-tomcat` | 182,384 | 0.31 | 0.54 | 0.75 | 296%
-| `spring-mvc` | 146,067 | 0.41 | 0.58 | 0.99 | 314%
-| `spider-silk-jetty-native` | 162,382 | 0.41 | 0.75 | 1.54 | 375%
-| `spring-mvc-native` | 93,028 | 0.63 | 0.97 | 2.56 | 322%
+| `spider-silk-jetty` | 253,830 | 0.26 | 0.49 | 0.83 | 380%
+| `spider-silk-tomcat` | 220,661 | 0.25 | 0.47 | 0.61 | 288%
+| `spring-mvc` | 200,313 | 0.29 | 0.52 | 0.77 | 283%
+| `spider-silk-jetty-native` | 190,022 | 0.35 | 0.66 | 1.34 | 370%
+| `spring-mvc-native` | 113,463 | 0.51 | 0.82 | 2.08 | 313%
 
 .5+| `json-list`
-| `spider-silk-jetty` | 77,530 | 0.86 | 1.40 | 2.15 | 387%
-| `spider-silk-tomcat` | 75,808 | 0.83 | 1.05 | 1.54 | 365%
-| `spring-mvc` | 73,986 | 0.86 | 1.07 | 1.51 | 367%
-| `spider-silk-jetty-native` | 50,389 | 1.30 | 2.22 | 3.39 | 376%
-| `spring-mvc-native` | 10,941 | 4.67 | 17.25 | 58.87 | 388%
+| `spider-silk-jetty` | 158,868 | 0.42 | 0.72 | 1.12 | 380%
+| `spider-silk-tomcat` | 131,754 | 0.45 | 0.65 | 1.05 | 325%
+| `spring-mvc` | 92,680 | 0.67 | 0.88 | 1.22 | 346%
+| `spider-silk-jetty-native` | 97,681 | 0.68 | 1.13 | 1.77 | 377%
+| `spring-mvc-native` | 13,630 | 3.95 | 10.04 | 35.09 | 387%
+
+.5+| `json-post`
+| `spider-silk-jetty` | 112,858 | 0.59 | 0.98 | 1.59 | 382%
+| `spider-silk-tomcat` | 109,506 | 0.56 | 0.78 | 1.29 | 333%
+| `spring-mvc` | 54,958 | 1.15 | 1.43 | 2.20 | 373%
+| `spider-silk-jetty-native` | 74,379 | 0.89 | 1.56 | 2.63 | 367%
+| `spring-mvc-native` | 7,473 | 8.60 | 21.11 | 36.41 | 345%
 
 .3+| `template-jte`
-| `spider-silk-jetty` | 162,826 | 0.41 | 0.73 | 1.28 | 382%
-| `spider-silk-tomcat` | 147,622 | 0.41 | 0.60 | 1.03 | 311%
-| `spider-silk-jetty-native` | 116,123 | 0.57 | 1.01 | 1.86 | 374%
+| `spider-silk-jetty` | 197,862 | 0.34 | 0.61 | 1.09 | 377%
+| `spider-silk-tomcat` | 183,579 | 0.32 | 0.52 | 0.81 | 300%
+| `spider-silk-jetty-native` | 138,690 | 0.48 | 0.88 | 1.66 | 367%
 
 .5+| `template-thymeleaf`
-| `spider-silk-jetty` | 52,301 | 1.27 | 2.07 | 3.22 | 388%
-| `spider-silk-tomcat` | 53,390 | 1.18 | 1.49 | 2.42 | 374%
-| `spring-mvc` | 50,719 | 1.25 | 1.58 | 2.37 | 373%
-| `spider-silk-jetty-native` | 23,246 | 2.82 | 4.95 | 8.04 | 371%
-| `spring-mvc-native` | 27,725 | 2.13 | 3.65 | 7.04 | 370%
+| `spider-silk-jetty` | 63,519 | 1.05 | 1.75 | 2.72 | 381%
+| `spider-silk-tomcat` | 62,444 | 1.00 | 1.29 | 2.07 | 357%
+| `spring-mvc` | 60,331 | 1.04 | 1.39 | 2.03 | 353%
+| `spider-silk-jetty-native` | 28,378 | 2.33 | 4.10 | 6.71 | 368%
+| `spring-mvc-native` | 33,346 | 1.77 | 3.04 | 5.24 | 365%
 |===
 
 The ratios below divide Spider Silk's throughput by Spring MVC's, so a value above 1 favors Spider Silk.
@@ -199,11 +214,12 @@ The ratios below divide Spider Silk's throughput by Spring MVC's, so a value abo
 |===
 | Case | Jetty vs. Spring MVC | Tomcat vs. Spring MVC | Native vs. native
 
-| `text` | 1.47 | 1.24 | 1.65
-| `json` | 1.45 | 1.25 | 1.75
-| `json-list` | 1.05 | 1.02 | 4.61
-| Spider Silk's jte vs. Spring MVC's Thymeleaf | 3.21 | 2.91 | 4.19
-| Thymeleaf on both sides | 1.03 | 1.05 | 0.84
+| `text` | 1.43 | 1.27 | 1.49
+| `json` | 1.27 | 1.10 | 1.67
+| `json-list` | 1.71 | 1.42 | 7.17
+| `json-post` | 2.05 | 1.99 | 9.95
+| Spider Silk's jte vs. Spring MVC's Thymeleaf | 3.28 | 3.04 | 4.16
+| Thymeleaf on both sides | 1.05 | 1.04 | 0.85
 |===
 
 === Startup and memory
@@ -215,18 +231,18 @@ Memory is the process's resident set size at that moment.
 |===
 | Target | Startup (median) | Fastest | Slowest | Resident memory
 
-| `spider-silk-jetty` | 312 ms | 306 ms | 316 ms | 116 MB
-| `spider-silk-tomcat` | 361 ms | 355 ms | 381 ms | 117 MB
-| `spring-mvc` | 923 ms | 911 ms | 1,014 ms | 216 MB
-| `spider-silk-jetty-native` | 48 ms | 23 ms | 51 ms | 37 MB
-| `spring-mvc-native` | 50 ms | 46 ms | 64 ms | 74 MB
+| `spider-silk-jetty` | 295 ms | 294 ms | 346 ms | 117 MB
+| `spider-silk-tomcat` | 345 ms | 342 ms | 359 ms | 117 MB
+| `spring-mvc` | 908 ms | 905 ms | 923 ms | 216 MB
+| `spider-silk-jetty-native` | 24 ms | 22 ms | 25 ms | 37 MB
+| `spring-mvc-native` | 37 ms | 36 ms | 53 ms | 74 MB
 |===
 
-Spring Boot's own log reports `Started SpringMvcBenchmark in 0.73 seconds` on the JVM and `in 0.03 seconds` as a native image.
+Spring Boot's own log reports `Started SpringMvcBenchmark in 0.73 seconds` on the JVM and `in 0.025 seconds` as a native image.
 The difference from the table is the JVM's own startup and the time to the first answer.
 
-Under load, a JVM process held 760 to 880 MB, most of it the 1 GiB heap that `-Xms1g` reserves.
-The native images held 70 to 280 MB, the most under `json-list`.
+Under load, a JVM process held 760 to 890 MB, most of it the 1 GiB heap that `-Xms1g` reserves.
+The native images held 60 to 360 MB, the most under `json-post` on `spring-mvc-native`.
 
 === Native image builds
 
@@ -238,22 +254,22 @@ The Spider Silk modules the application depends on were already compiled and are
 |===
 | Application | Build (median) | `native-image` alone | `native-image` peak memory | Binary
 
-| Spider Silk | 88.9 s | 87 s | 4.1 GiB | 63.6 MB
-| Spring MVC | 105.1 s | 101 s | 4.1 GiB | 73.9 MB
+| Spider Silk | 72.2 s | 70 s | 4.2 GiB | 63.6 MB
+| Spring MVC | 87.3 s | 84 s | 4.0 GiB | 73.9 MB
 |===
 
 `native-image` used all eight CPUs, at a load of about 6.5, for both applications.
-The JVM applications' dependencies come to 9.5 MB for Spider Silk and 21 MB for Spring MVC.
+The JVM applications' dependencies come to 9.6 MB for Spider Silk and 21 MB for Spring MVC.
 
 [#json-microbenchmark]
 === The serializer and the parser alone
 
 `benchmark/json-bench` measures the JSON engine with no HTTP around it, on the documents the HTTP cases send: the 100 records of `json-list` and the 27-byte object of `json`.
 It also measures 100 places with three numbers each that have a fraction, and 100 orders whose status is an enum, which no HTTP case sends.
-The same 100 records come in more forms: with nothing to escape, with Korean strings, with their keys in reverse order, with a description of 200 characters, spaced out as Python's `json.dumps` and a pretty printer write them, with ids of 13 and 18 digits, and with strings of no character or one.
+The same 100 records come in more forms: with nothing to escape, with Korean strings, with their keys in reverse order, with a description of 200 characters in English and in Korean, spaced out as Python's `json.dumps` and a pretty printer write them, with ids of 13 and 18 digits, and with strings of no character or one.
 The reversed and spaced keys stand for a document that another program wrote, and the long description for prose such as a product page.
 It ran on 2026-10-11 on the same machine, on AC power with the `performance` platform profile.
-It measured silk-json with the changes on top of commit `5f067c8`, under JMH 1.37 with two forks of five warm-up and five measured iterations of a second each, pinned to CPUs 0 to 3, with `-Xms1g -Xmx1g`, on Temurin 25.
+It measured silk-json with the changes on top of commit `11b9a13`, compiled for Java 25, under JMH 1.37 with two forks of five warm-up and five measured iterations of a second each, pinned to CPUs 0 to 3, with `-Xms1g -Xmx1g`, on Temurin 25.
 Each cell is the average time per operation and the bytes allocated per operation, the latter from JMH's `gc` profiler.
 
 [cols="2,3,>1,>1",options="header"]
@@ -263,7 +279,7 @@ Each cell is the average time per operation and the bytes allocated per operatio
 .6+| Write the 100 records (10,490 B)
 | the `Json.object()` tree, as `JsonWriter.tree` | 8.0 µs | 24.1 KB
 | a hand-written `JsonWriter` | 5.9 µs | 11.3 KB
-| the generated codec | 4.8 µs | 10.7 KB
+| the generated codec | 4.7 µs | 10.7 KB
 | Jackson 3.1 | 11.8 µs | 19.7 KB
 | fastjson2 2.0.57 | 4.6 µs | 10.7 KB
 | fastjson2 2.0.57, `creator=reflect` | 5.7 µs | 10.7 KB
@@ -273,27 +289,31 @@ Each cell is the average time per operation and the bytes allocated per operatio
 | fastjson2 2.0.57, `JSON.writeTo` | 3.6 µs | 184 B
 
 .2+| Write the 100 records with nothing to escape (10,090 B)
-| the generated codec | 4.3 µs | 10.3 KB
-| fastjson2 2.0.57 | 3.7 µs | 10.3 KB
+| the generated codec | 4.2 µs | 10.3 KB
+| fastjson2 2.0.57 | 3.6 µs | 10.3 KB
 
 .2+| Write the 100 records in Korean (9,590 B)
-| the generated codec | 4.1 µs | 9.8 KB
+| the generated codec | 4.0 µs | 9.8 KB
 | fastjson2 2.0.57 | 3.6 µs | 9.8 KB
 
 .2+| Write the 100 records with a 200-character description (27,498 B)
 | the generated codec | 6.8 µs | 28.4 KB
 | fastjson2 2.0.57 | 6.3 µs | 27.7 KB
 
+.2+| Write the 100 records with a 200-character description in Korean (54,516 B)
+| the generated codec | 23.0 µs | 55.4 KB
+| fastjson2 2.0.57 | 37.0 µs | 54.7 KB
+
 .2+| Write the 100 orders (5,985 B)
 | the generated codec | 2.4 µs | 6.2 KB
 | fastjson2 2.0.57 | 2.7 µs | 6.2 KB
 
 .5+| Read the 100 records
-| a hand-written `JsonReader.object` | 14.3 µs | 37.8 KB
-| the generated codec | 5.4 µs | 17.6 KB
-| Jackson 3.1 | 23.9 µs | 52.8 KB
-| fastjson2 2.0.57 | 6.2 µs | 24.8 KB
-| fastjson2 2.0.57, `creator=reflect` | 24.0 µs | 111.2 KB
+| a hand-written `JsonReader.object` | 14.2 µs | 37.8 KB
+| the generated codec | 5.6 µs | 17.6 KB
+| Jackson 3.1 | 23.7 µs | 52.8 KB
+| fastjson2 2.0.57 | 6.1 µs | 24.8 KB
+| fastjson2 2.0.57, `creator=reflect` | 24.5 µs | 111.2 KB
 
 .2+| Read the 100 records in Korean
 | the generated codec | 5.7 µs | 23.1 KB
@@ -301,57 +321,57 @@ Each cell is the average time per operation and the bytes allocated per operatio
 
 .2+| Read the 100 records with their keys reversed
 | the generated codec | 7.3 µs | 17.6 KB
-| fastjson2 2.0.57 | 6.2 µs | 24.8 KB
+| fastjson2 2.0.57 | 6.3 µs | 24.8 KB
 
 .2+| Read the 100 records as `json.dumps` spaces them (11,489 B)
-| the generated codec | 6.6 µs | 17.6 KB
-| fastjson2 2.0.57 | 6.9 µs | 24.8 KB
+| the generated codec | 6.7 µs | 17.6 KB
+| fastjson2 2.0.57 | 7.0 µs | 24.8 KB
 
 .2+| Read the 100 records indented (14,091 B)
-| the generated codec | 8.7 µs | 17.6 KB
-| fastjson2 2.0.57 | 7.9 µs | 24.8 KB
+| the generated codec | 9.0 µs | 17.6 KB
+| fastjson2 2.0.57 | 8.1 µs | 24.8 KB
 
 .2+| Read the 100 records with a 200-character description
-| the generated codec | 6.5 µs | 34.3 KB
-| fastjson2 2.0.57 | 5.2 µs | 34.4 KB
+| the generated codec | 6.6 µs | 34.3 KB
+| fastjson2 2.0.57 | 5.4 µs | 34.4 KB
 
 .2+| Read the 100 records with 13-digit ids
 | the generated codec | 5.9 µs | 17.6 KB
-| fastjson2 2.0.57 | 7.0 µs | 24.8 KB
+| fastjson2 2.0.57 | 6.9 µs | 24.8 KB
 
 .2+| Read the 100 records with 18-digit ids
-| the generated codec | 5.9 µs | 17.6 KB
+| the generated codec | 6.0 µs | 17.6 KB
 | fastjson2 2.0.57 | 7.3 µs | 24.8 KB
 
 .2+| Read the 100 records with strings of no character or one (6,956 B)
 | the generated codec | 2.8 µs | 5.5 KB
-| fastjson2 2.0.57 | 3.8 µs | 14.8 KB
+| fastjson2 2.0.57 | 3.9 µs | 14.8 KB
 
 .2+| Read the 100 orders
-| the generated codec | 3.0 µs | 9.5 KB
-| fastjson2 2.0.57 | 3.1 µs | 9.6 KB
+| the generated codec | 3.1 µs | 9.5 KB
+| fastjson2 2.0.57 | 3.2 µs | 9.6 KB
 
 .3+| Write the 27-byte object
-| the generated codec | 26 ns | 232 B
-| Jackson 3.1 | 136 ns | 496 B
-| fastjson2 2.0.57 | 28 ns | 216 B
+| the generated codec | 25 ns | 232 B
+| Jackson 3.1 | 135 ns | 496 B
+| fastjson2 2.0.57 | 27 ns | 216 B
 
 .3+| Write the 100 places (8,263 B)
-| the generated codec | 9.5 µs | 8.5 KB
-| Jackson 3.1 | 19.7 µs | 50.1 KB
-| fastjson2 2.0.57 | 9.7 µs | 17.6 KB
+| the generated codec | 9.4 µs | 8.5 KB
+| Jackson 3.1 | 20.1 µs | 50.1 KB
+| fastjson2 2.0.57 | 9.5 µs | 17.6 KB
 
 .3+| Read the 100 places
-| the generated codec | 4.9 µs | 11.1 KB
-| Jackson 3.1 | 25.7 µs | 59.6 KB
-| fastjson2 2.0.57 | 5.4 µs | 11.2 KB
+| the generated codec | 5.1 µs | 11.1 KB
+| Jackson 3.1 | 26.6 µs | 59.7 KB
+| fastjson2 2.0.57 | 5.3 µs | 11.2 KB
 |===
 
-The generated codec writes the list in 41% of Jackson's time and reads it in 23%, with between a third and a half of the allocation, and writes the small object in under a fifth of Jackson's time.
+The generated codec writes the list in 40% of Jackson's time and reads it in 24%, with between a third and a half of the allocation, and writes the small object in under a fifth of Jackson's time.
 The hand-written writer lands between the tree and the codec: it finds each key among the keys the document has already written, where the codec copies the key from a constant.
-The codec reads the 10 KB document in 88% of fastjson2's time, and writes the small object in 93% of it.
-fastjson2 stays ahead writing the 10 KB document, by 5%.
-Its lead is in writing the strings, and it is wider where no string needs an escape: 1.16 times on the plain records and 1.12 times on the Korean ones.
+The codec reads the 10 KB document in 92% of fastjson2's time, and writes the small object in 92% of it.
+fastjson2 stays ahead writing the 10 KB document, by 3%.
+Its lead is in writing the strings, and it is wider where no string needs an escape: 1.17 times on the plain records and 1.11 times on the Korean ones.
 fastjson2 reads a `String`'s own bytes through `sun.misc.Unsafe`, which the JDK is retiring and core does not use.
 The codec copies a string's characters out with `getChars` and checks them one at a time.
 Copying a string's bytes with no check at all, a floor no correct writer can stand on, writes the plain records in 2.7 µs, ahead of fastjson2's 3.7 µs.
@@ -362,7 +382,7 @@ The JIT compiler of JDK 25 does not vectorize a loop that narrows a `char` to a 
 The codec writes a member's key and value with one call, `put(JsonKey, ...)`, which checks the writer's state once.
 It writes a number below 1000 with one store, and a three-byte character, such as a Korean syllable, with one four-byte store.
 Measured back to back with the build before them, these took the plain records from 4.4 µs to 4.2 µs and the Korean ones from 4.4 µs to 4.0 µs.
-On Temurin 21, the JDK the release targets, the ratios are the same: fastjson2 writes the plain records 1.15 times as fast and the Korean ones 1.13 times, and the codec reads the list in 88% of fastjson2's time.
+On Temurin 21, which the release targeted before it required Java 25, the ratios were the same: fastjson2 writes the plain records 1.15 times as fast and the Korean ones 1.13 times, and the codec reads the list in 88% of fastjson2's time.
 
 A string of 64 characters or more takes another path.
 The JDK's `US_ASCII` encoder narrows it into the buffer through an intrinsic of the JIT compiler.
@@ -371,6 +391,9 @@ An escape moves the narrowed bytes after it up, rather than narrowing them again
 The encoder stops at the first character past ASCII, and the rest of the string goes to the loop that writes one character at a time.
 Measured back to back with the builds before them, these took the records with a long description from 15.0 µs to 8.6 µs, and then to 6.9 µs.
 fastjson2 still writes them 1.08 times as fast.
+In Korean, the codec writes the long descriptions in 62% of fastjson2's time.
+Java 25 has `MemorySegment.setString`, the one public call that copies a string's Latin-1 bytes with no widening to `char`.
+Copying through it and checking the bytes eight at a time wrote the 10 KB list in 5.4 µs against 4.9 µs and the long descriptions in 7.1 µs against 6.8 µs, so the codec does not use it.
 The codec allocates 0.7 KB more for them, the encoder and the two buffers around it, made once per document.
 A plain string pays on this path from about 16 characters, on Temurin 21, on Temurin 25, and under GraalVM's JIT compiler alike.
 A string with escapes pays only from 48 to 96 characters, depending on the compiler, and the threshold of 64 sits between the two.
@@ -378,7 +401,8 @@ The 2% to 2.5% that this path first cost the 10 KB list no longer shows: without
 
 An enum constant is written and read through its name encoded once as a `JsonKey`.
 The name is copied out as a key is, and compared in place on the way in, with no string made.
-Measured back to back with the build before, this took the orders from 2.9 µs to 2.4 µs out and from 4.6 µs to 3.0 µs in, 89% and 95% of fastjson2's time.
+Measured back to back with the build before, this took the orders from 2.9 µs to 2.4 µs out and from 4.6 µs to 3.0 µs in, now 91% and 96% of fastjson2's time.
+A generated codec does this for an enum wherever it stands: a property, an `Optional`, an element of a collection, or a value of a map.
 
 The codec reads the Korean records in 72% of fastjson2's time.
 It checks a string that has bytes past ASCII and decodes it into characters in the same pass, and widens the ASCII before them without a check.
@@ -388,17 +412,18 @@ A generated read tries the declared keys in order first.
 A key out of that order is found by a switch on the four bytes where the next member stands, which `JsonInput.keyHead()` reads.
 Measured back to back with the build before, this took the list from 6.0 µs to 5.5 µs and the reversed one from 9.5 µs to 8.0 µs.
 Once a document has left the declared order, each key after it goes straight to that switch, which took the reversed records to 7.2 µs.
-fastjson2 still reads them 1.19 times as fast.
+fastjson2 still reads them 1.17 times as fast.
 The read also passes over whitespace before a key and after its comma, and checks a comma and one space first.
-Measured back to back with the build before, this took the records as `json.dumps` spaces them from 10.0 µs to 6.6 µs, 95% of fastjson2's time, and the indented ones from 11.6 µs to 8.6 µs, 1.10 times fastjson2's.
+Measured back to back with the build before, this took the records as `json.dumps` spaces them from 10.0 µs to 6.6 µs, 95% of fastjson2's time, and the indented ones from 11.6 µs to 8.6 µs.
+In this run the indented ones took 1.11 times fastjson2's time.
 An integer of 8 to 16 digits is read two words at a time, which took the 18-digit ids from 6.5 µs to 5.9 µs.
-The codec reads the 13-digit and the 18-digit ids in 84% and 81% of fastjson2's time.
-An empty or one-character string comes from a table with no allocation, which took the records of such strings from 3.4 µs and 13.9 KB to 2.8 µs and 5.5 KB, 74% of fastjson2's time.
-fastjson2 also reads the long descriptions 1.25 times as fast.
+The codec reads the 13-digit and the 18-digit ids in 86% and 83% of fastjson2's time.
+An empty or one-character string comes from a table with no allocation, which took the records of such strings from 3.4 µs and 13.9 KB to 2.8 µs and 5.5 KB, 73% of fastjson2's time.
+fastjson2 also reads the long descriptions 1.21 times as fast.
 It finds the end of a string and makes the `String` through JDK internal methods that it binds by way of `sun.misc.Unsafe`, and the public API has no equivalent.
 
 Each place has a latitude with four decimals, a longitude with six, and a rating with one.
-The codec reads them in 92% of fastjson2's time with the same allocation, and in a fifth of Jackson's.
+The codec reads them in 96% of fastjson2's time with the same allocation, and in a fifth of Jackson's.
 `readDouble` converts a number from its digits, with one multiplication or division for numbers like these.
 Before it did, it made a string of each number for `Double.parseDouble`, and the same read took 12.6 µs and 43.9 KB.
 Jackson 3 parses a double with its fast parser by default, so turning `USE_FAST_DOUBLE_PARSER` on changed nothing.
@@ -418,29 +443,56 @@ On JDK 24 and later, its first call prints a warning that a method of `sun.misc.
 JEP 471 and JEP 498 set the order: a warning, then denial by default, then removal.
 The default in JDK 26 and JDK 27 is still the warning, and no JEP yet makes denial the default or removes the methods.
 fastjson2's 2.1.x branch, which moves to `VarHandle`, has had no change since February 2026.
-With `-Dfastjson2.creator=reflect` on the JVM, fastjson2 builds no classes at run time, and reads the list in 24.0 µs and 111.2 KB, four times its usual time, and writes it in 5.7 µs.
+With `-Dfastjson2.creator=reflect` on the JVM, fastjson2 builds no classes at run time, and reads the list in 24.5 µs and 111.2 KB, four times its usual time, and writes it in 5.7 µs.
 In a GraalVM native image, fastjson2 turns off its `String` fast path and its generated classes, and binds through reflection, which needs reachability metadata for every type it binds.
-That was read from its source and not measured.
-silk-json was not measured in a native image either, so this appendix claims neither library faster there.
-In the HTTP cases the serializer is a share of the request rather than the whole of it, so the next run is expected to move `json-list` by that share and `json` hardly at all, and `json-post` is where the parser's difference shows.
+fastjson2 2.0.57 does not build into a native image with the settings its jar carries, under GraalVM CE 25.2.4.
+Those settings initialize `JSONFactory` and a few other classes at build time, and the objects those classes hold reach classes the settings leave to run time, which `native-image` refuses.
+Built with the whole package initialized at build time, the image misreads the records: `"available":false` fails with `syntax error : 102`, while `true` reads.
+fastjson2 reads `false` through `sun.misc.Unsafe`, at an offset into the byte array that `JDKUtils` computed in the JVM that built the image.
+That offset is 16, and the image's own is 12.
+`JDKUtils` is one of the classes fastjson2's own settings initialize at build time, so the offset is wrong in any image of it that builds.
+silk-json reads through a `VarHandle` view of the array, which carries no offset.
+
+`json-bench/native-bench.sh` builds six of the cases into a native image with GraalVM CE 25.2.4's defaults, and `NativeBench` measures them with no JMH around them: a warm-up of three seconds, then the median of ten rounds of one second.
+The same harness on Temurin 25 gives the JVM column.
+
+[cols="3,>1,>1",options="header"]
+|===
+| Operation, generated codec | Native image | JVM
+
+| Write the 100 records | 12.2 µs | 4.6 µs
+| Write the 100 records in Korean | 9.7 µs | 4.5 µs
+| Write the 100 places | 12.9 µs | 9.6 µs
+| Read the 100 records | 10.5 µs | 5.6 µs
+| Read the 100 records in Korean | 10.8 µs | 6.5 µs
+| Read the 100 places | 9.6 µs | 5.1 µs
+|===
+
+The native image takes 1.3 to 2.6 times the JVM's time, as the native images of the HTTP cases answer fewer requests than their JVMs.
+fastjson2 is left out of the table, since its image misread the documents.
+In the HTTP cases the serializer and the parser are a share of each request, and <<reading>> sets them against the throughput.
 
 [#reading]
 == Reading the results
 
 The `text` and `json` cases measure what a framework adds to a request, since the body is tiny.
-On the same container, Tomcat, Spider Silk answers 24% to 25% more requests per second than Spring MVC.
+On the same container, Tomcat, Spider Silk answers 27% more requests per second than Spring MVC under `text` and 10% more under `json`.
 The two differ in the work done per request.
 Spider Silk's path from the servlet to the handler is two stack frames, while Spring MVC resolves a handler mapping, argument resolvers, return-value handlers, and message converters on every request.
-Jetty adds another 16% to 19% on top.
+Jetty adds another 13% to 15% on top.
 It is also the only server that kept four cores busy at these 64 connections, while both Tomcat targets stayed at about 300%.
 
-The `json-list` case narrows the gap to 2% to 5%, because a 10 KB document is the serializer's work rather than the framework's.
-At that commit, `JsonWriter.list` built the whole document as a tree in memory before writing any of it, while Jackson wrote each field straight to the response.
-Spider Silk then wrote the tree once, as UTF-8 into a byte array, and that array was the body.
-For a document of this size, the two approaches cost about the same on the JVM.
-The tree has since gone: a writer puts each member straight into the output, and <<json-microbenchmark>> measures what that changed.
+The `json-list` case widens the gap to 1.71 times on Jetty and 1.42 times on Tomcat, because a 10 KB document is the serializer's work rather than the framework's.
+The generated codec writes the document into the thread's buffer, and `WebResponse.json` sends the body from that buffer with no copy.
+<<json-microbenchmark>> measures the codec at 40% of Jackson's time on the same list.
+In the run of 2026-10-09, `JsonWriter.list` built the whole document as a tree before writing any of it, and the gap was 2% to 5%.
 An application that sends large documents has two other paths: the streaming writer in xref:large-json.adoc[Large JSON and NDJSON], and a binding library such as Jackson through xref:json-interop.adoc[External JSON Binding].
 Neither was measured here.
+
+The `json-post` case measures the parser, and Spider Silk answers about twice as many requests per second as Spring MVC on either container.
+The generated codec reads the body's bytes straight into records, with no tree and no reflection.
+<<json-microbenchmark>> measures it at 24% of Jackson's time on the same list.
+Jetty and Tomcat land within 3% of each other here, since the parse outweighs the container.
 
 The template cases show the engine outweighing the framework.
 jte runs a template as compiled Java, and renders this page about three times as fast as Thymeleaf, which interprets the template and reads the model through an expression language.
@@ -448,7 +500,8 @@ With Thymeleaf on both sides, the framework's share is small enough that the two
 
 The native images give up throughput for startup and memory.
 They run code compiled ahead of time without the profile a JIT collects, on GraalVM CE's Serial GC instead of G1.
-The allocation-heavy cases suffer most: `spring-mvc-native` under `json-list` answers 15% of what the same application does on the JVM, with a p99 of 59 ms.
+The allocation-heavy cases suffer most: `spring-mvc-native` answers 15% of what the same application does on the JVM under `json-list` and 14% under `json-post`, with a p99 of 35 ms and 36 ms.
+Spider Silk's native image keeps 62% and 66% of its JVM's throughput under the same cases, in line with the codec's times in <<json-microbenchmark>>.
 Thymeleaf is the one case where Spider Silk's native image is slower than Spring's.
 The two evaluate Thymeleaf's expressions differently: Spider Silk's module through OGNL, which reads `Fortune` by reflection, and Spring's integration through SpEL.
 Oracle GraalVM offers the G1 collector and profile-guided optimization, which aim at part of this cost.
@@ -462,7 +515,7 @@ Neither was measured here.
 wrk kept up with the fastest case, so the server, not wrk, set the throughput.
 * wrk sends the next request on a connection only after the previous response arrives, so its percentiles omit the time a request would have waited behind a slow one (coordinated omission).
 The percentiles compare the targets with each other, not with a service-level objective.
-* The CPU ran under the `powersave` governor and the `balanced` profile, so its clock rose and fell with load and temperature.
+* The CPU ran under the `powersave` governor and the `performance` profile, so its clock still rose and fell with load and temperature.
 The interleaved rounds spread that drift over every target.
 * The handlers do no I/O, so the numbers measure the framework, the serializer, and the template engine only.
 An application that waits on a database spends most of a request there, and the differences above shrink accordingly.
