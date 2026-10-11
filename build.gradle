@@ -144,7 +144,7 @@ configure(subprojects.findAll { it.name != 'spider-silk-maven-parent' }) {
 
     tasks.withType(JavaCompile).configureEach {
         options.encoding = 'UTF-8'
-        options.release = 21
+        options.release = 25
         // Error Prone runs inside javac on every module. Sources the build
         // generates (jte's precompiled templates carry no @Generated) are
         // not this project's to fix, so they are left out of the checks.

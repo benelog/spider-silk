@@ -47,9 +47,9 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- maven.compiler.release is also where jib-maven-plugin reads the Java
-         version it checks against the base image, so the JRE 21 base below
+         version it checks against the base image, so the JRE 25 base below
          needs no restating elsewhere. -->
-    <maven.compiler.release>21</maven.compiler.release>
+    <maven.compiler.release>25</maven.compiler.release>
 
     <!-- The versions the parent pins, in step with spider-silk-gradle-plugin
          where upstream allows: Jib's Maven plugin lags its Gradle plugin
@@ -106,7 +106,7 @@
           <version>${jib.version}</version>
           <configuration>
             <from>
-              <image>eclipse-temurin:21-jre</image>
+              <image>eclipse-temurin:25-jre</image>
             </from>
             <container>
               <ports>

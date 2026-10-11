@@ -43,7 +43,8 @@ pool.setVirtualThreadsExecutor(VirtualThreads.getDefaultVirtualThreadsExecutor()
 app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool)).start(8080);
 ```
 
-A `synchronized` block around the blocking call pins the carrier thread and takes the benefit back.
+A `synchronized` block around the blocking call no longer pins the carrier thread (JDK 24, JEP 491).
+A blocking call inside a native method still does.
 On Tomcat and Undertow the same is `executor(Executors.newVirtualThreadPerTaskExecutor())`.
 
 ## Tomcat
@@ -116,7 +117,7 @@ implementation('net.benelog.spidersilk:spider-silk-core') {
 
 ## Container images
 
-The Gradle plugin (see setup.md) brings Jib with `eclipse-temurin:21-jre`, port 8080, and layered caching already set; the build states only the image name:
+The Gradle plugin (see setup.md) brings Jib with `eclipse-temurin:25-jre`, port 8080, and layered caching already set; the build states only the image name:
 
 ```groovy
 plugins { id 'net.benelog.spidersilk' }

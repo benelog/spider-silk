@@ -51,7 +51,7 @@ class SpiderSilkPluginTest {
                     }
                 }
                 tasks.withType(JavaCompile).configureEach {
-                    options.release = 21
+                    options.release = 25
                 }
                 """);
     }
@@ -78,7 +78,7 @@ class SpiderSilkPluginTest {
         assertThat(output).contains("metadataRepository=true");
         assertThat(output).contains("--no-fallback");
         assertThat(output).contains("--static-nolibc");
-        assertThat(output).contains("targetCompatibility=21");
+        assertThat(output).contains("targetCompatibility=25");
         assertThat(output).contains("jibDependsOnNativeCompile=false");
     }
 

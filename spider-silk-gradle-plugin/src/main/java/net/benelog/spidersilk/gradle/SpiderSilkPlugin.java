@@ -21,7 +21,7 @@ import java.util.Map;
  *
  * <p>Applying the plugin applies {@code application}, Jib, and the GraalVM
  * native-image plugin, and sets the conventions the manual's Deployment
- * chapter walks through: a JRE 21 base image, port 8080, the reachability
+ * chapter walks through: a JRE 25 base image, port 8080, the reachability
  * metadata repository, {@code --no-fallback} (a fallback image would reintroduce
  * the reflection the framework exists to avoid), and a {@code resolveDependencies}
  * task for a Dockerfile's dependency-cache layer. {@code -Pnative} re-aims the
@@ -32,7 +32,7 @@ import java.util.Map;
  */
 public class SpiderSilkPlugin implements Plugin<Project> {
 
-    static final String JRE_BASE_IMAGE = "eclipse-temurin:21-jre";
+    static final String JRE_BASE_IMAGE = "eclipse-temurin:25-jre";
     static final String NATIVE_BASE_IMAGE = "gcr.io/distroless/base-debian12";
 
     @Override

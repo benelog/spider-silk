@@ -59,7 +59,7 @@ jib {
 }
 ----
 
-Without the plugin, the same image takes Jib's own plugin (`com.google.cloud.tools.jib`) and adds `from.image = 'eclipse-temurin:21-jre'` and `container.ports = ['8080']` to the block above.
+Without the plugin, the same image takes Jib's own plugin (`com.google.cloud.tools.jib`) and adds `from.image = 'eclipse-temurin:25-jre'` and `container.ports = ['8080']` to the block above.
 
 Jib splits the image into layers that follow the structure of the build, and that split makes rebuilds and pushes cheap.
 Four tiers each become a layer: external dependencies (the Jetty, Spring JDBC, and H2 jars), project dependencies (the `spider-silk-core` and `spider-silk-openapi` jars, on their own so a framework edit leaves the larger external layer untouched), resources, and classes.
@@ -72,8 +72,8 @@ An application that pulls spider-silk from a repository sees it as one more exte
 The entrypoint comes from the `application` block's `mainClass`.
 A JRE base suffices because the templates ship as the precompiled classes from the section above, and nothing in the image compiles at runtime.
 The plugin also works around one Jib check.
-Jib checks the app's `targetCompatibility` against the base image's Java version, and a build that targets 21 through `options.release` alone leaves `targetCompatibility` at the toolchain's version, so the check refuses the JRE 21 base.
-The plugin copies the release into `targetCompatibility`, which by hand is `java { targetCompatibility = JavaVersion.VERSION_21 }`.
+Jib checks the app's `targetCompatibility` against the base image's Java version, and a build that targets 25 through `options.release` alone leaves `targetCompatibility` at the toolchain's version, so the check refuses the JRE 25 base under a newer toolchain.
+The plugin copies the release into `targetCompatibility`, which by hand is `java { targetCompatibility = JavaVersion.VERSION_25 }`.
 
 [source,bash]
 ----
@@ -122,6 +122,5 @@ Docker caches the instructions as a chain, so an edit rewrites its own tier and 
 Jib's layers are independent of one another.
 The entrypoint states what the jar's manifest no longer can: the classpath, in Jib's order, and the main class.
 The `.dockerignore` at the root is part of this setup: it keeps `build/` directories out of the context, since they would otherwise invalidate the source layers on every build.
-The image matches the Jib one in its port and in the H2 caveat about the process home.
-The base image differs: the Dockerfile builds on `eclipse-temurin:25-jdk` and runs on `eclipse-temurin:25-jre`, while Jib runs on `eclipse-temurin:21-jre`.
-The application compiles with `release = 21`, so it runs on either JRE.
+The image matches the Jib one in its port, in its base, and in the H2 caveat about the process home.
+The Dockerfile builds on `eclipse-temurin:25-jdk` and runs on `eclipse-temurin:25-jre`, the JRE Jib runs on.

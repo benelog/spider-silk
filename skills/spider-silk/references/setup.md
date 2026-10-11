@@ -1,6 +1,6 @@
 # Setup: dependencies, modules, build integration
 
-Spider Silk requires Java 21 or later.
+Spider Silk requires Java 25 or later.
 Releases are published to Maven Central, so neither Gradle nor Maven needs a repository beyond the default or any credentials.
 The snippets below write `1.1.0`, the release this skill was written against.
 SKILL.md has the rule for checking it before it reaches a build file.
@@ -81,7 +81,7 @@ Each module's classes live in a subpackage of the core root: `net.benelog.spider
 
 ## The Gradle plugin (packaging conventions)
 
-The `net.benelog.spidersilk` plugin carries the packaging block an application would otherwise restate: it applies `application`, Jib, and the GraalVM native plugin, with Jib on `eclipse-temurin:21-jre` exposing port 8080 and the native binary built `--no-fallback --static-nolibc`.
+The `net.benelog.spidersilk` plugin carries the packaging block an application would otherwise restate: it applies `application`, Jib, and the GraalVM native plugin, with Jib on `eclipse-temurin:25-jre` exposing port 8080 and the native binary built `--no-fallback --static-nolibc`.
 
 ```groovy
 plugins {

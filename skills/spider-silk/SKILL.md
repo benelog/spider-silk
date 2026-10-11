@@ -21,7 +21,7 @@ metadata:
 
 A thin Java web framework on top of the Jakarta Servlet API.
 Two stack frames stand between `HttpServlet.service` and a handler: `AppServlet.service` and `AppServlet.dispatch`.
-Requires Java 21 or later.
+Requires Java 25 or later.
 Releases are published to Maven Central, so `mavenCentral()` is the only repository a build needs.
 The Gradle plugin is on Central too, not on the Gradle Plugin Portal — see [First-run setup](#first-run-setup) before touching the build file.
 The full manual is at <https://spider-silk.benelog.net>; the reference files beside this one are distilled from it.

@@ -51,6 +51,9 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 
 ### Changed
 
+- Spider Silk requires Java 25, where it required Java 21.
+  Every module is compiled for 25, and the Jib base image of `spider-silk-gradle-plugin` and `spider-silk-maven-parent` is `eclipse-temurin:25-jre`.
+  An application compiles with `release = 25` or later.
 - `silk-json`: the JSON API is a module of its own, which needs nothing but the JDK at run time, in the package `net.benelog.silkjson`, where it was `net.benelog.spidersilk.json` in `spider-silk-core`.
   Core depends on it, so an application has it as before, and an import of `net.benelog.spidersilk.json.Json` becomes `net.benelog.silkjson.Json`.
   An application that is not a Spider Silk one takes `net.benelog.silkjson:silk-json` alone.

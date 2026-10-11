@@ -38,7 +38,8 @@ app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool))
 ----
 
 가상 스레드는 핸들러가 I/O나 데이터베이스에서 블로킹할 때만 이점이 있다.
-그 블로킹 호출을 감싼 `synchronized` 블록은 캐리어 스레드를 고정(pin)시켜 이점을 도로 가져간다.
+그 블로킹 호출을 감싼 `synchronized` 블록은 JDK 24(JEP 491)부터 캐리어 스레드를 고정(pin)시키지 않는다.
+네이티브 메서드 안의 블로킹 호출은 여전히 캐리어 스레드를 고정시켜 이점을 도로 가져간다.
 
 == 종료
 

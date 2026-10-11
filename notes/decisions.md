@@ -90,8 +90,11 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 74 | `spider-silk-opentelemetry-agent`: the matched route as the span's `http.route` | ✅ shipped |
 | 75 | `WebResponse.json` answers with `Bytes`, written as UTF-8 straight from the tree | ✅ shipped |
 | 76 | One byte-level JSON engine, with hand-written and generated mappings on top of it | ✅ shipped |
+| 77 | `silk-json`, a JSON library tied to nothing, which core is built on | ✅ shipped |
+| 78 | `WebResponse.json` answers with a `Json` body, written into the thread's buffer and sent from there | ✅ shipped |
+| 79 | Java 25 is the floor | ✅ shipped |
 
-Fifty-eight of the fifty-nine shipped.
+Eighty-one of the eighty-two shipped.
 The exception, 15b, is a decision rather than a gap.
 "WebSocket / SSE" split into 15a–15c because SSE is HTTP and rides through `AppServlet`, while WebSocket is a protocol upgrade that does not.
 
@@ -289,7 +292,8 @@ Virtual threads are documented, not wrapped.
 
 Rejected: a `virtualThreads()` method.
 It would hide two lines of the server's API behind a name.
-The choice is the application's: it pays off only when handlers block, and `synchronized` around the blocking call takes the benefit back.
+The choice is the application's: it pays off only when handlers block, and a blocking native call takes the benefit back.
+Since Java 25 became the floor (decision 79), `synchronized` around the blocking call no longer does.
 
 ## 17–20 · Structural
 
@@ -1607,6 +1611,28 @@ It answers decision 75's Rejected line: the test still has something to assert o
 
 Rejected: a length and a release on `Bytes`, holding the buffer from the handler on, since a held response would then see another request's document.
 Rejected: writing straight to the servlet's stream, which leaves no length for `Content-Length` and a failure halfway with half a document sent.
+
+## 79 · The Java release
+
+### 79. Spider Silk requires Java 25, the long-term release after 21
+
+Every module compiles with `release = 25`, the Jib base of the Gradle plugin and the Maven parent is `eclipse-temurin:25-jre`, and CI builds on 25.
+25 is the first long-term release with both of what 21 lacked.
+
+- **What 21 lacked.**
+  - A `synchronized` block pinned a virtual thread to its carrier, so decision 16 had to warn against one around a blocking call.
+    Java 24 stopped that (JEP 491), and a handler on virtual threads needs no `ReentrantLock` in its place.
+  - The foreign memory API was a preview, and `MemorySegment.setString` is the one public way to copy a Latin-1 string's bytes with no widening to `char`.
+    Measured on 25, it does not pay, so silk-json does not use it (decision 76's Rejected line).
+    The floor still matters to it: a multi-release jar is no longer the cost of trying the next public path.
+- **Why not 22, 23, or 24.**
+  - None is a long-term release, and their updates have ended, so an application on one runs with no security fixes.
+  - A floor below 25 would hold the code to it and gain nobody a supported JDK.
+- **The Gradle plugin stays at 21.**
+  - It runs in Gradle's JVM, not the application's, and a build whose daemon runs on an older JDK than its toolchain still applies it.
+
+Rejected: a multi-release jar with a `META-INF/versions/22` copy of the string writer, which keeps 21 at the cost of two string paths to test and measure, for a path that measured slower.
+Rejected: 22, the first release with the foreign memory API final, whose updates ended in 2024.
 
 ## Rejected — decisions, with the reason
 

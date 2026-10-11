@@ -1,7 +1,7 @@
 = Installation
 :navtitle: Installation
 
-Spider Silk requires Java 21 or later.
+Spider Silk requires Java 25 or later.
 Releases are published to https://central.sonatype.com/namespace/net.benelog[Maven Central], so a build needs no repository beyond the default one.
 The current version is `{project-version}`.
 https://github.com/{project-repo}/blob/main/CHANGELOG.md[CHANGELOG.md] lists what changed in each release.

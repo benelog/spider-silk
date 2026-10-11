@@ -38,7 +38,8 @@ app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool))
 ----
 
 Virtual threads pay off only when the handlers block on I/O or on a database.
-A `synchronized` block around that blocking call pins the carrier thread and takes the benefit back.
+A `synchronized` block around that blocking call no longer pins the carrier thread, since JDK 24 (JEP 491).
+A blocking call inside a native method still pins it and takes the benefit back.
 
 == Shutdown
 

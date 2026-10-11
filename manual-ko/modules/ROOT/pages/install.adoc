@@ -1,7 +1,7 @@
 = 설치
 :navtitle: 설치
 
-Spider Silk는 Java 21 이상이 필요하다.
+Spider Silk는 Java 25 이상이 필요하다.
 릴리스는 https://central.sonatype.com/namespace/net.benelog[Maven Central]에 게시되므로, 빌드에 기본 저장소 말고 다른 저장소를 추가할 필요가 없다.
 현재 버전은 ``{project-version}``이다.
 https://github.com/{project-repo}/blob/main/CHANGELOG.md[CHANGELOG.md]에 릴리스마다 바뀐 내용이 정리되어 있다.

@@ -130,8 +130,8 @@ public final class JettyServer implements WebServer {
      * <p>A recipe rather than a method of ours: it is two lines of Jetty's own
      * API, and wrapping it would only hide which Jetty knob was turned. Note
      * that a virtual thread is only worth it if the handlers block — on I/O, on
-     * a database — and that a {@code synchronized} block around that blocking
-     * call pins the carrier thread and undoes the benefit.
+     * a database. Since JDK 24 a {@code synchronized} block around that call
+     * no longer pins the carrier thread; a blocking native call still does.
      */
     public JettyServer threadPool(ThreadPool threadPool) {
         this.threadPool = Objects.requireNonNull(threadPool, "threadPool");

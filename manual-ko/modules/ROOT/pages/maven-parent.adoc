@@ -63,9 +63,9 @@ Jib과 ``native-maven-plugin``에 따로 설정해도 동작은 하지만, 두 �
 
 선언한 플러그인은 Gradle 플러그인이 설정하는 컨벤션을 상속한다:
 
-* Jib은 `eclipse-temurin:21-jre` 위에 빌드하고 포트 8080을 노출한다.
+* Jib은 `eclipse-temurin:25-jre` 위에 빌드하고 포트 8080을 노출한다.
   ``mvn package jib:buildTar``는 Docker 데몬 없이 ``target/jib-image.tar``를 써내며, xref:deployment.adoc[배포]가 설명하는 대로 레이어를 나눈다.
-* ``maven.compiler.release``는 21로 설정되며, 이는 Jib이 베이스 이미지와 대조할 Java 버전을 읽는 자리를 겸한다.
+* ``maven.compiler.release``는 25로 설정되며, 이는 Jib이 베이스 이미지와 대조할 Java 버전을 읽는 자리를 겸한다.
   따라서 Gradle 플러그인이 우회하는 `targetCompatibility` 불일치는 Maven에서는 생기지 않는다.
 * jte는 `src/main/resources/jte` 아래의 모든 템플릿을 빌드 시점에 미리 컴파일하며, 네이티브 이미지 리소스도 포함해 xref:templates.adoc#production[템플릿]이 설명하는 그대로다.
 * 네이티브 바이너리는 ``<fallback>false</fallback>``으로, 대부분 정적으로(`--static-nolibc`, 그래서 `distroless/base` 컨테이너는 glibc 외에는 아무것도 빚지지 않는다), 그리고 도달 가능성 메타데이터 저장소를 활성화한 채로 빌드한다.

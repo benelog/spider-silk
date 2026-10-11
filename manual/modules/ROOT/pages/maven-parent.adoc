@@ -63,9 +63,9 @@ Configuring it on Jib and `native-maven-plugin` separately would also work, unti
 
 The declared plugins inherit the conventions the Gradle plugin sets:
 
-* Jib builds on `eclipse-temurin:21-jre` and exposes port 8080.
+* Jib builds on `eclipse-temurin:25-jre` and exposes port 8080.
   `mvn package jib:buildTar` writes `target/jib-image.tar` with no Docker daemon involved, layered as xref:deployment.adoc[Deployment] describes.
-* `maven.compiler.release` is set to 21, which doubles as where Jib reads the Java version it checks against the base image.
+* `maven.compiler.release` is set to 25, which doubles as where Jib reads the Java version it checks against the base image.
   The `targetCompatibility` mismatch that the Gradle plugin works around therefore does not arise in Maven.
 * jte precompiles every template under `src/main/resources/jte` at build time, native-image resources included, exactly as xref:templates.adoc#production[Templates] describes.
 * The native binary builds with `<fallback>false</fallback>`, mostly static (`--static-nolibc`, so the `distroless/base` container owes it nothing but glibc), and the reachability metadata repository enabled.

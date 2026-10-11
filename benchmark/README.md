@@ -21,7 +21,7 @@ It includes the root build, so the Spider Silk side runs the modules of this wor
 
 ## Running it
 
-It needs Linux (`taskset` and `/proc`), Java 21 or later, curl, and wrk.
+It needs Linux (`taskset` and `/proc`), Java 25 or later, curl, and wrk.
 The native images also need a GraalVM JDK named by `GRAALVM_HOME`; without it, `run.sh` measures the JVM cases only.
 
 ```bash

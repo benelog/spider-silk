@@ -43,7 +43,7 @@ pluginManagement {
 
 Applying the plugin applies `application`, https://github.com/GoogleContainerTools/jib[Jib], and the https://graalvm.github.io/native-build-tools/[GraalVM native plugin], and sets the conventions that the deployment and native image chapters walk through:
 
-* Jib builds on `eclipse-temurin:21-jre` and exposes port 8080, layered the way xref:deployment.adoc[Deployment] describes.
+* Jib builds on `eclipse-temurin:25-jre` and exposes port 8080, layered the way xref:deployment.adoc[Deployment] describes.
 * `targetCompatibility` is derived from `options.release`, so Jib reads the release instead of the toolchain's version and accepts the JRE base.
 * The native binary builds `--no-fallback`, since a fallback image is a JVM carrying the reflection the framework exists to avoid.
   It also builds mostly static (`--static-nolibc`), so the `distroless/base` container below has to supply nothing but glibc.
@@ -58,7 +58,7 @@ Under `-Pnative`, the base image is therefore `distroless/base` even when the `j
 The diagram shows what the plugin wires between the sources and the two images a build can produce:
 
 .From the sources to a container image
-image::build-pipeline.svg[The templates become Java classes through generateJte, compileJava and processResources produce the runtime classpath, and from there the Jib tasks build a JVM image on eclipse-temurin:21-jre in four layers, or nativeCompile builds the binary that the same Jib tasks put on distroless/base with -Pnative,link=self]
+image::build-pipeline.svg[The templates become Java classes through generateJte, compileJava and processResources produce the runtime classpath, and from there the Jib tasks build a JVM image on eclipse-temurin:25-jre in four layers, or nativeCompile builds the binary that the same Jib tasks put on distroless/base with -Pnative,link=self]
 
 == spiderSilk.jte()
 

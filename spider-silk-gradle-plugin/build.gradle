@@ -38,6 +38,9 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// The plugin runs in Gradle's own JVM, not the application's, so it stays at
+// 21 while the framework requires 25: a build whose daemon runs on an older
+// JDK than its toolchain still applies it.
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
     options.release = 21

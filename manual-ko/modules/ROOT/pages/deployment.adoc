@@ -59,7 +59,7 @@ jib {
 }
 ----
 
-플러그인 없이 같은 이미지를 만들려면 Jib 자체의 플러그인(`com.google.cloud.tools.jib`)을 쓰고 위 블록에 ``from.image = 'eclipse-temurin:21-jre'``와 ``container.ports = ['8080']``을 더한다.
+플러그인 없이 같은 이미지를 만들려면 Jib 자체의 플러그인(`com.google.cloud.tools.jib`)을 쓰고 위 블록에 ``from.image = 'eclipse-temurin:25-jre'``와 ``container.ports = ['8080']``을 더한다.
 
 Jib은 빌드의 구조를 따라 이미지를 레이어로 나누며, 이 분할 덕분에 재빌드와 푸시의 비용이 작다.
 네 계층이 각각 레이어가 된다: 외부 의존성(Jetty, Spring JDBC, H2 jar), 프로젝트 의존성(``spider-silk-core``와 `spider-silk-openapi` jar로, 프레임워크 수정이 더 큰 외부 레이어를 건드리지 않도록 따로 둔다), 리소스, 그리고 클래스다.
@@ -72,8 +72,8 @@ spider-silk jar가 프로젝트 의존성으로 취급되는 것은 예제와 �
 엔트리포인트는 `application` 블록의 ``mainClass``에서 온다.
 템플릿이 위 절의 미리 컴파일한 클래스로 함께 들어가고 이미지 안의 어느 것도 런타임에 컴파일하지 않으므로, JRE 베이스로 충분하다.
 플러그인은 Jib의 검사 하나도 우회한다.
-Jib은 앱의 ``targetCompatibility``를 베이스 이미지의 Java 버전과 대조하는데, ``options.release``만으로 21을 목표로 하는 빌드는 ``targetCompatibility``를 툴체인의 버전으로 남겨 두므로 검사가 JRE 21 베이스를 거부한다.
-플러그인은 release 값을 ``targetCompatibility``에 복사하며, 손으로 쓰면 ``java { targetCompatibility = JavaVersion.VERSION_21 }``이다.
+Jib은 앱의 ``targetCompatibility``를 베이스 이미지의 Java 버전과 대조하는데, ``options.release``만으로 25를 목표로 하는 빌드는 ``targetCompatibility``를 툴체인의 버전으로 남겨 두므로 더 새 툴체인에서는 검사가 JRE 25 베이스를 거부한다.
+플러그인은 release 값을 ``targetCompatibility``에 복사하며, 손으로 쓰면 ``java { targetCompatibility = JavaVersion.VERSION_25 }``이다.
 
 [source,bash]
 ----
@@ -122,6 +122,5 @@ Docker는 명령을 사슬로 캐시하므로, 수정은 자신의 계층과 그
 Jib의 레이어는 서로 독립적이다.
 엔트리포인트는 jar의 매니페스트가 더 이상 담을 수 없는 것을 명시한다: Jib과 같은 순서의 클래스패스와 메인 클래스다.
 루트의 ``.dockerignore``도 이 구성의 일부다: `build/` 디렉터리를 컨텍스트에서 빼는데, 그러지 않으면 이 디렉터리가 빌드할 때마다 소스 레이어를 무효화한다.
-포트와 프로세스 홈에 관한 H2 주의점은 Jib 이미지와 같다.
-베이스 이미지는 다르다: Dockerfile은 ``eclipse-temurin:25-jdk``에서 빌드하고 ``eclipse-temurin:25-jre``에서 실행하지만, Jib은 ``eclipse-temurin:21-jre``에서 실행한다.
-애플리케이션은 ``release = 21``로 컴파일되므로 어느 JRE에서도 실행된다.
+포트, 베이스, 프로세스 홈에 관한 H2 주의점은 Jib 이미지와 같다.
+Dockerfile은 ``eclipse-temurin:25-jdk``에서 빌드하고, Jib이 실행하는 JRE인 ``eclipse-temurin:25-jre``에서 실행한다.
