@@ -469,6 +469,7 @@ The same harness on Temurin 25 gives the JVM column.
 |===
 
 The native image takes 1.3 to 2.6 times the JVM's time, as the native images of the HTTP cases answer fewer requests than their JVMs.
+Built with `-O3`, the image took 0% to 8% less time in each case, and with `-march=native` from 6% less to 11% more, so neither option closes the gap to the JVM.
 fastjson2 is left out of the table, since its image misread the documents.
 In the HTTP cases the serializer and the parser are a share of each request, and <<reading>> sets them against the throughput.
 
