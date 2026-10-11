@@ -1,41 +1,31 @@
 # 남은 작업
 
-2026-10-11에 silk-json 성능 작전 2-1~2-5를 커밋하고 부록 수치와 결정 76을 갱신하고, 3단계(빌린 버퍼 본문)를 구현한 뒤 남은 일이다.
-수치, 기각한 변형, 작전의 세부는 `notes/json-performance-tuning.md`에 있고, 이 파일은 할 일의 목록만 적는다.
+2026-10-11 오후에 측정판의 나머지, 작전 1단계, 2-6, 빌린 버퍼 본문의 측정, 남은 격차의 변형을 실행하고 부록·결정 76·노트를 갱신한 뒤 남은 일이다.
+수치, 기각한 변형, 작전의 세부는 `notes/json-performance-tuning.md`(7절과 "2026-10-11 오후 전체 실행")에 있고, 이 파일은 할 일의 목록만 적는다.
 
-## 1. 빌린 버퍼 본문의 측정 (작전 3단계)
+## 1. 커밋
 
-- 구현은 2026-10-11에 결정 78로 했다: `WebResponse.Json` 본문을 `AppServlet`이 KEPT 버퍼에 쓰고, 복사 없이 보낸 뒤 `service`의 `finally`에서 반납한다.
-- 측정이 남았다: `writeList_stream` 행(2절에서 만든다)과 HTTP `json-list`의 요청당 할당이다.
-  기대치는 노트의 "3. 빌린 버퍼 본문" 절에 있다(-0.6~-0.75 µs, 요청당 -10.3 KB).
-- 측정은 사용자 지시 후에 시작한다.
+- 이번 변경은 모두 작업 트리에 있고 커밋하지 않았다.
+  silk-json(공백 키, 큰 정수, 0~1자 문자열, enum 이름 키, 긴 문자열 `indexOf`·LS2), 프로세서(체인 뒤 예측 제거, enum 표), 테스트, json-bench 케이스, 문서(부록·json·json-codegen·api-summary 영문과 한국어, CHANGELOG, 결정 76, 노트, benchmark README)다.
 
-## 2. 측정판의 나머지 (작전 0단계)
+## 2. 남은 격차 (fastjson2 대비, 2026-10-11 오후)
 
-- `readPythonList`(`json.dumps` 구분자), `readPrettyList`(들여쓰기), `readBigIdList`(13자리·18자리), `writeList_stream`(`nullOutputStream`)을 두 라이브러리 모두에 더한다.
-- fastjson2 쪽에 `-Dfastjson2.creator=reflect`인 readList·writeList 짝을 더한다.
-- fastjson2의 쓰기 수치가 ASM writer에서 나왔는지 `-verbose:class`로 `OWG_*_Item` 로드를 확인한다.
-- 대상인 Temurin 21에서 writePlainList·writeKoreanList·readList·writeLongStringList를 한 번 돈다.
-  2-5의 US_ASCII 인코더는 JDK 21에서도 `encodeASCII` intrinsic을 쓰지만(소스에서 확인), 손익 분기는 재지 않았다.
-- 새 문서는 그 케이스만 쓰는 `@State`에서 만든다.
-  공통 `@Setup`에서 만들면 다른 케이스의 JIT 프로파일이 바뀐다.
+- 긴 문자열 읽기 1.25배: fastjson2가 `IMPL_LOOKUP`으로 묶은 JDK 내부 메서드의 몫이라 공개 API로는 닫기 어렵다고 본다.
+- 역순 키 읽기 1.19배: 남은 비용은 키마다의 `keyHead` switch와 `nextKeyIs` 확인이다.
+- 짧은 평문 문자열 쓰기 1.12~1.16배: 1단계로 전부 문자열 표현의 몫임이 확인됐다.
+  공개 경로는 JDK 22 이상의 FFM `MemorySegment.setString`뿐이라 multi-release jar로만 가능하다.
+- 들여쓴 문서 읽기 1.10배: 줄바꿈과 들여쓰기를 `skipWhitespace`가 바이트 루프로 건너뛴다.
+  공백을 워드로 건너뛰는 변형이나 2-6의 한 바이트 미리 읽기를 잰다.
+- 긴 문자열 쓰기 1.08배.
 
-## 3. 남은 격차
+## 3. 더 할 수 있는 것
 
-- `writeList` +2~2.5%: 2-5를 얹은 뒤의 회귀이고 원인을 찾지 못했다.
-  인라인 결정은 전후가 같았으므로, `string()`의 길이 분기를 호출자 쪽으로 옮기는 변형이나 async-profiler로 본다.
-- 짧은 평문 문자열 쓰기 1.14~1.18배: 작전 1단계(N=1~3 변형으로 격차 귀속)가 이것을 숫자로 가른다.
-  지금 평문 격차는 0.62 µs다.
-- 긴 문자열 쓰기 1.39배: 검사를 `special` SWAR 대신 `String.indexOf('"')`·`indexOf('\\')`(intrinsic)와 제어 문자 SWAR로 나누는 변형, GraalVM JIT에서의 기준 길이(작전은 128자를 안전값으로 봤다)를 잰다.
-- 역순 키 읽기 1.30배: 남은 약 1.9 µs는 멤버마다 실패하는 선언 순서 `nextKeyIs`와 `keyIndex` 호출이다.
-  체인이 한 번 끊긴 객체는 다음 키부터 `keyIndex`를 먼저 부르는 변형을 잰다.
-- 긴 문자열 읽기 1.26배: fastjson2가 `IMPL_LOOKUP`으로 묶은 JDK 내부 메서드의 몫이라 공개 API로는 닫기 어렵다고 본다.
+- enum 이름 키는 직접 속성과 `Optional` 안에만 쓴다.
+  `List<Enum>` 같은 컬렉션 원소는 아직 `name()`·`valueOf`다.
+- HTTP 전체 벤치마크(`benchmark/run.sh`)의 재실행은 하지 않았다.
+  부록의 처리량 표는 이전 실행 그대로이고, 시작은 사용자 지시 후다.
+- json-bench를 네이티브 이미지로 빌드해 두 라이브러리를 재는 것(부록의 "미측정")은 하지 않았다.
 
-## 4. 보조 후보 (작전 2-6)
-
-- 8~15자리 정수 `readLong`의 두 워드 읽기, 0~1자 문자열 표, enum 상수의 바이트 사전 계산, 한 바이트 미리 읽기.
-- 각자의 벤치마크 행을 먼저 만든다.
-
-## 5. 기계 상태
+## 4. 기계 상태
 
 - 측정을 위해 2026-10-11에 전원 프로파일을 `balanced`에서 `performance`로 바꿨고(`powerprofilesctl set performance`), 그대로 두었다.

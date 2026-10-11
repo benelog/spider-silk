@@ -1515,6 +1515,15 @@ The tree of decision 75 stayed as a value type, and stopped being the way out an
   - A generated read chains the declared keys first, and `keyIndex` switches on `JsonInput.keyHead()`, the four bytes where the next member stands, which took reading the list from 6.0 µs to 5.5 µs and reading it with its keys reversed from 9.5 µs to 8.0 µs.
   - `put(JsonKey, ...)` checks the state once and writes key and value, a number below 1000 goes out with one store, and a three-byte character with one `putInt`, which took the list with nothing to escape from 4.4 µs to 4.2 µs and the Korean one from 4.4 µs to 4.0 µs.
   - A string of 64 characters or more is narrowed by the `US_ASCII` encoder, which stops at the first character past ASCII, and checked a word at a time, which took writing 100 records with a 200-character description from 15.0 µs to 8.6 µs and costs the list 2% to 2.5%.
+- **The shapes other programs write, and values from a fixed set, got paths of their own too (2026-10-11, later).**
+  - `nextKeyIs` passes over whitespace before a key and after its comma, and checks a comma and one space first, which took reading the list as Python's `json.dumps` spaces it from 10.0 µs to 6.6 µs, and indented from 11.6 µs to 8.6 µs, against fastjson2's 7.1 µs and 8.1 µs.
+  - Once a generated read has left the declared order, each key goes straight to `keyIndex`, which took the reversed list from 8.2 µs to 7.2 µs against fastjson2's 6.1 µs.
+  - An integer of 8 to 16 digits is read two words at a time, which took 100 ids of 18 digits from 6.5 µs to 5.9 µs and of 13 digits from 6.1 µs to 5.9 µs.
+  - An empty or one-character string comes from a table, which took records of such strings from 3.4 µs and 13.9 KB to 2.8 µs and 5.5 KB.
+  - `JsonKey.names(constants)` encodes an enum's names once, `put(key, name)` copies one, and `readOneOf(names)` compares them in place, which took 100 orders from 2.9 µs to 2.4 µs out and from 4.6 µs to 3.0 µs in, against fastjson2's 2.7 µs and 3.1 µs.
+  - A long string finds its quotes and backslashes with `String.indexOf`, checks the narrowed bytes for control characters only, and moves those bytes up past an escape rather than narrowing them again, which took the 200-character descriptions from 8.9 µs to 6.9 µs against fastjson2's 6.3 µs.
+  - The threshold stays 64: a plain string pays on the long path from about 16 characters on Temurin 21, Temurin 25, and GraalVM's compiler alike, but one with an escape only from 48 to 64 characters on Temurin 25 and from 64 to 96 on the other two, and the list's 26- to 28-character strings with quotes took it to 6.5 µs against 4.8 µs.
+  - Writing a string's bytes with no check at all, the floor, writes the plain list in 2.7 µs against fastjson2's 3.7 µs, and checking the copy a word at a time takes it to 4.0 µs: the gap left on short strings is the string's representation, all of it.
 - **A number with a fraction is converted from its digits and to them, with no string made.**
   - A significand up to 2^53 with a power of ten from -22 to 22 takes one multiplication or division (Clinger), the rest of 19 digits takes Eisel-Lemire's 128-bit product, and only a longer number or an undecided rounding goes to `Double.parseDouble`.
   - Reading 100 places with three such numbers each went from 12.6 µs and 43.9 KB to 5.3 µs and 11.1 KB, against fastjson2's 5.2 µs and Jackson's 24.7 µs.
@@ -1542,6 +1551,10 @@ Rejected: the escaping loop nested around the plain one, which measured no faste
 Rejected: decoding in one pass only a string whose ASCII prefix is under 16 bytes, which measured the same or slower than widening the prefix on every shape (8.1 µs against 6.9 µs with Korean at the tail).
 Rejected: splitting the slow writing loop into a hot one for one- to three-byte characters and the rest, which on top of `putInt` wrote the Korean list in 3.95 µs against 3.97 µs, within the noise.
 Rejected: `String.getBytes` for a string's bytes, since into a new array it allocates per string and measured slower, and into the buffer it cannot tell a character past Latin-1 from the byte it is cut down to.
+Rejected: writing an enum as `put(key, constant.name())`, which measured the same as a name and then a value.
+Rejected: giving the short-string loop a body apart from the long-string branch, which wrote the list in 4.77 µs against 4.82 µs; the 2% the long path had cost the list no longer shows (4.68 µs without it, 4.72 µs with it).
+Rejected: a string's bytes from `getBytes(UTF_8)`, checked a word at a time and copied, which wrote the plain list in 4.37 µs against 4.33 µs.
+Rejected: carrying only the first eight digits of a long integer into the scanning loop, which read the 18-digit ids in 6.1 µs against two words' 5.9 µs.
 Rejected: `@JsonbVisibility`, `@JsonbNumberFormat`, and the JSON-P serializers, each a compile error that says so, since the first takes a reflective strategy and the others a runtime the generated code does not have.
 
 ## 77 · A JSON library of its own

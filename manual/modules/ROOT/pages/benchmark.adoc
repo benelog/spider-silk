@@ -249,23 +249,28 @@ The JVM applications' dependencies come to 9.5 MB for Spider Silk and 21 MB for 
 === The serializer and the parser alone
 
 `benchmark/json-bench` measures the JSON engine with no HTTP around it, on the documents the HTTP cases send: the 100 records of `json-list` and the 27-byte object of `json`.
-It also measures 100 places with three numbers each that have a fraction, which no HTTP case sends.
-The same 100 records come in four more forms: with nothing to escape, with Korean strings, with their keys in reverse order, and with a description of 200 characters.
-The reversed keys stand for a document that another program wrote, and the long description for prose such as a product page.
+It also measures 100 places with three numbers each that have a fraction, and 100 orders whose status is an enum, which no HTTP case sends.
+The same 100 records come in more forms: with nothing to escape, with Korean strings, with their keys in reverse order, with a description of 200 characters, spaced out as Python's `json.dumps` and a pretty printer write them, with ids of 13 and 18 digits, and with strings of no character or one.
+The reversed and spaced keys stand for a document that another program wrote, and the long description for prose such as a product page.
 It ran on 2026-10-11 on the same machine, on AC power with the `performance` platform profile.
-It measured silk-json at commit `6b3211c`, under JMH 1.37 with two forks of five warm-up and five measured iterations of a second each, pinned to CPUs 0 to 3, with `-Xms1g -Xmx1g`.
+It measured silk-json with the changes on top of commit `5f067c8`, under JMH 1.37 with two forks of five warm-up and five measured iterations of a second each, pinned to CPUs 0 to 3, with `-Xms1g -Xmx1g`, on Temurin 25.
 Each cell is the average time per operation and the bytes allocated per operation, the latter from JMH's `gc` profiler.
 
 [cols="2,3,>1,>1",options="header"]
 |===
 | Operation | Through | Time | Allocation
 
-.5+| Write the 100 records (10,490 B)
-| the `Json.object()` tree, as `JsonWriter.tree` | 8.1 µs | 24.1 KB
+.6+| Write the 100 records (10,490 B)
+| the `Json.object()` tree, as `JsonWriter.tree` | 8.0 µs | 24.1 KB
 | a hand-written `JsonWriter` | 5.9 µs | 11.3 KB
 | the generated codec | 4.8 µs | 10.7 KB
 | Jackson 3.1 | 11.8 µs | 19.7 KB
 | fastjson2 2.0.57 | 4.6 µs | 10.7 KB
+| fastjson2 2.0.57, `creator=reflect` | 5.7 µs | 10.7 KB
+
+.2+| Write the 100 records to a stream, from the buffer
+| the generated codec, `writeTo` | 3.8 µs | 184 B
+| fastjson2 2.0.57, `JSON.writeTo` | 3.6 µs | 184 B
 
 .2+| Write the 100 records with nothing to escape (10,090 B)
 | the generated codec | 4.3 µs | 10.3 KB
@@ -276,64 +281,104 @@ Each cell is the average time per operation and the bytes allocated per operatio
 | fastjson2 2.0.57 | 3.6 µs | 9.8 KB
 
 .2+| Write the 100 records with a 200-character description (27,498 B)
-| the generated codec | 9.0 µs | 28.4 KB
-| fastjson2 2.0.57 | 6.4 µs | 27.7 KB
+| the generated codec | 6.8 µs | 28.4 KB
+| fastjson2 2.0.57 | 6.3 µs | 27.7 KB
 
-.4+| Read the 100 records
+.2+| Write the 100 orders (5,985 B)
+| the generated codec | 2.4 µs | 6.2 KB
+| fastjson2 2.0.57 | 2.7 µs | 6.2 KB
+
+.5+| Read the 100 records
 | a hand-written `JsonReader.object` | 14.3 µs | 37.8 KB
-| the generated codec | 5.3 µs | 17.6 KB
-| Jackson 3.1 | 23.3 µs | 52.8 KB
-| fastjson2 2.0.57 | 6.1 µs | 24.8 KB
+| the generated codec | 5.4 µs | 17.6 KB
+| Jackson 3.1 | 23.9 µs | 52.8 KB
+| fastjson2 2.0.57 | 6.2 µs | 24.8 KB
+| fastjson2 2.0.57, `creator=reflect` | 24.0 µs | 111.2 KB
 
 .2+| Read the 100 records in Korean
 | the generated codec | 5.7 µs | 23.1 KB
 | fastjson2 2.0.57 | 7.9 µs | 34.1 KB
 
 .2+| Read the 100 records with their keys reversed
-| the generated codec | 8.2 µs | 17.6 KB
-| fastjson2 2.0.57 | 6.1 µs | 24.8 KB
+| the generated codec | 7.3 µs | 17.6 KB
+| fastjson2 2.0.57 | 6.2 µs | 24.8 KB
+
+.2+| Read the 100 records as `json.dumps` spaces them (11,489 B)
+| the generated codec | 6.6 µs | 17.6 KB
+| fastjson2 2.0.57 | 6.9 µs | 24.8 KB
+
+.2+| Read the 100 records indented (14,091 B)
+| the generated codec | 8.7 µs | 17.6 KB
+| fastjson2 2.0.57 | 7.9 µs | 24.8 KB
 
 .2+| Read the 100 records with a 200-character description
-| the generated codec | 6.4 µs | 34.3 KB
+| the generated codec | 6.5 µs | 34.3 KB
 | fastjson2 2.0.57 | 5.2 µs | 34.4 KB
 
+.2+| Read the 100 records with 13-digit ids
+| the generated codec | 5.9 µs | 17.6 KB
+| fastjson2 2.0.57 | 7.0 µs | 24.8 KB
+
+.2+| Read the 100 records with 18-digit ids
+| the generated codec | 5.9 µs | 17.6 KB
+| fastjson2 2.0.57 | 7.3 µs | 24.8 KB
+
+.2+| Read the 100 records with strings of no character or one (6,956 B)
+| the generated codec | 2.8 µs | 5.5 KB
+| fastjson2 2.0.57 | 3.8 µs | 14.8 KB
+
+.2+| Read the 100 orders
+| the generated codec | 3.0 µs | 9.5 KB
+| fastjson2 2.0.57 | 3.1 µs | 9.6 KB
+
 .3+| Write the 27-byte object
-| the generated codec | 25 ns | 232 B
+| the generated codec | 26 ns | 232 B
 | Jackson 3.1 | 136 ns | 496 B
-| fastjson2 2.0.57 | 27 ns | 216 B
+| fastjson2 2.0.57 | 28 ns | 216 B
 
 .3+| Write the 100 places (8,263 B)
-| the generated codec | 9.3 µs | 8.5 KB
-| Jackson 3.1 | 19.8 µs | 50.1 KB
-| fastjson2 2.0.57 | 9.6 µs | 17.6 KB
+| the generated codec | 9.5 µs | 8.5 KB
+| Jackson 3.1 | 19.7 µs | 50.1 KB
+| fastjson2 2.0.57 | 9.7 µs | 17.6 KB
 
 .3+| Read the 100 places
-| the generated codec | 5.0 µs | 11.1 KB
-| Jackson 3.1 | 25.8 µs | 59.6 KB
-| fastjson2 2.0.57 | 5.3 µs | 11.2 KB
+| the generated codec | 4.9 µs | 11.1 KB
+| Jackson 3.1 | 25.7 µs | 59.6 KB
+| fastjson2 2.0.57 | 5.4 µs | 11.2 KB
 |===
 
-The generated codec writes the list in 40% of Jackson's time and reads it in 23%, with between a third and a half of the allocation, and writes the small object in under a fifth of Jackson's time.
+The generated codec writes the list in 41% of Jackson's time and reads it in 23%, with between a third and a half of the allocation, and writes the small object in under a fifth of Jackson's time.
 The hand-written writer lands between the tree and the codec: it finds each key among the keys the document has already written, where the codec copies the key from a constant.
 The codec reads the 10 KB document in 88% of fastjson2's time, and writes the small object in 93% of it.
-fastjson2 stays ahead writing the 10 KB document, by 4%.
-Its lead is in writing the strings, and it is wider where no string needs an escape: 1.19 times on the plain records and 1.13 times on the Korean ones.
+fastjson2 stays ahead writing the 10 KB document, by 5%.
+Its lead is in writing the strings, and it is wider where no string needs an escape: 1.16 times on the plain records and 1.12 times on the Korean ones.
 fastjson2 reads a `String`'s own bytes through `sun.misc.Unsafe`, which the JDK is retiring and core does not use.
 The codec copies a string's characters out with `getChars` and checks them one at a time.
-It escapes a quote or a backslash in the same loop that writes the plain characters, and compares each character instead of looking it up in a table.
+Copying a string's bytes with no check at all, a floor no correct writer can stand on, writes the plain records in 2.7 µs, ahead of fastjson2's 3.7 µs.
+Checking that copy eight bytes at a time takes it to 4.0 µs, so the lead is the string's representation, all of it.
+The codec escapes a quote or a backslash in the same loop that writes the plain characters, and compares each character instead of looking it up in a table.
 Before it did, the first quote sent the rest of the string to a slower loop, and the same write took 5.3 µs.
 The JIT compiler of JDK 25 does not vectorize a loop that narrows a `char` to a `byte`, so a pass that checks the whole string before writing it measured slower, not faster.
 The codec writes a member's key and value with one call, `put(JsonKey, ...)`, which checks the writer's state once.
 It writes a number below 1000 with one store, and a three-byte character, such as a Korean syllable, with one four-byte store.
 Measured back to back with the build before them, these took the plain records from 4.4 µs to 4.2 µs and the Korean ones from 4.4 µs to 4.0 µs.
+On Temurin 21, the JDK the release targets, the ratios are the same: fastjson2 writes the plain records 1.15 times as fast and the Korean ones 1.13 times, and the codec reads the list in 88% of fastjson2's time.
 
 A string of 64 characters or more takes another path.
-The JDK's `US_ASCII` encoder narrows it into the buffer through an intrinsic of the JIT compiler, and the bytes it wrote are then checked eight at a time.
+The JDK's `US_ASCII` encoder narrows it into the buffer through an intrinsic of the JIT compiler.
+The string's own `indexOf`, another intrinsic, finds its quotes and backslashes, and the narrowed bytes before them are checked eight at a time for a control character only.
+An escape moves the narrowed bytes after it up, rather than narrowing them again.
 The encoder stops at the first character past ASCII, and the rest of the string goes to the loop that writes one character at a time.
-Measured back to back with the build before it, this path took the records with a long description from 15.0 µs to 8.6 µs, and cost the 10 KB list 2% to 2.5%.
-fastjson2 still writes them 1.42 times as fast.
+Measured back to back with the builds before them, these took the records with a long description from 15.0 µs to 8.6 µs, and then to 6.9 µs.
+fastjson2 still writes them 1.08 times as fast.
 The codec allocates 0.7 KB more for them, the encoder and the two buffers around it, made once per document.
-Below about 40 characters the encoder costs more than it saves, and the threshold of 64 leaves a margin.
+A plain string pays on this path from about 16 characters, on Temurin 21, on Temurin 25, and under GraalVM's JIT compiler alike.
+A string with escapes pays only from 48 to 96 characters, depending on the compiler, and the threshold of 64 sits between the two.
+The 2% to 2.5% that this path first cost the 10 KB list no longer shows: without the path, the same build writes the list in 4.68 µs against 4.72 µs.
+
+An enum constant is written and read through its name encoded once as a `JsonKey`.
+The name is copied out as a key is, and compared in place on the way in, with no string made.
+Measured back to back with the build before, this took the orders from 2.9 µs to 2.4 µs out and from 4.6 µs to 3.0 µs in, 89% and 95% of fastjson2's time.
 
 The codec reads the Korean records in 72% of fastjson2's time.
 It checks a string that has bytes past ASCII and decodes it into characters in the same pass, and widens the ASCII before them without a check.
@@ -342,18 +387,29 @@ fastjson2 does not check them: an overlong sequence, or a surrogate written as U
 A generated read tries the declared keys in order first.
 A key out of that order is found by a switch on the four bytes where the next member stands, which `JsonInput.keyHead()` reads.
 Measured back to back with the build before, this took the list from 6.0 µs to 5.5 µs and the reversed one from 9.5 µs to 8.0 µs.
-fastjson2 still reads the reversed records 1.33 times as fast, since the codec tries the key declared next before each member, and on this document it fails every time.
-fastjson2 also reads the long descriptions 1.23 times as fast.
+Once a document has left the declared order, each key after it goes straight to that switch, which took the reversed records to 7.2 µs.
+fastjson2 still reads them 1.19 times as fast.
+The read also passes over whitespace before a key and after its comma, and checks a comma and one space first.
+Measured back to back with the build before, this took the records as `json.dumps` spaces them from 10.0 µs to 6.6 µs, 95% of fastjson2's time, and the indented ones from 11.6 µs to 8.6 µs, 1.10 times fastjson2's.
+An integer of 8 to 16 digits is read two words at a time, which took the 18-digit ids from 6.5 µs to 5.9 µs.
+The codec reads the 13-digit and the 18-digit ids in 84% and 81% of fastjson2's time.
+An empty or one-character string comes from a table with no allocation, which took the records of such strings from 3.4 µs and 13.9 KB to 2.8 µs and 5.5 KB, 74% of fastjson2's time.
+fastjson2 also reads the long descriptions 1.25 times as fast.
 It finds the end of a string and makes the `String` through JDK internal methods that it binds by way of `sun.misc.Unsafe`, and the public API has no equivalent.
 
 Each place has a latitude with four decimals, a longitude with six, and a rating with one.
-The codec reads them in 95% of fastjson2's time with the same allocation, and in a fifth of Jackson's.
+The codec reads them in 92% of fastjson2's time with the same allocation, and in a fifth of Jackson's.
 `readDouble` converts a number from its digits, with one multiplication or division for numbers like these.
 Before it did, it made a string of each number for `Double.parseDouble`, and the same read took 12.6 µs and 43.9 KB.
 Jackson 3 parses a double with its fast parser by default, so turning `USE_FAST_DOUBLE_PARSER` on changed nothing.
-The codec writes the places in 97% of fastjson2's time with half its allocation, little more than the document itself, and in under half of Jackson's time.
+The codec writes the places in 98% of fastjson2's time with half its allocation, little more than the document itself, and in under half of Jackson's time.
 `JsonOutput` lays out a double's shortest decimal straight in its buffer, by the algorithm `Double.toString` uses since JDK 19, and writes the same text.
 Before it did, it made a string of each number with `Double.toString` and copied it, and the same write took 16.5 µs and 35.6 KB.
+
+Written to a stream straight from the thread's buffer, as `WebResponse.json` sends a body, the list takes 3.8 µs and 184 bytes.
+That is 1.0 µs and 10.5 KB less than the array `toBytes()` copies the document into.
+fastjson2's `JSON.writeTo` saves as much, so the saving is the framework's rather than the library's.
+In the HTTP `json-list` case, the same change took the allocation per request from 14.4 KB to 3.8 KB on Jetty and from 13.2 KB to 2.6 KB on Tomcat, counted from the GC log over 30 seconds of load.
 
 fastjson2's speed comes with terms that the table does not show.
 Under `--sun-misc-unsafe-memory-access=deny`, fastjson2 2.0.57 does not initialize: `JDKUtils.<clinit>` fails at `arrayBaseOffset`, and every later call throws `NoClassDefFoundError`.
@@ -362,6 +418,7 @@ On JDK 24 and later, its first call prints a warning that a method of `sun.misc.
 JEP 471 and JEP 498 set the order: a warning, then denial by default, then removal.
 The default in JDK 26 and JDK 27 is still the warning, and no JEP yet makes denial the default or removes the methods.
 fastjson2's 2.1.x branch, which moves to `VarHandle`, has had no change since February 2026.
+With `-Dfastjson2.creator=reflect` on the JVM, fastjson2 builds no classes at run time, and reads the list in 24.0 µs and 111.2 KB, four times its usual time, and writes it in 5.7 µs.
 In a GraalVM native image, fastjson2 turns off its `String` fast path and its generated classes, and binds through reflection, which needs reachability metadata for every type it binds.
 That was read from its source and not measured.
 silk-json was not measured in a native image either, so this appendix claims neither library faster there.
