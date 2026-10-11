@@ -1,14 +1,27 @@
 package net.benelog.spidersilk;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.net.URI;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.zip.GZIPInputStream;
 
 import org.junit.jupiter.api.Test;
 
+import net.benelog.silkjson.JsonOutput;
 import net.benelog.silkjson.JsonReader;
 import net.benelog.silkjson.JsonWriter;
 import net.benelog.spidersilk.test.WebTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 
 /** {@code WebResponse.json(value, writer)} and {@code req.bodyJson(reader)} over HTTP. */
@@ -129,5 +142,182 @@ class JsonSeamTest {
             assertThat(client.postJson("/decks", "{\"id\":9223372036854775808.0}").statusCode())
                     .isEqualTo(400);
         });
+    }
+
+    /** Enough decks that gzip is worth it, and a document of a size the servlet would otherwise copy. */
+    private static final List<Deck> MANY = manyDecks();
+
+    private static final String MANY_JSON = JsonWriter.list(DECK).toJson(MANY);
+
+    private static List<Deck> manyDecks() {
+        List<Deck> decks = new ArrayList<>();
+        for (int i = 0; i < 200; i++) {
+            decks.add(new Deck(i, "deck " + i));
+        }
+        return decks;
+    }
+
+    /**
+     * The document goes out from the buffer it was written into, after a
+     * Content-Length, and the buffer goes back once it is sent: the output the
+     * writer was handed can no longer be read.
+     */
+    @Test
+    void aJsonBodyIsSentWithItsLengthAndItsBufferIsReleased() {
+        Released released = new Released();
+        App app = released.watch(new App());
+
+        WebTest.test(app, client -> {
+            var response = client.get("/decks");
+
+            assertThat(response.body()).isEqualTo(MANY_JSON);
+            assertThat(response.headers().firstValue("Content-Length"))
+                    .hasValue(Integer.toString(MANY_JSON.getBytes(StandardCharsets.UTF_8).length));
+            released.await();
+        });
+    }
+
+    /** A HEAD carries the length the GET sends, and hands the buffer back all the same. */
+    @Test
+    void aHeadOfAJsonBodyCarriesItsLengthAndReleasesTheBuffer() {
+        Released released = new Released();
+        App app = released.watch(new App());
+
+        WebTest.test(app, client -> {
+            var response = client.head("/decks");
+
+            assertThat(response.body()).isEmpty();
+            assertThat(response.headers().firstValue("Content-Length"))
+                    .hasValue(Integer.toString(MANY_JSON.getBytes(StandardCharsets.UTF_8).length));
+            released.await();
+        });
+    }
+
+    /** Gzip deflates the document from the buffer, and the buffer goes back after that too. */
+    @Test
+    void aCompressedJsonBodyIsDeflatedFromTheBufferAndReleasesIt() {
+        Released released = new Released();
+        App app = released.watch(new App().gzip());
+
+        WebTest.test(app, client -> {
+            HttpResponse<byte[]> response = client.send(request -> request
+                    .uri(URI.create(client.url("/decks")))
+                    .header("Accept-Encoding", "gzip")
+                    .GET(), HttpResponse.BodyHandlers.ofByteArray());
+
+            assertThat(response.headers().firstValue("Content-Encoding")).hasValue("gzip");
+            assertThat(response.headers().firstValue("Content-Length"))
+                    .hasValue(Integer.toString(response.body().length));
+            assertThat(inflate(response.body())).isEqualTo(MANY_JSON);
+            released.await();
+        });
+    }
+
+    /** A response kept as a constant is written again for every request it answers. */
+    @Test
+    void aJsonResponseHeldAsAConstantIsWrittenForEachRequest() {
+        WebResponse decks = WebResponse.json(MANY, JsonWriter.list(DECK));
+        App app = new App()
+                .get("/decks", req -> decks)
+                .get("/one", req -> WebResponse.json(new Deck(1, "English"), DECK));
+
+        WebTest.test(app, client -> {
+            for (int i = 0; i < 3; i++) {
+                assertThat(client.get("/decks").body()).isEqualTo(MANY_JSON);
+                assertThat(client.get("/one").body()).isEqualTo("{\"id\":1,\"name\":\"English\"}");
+            }
+        });
+    }
+
+    /** The writer runs while exception handling still applies, so what it throws reaches an exception handler. */
+    @Test
+    void aWriterThatThrowsReachesTheExceptionHandlers() {
+        JsonWriter<Deck> failing = (deck, out) -> {
+            throw new IllegalArgumentException("no name for " + deck.id());
+        };
+        App app = new App()
+                .get("/decks/1", req -> WebResponse.json(new Deck(1, "English"), failing))
+                .exception(IllegalArgumentException.class,
+                        (req, e) -> WebResponse.text(e.getMessage()).status(HttpStatus.CONFLICT));
+
+        WebTest.test(app, client -> {
+            var response = client.get("/decks/1");
+
+            assertThat(response.statusCode()).isEqualTo(409);
+            assertThat(response.body()).isEqualTo("no name for 1");
+        });
+    }
+
+    /** A writer that leaves an object open is a 500 before anything is sent, not half a document. */
+    @Test
+    void aWriterThatLeavesAContainerOpenIsA500() {
+        JsonWriter<Deck> unclosed = (deck, out) -> out.object().put("id", deck.id());
+        App app = new App().get("/decks/1", req -> WebResponse.json(new Deck(1, "English"), unclosed));
+
+        WebTest.test(app, client -> {
+            var response = client.get("/decks/1");
+
+            assertThat(response.statusCode()).isEqualTo(500);
+            assertThat(response.body()).isEqualTo("Internal Server Error");
+        });
+    }
+
+    /** An exception handler whose JSON fails as well leaves a plain 500. */
+    @Test
+    void anErrorAnswerWhoseWriterFailsTooIsAPlain500() {
+        JsonWriter<Deck> failing = (deck, out) -> {
+            throw new IllegalArgumentException("no name for " + deck.id());
+        };
+        App app = new App()
+                .get("/decks/1", req -> WebResponse.json(new Deck(1, "English"), failing))
+                .exception(IllegalArgumentException.class,
+                        (req, e) -> WebResponse.json(new Deck(2, "error"), failing).status(HttpStatus.CONFLICT));
+
+        WebTest.test(app, client -> {
+            var response = client.get("/decks/1");
+
+            assertThat(response.statusCode()).isEqualTo(500);
+            assertThat(response.body()).isEqualTo("Internal Server Error");
+        });
+    }
+
+    /**
+     * Keeps the output a route's writer was handed, and tells the test when
+     * the request logger has heard of the request, which is after the servlet
+     * released the buffer.
+     */
+    private static final class Released {
+
+        private final AtomicReference<JsonOutput> handed = new AtomicReference<>();
+        private final CountDownLatch logged = new CountDownLatch(1);
+
+        App watch(App app) {
+            JsonWriter<List<Deck>> keeping = (decks, out) -> {
+                handed.set(out);
+                JsonWriter.list(DECK).write(decks, out);
+            };
+            return app.get("/decks", req -> WebResponse.json(MANY, keeping))
+                    .requestLogger((request, completion) -> logged.countDown());
+        }
+
+        void await() {
+            try {
+                assertThat(logged.await(10, TimeUnit.SECONDS)).isTrue();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError(e);
+            }
+            JsonOutput out = handed.get();
+            assertThat(out).isNotNull();
+            assertThatThrownBy(out::length).isInstanceOf(IllegalStateException.class);
+        }
+    }
+
+    private static String inflate(byte[] compressed) {
+        try (GZIPInputStream in = new GZIPInputStream(new ByteArrayInputStream(compressed))) {
+            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
     }
 }

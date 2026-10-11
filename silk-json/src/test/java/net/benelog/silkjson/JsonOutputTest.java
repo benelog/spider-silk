@@ -289,6 +289,66 @@ class JsonOutputTest {
         assertThatThrownBy(() -> out.value("more")).isInstanceOf(IllegalStateException.class);
     }
 
+    /** A document written from the buffer is the one toBytes() would have copied, and is gone once released. */
+    @Test
+    void writeToSendsTheBufferAndReleaseHandsItBack() throws IOException {
+        Deck deck = new Deck(7, "스페인어", List.of("a", "b"));
+        byte[] expected = DECK.toJsonBytes(deck);
+        JsonOutput out = JsonOutput.inMemory();
+        DECK.write(deck, out);
+        ByteArrayOutputStream sent = new ByteArrayOutputStream();
+
+        assertThat(out.length()).isEqualTo(expected.length);
+        out.writeTo(sent);
+        out.release();
+        out.release();
+
+        assertThat(sent.toByteArray()).isEqualTo(expected);
+        assertThatThrownBy(out::length).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> out.writeTo(sent)).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(out::toBytes).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> out.value("more")).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(out::newline).isInstanceOf(IllegalStateException.class);
+    }
+
+    /** After toBytes() the document is the array it answered, so it can still be read and released. */
+    @Test
+    void aDocumentTakenWithToBytesIsStillWrittenWhole() throws IOException {
+        JsonOutput out = JsonOutput.inMemory().value("done");
+        byte[] taken = out.toBytes();
+        out.release();
+        ByteArrayOutputStream sent = new ByteArrayOutputStream();
+
+        out.writeTo(sent);
+
+        assertThat(out.length()).isEqualTo(taken.length);
+        assertThat(sent.toByteArray()).isEqualTo(taken);
+        assertThat(out.toBytes()).isSameAs(taken);
+    }
+
+    /** A writer that threw halfway leaves an output that can be released, and whose later writes reach nobody. */
+    @Test
+    void anOutputAbandonedHalfwayIsReleasedAndWritesNoMoreIntoTheThreadsBuffer() {
+        JsonOutput abandoned = JsonOutput.inMemory().array().value("first");
+
+        assertThatThrownBy(abandoned::length).isInstanceOf(IllegalStateException.class);
+        abandoned.release();
+        JsonOutput next = JsonOutput.inMemory().array().value("next");
+        abandoned.value("late").value("x".repeat(300));
+
+        assertThat(next.end().toJson()).isEqualTo("[\"next\"]");
+    }
+
+    /** Reading a document from an output that writes to a stream is refused: flush() is what sends it. */
+    @Test
+    void aStreamOutputHasNoDocumentToRead() {
+        JsonOutput out = JsonOutput.to(new ByteArrayOutputStream()).value("sent");
+
+        assertThatThrownBy(out::length).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> out.writeTo(new ByteArrayOutputStream()))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
     /** Two outputs open at once on one thread never share the thread's kept buffer. */
     @Test
     void twoOutputsOpenAtOnceKeepTheirOwnBuffers() {

@@ -299,15 +299,17 @@ class WebResponseTest {
         assertThat(response.header("Content-Type")).isEqualTo("text/html; charset=UTF-8");
     }
 
-    /** A JSON document goes out as the UTF-8 it was written as, and raw JSON as the text it was given. */
+    /** A JSON document is the value and its writer, read back as the UTF-8 they write; raw JSON is the text it was given. */
     @Test
-    void aJsonBodyIsItsUtf8Bytes() {
+    void aJsonBodyIsItsValueAndItsWriter() {
         WebResponse built = WebResponse.json(Json.object().put("name", "스페인어"));
         WebResponse raw = WebResponse.rawJson("{\"name\":\"스페인어\"}");
 
         assertThat(built.header("Content-Type")).isEqualTo("application/json");
-        assertThat(((WebResponse.Bytes) built.body()).data())
-                .isEqualTo("{\"name\":\"스페인어\"}".getBytes(StandardCharsets.UTF_8));
+        WebResponse.Json<?> json = (WebResponse.Json<?>) built.body();
+        assertThat(json.toBytes()).isEqualTo("{\"name\":\"스페인어\"}".getBytes(StandardCharsets.UTF_8));
+        assertThat(json.toBytes()).isNotSameAs(json.toBytes());
+        assertThat(json.toJson()).isEqualTo("{\"name\":\"스페인어\"}");
         assertThat(((WebResponse.Text) raw.body()).content()).isEqualTo("{\"name\":\"스페인어\"}");
     }
 
@@ -321,6 +323,8 @@ class WebResponseTest {
                 .isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new WebResponse.Text(null)).isInstanceOf(NullPointerException.class);
         assertThatThrownBy(() -> new WebResponse.Bytes(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> WebResponse.json(null)).isInstanceOf(NullPointerException.class);
+        assertThatThrownBy(() -> WebResponse.json("deck", null)).isInstanceOf(NullPointerException.class);
     }
 
     /** Thrown from a handler, a null body reaches the exception handlers and the logger as what was thrown. */

@@ -137,9 +137,9 @@ class ApiControllerTest extends RepositoryTestSupport {
         assertThat(cardService.cardsWithTags(deckId)).isEmpty();
     }
 
-    /** A JSON response carries its document as UTF-8 bytes, read back as text to assert on. */
+    /** A JSON response carries its value and writer, whose document is read back as text to assert on. */
     private static String body(WebResponse response) {
-        return new String(((WebResponse.Bytes) response.body()).data(), StandardCharsets.UTF_8);
+        return ((WebResponse.Json<?>) response.body()).toJson();
     }
 
     /** A streamed body is produced by running its writer, which is what the servlet does. */

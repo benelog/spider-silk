@@ -82,7 +82,7 @@ The package belongs to xref:json.adoc#silk-json[silk-json], the JSON library cor
   `JsonWriter.list`, `JsonWriter.tree`, `JsonReader.object`, `JsonReader.list`, `JsonReader.tree`, `JsonCodec.of`, and `JsonCodec.list` build them.
   `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, and `reader.fromJsonBytes(utf8)` run one outside a request
 * `JsonOutput`: `object()`, `array()`, `end()`, `name(key)`, `put(key, ...)`, `putNull(key)`, `value(...)`, `nullValue()`, `values(strings)`, and `newline()`.
-  `JsonOutput.inMemory()` answers `toBytes()` and `toJson()`, and `JsonOutput.to(stream)` sends its buffer on `flush()`
+  `JsonOutput.inMemory()` answers `toBytes()` and `toJson()`, or `length()` and `writeTo(stream)` followed by `release()`, and `JsonOutput.to(stream)` sends its buffer on `flush()`
 * `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `keyHead()`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readFloat()`, `readNumber()`, `readBoolean()`, `readNull()`, `readValue()`, `skipValue()`, `end()`, and `error(message)`, over `JsonInput.of(utf8)` or `JsonInput.of(text)`
 * `JsonKey.of(name)`: a member name encoded once, for `put`, `name`, and `keyIs`
 * `@JsonBound`: the codec of the annotated type, or of the type it names, generated at compile time as `<Type>Json.CODEC` by `silk-json-processor`; see xref:json-codegen.adoc[Generated JSON Codecs]

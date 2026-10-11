@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 
 import org.junit.jupiter.api.Test;
 
+import net.benelog.silkjson.Json;
 import net.benelog.spidersilk.test.WebTest;
 
 /**
@@ -96,6 +97,7 @@ class ResponseBodiesTest {
         assertThat(describe(WebResponse.html("hello"))).isEqualTo("hello");
         assertThat(describe(WebResponse.bytes("application/octet-stream", new byte[2])))
                 .isEqualTo("2 bytes");
+        assertThat(describe(WebResponse.json(Json.array().add("deck")))).isEqualTo("[\"deck\"]");
         assertThat(describe(WebResponse.template("deck")))
                 .isEqualTo("template deck");
         assertThat(describe(WebResponse.stream("text/csv", out -> { }))).isEqualTo("a stream");
@@ -108,6 +110,7 @@ class ResponseBodiesTest {
             case WebResponse.Empty ignored -> "no body";
             case WebResponse.Text text -> text.content();
             case WebResponse.Bytes bytes -> bytes.data().length + " bytes";
+            case WebResponse.Json<?> json -> json.toJson();
             case WebResponse.Template template -> "template " + template.name();
             case WebResponse.Streamed ignored -> "a stream";
             case WebResponse.Sse ignored -> "an event stream";

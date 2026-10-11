@@ -1,16 +1,14 @@
 # 남은 작업
 
-2026-10-11에 silk-json 성능 작전 2-1~2-5를 커밋하고 부록 수치와 결정 76을 갱신한 뒤 남은 일이다.
+2026-10-11에 silk-json 성능 작전 2-1~2-5를 커밋하고 부록 수치와 결정 76을 갱신하고, 3단계(빌린 버퍼 본문)를 구현한 뒤 남은 일이다.
 수치, 기각한 변형, 작전의 세부는 `notes/json-performance-tuning.md`에 있고, 이 파일은 할 일의 목록만 적는다.
 
-## 1. 빌린 버퍼 본문 (작전 3단계)
+## 1. 빌린 버퍼 본문의 측정 (작전 3단계)
 
-- 목표는 HTTP 경로에서 JSON 본문의 마지막 `Arrays.copyOf`를 없애는 것이다.
-  사용자가 2026-10-10에 core의 `WebResponse.Bytes` 변경을 승인했다.
-- 형태는 값과 writer를 든 지연 `Body`를 `AppServlet`이 materialize하는 것이고, 세부는 노트의 "3. 빌린 버퍼 본문" 절에 있다.
-- `release()` 중복 호출, gzip·HEAD 경로의 반납 누락을 테스트한다.
-- 문서화된 테스트 패턴 `((WebResponse.Bytes) response.body()).data()`가 바뀌는 곳(`response.adoc` 영문·한국어, `skills/spider-silk/references/testing.md`, `ReadmeSnippets`, `ApiControllerTest`, `WebResponseTest`, `ResponseBodiesTest`)을 같은 커밋에 고친다.
-- 측정은 `writeList_stream` 행과 HTTP `json-list`의 요청당 할당이다.
+- 구현은 2026-10-11에 결정 78로 했다: `WebResponse.Json` 본문을 `AppServlet`이 KEPT 버퍼에 쓰고, 복사 없이 보낸 뒤 `service`의 `finally`에서 반납한다.
+- 측정이 남았다: `writeList_stream` 행(2절에서 만든다)과 HTTP `json-list`의 요청당 할당이다.
+  기대치는 노트의 "3. 빌린 버퍼 본문" 절에 있다(-0.6~-0.75 µs, 요청당 -10.3 KB).
+- 측정은 사용자 지시 후에 시작한다.
 
 ## 2. 측정판의 나머지 (작전 0단계)
 

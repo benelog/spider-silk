@@ -27,6 +27,8 @@ import jakarta.servlet.http.HttpSession;
 
 import org.jspecify.annotations.Nullable;
 
+import net.benelog.silkjson.JsonOutput;
+
 /**
  * The entry point that deploys an {@link App} to a servlet container.
  * Mapped to "/*", it takes care of routing, static files, and exception handling.
@@ -36,7 +38,8 @@ import org.jspecify.annotations.Nullable;
  * {@link #write} puts it on the wire. Everything that can be routed to
  * {@link App#exception} happens in the first half — template rendering included,
  * which is why a {@link WebResponse.Template} is materialized before the second
- * half begins.
+ * half begins, and a {@link WebResponse.Json} is written into the thread's
+ * buffer.
  *
  * <p>Not final, and neither is the dispatch it inherits from
  * {@link HttpServlet}: a {@code web.xml} names a class and calls the no-argument
@@ -143,18 +146,22 @@ public class AppServlet extends HttpServlet {
         // Split here and nowhere else: the router, the filters, and the CORS
         // path all read the same segments, and the path cannot change under them.
         String[] segments = PathPattern.split(arrived.path());
-        Answer answer = dispatch(arrived, segments);
+        Answer answer = renderJson(dispatch(arrived, segments));
         WebRequest request = answer.request();
         WebResponse response = answer.response();
+        RenderedJson json = answer.json();
         Throwable failure = null;
         boolean head = "HEAD".equals(req.getMethod());
         try {
-            response = decorate(response, request, segments);
-            write(response, req, res, head);
+            response = decorate(response, request, segments, json);
+            write(response, req, res, head, json);
         } catch (Throwable e) {
             failure = e;
             writeFailed(e, req, res, request, segments, head);
         } finally {
+            if (json != null) {
+                json.output().release();
+            }
             logRequest(request, response, res.getStatus(), startedAt, failure);
         }
     }
@@ -176,9 +183,30 @@ public class AppServlet extends HttpServlet {
     /**
      * What {@link #dispatch} worked out: the answer, and the request as it was
      * answered, which from routing on carries the matched route and its
-     * variables, and after an exception carries what was thrown.
+     * variables, and after an exception carries what was thrown. Once
+     * {@link #renderJson} has run, a {@link WebResponse.Json} answer carries its
+     * document too.
      */
-    private record Answer(WebRequest request, WebResponse response) {
+    private record Answer(WebRequest request, WebResponse response, @Nullable RenderedJson json) {
+
+        Answer(WebRequest request, WebResponse response) {
+            this(request, response, null);
+        }
+    }
+
+    /**
+     * A JSON body written into the thread's kept buffer, and the body it was
+     * written from. The buffer stays inside this servlet: it is sent, and
+     * released in {@link #service}'s {@code finally}, whatever became of the
+     * answer in between.
+     */
+    private record RenderedJson(WebResponse.Json<?> body, JsonOutput output) {
+
+        /** The document, when that response still answers with the body it was written from. */
+        @SuppressWarnings("ReferenceEquality")
+        @Nullable JsonOutput of(WebResponse response) {
+            return response.body() == body ? output : null;
+        }
     }
 
     /**
@@ -195,7 +223,8 @@ public class AppServlet extends HttpServlet {
      * security headers add headers; compression runs last, because what it does
      * depends on the content type and the length the other two have settled.
      */
-    private WebResponse decorate(WebResponse response, WebRequest request, String[] segments) {
+    private WebResponse decorate(WebResponse response, WebRequest request, String[] segments,
+            @Nullable RenderedJson json) {
         WebResponse decorated = response;
         if (Boolean.TRUE.equals(request.raw().getAttribute(WebRequest.NEGOTIATED_ATTRIBUTE))) {
             decorated = decorated.vary("Accept");
@@ -207,7 +236,7 @@ public class AppServlet extends HttpServlet {
             decorated = deployment.securityHeaders().apply(decorated, request);
         }
         if (deployment.gzip() != null) {
-            decorated = deployment.gzip().apply(decorated, request);
+            decorated = deployment.gzip().apply(decorated, request, json == null ? null : json.of(decorated));
         }
         return decorated;
     }
@@ -463,6 +492,41 @@ public class AppServlet extends HttpServlet {
     }
 
     /**
+     * Writes a {@link WebResponse.Json} answer into the thread's kept buffer,
+     * as {@link #renderTemplate} renders a page: while exception handling
+     * still applies, so a writer that throws reaches {@link App#exception}, and
+     * before the headers go out, so the answer carries its length. It runs once
+     * every filter has answered, so a body a filter replaced is never written.
+     *
+     * <p>The answer to a writer's failure skips the response filters, as the
+     * answer to a filter's own failure does. Should that answer be JSON whose
+     * writer fails as well, a plain 500 goes out.
+     */
+    private Answer renderJson(Answer answer) {
+        if (!(answer.response().body() instanceof WebResponse.Json<?> json)) {
+            return answer;
+        }
+        WebRequest request = answer.request();
+        try {
+            return new Answer(request, answer.response(), new RenderedJson(json, json.render()));
+        } catch (Throwable e) {
+            request.errorMessage(null);
+            WebResponse failed = completeErrorResponse(handleException(e, request), request);
+            if (!(failed.body() instanceof WebResponse.Json<?> again)) {
+                return new Answer(request, failed);
+            }
+            try {
+                return new Answer(request, failed, new RenderedJson(again, again.render()));
+            } catch (Throwable twice) {
+                log("Writing the JSON of an error response failed", twice);
+                reportAlso(request, twice);
+                return new Answer(request, WebResponse.text("Internal Server Error")
+                        .status(HttpStatus.INTERNAL_SERVER_ERROR));
+            }
+        }
+    }
+
+    /**
      * The buffer a template renders into. {@link java.io.StringWriter
      * StringWriter} would do the
      * same job over a {@code StringBuffer}, whose every append is synchronized
@@ -658,13 +722,7 @@ public class AppServlet extends HttpServlet {
                 log("Error handler failed for status " + status, e);
                 // Reported as a handler's failure is: a 404 page that throws is a
                 // 500, and the logger would otherwise hear of a 500 nothing threw.
-                // An exception the request was already answered for stays first.
-                Throwable earlier = request.thrown();
-                if (earlier == null) {
-                    request.thrown(e);
-                } else if (!earlier.equals(e)) {
-                    earlier.addSuppressed(e);
-                }
+                reportAlso(request, e);
                 return WebResponse.text("Internal Server Error")
                         .status(HttpStatus.INTERNAL_SERVER_ERROR);
             }
@@ -675,10 +733,24 @@ public class AppServlet extends HttpServlet {
         return response;
     }
 
+    /**
+     * Keeps a failure met while answering an earlier one for the request
+     * logger. An exception the request was already answered for stays first,
+     * with this one suppressed under it.
+     */
+    private static void reportAlso(WebRequest request, Throwable e) {
+        Throwable earlier = request.thrown();
+        if (earlier == null) {
+            request.thrown(e);
+        } else if (!earlier.equals(e)) {
+            earlier.addSuppressed(e);
+        }
+    }
+
     // ---- Putting the answer on the wire ----
 
     private void write(WebResponse response, HttpServletRequest req, HttpServletResponse res,
-            boolean head) throws Exception {
+            boolean head, @Nullable RenderedJson rendered) throws Exception {
         res.setStatus(response.status().code());
         for (Map.Entry<String, String> header : response.headers().entrySet()) {
             if ("Content-Type".equalsIgnoreCase(header.getKey())) {
@@ -698,6 +770,14 @@ public class AppServlet extends HttpServlet {
             case WebResponse.Text text ->
                     writeBytes(text.content().getBytes(StandardCharsets.UTF_8), res, head);
             case WebResponse.Bytes bytes -> writeBytes(bytes.data(), res, head);
+            case WebResponse.Json<?> json -> {
+                JsonOutput document = rendered == null ? null : rendered.of(response);
+                if (document == null) {
+                    writeBytes(json.toBytes(), res, head);
+                } else {
+                    writeJson(document, res, head);
+                }
+            }
             case WebResponse.Streamed stream -> writeStream(stream.writer(), res, head);
             case WebResponse.Sse sse -> writeSse(sse.writer(), res, head);
             case WebResponse.Raw raw -> writeRaw(raw.writer(), req, res, head);
@@ -718,6 +798,19 @@ public class AppServlet extends HttpServlet {
             return;
         }
         res.getOutputStream().write(data);
+    }
+
+    /**
+     * A JSON document in the thread's kept buffer: the same answer as
+     * {@link #writeBytes}, sent from the buffer itself rather than from a copy
+     * of it. {@link #service} releases the buffer, on a HEAD too.
+     */
+    private void writeJson(JsonOutput document, HttpServletResponse res, boolean head) throws IOException {
+        setLengthIfUnset(res, document.length());
+        if (head) {
+            return;
+        }
+        document.writeTo(res.getOutputStream());
     }
 
     /**
@@ -822,7 +915,7 @@ public class AppServlet extends HttpServlet {
         // goes out bare.
         try {
             write(decorate(WebResponse.text("Internal Server Error").status(HttpStatus.INTERNAL_SERVER_ERROR),
-                    request, segments), req, res, head);
+                    request, segments, null), req, res, head, null);
         } catch (Throwable again) {
             e.addSuppressed(again);
             res.reset();

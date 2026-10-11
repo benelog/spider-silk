@@ -12,6 +12,8 @@ import java.util.zip.GZIPOutputStream;
 
 import org.jspecify.annotations.Nullable;
 
+import net.benelog.silkjson.JsonOutput;
+
 /**
  * Compresses the response when the client says it can read it.
  *
@@ -27,8 +29,9 @@ import org.jspecify.annotations.Nullable;
  *
  * <p>Compression is a transform over the {@link WebResponse}, not a wrapper
  * around the servlet response. A body already in memory — {@link WebResponse.Text},
- * {@link WebResponse.Bytes} — is compressed there and then, so the length it
- * answers with is the length it sends. A {@link WebResponse.Streamed} is
+ * {@link WebResponse.Bytes}, a {@link WebResponse.Json} the servlet has
+ * written — is compressed there and then, so the length it answers with is
+ * the length it sends. A {@link WebResponse.Streamed} is
  * compressed as it is written, which is what keeps a large file out of memory;
  * its size is unknown beforehand, so {@link #minBytes(int)} does not apply to
  * one and its {@code Content-Length} is dropped.
@@ -119,9 +122,11 @@ public final class Gzip {
     /**
      * The response as it goes on the wire. Unchanged when there is nothing to
      * gain: a body that is not compressible, a client that did not ask, a body
-     * too small to bother with, or one that came out no smaller.
+     * too small to bother with, or one that came out no smaller. A
+     * {@link WebResponse.Json} body is deflated from {@code rendered}, the
+     * buffer {@link AppServlet} wrote it into, rather than written a second time.
      */
-    WebResponse apply(WebResponse response, WebRequest request) {
+    WebResponse apply(WebResponse response, WebRequest request, @Nullable JsonOutput rendered) {
         if (response.status() == HttpStatus.NOT_MODIFIED) {
             return notModified(response, request);
         }
@@ -137,6 +142,9 @@ public final class Gzip {
         return switch (response.body()) {
             case WebResponse.Text text -> compressed(varying, text.content());
             case WebResponse.Bytes bytes -> compressed(varying, bytes.data());
+            case WebResponse.Json<?> json -> rendered != null
+                    ? compressed(varying, rendered.length(), rendered::writeTo)
+                    : compressed(varying, json.toBytes());
             case WebResponse.Streamed stream -> "HEAD".equals(request.method())
                     ? headOfCompressed(varying)
                     : compressed(varying, stream.writer());
@@ -243,11 +251,16 @@ public final class Gzip {
 
     /** A body already in memory, compressed now so its length is known now. */
     private WebResponse compressed(WebResponse response, byte[] raw) {
-        if (raw.length < minBytes) {
+        return compressed(response, raw.length, out -> out.write(raw));
+    }
+
+    /** The same, for a body of that length that writes itself into the deflater. */
+    private WebResponse compressed(WebResponse response, int length, Source raw) {
+        if (length < minBytes) {
             return response;
         }
-        byte[] zipped = deflate(raw);
-        if (zipped.length >= raw.length) {
+        byte[] zipped = deflate(length, raw);
+        if (zipped.length >= length) {
             return response;
         }
         return encoded(response.body(new WebResponse.Bytes(zipped)))
@@ -334,10 +347,16 @@ public final class Gzip {
         return response.header("ETag", "W/" + etag);
     }
 
-    private static byte[] deflate(byte[] raw) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(32, raw.length / 4));
+    /** A body in memory, which writes itself to the stream it is handed. */
+    private interface Source {
+
+        void writeTo(OutputStream out) throws IOException;
+    }
+
+    private static byte[] deflate(int length, Source raw) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream(Math.max(32, length / 4));
         try (GZIPOutputStream zipped = new GZIPOutputStream(out)) {
-            zipped.write(raw);
+            raw.writeTo(zipped);
         } catch (IOException e) {
             // A ByteArrayOutputStream does not fail; the checked type is the API's.
             throw new UncheckedIOException(e);

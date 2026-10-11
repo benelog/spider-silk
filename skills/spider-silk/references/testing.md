@@ -59,12 +59,11 @@ The host a handler reads with `req.host()` is stated as a header: `header("Host"
 ## Asserting on the response value
 
 `WebResponse` is a value, so assertions read it back directly — `status()`, `header(name)`, `headers()`, `cookies()`, and `body()`, a sealed type you can cast or switch on.
-`WebResponse.json` answers with `Bytes`, the UTF-8 the document was written as, so a test reads it back as text (`rawJson` and `text` answer with `Text`):
+`WebResponse.json` answers with `Json`, which holds the value and its writer, and its `toJson()` writes the document for the test to read (`rawJson` and `text` answer with `Text`):
 
 ```java
 assertThat(response.header("Location")).isEqualTo("/api/decks/1");
-assertThat(new String(((WebResponse.Bytes) response.body()).data(), StandardCharsets.UTF_8))
-        .isEqualTo("{\"id\":1}");
+assertThat(((WebResponse.Json<?>) response.body()).toJson()).isEqualTo("{\"id\":1}");
 ```
 
 ## Picking between the two

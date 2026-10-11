@@ -1566,6 +1566,35 @@ Core depends on it, and it needs nothing but the JDK at run time.
 Rejected: `spider-silk-json`, which names the framework rather than the library.
 Rejected: a repository of its own now, which doubles the release, the manual, and the benchmark while the API still moves.
 
+## 78 · A JSON body is written where it is sent
+
+### 78. `WebResponse.json` answers with a `Json` body, which the servlet writes into the thread's buffer and sends from there
+
+The body holds the value and its writer, and `AppServlet` writes the document when the answer goes out, so no array the size of the document is copied out of the buffer.
+That copy was 16% of a write profile, and 10 KB of allocation per request for the benchmark's list of 100 records.
+It answers decision 75's Rejected line: the test still has something to assert on, and the buffer never leaves the servlet.
+
+- **The buffer stays in the servlet.**
+  - A `WebResponse` is a public immutable value, which a constant or a filter can hold.
+    A body that carried the buffer would read another request's JSON once the buffer went back to the thread.
+  - The body carries the value and the writer instead, and is written again for each request it answers.
+  - `AppServlet` releases the buffer in `service`'s `finally`, after a GET, a HEAD, a gzip, and a failed write alike.
+- **It is written where a template is rendered.**
+  - The servlet writes it once every filter has answered, while exception handling still applies, so a writer that throws reaches `App#exception`.
+  - A writer that leaves a container open fails there too, before a byte is sent, rather than sending half a document.
+  - The answer to that failure skips the response filters, as the answer to a filter's own failure does, and a JSON error answer whose writer fails too leaves a plain 500.
+- **`JsonOutput` gained `length()`, `writeTo(stream)`, and `release()`.**
+  - `release()` is the hand-back `toBytes()` already did, and a second call does nothing.
+  - After it, `length()` and `writeTo` throw, and the output writes into an empty array of its own, so a writer that kept the output cannot write into the next document.
+- **Gzip and tests read a copy.**
+  - Gzip deflates from the servlet's buffer, so a compressed document is written once.
+  - `toBytes()` and `toJson()` on the body write the document anew, which is what a test or a filter reads.
+- **The value is read when the answer is written.**
+  - A value the handler changes after returning it changes the answer, as a model value or a `bytes` array would.
+
+Rejected: a length and a release on `Bytes`, holding the buffer from the handler on, since a held response would then see another request's document.
+Rejected: writing straight to the servlet's stream, which leaves no length for `Content-Length` and a failure halfway with half a document sent.
+
 ## Rejected — decisions, with the reason
 
 These are closed: reopening one changes what the framework is.

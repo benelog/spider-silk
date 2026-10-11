@@ -32,8 +32,9 @@ import org.jspecify.annotations.Nullable;
  * class's business. Inside an object a member is {@link #put}, or
  * {@link #name} followed by a value; inside an array each element is
  * {@link #value}. A document is one value, read back with {@link #toBytes()}
- * from an {@link #inMemory()} output, or sent on by {@link #flush()} from one
- * {@link #to(OutputStream)}.
+ * from an {@link #inMemory()} output, or written from its buffer with
+ * {@link #writeTo(OutputStream)} and then {@link #release()}d, or sent on by
+ * {@link #flush()} from one {@link #to(OutputStream)}.
  *
  * <p>A string is read through {@link String#getChars}, one copy for the whole
  * string, and its characters are checked in that array rather than through
@@ -103,13 +104,17 @@ public final class JsonOutput {
      * It is a plain byte array, so a thread of a container the application is
      * undeployed from holds nothing of the application's classes. A virtual
      * thread lives for one task, and keeps nothing. An output takes the buffer
-     * while it writes and gives it back with {@link #toBytes()}, so two outputs
-     * open at once on one thread never share it.
+     * while it writes and gives it back with {@link #toBytes()} or
+     * {@link #release()}, so two outputs open at once on one thread never
+     * share it.
      */
     private static final ThreadLocal<byte[]> KEPT = new ThreadLocal<>();
 
     /** The largest buffer a thread keeps: a document past it is written into a buffer of its own. */
     private static final int KEPT_MAX = 64 * 1024;
+
+    /** What a released output holds in place of the buffer it handed back. */
+    private static final byte[] NO_BYTES = new byte[0];
 
     /** The buffer an output writing to a stream starts with. */
     private static final int STREAM_BUFFER = 8 * 1024;
@@ -160,8 +165,11 @@ public final class JsonOutput {
 
     private @Nullable KeyCache keyCache;
 
-    /** The document, once {@link #toBytes()} has taken it; nothing is written after that. */
+    /** The document, once {@link #toBytes()} has taken it. */
     private byte @Nullable [] result;
+
+    /** Whether the buffer went back to the thread, through {@link #toBytes()} or {@link #release()}; nothing is written after that. */
+    private boolean released;
 
     private JsonOutput(byte[] buf, @Nullable OutputStream stream, boolean kept) {
         this.buf = buf;
@@ -465,6 +473,9 @@ public final class JsonOutput {
         if (state != TOP) {
             throw new IllegalStateException("A newline goes between top-level values, not inside one");
         }
+        if (released) {
+            throw finished();
+        }
         ensure(1);
         buf[pos++] = '\n';
         return this;
@@ -478,24 +489,103 @@ public final class JsonOutput {
      * document, and a later call answers the same bytes.
      */
     public byte[] toBytes() {
+        requireDocument();
+        byte[] taken = result;
+        if (taken != null) {
+            return taken;
+        }
+        requireHeld();
+        taken = Arrays.copyOf(buf, pos);
+        result = taken;
+        release();
+        return taken;
+    }
+
+    /**
+     * How many bytes the document is, once every container is closed: what
+     * {@link #writeTo(OutputStream)} sends, and what a {@code Content-Length}
+     * says before a byte of it is sent.
+     *
+     * @throws IllegalStateException after {@link #release()}, since the buffer
+     *         may hold another document by then
+     */
+    public int length() {
+        requireDocument();
+        byte[] taken = result;
+        if (taken != null) {
+            return taken.length;
+        }
+        requireHeld();
+        return pos;
+    }
+
+    /**
+     * Writes the document to a stream straight from the buffer, with no copy
+     * of it made: the way a response body goes out without the array
+     * {@link #toBytes()} would allocate. The stream is not flushed or closed.
+     * A {@link #release()} follows once the bytes are written.
+     *
+     * @throws IllegalStateException after {@link #release()}, since the buffer
+     *         may hold another document by then
+     */
+    public void writeTo(OutputStream out) throws IOException {
+        requireDocument();
+        byte[] taken = result;
+        if (taken != null) {
+            out.write(taken);
+            return;
+        }
+        requireHeld();
+        out.write(buf, 0, pos);
+    }
+
+    /**
+     * Hands the buffer back for the thread's next document, which is what
+     * {@link #toBytes()} does once it has copied the document out. An output
+     * read with {@link #writeTo(OutputStream)} calls this when the bytes are
+     * written, and an output abandoned halfway, by a writer that threw, may
+     * call it whether or not its containers are closed. A second call does
+     * nothing.
+     *
+     * <p>Nothing is written after it, and {@link #length()} and
+     * {@link #writeTo(OutputStream)} throw: the next output on this thread
+     * writes into the same array.
+     */
+    public void release() {
+        if (released) {
+            return;
+        }
+        released = true;
+        byte[] held = buf;
+        // A writer that kept writing into a container it had left open would
+        // write into the next document; it writes into an array of its own.
+        buf = NO_BYTES;
+        if (stream == null && (kept || held.length <= KEPT_MAX)) {
+            if (!Thread.currentThread().isVirtual() && held.length <= KEPT_MAX) {
+                KEPT.set(held);
+            }
+        }
+    }
+
+    /** What the methods reading a whole document ask first: an output held in memory, with every container closed. */
+    private void requireDocument() {
         if (stream != null) {
             throw new IllegalStateException("This output writes to a stream: flush() sends what it holds");
         }
         if (state != TOP) {
             throw new IllegalStateException("An object or array is still open");
         }
-        byte[] taken = result;
-        if (taken != null) {
-            return taken;
+    }
+
+    /** What reading the buffer asks: that it has not gone back to the thread. */
+    private void requireHeld() {
+        if (released) {
+            throw new IllegalStateException("The buffer was released: the document is no longer there to read");
         }
-        taken = Arrays.copyOf(buf, pos);
-        result = taken;
-        if (kept || buf.length <= KEPT_MAX) {
-            if (!Thread.currentThread().isVirtual() && buf.length <= KEPT_MAX) {
-                KEPT.set(buf);
-            }
-        }
-        return taken;
+    }
+
+    private static IllegalStateException finished() {
+        return new IllegalStateException("The document was already taken with toBytes() or released");
     }
 
     /** The document as a string: {@link #toBytes()} decoded. */
@@ -561,8 +651,8 @@ public final class JsonOutput {
         } else if (current == (ARRAY | FIRST)) {
             state = ARRAY;
         } else if (current == TOP) {
-            if (result != null) {
-                throw new IllegalStateException("The document was already taken with toBytes()");
+            if (released) {
+                throw finished();
             }
         } else {
             throw new IllegalStateException("A value inside an object follows a member name");

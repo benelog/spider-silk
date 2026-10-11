@@ -11,6 +11,7 @@ A cookie is copied when it is added and again when `cookies()` hands it out, so 
 A template model is a `Model`, which is immutable, so nothing the handler does after building it reaches the page.
 The copies are shallow, and a mutable object stored as a model value is still the one the handler passed.
 The array of a `bytes` body and the writer of a `stream` body are handed over rather than copied, because those two bodies exist to avoid a second copy of a large body.
+The value of a `json` body is held rather than copied as well, and is read when the answer is written, so a value the handler changes after returning it changes the answer.
 
 == Bodies
 
@@ -19,9 +20,9 @@ The content type is the first argument of every body that takes one.
 A template name carries no extension.
 The engine appends its own, as xref:templates.adoc[Templates] describes.
 
-`body()` returns a sealed `WebResponse.Body`: `Empty`, `Text`, `Bytes`, `Template`, `Stream`, `Sse`, or `Raw`.
+`body()` returns a sealed `WebResponse.Body`: `Empty`, `Text`, `Bytes`, `Json`, `Template`, `Stream`, `Sse`, or `Raw`.
 A `switch` over it needs no default case, and a test can assert on the answer without a servlet response to read it out of.
-`WebResponse.json` answers with `Bytes`, the UTF-8 the document was written as, so a test reads the document back as text:
+`WebResponse.json` answers with `Json`, which holds the value and its writer, and its `toJson()` writes the document for a test to read:
 
 [source,java]
 ----
@@ -32,9 +33,12 @@ WebResponse response = controller.createDeck(TestRequest.post("/api/decks")
 
 assertThat(response.status()).isEqualTo(HttpStatus.CREATED);
 assertThat(response.header("Location")).isEqualTo("/api/decks/1");
-assertThat(new String(((WebResponse.Bytes) response.body()).data(), StandardCharsets.UTF_8))
-        .isEqualTo("{\"id\":1}");
+assertThat(((WebResponse.Json<?>) response.body()).toJson()).isEqualTo("{\"id\":1}");
 ----
+
+The servlet writes a `Json` body once every filter has answered, while exception handling still applies, so a writer that throws reaches an exception handler.
+It writes the document into the buffer the thread keeps, sends that buffer after a `Content-Length`, and hands it back, so no array the size of the document is allocated on the way to the client.
+The buffer never leaves the servlet, so a response held as a constant or kept by a filter is written again for every request it answers.
 
 `body(replacement)` preserves all headers.
 You must update or remove metadata that describes the previous body, including `Content-Length`, `ETag`, `Last-Modified`, and `Content-Encoding`.
@@ -51,7 +55,7 @@ return response.body(new WebResponse.Text(replacement))
         .withoutHeader("Content-Encoding");
 ----
 
-The writer computes the new length for text and bytes when no length is set.
+The writer computes the new length for text, bytes, and JSON when no length is set.
 A streaming replacement may omit a length.
 
 == A file on disk

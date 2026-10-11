@@ -21,7 +21,6 @@ import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.CheckReturnValue;
 import org.jspecify.annotations.Nullable;
 
-import net.benelog.silkjson.Json;
 import net.benelog.silkjson.JsonOutput;
 import net.benelog.silkjson.JsonValue;
 import net.benelog.silkjson.JsonWriter;
@@ -57,8 +56,9 @@ import net.benelog.silkjson.JsonWriter;
  * {@link Model} cannot be changed once built, so nothing a caller still holds
  * changes a response already made. A model value that is itself mutable is
  * still the object the caller passed. The
- * bytes of a {@link Bytes} body and the writer of a streamed one are handed over
- * rather than copied, as their own descriptions say.
+ * bytes of a {@link Bytes} body, the value of a {@link Json} one, and the writer
+ * of a streamed one are handed over rather than copied, as their own
+ * descriptions say.
  *
  * <p>The envelope is always the same; what differs between an HTML page, a JSON
  * document, a file download, and an SSE stream is the {@link Body}. That is a
@@ -71,6 +71,7 @@ import net.benelog.silkjson.JsonWriter;
  *         case WebResponse.Empty ignored -> "no body";
  *         case WebResponse.Text text -> text.content();
  *         case WebResponse.Bytes bytes -> bytes.data().length + " bytes";
+ *         case WebResponse.Json<?> json -> json.toJson();
  *         case WebResponse.Template template -> "template " + template.name();
  *         case WebResponse.Streamed ignored -> "a stream";
  *         case WebResponse.Sse ignored -> "an event stream";
@@ -114,6 +115,58 @@ public final class WebResponse {
 
         public Bytes {
             Objects.requireNonNull(data, "data");
+        }
+    }
+
+    /**
+     * A value and the writer that states it as JSON, written when the answer
+     * goes out rather than when it is built. {@link AppServlet} writes it into
+     * the thread's kept buffer once every filter has answered, while exception
+     * handling still applies, so a writer that throws reaches
+     * {@link App#exception} as a handler that throws does. It then sends that
+     * buffer as it is, after a {@code Content-Length}, and hands it back: no
+     * array the size of the document is allocated on the way to the client.
+     *
+     * <p>The buffer never leaves the servlet. A response held as a constant, or
+     * kept by a filter, carries the value and the writer, and is written again
+     * for each request it answers. The value is held, not copied, so it is read
+     * as it stands when the answer is written: a list the handler changes after
+     * returning it changes the answer.
+     *
+     * <p>{@link #toBytes()} and {@link #toJson()} write the document anew, for
+     * a test or a filter that reads it.
+     */
+    public record Json<T>(T value, JsonWriter<T> writer) implements Body {
+
+        public Json {
+            Objects.requireNonNull(writer, "writer");
+        }
+
+        /** The document as UTF-8, written now, in an array of its own. */
+        public byte[] toBytes() {
+            return writer.toJsonBytes(value);
+        }
+
+        /** The document as text, written now. */
+        public String toJson() {
+            return writer.toJson(value);
+        }
+
+        /**
+         * The document in the thread's kept buffer, for {@link AppServlet} to
+         * send and release. A writer that throws, or leaves a container open,
+         * has the buffer handed back before the failure goes on.
+         */
+        JsonOutput render() {
+            JsonOutput out = JsonOutput.inMemory();
+            try {
+                writer.write(value, out);
+                out.length(); // throws for a container left open, while the failure can still be answered
+            } catch (Throwable failure) {
+                out.release();
+                throw failure;
+            }
+            return out;
         }
     }
 
@@ -189,19 +242,26 @@ public final class WebResponse {
     }
 
     /**
-     * A JSON document built as a tree. The body is {@link Bytes}, the UTF-8
-     * the tree is written as: a document goes to the client as it was
-     * written, with no string between the tree and the socket. A test reads it
-     * back with {@code new String(((WebResponse.Bytes) response.body()).data(), UTF_8)}.
+     * A JSON document built as a tree. The body is {@link Json}, written as
+     * UTF-8 when the answer goes out: a document goes to the client as it was
+     * written, with no string and no copy between the tree and the socket. A
+     * test reads it back with {@code ((WebResponse.Json<?>) response.body()).toJson()}.
      */
     public static WebResponse json(JsonValue value) {
-        return of(new Bytes(value.toJsonBytes())).contentType("application/json");
+        return of(new Json<>(Objects.requireNonNull(value, "value"), TREE)).contentType("application/json");
     }
 
-    /** A value written as JSON through its writer, straight into the bytes the body carries. */
+    /**
+     * A value written as JSON through its writer, when the answer goes out. The
+     * body is {@link Json}, which says when that is and what it means for a
+     * value changed afterwards.
+     */
     public static <T> WebResponse json(T value, JsonWriter<T> writer) {
-        return of(new Bytes(writer.toJsonBytes(value))).contentType("application/json");
+        return of(new Json<>(value, writer)).contentType("application/json");
     }
+
+    /** The writer of a tree: the tree is its own mapping. */
+    private static final JsonWriter<JsonValue> TREE = (tree, out) -> out.value(tree);
 
     /**
      * A JSON array written one element at a time, for an answer too big to hold

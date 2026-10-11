@@ -27,6 +27,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `silk-json`: `JsonReader.object(fromObject)` builds a reader of a JSON object from a function of its `JsonObject`, so a reader calls `asObject()` once rather than once per field.
 - `silk-json`: `JsonOutput` and `JsonInput`, the byte-level engine every JSON goes through.
   A `JsonOutput` writes UTF-8 straight into a buffer, in memory or to a stream, through `object()`, `array()`, `end()`, `put`, `name`, `value`, `values`, and `newline()`.
+  An in-memory one answers `toBytes()`, or `length()` and `writeTo(stream)` followed by `release()`, which send the document from the buffer with no copy of it.
   A `JsonInput` reads a document's bytes one value at a time, through `object()`, `array()`, `nextKey()`, `nextKeyIs`, `keyHead()`, `nextElement()`, `keyIs`, `key()`, the `read` methods, `readValue()`, `skipValue()`, and `end()`, and builds no string of the document first.
   `JsonKey.of(name)` encodes a member name once for both.
 - `silk-json`: `JsonWriter.tree(toTree)`, `JsonReader.tree(fromTree)`, `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, and `reader.fromJsonBytes(utf8)`.
@@ -74,6 +75,9 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `spider-silk-core`: `StaticFiles.hostedPath(...)` throws `IllegalArgumentException` for a `*`.
   It takes a prefix, and `hostedPath("/assets/*")` used to answer every file under it with 404.
 - `spider-silk-core`: `WebResponse.json(String)` is `WebResponse.rawJson(String)`.
+- `spider-silk-core`: `WebResponse.json(value, writer)` and `json(JsonValue)` answer with a `WebResponse.Json` body, which holds the value and its writer, where they answered with `Text`.
+  The servlet writes the document into the thread's buffer once every filter has answered, while exception handling still applies, and sends that buffer with no copy of it.
+  A test that cast a JSON body to `Text` reads it with `((WebResponse.Json<?>) response.body()).toJson()`, and a `switch` over `Body` gains a `Json` case.
 - `spider-silk-core`: `WebResponse.template(name, Map)` is `WebResponse.template(name, Model)`, and `WebResponse.Template` is `Template(String name, Model model)`.
   A model built with `Map.of` becomes `Model.of` with the same arguments, and a `HashMap` filled with `put` becomes a `Model` grown with `with`.
 - `spider-silk-core`: `TemplateRenderer.render(template, model, out)` takes a `Model` instead of a `Map`.
