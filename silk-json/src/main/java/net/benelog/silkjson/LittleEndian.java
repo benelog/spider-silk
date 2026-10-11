@@ -41,6 +41,10 @@ final class LittleEndian {
         return (int) INT.get(bytes, index);
     }
 
+    static void putInt(byte[] bytes, int index, int value) {
+        INT.set(bytes, index, value);
+    }
+
     /**
      * The high bit of each byte in the word that a JSON string does not hold
      * as itself: a quote, a backslash, a control character, or a byte of a

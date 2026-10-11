@@ -1,7 +1,11 @@
 package net.benelog.silkjson.processor;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
@@ -30,6 +34,14 @@ final class CodecSource {
     private static final Set<String> TIME_PLAIN = Set.of("java.time.Duration", "java.time.Period");
     private static final Set<String> LISTS = Set.of("java.util.List", "java.util.Collection", "java.lang.Iterable");
     private static final Set<String> SETS = Set.of("java.util.Set");
+
+    /**
+     * The most readable properties the read tries in a chain, and the most it
+     * switches on the head of a key for. A wider type would bring its read
+     * near the size the JIT compiler gives up at, 8000 bytes of bytecode.
+     */
+    private static final int CHAIN_MAX = 32;
+    private static final int SWITCH_MAX = 64;
 
     private final BoundType type;
     private final StringBuilder helpers = new StringBuilder();
@@ -110,8 +122,7 @@ final class CodecSource {
         String key = "K_" + property.name;
         TypeMirror type = property.type;
         if (type.getKind().isPrimitive()) {
-            out.append("        out.name(").append(key).append(");\n");
-            out.append("        ").append(writeValue(type, getter, property, 2)).append("\n");
+            out.append("        ").append(writeMember(key, type, getter, property, 2)).append("\n");
             return;
         }
         String local = "p_" + property.name;
@@ -161,12 +172,31 @@ final class CodecSource {
             return;
         }
         out.append("        if (").append(present).append(") {\n");
-        out.append("            out.name(").append(key).append(");\n");
-        out.append("            ").append(writeValue(written, expr, property, 3)).append("\n");
+        out.append("            ").append(writeMember(key, written, expr, property, 3)).append("\n");
         if (property.nillable) {
             out.append("        } else {\n            out.putNull(").append(key).append(");\n");
         }
         out.append("        }\n");
+    }
+
+    /**
+     * Statements writing a member whose value is known not to be null: one
+     * {@code put} for a primitive, a boxed primitive, or a string, which the
+     * output writes with one check of its state, and the key's name and the
+     * value for the rest.
+     */
+    private String writeMember(String key, TypeMirror type, String expr, @Nullable Property property, int indent) {
+        boolean fused = switch (type.getKind()) {
+            case BOOLEAN, BYTE, SHORT, INT, LONG, FLOAT, DOUBLE -> true;
+            case DECLARED -> Set.of("java.lang.String", "java.lang.Boolean", "java.lang.Integer", "java.lang.Long",
+                    "java.lang.Short", "java.lang.Byte", "java.lang.Double", "java.lang.Float")
+                    .contains(TypeNames.qualifiedName((DeclaredType) type));
+            default -> false;
+        };
+        if (fused) {
+            return "out.put(" + key + ", " + expr + ");";
+        }
+        return "out.name(" + key + ");\n" + pad(indent) + writeValue(type, expr, property, indent);
     }
 
     /** A statement writing a value, known not to be null, of the type as the next value. */
@@ -272,10 +302,30 @@ final class CodecSource {
         if (readable.isEmpty()) {
             out.append("        while (in.nextKey()) {\n            in.skipValue();\n        }\n");
         } else {
+            if (readable.size() <= CHAIN_MAX) {
+                // A document written from this declaration has its keys in
+                // this order, so they are tried in place one after another
+                // first, each read with no switch to go through; the first key
+                // out of that order leaves the chain for the loop below.
+                out.append("        int key;\n");
+                out.append("        chain: {\n");
+                for (Property property : readable) {
+                    out.append("            if (!in.nextKeyIs(K_").append(property.name).append(")) {\n");
+                    out.append("                key = keyIndex(in);\n");
+                    out.append("                break chain;\n");
+                    out.append("            }\n");
+                    StringBuilder body = new StringBuilder();
+                    readProperty(body, property);
+                    out.append(body.toString().indent(-4));
+                }
+                out.append("            key = keyIndex(in);\n");
+                out.append("        }\n");
+            } else {
+                out.append("        int key = in.nextKeyIs(K_").append(readable.get(0).name).append(") ? 0 : keyIndex(in);\n");
+            }
             // A case reads one property and tries the key declared after it in
             // place, which a document written from this declaration has there;
             // any other key goes through keyIndex.
-            out.append("        int key = in.nextKeyIs(K_").append(readable.get(0).name).append(") ? 0 : keyIndex(in);\n");
             out.append("        while (key != -1) {\n");
             out.append("            switch (key) {\n");
             for (int i = 0; i < readable.size(); i++) {
@@ -339,15 +389,86 @@ final class CodecSource {
         out.append("    }\n\n");
     }
 
-    /** The helper the read goes to for a key out of the declared order: the key's index among the readable properties, -2 for a key it does not know, or -1 at the end of the object. */
+    /**
+     * The helper the read goes to for a key out of the declared order: the
+     * key's index among the readable properties, -2 for a key it does not
+     * know, or -1 at the end of the object. The first four bytes of the member
+     * pick the keys that can be there, which are tried in place; a member they
+     * pick none for, or written another way, with whitespace or an escape, is
+     * scanned and compared with each key.
+     */
     private void keyIndexMethod(List<Property> readable) {
         helpers.append("    private static int keyIndex(").append(JSON).append("JsonInput in) {\n");
+        Map<Integer, List<Integer>> heads = readable.size() <= SWITCH_MAX ? heads(readable) : Map.of();
+        if (!heads.isEmpty()) {
+            helpers.append("        switch (in.keyHead()) {\n");
+            for (Map.Entry<Integer, List<Integer>> head : heads.entrySet()) {
+                helpers.append("            case ").append(String.format("0x%08x", head.getKey())).append(" -> {\n");
+                for (int i : head.getValue()) {
+                    helpers.append("                if (in.nextKeyIs(K_").append(readable.get(i).name).append(")) {\n");
+                    helpers.append("                    return ").append(i).append(";\n                }\n");
+                }
+                helpers.append("            }\n");
+            }
+            helpers.append("            default -> {\n                // the end of the object, or a key none of these start with\n            }\n");
+            helpers.append("        }\n");
+        }
         helpers.append("        if (!in.nextKey()) {\n            return -1;\n        }\n");
         for (int i = 0; i < readable.size(); i++) {
             helpers.append("        if (in.keyIs(K_").append(readable.get(i).name).append(")) {\n");
             helpers.append("            return ").append(i).append(";\n        }\n");
         }
         helpers.append("        return -2;\n    }\n\n");
+    }
+
+    /**
+     * The properties by the first four bytes of their member as the output
+     * writes it, in both its forms: the quote and three bytes of the key for
+     * the first member, and the comma, the quote, and two bytes for the rest.
+     * The two forms never meet, one starting with a quote and the other with a
+     * comma, but two keys can share a form's head, and are then tried in
+     * declaration order. A key written with an escape, or too short to fill
+     * the four bytes, has no head and is left to the scan.
+     */
+    private static Map<Integer, List<Integer>> heads(List<Property> readable) {
+        Map<Integer, List<Integer>> heads = new TreeMap<>();
+        for (int i = 0; i < readable.size(); i++) {
+            String name = readable.get(i).jsonName;
+            if (!plain(name)) {
+                continue;
+            }
+            byte[] utf8 = name.getBytes(StandardCharsets.UTF_8);
+            byte[] first = new byte[utf8.length + 3];
+            first[0] = '"';
+            System.arraycopy(utf8, 0, first, 1, utf8.length);
+            first[utf8.length + 1] = '"';
+            first[utf8.length + 2] = ':';
+            if (first.length < 4) {
+                continue;
+            }
+            byte[] next = new byte[first.length + 1];
+            next[0] = ',';
+            System.arraycopy(first, 0, next, 1, first.length);
+            heads.computeIfAbsent(head(first), h -> new ArrayList<>()).add(i);
+            heads.computeIfAbsent(head(next), h -> new ArrayList<>()).add(i);
+        }
+        return heads;
+    }
+
+    /** Whether the output writes the name as its own UTF-8, with no escape: no quote, backslash, control character, or surrogate. */
+    private static boolean plain(String name) {
+        for (int i = 0; i < name.length(); i++) {
+            char c = name.charAt(i);
+            if (c == '"' || c == '\\' || c < 0x20 || Character.isSurrogate(c)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** The first four bytes as one int, the first of them the low byte, as {@code JsonInput.keyHead()} reads them. */
+    private static int head(byte[] bytes) {
+        return (bytes[0] & 0xFF) | (bytes[1] & 0xFF) << 8 | (bytes[2] & 0xFF) << 16 | (bytes[3] & 0xFF) << 24;
     }
 
     /** Whether the read keeps a flag for having seen the property: a required primitive, or one set after creation. */

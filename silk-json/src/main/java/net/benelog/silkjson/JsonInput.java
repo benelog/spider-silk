@@ -45,7 +45,8 @@ import org.jspecify.annotations.Nullable;
  * the quotes are then the string. A key is compared with a {@link JsonKey} a
  * word at a time, and {@link #nextKeyIs} compares the key a reader expects
  * next where it stands, quotes and colon included, so a document in the order
- * a codec declares has none of its keys scanned.
+ * a codec declares has none of its keys scanned. {@link #keyHead} lets a
+ * codec pick the keys to try that way for a document in another order.
  */
 public final class JsonInput {
 
@@ -263,6 +264,23 @@ public final class JsonInput {
         return true;
     }
 
+    /**
+     * The four bytes where the next member stands, the first of them the low
+     * byte, or 0 when fewer than four are left. A member as {@link JsonOutput}
+     * writes it starts with its quote and the first bytes of its key, or with
+     * a comma, the quote, and the first two; a generated codec switches on
+     * this to pick the keys worth trying with {@link #nextKeyIs}, so the keys
+     * of a document in an order of its own are found with no scan either.
+     * Nothing is read: the input stays where it is.
+     */
+    public int keyHead() {
+        if (kind != OBJECT) {
+            throw new IllegalStateException("keyHead() looks into an object: call object() first");
+        }
+        int p = pos;
+        return p <= in.length - 4 ? LittleEndian.getInt(in, p) : 0;
+    }
+
     /** Whether the words of a form past its first two are the bytes 16 places after that index and on. */
     private boolean restAt(int p, long[] words, int length) {
         byte[] in = this.in;
@@ -421,7 +439,7 @@ public final class JsonInput {
     /** The key {@link #nextKey()} stopped at, as a string. A key that repeats across objects is the same string each time. */
     public String key() {
         if (keyEscaped) {
-            return decode(keyStart);
+            return decode(keyStart, keyStart);
         }
         int start = keyStart;
         int length = keyEnd - start;
@@ -465,21 +483,28 @@ public final class JsonInput {
 
     /**
      * A string past its first byte that is not plain ASCII. One with an
-     * escape and only Latin-1 characters is resolved into bytes, and one with
-     * characters outside ASCII and no escape is checked as UTF-8 and decoded by
-     * the JDK; a string with both, or with a fault, is decoded a character at
-     * a time, which also says where the fault is.
+     * escape and only Latin-1 characters is resolved into bytes; one with a
+     * character outside ASCII, or with both, is decoded a character at a time
+     * into {@link #chars}, checked as UTF-8 on the way, which also says where
+     * a fault is. Decoded once that way, it is faster than checking the bytes
+     * and having the JDK decode them again, and the plain bytes before the
+     * first other one are widened with no check.
      */
     private String readStringSlow(int start, int at) {
         byte[] in = this.in;
+        int plainTo = start;
         if (at < in.length) {
             byte b = in[at];
-            String value = b == '\\' ? unescape(start) : b < 0 ? utf8(start, at) : null;
-            if (value != null) {
-                return value;
+            if (b == '\\') {
+                String value = unescape(start);
+                if (value != null) {
+                    return value;
+                }
+            } else {
+                plainTo = at;
             }
         }
-        String value = decode(start);
+        String value = decode(start, plainTo);
         pos = stringEnd;
         return value;
     }
@@ -879,52 +904,33 @@ public final class JsonInput {
     }
 
     /**
-     * A string with a character outside ASCII, from its first byte, checked as
-     * UTF-8 as far as its closing quote and then decoded by the JDK, which
-     * finds nothing to replace. Answers null at an escape, which leaves the
-     * string to {@link #decode}.
+     * The characters of a string from its first byte, decoded a character at
+     * a time, the plain ASCII bytes before the second index already known to
+     * be such; {@link #stringEnd} is left after the closing quote.
      */
-    private @Nullable String utf8(int start, int at) {
-        byte[] in = this.in;
-        int p = at;
-        while (true) {
-            if (p >= in.length) {
-                throw errorAt(p, "Unexpected end of input");
-            }
-            byte b = in[p];
-            if (b == '"') {
-                pos = p + 1;
-                return new String(in, start, p - start, StandardCharsets.UTF_8);
-            }
-            if (b < 0) {
-                do {
-                    p += sequenceLength(codePoint(p));
-                } while (p < in.length && in[p] < 0);
-            } else if (b == '\\') {
-                return null;
-            } else {
-                throw unescapedControlCharacter(p, b);
-            }
-            p = plainRun(p);
-        }
-    }
-
-    /** The characters of a string from its first byte, decoded a character at a time; {@link #stringEnd} is left after the closing quote. */
-    private String decode(int from) {
-        stringEnd = decodeChars(from);
+    private String decode(int from, int plainTo) {
+        stringEnd = decodeChars(from, plainTo);
         return new String(chars, 0, stringLength);
     }
 
     /**
      * Decodes a string from its first byte to its closing quote into
-     * {@link #chars}, checking every escape and every multi-byte sequence.
-     * Answers the index after the closing quote.
+     * {@link #chars}, checking every escape and every multi-byte sequence past
+     * the run of plain bytes that ends at the second index, and widening that
+     * run as it is. Answers the index after the closing quote.
      */
-    private int decodeChars(int from) {
+    private int decodeChars(int from, int plainTo) {
         byte[] in = this.in;
         char[] chars = this.chars;
-        int n = 0;
-        int p = from;
+        int n = plainTo - from;
+        if (chars.length < n + 2) {
+            chars = new char[Math.max(64, n * 2)];
+            this.chars = chars;
+        }
+        for (int i = 0; i < n; i++) {
+            chars[i] = (char) in[from + i];
+        }
+        int p = plainTo;
         while (true) {
             if (p >= in.length) {
                 throw errorAt(p, "Unexpected end of input");
@@ -938,15 +944,26 @@ public final class JsonInput {
                 stringLength = n;
                 return p + 1;
             }
-            if (b == '\\') {
-                chars[n++] = (char) escape(p);
-                p += in[p + 1] == 'u' ? 6 : 2;
-            } else if (b >= 0) {
-                if (b < 0x20) {
-                    throw unescapedControlCharacter(p, b);
+            if (b >= 0x20) {
+                if (b == '\\') {
+                    chars[n++] = (char) escape(p);
+                    p += in[p + 1] == 'u' ? 6 : 2;
+                } else {
+                    chars[n++] = (char) b;
+                    p++;
                 }
-                chars[n++] = (char) b;
-                p++;
+            } else if (b >= 0) {
+                throw unescapedControlCharacter(p, b);
+            } else if ((b & 0xF0) == 0xE0 && p + 2 < in.length) {
+                // Three bytes, the commonest sequence outside Latin-1: Hangul, CJK, and most punctuation.
+                int b1 = in[p + 1];
+                int b2 = in[p + 2];
+                int c = ((b & 0x0F) << 12) | ((b1 & 0x3F) << 6) | (b2 & 0x3F);
+                if ((b1 & 0xC0) != 0x80 || (b2 & 0xC0) != 0x80 || c < 0x800 || (c >= 0xD800 && c <= 0xDFFF)) {
+                    throw malformed(p);
+                }
+                chars[n++] = (char) c;
+                p += 3;
             } else {
                 int codePoint = codePoint(p);
                 p += sequenceLength(codePoint);

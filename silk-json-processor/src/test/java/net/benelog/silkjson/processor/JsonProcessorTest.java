@@ -70,6 +70,42 @@ class JsonProcessorTest {
                 .doesNotContain("reflect");
     }
 
+    /** The chain takes the declared order, the switch on a key's head any other, and the scan a key written another way. */
+    @Test
+    void keysAreFoundInAnyOrderAndHoweverTheyAreWritten() throws Exception {
+        Compilation.Result result = compile(Map.of("example.Card", "package example;" + IMPORTS + """
+                @JsonBound
+                public record Card(long id, String desc, String description, @JsonbProperty("한글") @Nullable String korean,
+                        @JsonbProperty("a") int a) {
+                }
+                """));
+        JsonCodec<Object> card = codec(result, "example.CardJson");
+        String expected = "Card[id=7, desc=d, description=long, korean=값, a=3]";
+
+        for (String json : new String[] {
+                "{\"id\":7,\"desc\":\"d\",\"description\":\"long\",\"한글\":\"값\",\"a\":3}",
+                "{\"a\":3,\"한글\":\"값\",\"description\":\"long\",\"desc\":\"d\",\"id\":7}",
+                "{\"description\":\"long\",\"id\":7,\"descr\":0,\"a\":3,\"de\":[1],\"desc\":\"d\",\"한\":1,\"한글\":\"값\"}",
+                "{ \"a\" : 3 , \"id\" : 7 , \"desc\" : \"d\" , \"description\" : \"long\" , \"한글\" : \"값\" }",
+                "{\"\\u0069d\":7,\"desc\":\"d\",\"descriptio\\u006e\":\"long\",\"\\ud55c글\":\"값\",\"a\":3}",
+                "{\"id\":7,\"desc\":\"d\",\"description\":\"long\",\"한글\":\"값\",\"a\":3,\"unknown\":{\"id\":1}}",
+        }) {
+            assertThat(card.fromJson(json).toString()).as(json).isEqualTo(expected);
+        }
+        Object read = card.fromJson("{\"id\":7,\"desc\":\"d\",\"description\":\"long\",\"한글\":\"값\",\"a\":3}");
+        assertThat(card.toJson(card.fromJson(card.toJson(read)))).isEqualTo(card.toJson(read));
+        assertThatThrownBy(() -> card.fromJson("{\"a\":3,\"desc\":\"d\",\"description\":\"long\"}"))
+                .hasMessage("Missing key in JSON object: id");
+
+        String source = result.generated("example.CardJson");
+        assertThat(source).contains("break chain;")
+                .contains("case 0x6469222c -> {") // ,"id
+                .contains("case 0x22646922 -> {") // "id"
+                // ,"de: two keys share the head, and are tried in declaration order
+                .contains("case 0x6564222c -> {\n                if (in.nextKeyIs(K_desc)) {\n                    return 1;\n"
+                        + "                }\n                if (in.nextKeyIs(K_description)) {\n                    return 2;");
+    }
+
     @Test
     void nestedTypesCollectionsOptionalsEnumsTimesAndNumbersAreBound() throws Exception {
         Compilation.Result result = compile(Map.of(

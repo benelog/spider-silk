@@ -424,8 +424,8 @@ class JsonOutputTest {
     @Test
     void stringsOfEveryLengthNearAWordAreWrittenAsTheReferenceWritesThem() {
         List<String> strings = new ArrayList<>();
-        for (int length : new int[] {0, 1, 2, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65}) {
-            String plain = "abcdefghijklmnopqrstuvwxyz0123456789".repeat(2).substring(0, length);
+        for (int length : new int[] {0, 1, 2, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129}) {
+            String plain = "abcdefghijklmnopqrstuvwxyz0123456789".repeat(4).substring(0, length);
             strings.add(plain);
             for (String piece : PIECES) {
                 strings.add(piece.repeat(length));
@@ -450,7 +450,9 @@ class JsonOutputTest {
     @Test
     void aStringAcrossTheEndOfTheBufferIsWrittenWhole() throws InterruptedException {
         List<String> strings = List.of("\"".repeat(40), "a\"b\\c".repeat(10), "plain text".repeat(5) + "\"",
-                "한글과 \"quotes\" 😀".repeat(4), "\n\u0001".repeat(30));
+                "한글과 \"quotes\" 😀".repeat(4), "\n\u0001".repeat(30), "\"".repeat(80), "a\"b\\c".repeat(30),
+                "plain text".repeat(10) + "\"" + "after the quote ".repeat(6), "x".repeat(70) + "한글" + "y".repeat(70),
+                "z".repeat(100) + "\n\u0001".repeat(40));
         List<Throwable> failures = new ArrayList<>();
         Thread thread = Thread.ofVirtual().start(() -> {
             try {

@@ -5,6 +5,9 @@ import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharsetEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
@@ -40,7 +43,10 @@ import org.jspecify.annotations.Nullable;
  * takes the slower path; the loop over an array has no such path to take.
  * A quote or a backslash is escaped in that loop, and only the rare
  * characters, a control character or a character outside ASCII, leave it.
- * That loop is where a long document spends its time.
+ * That loop is where a long document spends its time. A string of 64
+ * characters or more is narrowed by the JDK's ASCII encoder instead, whose
+ * loop the compiler turns into vector instructions, and then checked a word
+ * at a time.
  */
 public final class JsonOutput {
 
@@ -71,6 +77,25 @@ public final class JsonOutput {
     }
 
     /**
+     * Each number below 1000 as its digits in the low three bytes, the first
+     * digit lowest, and how many there are in the high byte: an id or a count
+     * that small, the commonest number a document carries, goes out with one
+     * store, whose fourth byte the bytes after the number write over.
+     */
+    private static final int[] SMALL_NUMBERS = new int[1000];
+
+    static {
+        for (int i = 0; i < 1000; i++) {
+            byte[] digits = Integer.toString(i).getBytes(StandardCharsets.US_ASCII);
+            int packed = digits.length << 24;
+            for (int d = 0; d < digits.length; d++) {
+                packed |= digits[d] << (d << 3);
+            }
+            SMALL_NUMBERS[i] = packed;
+        }
+    }
+
+    /**
      * The buffer a platform thread wrote its last document into, kept for its
      * next one. A server thread answers request after request, and a buffer
      * already grown to the size of its documents is neither grown again nor
@@ -89,6 +114,13 @@ public final class JsonOutput {
     /** The buffer an output writing to a stream starts with. */
     private static final int STREAM_BUFFER = 8 * 1024;
 
+    /**
+     * The length from which a string is narrowed by the JDK's encoder rather
+     * than a character at a time. The two cost the same at about 40
+     * characters, and the encoder is ahead from there on.
+     */
+    private static final int LONG_STRING = 64;
+
     private static final int ARRAY = 0; // the open container is an array
     private static final int OBJECT = 1; // the open container is an object
     private static final int FIRST = 2; // nothing has been written into it yet
@@ -105,6 +137,11 @@ public final class JsonOutput {
 
     /** The characters of the string being written, copied out of it in one call. */
     private char[] chars = new char[32];
+
+    /** The ASCII encoder a long string is narrowed with, and its views of {@link #chars} and {@link #buf}, made with the first long string and kept while the arrays are the same. */
+    private @Nullable CharsetEncoder asciiEncoder;
+    private @Nullable CharBuffer charView;
+    private @Nullable ByteBuffer byteView;
 
     /**
      * The state of the container being written, a field the compiler keeps
@@ -217,16 +254,7 @@ public final class JsonOutput {
     }
 
     public JsonOutput name(JsonKey key) {
-        int current = state;
-        if (current == OBJECT) {
-            state = OBJECT | NAMED;
-            member(key.next0, key.next1, key.next, key.nextLength); // the comma comes with the key
-        } else if (current == (OBJECT | FIRST)) {
-            state = OBJECT | NAMED;
-            member(key.first0, key.first1, key.first, key.firstLength);
-        } else {
-            throw misplacedName(current);
-        }
+        memberKey(key, OBJECT | NAMED);
         return this;
     }
 
@@ -269,24 +297,53 @@ public final class JsonOutput {
         return name(key).nullValue();
     }
 
+    /**
+     * A string member, or JSON null for a null string. This put and those of
+     * a long, a double, a float, and a boolean under a {@link JsonKey} check
+     * the state once and write the key and then the value, with no named state
+     * in between: a generated codec writes most members through them.
+     */
     public JsonOutput put(JsonKey key, @Nullable String value) {
-        return name(key).value(value);
+        memberKey(key, OBJECT);
+        if (value == null) {
+            word(NULL, 4);
+        } else {
+            string(value);
+        }
+        return this;
     }
 
     public JsonOutput put(JsonKey key, long value) {
-        return name(key).value(value);
+        memberKey(key, OBJECT);
+        number(value);
+        return this;
     }
 
+    /** Throws {@link JsonException} for NaN and for an infinity, before the key is written. */
     public JsonOutput put(JsonKey key, double value) {
-        return name(key).value(value);
+        Json.finite(value);
+        memberKey(key, OBJECT);
+        doubleValue(value);
+        return this;
     }
 
+    /** Throws {@link JsonException} for NaN and for an infinity, before the key is written. */
     public JsonOutput put(JsonKey key, float value) {
-        return name(key).value(value);
+        Json.finite(value);
+        memberKey(key, OBJECT);
+        ensure(Schubfach.MAX_LENGTH);
+        pos = Schubfach.write(value, buf, pos);
+        return this;
     }
 
     public JsonOutput put(JsonKey key, boolean value) {
-        return name(key).value(value);
+        memberKey(key, OBJECT);
+        if (value) {
+            word(TRUE, 4);
+        } else {
+            word(FALSE, 5);
+        }
+        return this;
     }
 
     public JsonOutput put(JsonKey key, @Nullable JsonValue value) {
@@ -639,6 +696,10 @@ public final class JsonOutput {
      */
     private void string(String s) {
         int length = s.length();
+        if (length >= LONG_STRING) {
+            longString(s, length);
+            return;
+        }
         char[] chars = this.chars;
         if (chars.length < length) {
             chars = new char[Math.max(length, chars.length * 2)];
@@ -679,12 +740,130 @@ public final class JsonOutput {
     }
 
     /**
+     * A string of at least {@link #LONG_STRING} characters. The JDK's ASCII
+     * encoder narrows its characters into the buffer, in a loop the compiler
+     * turns into vector instructions, and stops at the first one outside
+     * ASCII; the bytes it wrote are then checked a word at a time for a quote,
+     * a backslash, or a control character. The plain run before the first of
+     * these is written as it stands, an escape is written where it is found,
+     * and a character outside ASCII leaves the rest of the string to
+     * {@link #rest}. Two passes over the string cost less than one character
+     * at a time once a string is this long.
+     */
+    private void longString(String s, int length) {
+        char[] chars = this.chars;
+        if (chars.length < length) {
+            chars = new char[Math.max(length, chars.length * 2)];
+            this.chars = chars;
+        }
+        s.getChars(0, length, chars, 0);
+        ensure(length + 2);
+        buf[pos++] = '"';
+        int i = 0;
+        while (i < length) {
+            int narrowed = narrow(chars, i, length);
+            int plain = plainBytes(buf, pos, narrowed);
+            pos += plain;
+            i += plain;
+            if (i == length) {
+                break;
+            }
+            char c = chars[i];
+            if (c >= 0x80 || length - i < LONG_STRING) {
+                rest(chars, i, length);
+                break;
+            }
+            ensure(length - i + 6); // the escape, and every character after it as one byte, and the closing quote
+            escapeAscii(c);
+            i++;
+        }
+        ensure(1);
+        buf[pos++] = '"';
+    }
+
+    /**
+     * Narrows the characters from that index into the buffer at {@link #pos},
+     * as far as the first one outside ASCII, and answers how many it narrowed.
+     * The position does not move: the caller decides how many of the bytes
+     * to keep. The buffer has room for every character left.
+     */
+    @SuppressWarnings({"ReferenceEquality", "ByteBufferBackingArray"}) // the same arrays, which the views wrap whole
+    private int narrow(char[] chars, int from, int to) {
+        CharsetEncoder encoder = asciiEncoder;
+        if (encoder == null) {
+            encoder = StandardCharsets.US_ASCII.newEncoder();
+            asciiEncoder = encoder;
+        }
+        CharBuffer in = charView;
+        if (in == null || in.array() != chars) {
+            in = CharBuffer.wrap(chars);
+            charView = in;
+        }
+        ByteBuffer out = byteView;
+        if (out == null || out.array() != buf) {
+            out = ByteBuffer.wrap(buf);
+            byteView = out;
+        }
+        in.limit(to).position(from);
+        out.limit(out.capacity()).position(pos);
+        encoder.encode(in, out, false);
+        return in.position() - from;
+    }
+
+    /** How many of so many ASCII bytes at that index come before the first quote, backslash, or control character. */
+    private static int plainBytes(byte[] buf, int from, int count) {
+        int p = from;
+        int end = from + count;
+        while (p <= end - 8) {
+            long special = LittleEndian.special(LittleEndian.getLong(buf, p));
+            if (special != 0) {
+                return p - from + LittleEndian.plainBytes(special);
+            }
+            p += 8;
+        }
+        while (p < end) {
+            byte b = buf[p];
+            if (b < 0x20 || b == '"' || b == '\\') {
+                break;
+            }
+            p++;
+        }
+        return p - from;
+    }
+
+    /** An ASCII character a JSON string escapes, with room for it kept. */
+    private void escapeAscii(char c) {
+        byte escape = switch (c) {
+            case '"' -> '"';
+            case '\\' -> '\\';
+            case '\n' -> 'n';
+            case '\r' -> 'r';
+            case '\t' -> 't';
+            case '\b' -> 'b';
+            case '\f' -> 'f';
+            default -> 0;
+        };
+        if (escape == 0) {
+            buf[pos++] = '\\';
+            buf[pos++] = 'u';
+            buf[pos++] = '0';
+            buf[pos++] = '0';
+            buf[pos++] = HEX[c >> 4];
+            buf[pos++] = HEX[c & 0xF];
+        } else {
+            buf[pos++] = '\\';
+            buf[pos++] = escape;
+        }
+    }
+
+    /**
      * The rest of a string from its first control character or character outside ASCII.
      * Three bytes are reserved for every character left, which covers all but
-     * a backslash-u escape; that one reserves its own.
+     * a backslash-u escape, which reserves its own, and one more for the
+     * fourth byte of the store a three-byte character goes out with.
      */
     private void rest(char[] chars, int from, int length) {
-        ensure((length - from) * 3);
+        ensure((length - from) * 3 + 1);
         byte[] buf = this.buf;
         int pos = this.pos;
         for (int i = from; i < length; i++) {
@@ -717,9 +896,9 @@ public final class JsonOutput {
                 buf[pos++] = (byte) (0xC0 | (c >> 6));
                 buf[pos++] = (byte) (0x80 | (c & 0x3F));
             } else if (!Character.isSurrogate(c)) {
-                buf[pos++] = (byte) (0xE0 | (c >> 12));
-                buf[pos++] = (byte) (0x80 | ((c >> 6) & 0x3F));
-                buf[pos++] = (byte) (0x80 | (c & 0x3F));
+                // 1110xxxx 10xxxxxx 10xxxxxx as the low three bytes of one store, the first lowest
+                LittleEndian.putInt(buf, pos, (c >> 12) | ((c << 2) & 0x3F00) | ((c << 16) & 0x3F0000) | 0x8080E0);
+                pos += 3;
             } else if (Character.isHighSurrogate(c) && i + 1 < length && Character.isLowSurrogate(chars[i + 1])) {
                 int codePoint = Character.toCodePoint(c, chars[++i]); // four bytes for two characters
                 buf[pos++] = (byte) (0xF0 | (codePoint >> 18));
@@ -738,7 +917,7 @@ public final class JsonOutput {
 
     /** A control character or a lone surrogate as {@code \}{@code u} and four hex digits, with room kept for the characters after it. */
     private void unicodeEscape(char c, int charactersLeft) {
-        ensure(6 + charactersLeft * 3);
+        ensure(7 + charactersLeft * 3);
         buf[pos++] = '\\';
         buf[pos++] = 'u';
         buf[pos++] = HEX[c >> 12];
@@ -749,6 +928,13 @@ public final class JsonOutput {
 
     /** A whole number as {@link Long#toString(long)} writes it, two digits at a time, with no string in between. */
     private void number(long value) {
+        if (value >= 0 && value < 1000) {
+            ensure(4);
+            int packed = SMALL_NUMBERS[(int) value];
+            LittleEndian.putInt(buf, pos, packed);
+            pos += packed >>> 24;
+            return;
+        }
         if (value == Long.MIN_VALUE) {
             ascii(Long.toString(value)); // the one long whose magnitude is not a long
             return;
@@ -794,18 +980,33 @@ public final class JsonOutput {
         return 19;
     }
 
-    /** A key as it is written, with two stores when it fits in two words, which is most keys. */
-    private void member(long first, long second, long[] words, int length) {
-        if (length > 16) {
-            words(words, length);
-            return;
+    /**
+     * A member's key as it is written, comma and colon included, and the state
+     * after it: {@code NAMED} when a value is still to come, or the plain
+     * object state when the caller writes the value itself. The key goes out
+     * with two stores when it fits in two words, which is most keys. The form
+     * is picked with no branch around a call, so there is one call to inline;
+     * the state moves after the room is made, so a failure leaves no comma
+     * owed.
+     */
+    private void memberKey(JsonKey key, int after) {
+        int current = state;
+        boolean next = current == OBJECT;
+        if (!next && current != (OBJECT | FIRST)) {
+            throw misplacedName(current);
         }
-        ensure(16);
-        byte[] buf = this.buf;
-        int at = pos;
-        LittleEndian.putLong(buf, at, first);
-        LittleEndian.putLong(buf, at + 8, second);
-        pos = at + length;
+        int length = next ? key.nextLength : key.firstLength;
+        if (length > 16) {
+            words(next ? key.next : key.first, length);
+        } else {
+            ensure(16);
+            byte[] buf = this.buf;
+            int at = pos;
+            LittleEndian.putLong(buf, at, next ? key.next0 : key.first0);
+            LittleEndian.putLong(buf, at + 8, next ? key.next1 : key.first1);
+            pos = at + length;
+        }
+        state = after;
     }
 
     /** Bytes held eight to a word, written a word at a time; what the last word holds past the length is written over by what follows. */

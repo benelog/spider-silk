@@ -173,6 +173,8 @@ class JsonInputTest {
         assertThat(string.fromJson("\"past Latin-1 by escape: \\u0100\"")).isEqualTo("past Latin-1 by escape: \u0100");
         assertThat(string.fromJson("\"an escape, then Korean: \\n한글\"")).isEqualTo("an escape, then Korean: \n한글");
         assertThat(string.fromJson("\"Korean, then an escape: 한글\\n\"")).isEqualTo("Korean, then an escape: 한글\n");
+        assertThat(string.fromJson("\"" + "x".repeat(200) + "한글\"")).isEqualTo("x".repeat(200) + "한글");
+        assertThat(string.fromJson("\"" + "한".repeat(200) + "\"")).isEqualTo("한".repeat(200));
     }
 
     /** Strings of every mix, written by JsonOutput and read back three ways: as a string, skipped, and as a tree. */
@@ -182,7 +184,7 @@ class JsonInputTest {
         String[] pieces = {"\"", "\\", "/", "\n", "\u0001", "\u001f", " ", "\u007f", "\u00e9", "\u00ff", "\u0100", "한", "😀"};
         for (int i = 0; i < 3000; i++) {
             StringBuilder text = new StringBuilder();
-            int length = random.nextInt(40);
+            int length = random.nextInt(i % 10 == 0 ? 300 : 40);
             for (int j = 0; j < length; j++) {
                 if (random.nextInt(4) == 0) {
                     text.append(pieces[random.nextInt(pieces.length)]);
@@ -216,6 +218,9 @@ class JsonInputTest {
                 {'"', (byte) 0xC3, '"'}, // truncated
                 {'"', (byte) 0x80, '"'}, // a continuation byte alone
                 {'"', (byte) 0xFF, '"'},
+                {'"', (byte) 0xE4, (byte) 0xB8, '"'}, // three bytes cut short by the quote
+                {'"', (byte) 0xE4, 'A', 'A', '"'}, // three bytes with no continuation
+                {'"', 'a', 'b', (byte) 0xE4, (byte) 0xB8}, // three bytes cut short by the end of the input
         };
         for (byte[] bytes : malformed) {
             byte[] key = new byte[bytes.length + 4];
@@ -237,6 +242,10 @@ class JsonInputTest {
                     .hasMessageContaining("Malformed UTF-8");
             assertThatThrownBy(() -> Json.parse(bytes)).isInstanceOf(JsonException.class);
         }
+        assertThatThrownBy(() -> JsonInput.of(new byte[] {'"', (byte) 0xEA, (byte) 0xB0, (byte) 0x80}).readString())
+                .as("no closing quote")
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Unexpected end of input");
         assertThat(JsonInput.of("\"\u00e9\"".getBytes(StandardCharsets.UTF_8)).readString()).isEqualTo("\u00e9");
     }
 

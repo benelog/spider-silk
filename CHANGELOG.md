@@ -27,7 +27,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `silk-json`: `JsonReader.object(fromObject)` builds a reader of a JSON object from a function of its `JsonObject`, so a reader calls `asObject()` once rather than once per field.
 - `silk-json`: `JsonOutput` and `JsonInput`, the byte-level engine every JSON goes through.
   A `JsonOutput` writes UTF-8 straight into a buffer, in memory or to a stream, through `object()`, `array()`, `end()`, `put`, `name`, `value`, `values`, and `newline()`.
-  A `JsonInput` reads a document's bytes one value at a time, through `object()`, `array()`, `nextKey()`, `nextKeyIs`, `nextElement()`, `keyIs`, `key()`, the `read` methods, `readValue()`, `skipValue()`, and `end()`, and builds no string of the document first.
+  A `JsonInput` reads a document's bytes one value at a time, through `object()`, `array()`, `nextKey()`, `nextKeyIs`, `keyHead()`, `nextElement()`, `keyIs`, `key()`, the `read` methods, `readValue()`, `skipValue()`, and `end()`, and builds no string of the document first.
   `JsonKey.of(name)` encodes a member name once for both.
 - `silk-json`: `JsonWriter.tree(toTree)`, `JsonReader.tree(fromTree)`, `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, and `reader.fromJsonBytes(utf8)`.
 - `silk-json`: `JsonOutput.value(BigDecimal)` and `value(BigInteger)` write a decimal with every digit, and `JsonInput.readNumber()` answers a number's own text.

@@ -116,6 +116,10 @@ For any other member it answers false and moves nowhere.
 `nextKey()` then reads that member.
 A generated codec tries the key it declares next this way, so a document written from the same declaration is read with none of its keys scanned.
 
+`keyHead()` answers the four bytes where the next member stands, as an `int` whose low byte is the first, and moves nowhere.
+A generated codec switches on it to pick the keys worth trying with `nextKeyIs`.
+A document that lists its keys in another order then has them found in place too, as long as it is written with no whitespace around them.
+
 `reader.fromJson(text)` and `reader.fromJsonBytes(utf8)` read a document that holds that one value and nothing after it.
 A failure names where the input stands, as in `Near character 12: Not a JSON string: a number`.
 
