@@ -20,6 +20,7 @@ import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.BenchmarkParams;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -30,7 +31,9 @@ import tools.jackson.databind.json.JsonMapper;
  * the codec generated from the record, and through Jackson and fastjson2.
  * 100 places, each with three numbers that have a fraction, measure the
  * numbers the records have none of. The same records with nothing to escape,
- * and with Korean strings, tell the paths a string can take apart.
+ * and with Korean strings, tell the paths a string can take apart. The same
+ * records with their keys in reverse order measure a document another program
+ * wrote, and records with a 200-character description measure long strings.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -43,6 +46,7 @@ public class JsonBench {
     static final List<Item> ITEMS = items();
     static final List<Item> PLAIN_ITEMS = plainItems();
     static final List<Item> KOREAN_ITEMS = koreanItems();
+    static final List<Item> LONG_ITEMS = longItems();
     static final List<Place> PLACES = places();
     static final Message MESSAGE = new Message("Hello, World!");
 
@@ -71,6 +75,16 @@ public class JsonBench {
     static final JsonWriter<List<Item>> ITEMS_TREE = JsonWriter.list(ITEM_TREE);
     static final JsonWriter<List<Item>> ITEMS_WRITER = JsonWriter.list(ITEM_WRITER);
     static final JsonReader<List<Item>> ITEMS_READER = JsonReader.list(ITEM_READER);
+
+    /** The records with their keys in reverse order, as a program that is not this codec may write them. */
+    static final JsonWriter<List<Item>> ITEMS_REVERSED = JsonWriter.list((item, out) -> out.object()
+            .put("available", item.available())
+            .put("quantity", item.quantity())
+            .put("description", item.description())
+            .put("name", item.name())
+            .put("id", item.id())
+            .end());
+
     static final JsonCodec<List<Item>> ITEMS_GENERATED = JsonCodec.list(ItemJson.CODEC);
     static final JsonCodec<List<Place>> PLACES_GENERATED = JsonCodec.list(PlaceJson.CODEC);
 
@@ -85,6 +99,39 @@ public class JsonBench {
     public void setup() {
         listBytes = ITEMS_GENERATED.toJsonBytes(ITEMS);
         placesBytes = PLACES_GENERATED.toJsonBytes(PLACES);
+    }
+
+    /**
+     * A document only the cases that read it set up, so that writing it does
+     * not train the compiler on strings the other cases never see.
+     */
+    @State(Scope.Thread)
+    public static class Document {
+
+        byte[] korean;
+        byte[] reversed;
+        byte[] longStrings;
+
+        @Setup
+        public void setup(BenchmarkParams params) {
+            String benchmark = params.getBenchmark();
+            if (benchmark.contains("Korean")) {
+                korean = checked(ITEMS_GENERATED.toJsonBytes(KOREAN_ITEMS), KOREAN_ITEMS);
+            } else if (benchmark.contains("Reversed")) {
+                reversed = checked(ITEMS_REVERSED.toJsonBytes(ITEMS), ITEMS);
+            } else if (benchmark.contains("LongString")) {
+                longStrings = checked(ITEMS_GENERATED.toJsonBytes(LONG_ITEMS), LONG_ITEMS);
+            }
+        }
+
+        /** The document, once both parsers have read it back as the records it was written from. */
+        private static byte[] checked(byte[] document, List<Item> expected) {
+            if (!ITEMS_GENERATED.fromJsonBytes(document).equals(expected)
+                    || !JSON.parseArray(document, Item.class).equals(expected)) {
+                throw new IllegalStateException("A parser read the document as other records");
+            }
+            return document;
+        }
     }
 
     private static List<Item> items() {
@@ -109,6 +156,18 @@ public class JsonBench {
         List<Item> items = new ArrayList<>();
         for (int i = 1; i <= 100; i++) {
             items.add(new Item(i, "품목-" + i, "품목 " + i + "의 설명", i * 7 % 50, i % 3 != 0));
+        }
+        return List.copyOf(items);
+    }
+
+    /** The same records with a description of 200 characters, prose with nothing to escape. */
+    private static List<Item> longItems() {
+        String prose = "A long description of the item, written the way a product page or an issue tracker "
+                + "writes one: sentences of plain text with numbers, commas, and parentheses (but no quotes) ";
+        List<Item> items = new ArrayList<>();
+        for (int i = 1; i <= 100; i++) {
+            String description = (i + ". " + prose + prose).substring(0, 200);
+            items.add(new Item(i, "item-" + i, description, i * 7 % 50, i % 3 != 0));
         }
         return List.copyOf(items);
     }
@@ -170,6 +229,48 @@ public class JsonBench {
     @Benchmark
     public byte[] writeKoreanList_fastjson2() {
         return JSON.toJSONBytes(KOREAN_ITEMS);
+    }
+
+    @Benchmark
+    public List<Item> readKoreanList_generated(Document document) {
+        return ITEMS_GENERATED.fromJsonBytes(document.korean);
+    }
+
+    @Benchmark
+    public List<Item> readKoreanList_fastjson2(Document document) {
+        return JSON.parseArray(document.korean, Item.class);
+    }
+
+    @Benchmark
+    public List<Item> readReversedList_generated(Document document) {
+        return ITEMS_GENERATED.fromJsonBytes(document.reversed);
+    }
+
+    @Benchmark
+    public List<Item> readReversedList_fastjson2(Document document) {
+        return JSON.parseArray(document.reversed, Item.class);
+    }
+
+    // ---- the same records with a description of 200 characters, 27 KB ----
+
+    @Benchmark
+    public byte[] writeLongStringList_generated() {
+        return ITEMS_GENERATED.toJsonBytes(LONG_ITEMS);
+    }
+
+    @Benchmark
+    public byte[] writeLongStringList_fastjson2() {
+        return JSON.toJSONBytes(LONG_ITEMS);
+    }
+
+    @Benchmark
+    public List<Item> readLongStringList_generated(Document document) {
+        return ITEMS_GENERATED.fromJsonBytes(document.longStrings);
+    }
+
+    @Benchmark
+    public List<Item> readLongStringList_fastjson2(Document document) {
+        return JSON.parseArray(document.longStrings, Item.class);
     }
 
     @Benchmark
