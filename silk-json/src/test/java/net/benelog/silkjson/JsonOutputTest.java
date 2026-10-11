@@ -403,7 +403,7 @@ class JsonOutputTest {
 
     /** One character, or a pair, of each kind the string writer tells apart. */
     private static final String[] PIECES = {"\"", "\\", "\n", "\r", "\t", "\b", "\f", "\u0000", "\u0001", "\u001f",
-            "\u007f", "/", "\u0080", "é", "ÿ", "\u07ff", "\u0800", "한", "\uffff", "😀", "\ud83d", "\ude00"};
+            "\u007f", "/", "?", "\u0080", "é", "ÿ", "\u0100", "\u07ff", "\u0800", "한", "\uffff", "😀", "\ud83d", "\ude00"};
 
     /** Mostly plain ASCII, as most strings are, with a character of another kind now and then. */
     private static String randomString(Random random, int length) {

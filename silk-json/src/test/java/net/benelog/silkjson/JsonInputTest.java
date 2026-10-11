@@ -117,6 +117,21 @@ class JsonInputTest {
                 .hasMessageContaining("Not a JSON string");
     }
 
+    /** Runs of whitespace of every length up to two words, of spaces and of the other three, read as the document without them. */
+    @Test
+    void whitespaceOfEveryLengthIsPassedOver() {
+        String[] kinds = {" ", "\n", "\r\n", "\t", "\n    "};
+        for (int length = 0; length <= 17; length++) {
+            for (String kind : kinds) {
+                String gap = (" ".repeat(length) + kind).repeat(length % 3 + 1);
+                String json = "{" + gap + "\"id\"" + gap + ":" + gap + "1" + gap + "," + gap + "\"tags\":" + gap + "["
+                        + gap + "\"a\"" + gap + "," + gap + "true" + gap + "]" + gap + "}" + gap;
+                JsonValue read = JsonInput.of(json).readValue();
+                assertThat(read.toJson()).as("%s", json).isEqualTo("{\"id\":1,\"tags\":[\"a\",true]}");
+            }
+        }
+    }
+
     /** Whitespace before a key, or after its comma, as a pretty printer or Python's separators write it, is passed over; a comma is still required between members and refused before the end. */
     @Test
     void nextKeyIsPassesOverWhitespaceBeforeTheKey() {
