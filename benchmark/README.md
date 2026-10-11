@@ -48,6 +48,10 @@ Close other heavy programs first: the numbers are only comparable within one run
 The `Places` cases write and read 100 places with a latitude, a longitude, and a rating each, which measures the numbers with a fraction that the records have none of.
 The `PlainList` and `KoreanList` cases write the same records through the generated codec and fastjson2, once with nothing to escape and once with Korean strings, which tells apart the paths a string can take.
 The `KoreanList`, `ReversedList`, and `LongStringList` cases read the same records in Korean, with their keys in reverse order, and with a description of 200 characters, and `writeLongStringList` writes the last of them.
+The `PythonList` and `PrettyList` cases read the same records spaced out, with the separators of Python's `json.dumps` and indented by two spaces, `BigIdList` reads them with ids of 13 and 18 digits, and `ShortStringList` with strings of no character or one.
+The `Orders` cases write and read 100 orders whose status is an enum.
+`writeList_stream` writes the records into the thread's buffer and sends them to a stream with no copy, as a JSON response body is sent, beside fastjson2's `JSON.writeTo`.
+The `fastjson2Reflect` cases run fastjson2 with `-Dfastjson2.creator=reflect`, the mode it takes in a native image, where it builds no classes at run time.
 The documents those reads take are made in a `@State` that only they use, since a document set up for every case would train the JIT compiler on strings that the other cases never see.
 
 ```bash
