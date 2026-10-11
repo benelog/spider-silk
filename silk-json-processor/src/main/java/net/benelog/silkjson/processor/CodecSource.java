@@ -77,6 +77,15 @@ final class CodecSource {
                     .append(" = ").append(JSON).append("JsonKey.of(").append(literal(property.jsonName)).append(");\n");
         }
         for (Property property : type.properties) {
+            String constants = enumOf(property);
+            if (constants != null) {
+                source.append("    private static final ").append(constants).append("[] C_").append(property.name)
+                        .append(" = ").append(constants).append(".values();\n");
+                source.append("    private static final ").append(JSON).append("JsonKey[] V_").append(property.name)
+                        .append(" = ").append(JSON).append("JsonKey.names(C_").append(property.name).append(");\n");
+            }
+        }
+        for (Property property : type.properties) {
             if (property.dateFormat != null) {
                 source.append("    private static final java.time.format.DateTimeFormatter F_").append(property.name)
                         .append(" = java.time.format.DateTimeFormatter.ofPattern(").append(literal(property.dateFormat));
@@ -180,6 +189,28 @@ final class CodecSource {
     }
 
     /**
+     * The enum a property holds, itself or in an {@code Optional}, or null: such
+     * a property has its constants and their names encoded once, {@code C_}
+     * and {@code V_}, and is written and read through them with no string.
+     */
+    private static @Nullable String enumOf(Property property) {
+        TypeMirror type = TypeNames.is(property.type, "java.util.Optional") ? TypeNames.argument(property.type, 0)
+                : property.type;
+        if (property.adapter == null && type.getKind() == TypeKind.DECLARED
+                && ((DeclaredType) type).asElement().getKind() == ElementKind.ENUM) {
+            return TypeNames.qualifiedName((DeclaredType) type);
+        }
+        return null;
+    }
+
+    /** Whether the type is the enum whose tables the property has. */
+    private static boolean isEnumOf(Property property, TypeMirror type) {
+        String constants = enumOf(property);
+        return constants != null && type.getKind() == TypeKind.DECLARED
+                && constants.equals(TypeNames.qualifiedName((DeclaredType) type));
+    }
+
+    /**
      * Statements writing a member whose value is known not to be null: one
      * {@code put} for a primitive, a boxed primitive, or a string, which the
      * output writes with one check of its state, and the key's name and the
@@ -195,6 +226,9 @@ final class CodecSource {
         };
         if (fused) {
             return "out.put(" + key + ", " + expr + ");";
+        }
+        if (property != null && isEnumOf(property, type)) {
+            return "out.put(" + key + ", V_" + property.name + "[" + expr + ".ordinal()]);";
         }
         return "out.name(" + key + ");\n" + pad(indent) + writeValue(type, expr, property, indent);
     }
@@ -323,9 +357,14 @@ final class CodecSource {
             } else {
                 out.append("        int key = in.nextKeyIs(K_").append(readable.get(0).name).append(") ? 0 : keyIndex(in);\n");
             }
-            // A case reads one property and tries the key declared after it in
-            // place, which a document written from this declaration has there;
-            // any other key goes through keyIndex.
+            // With no chain, a case reads one property and tries the key
+            // declared after it in place, which a document written from this
+            // declaration has there; any other key goes through keyIndex.
+            // After a chain, the loop runs only for a document that has left
+            // the declared order once, and goes on out of it: each key goes
+            // straight to keyIndex, rather than first failing to be the next
+            // one declared.
+            boolean predicts = readable.size() > CHAIN_MAX;
             out.append("        while (key != -1) {\n");
             out.append("            switch (key) {\n");
             for (int i = 0; i < readable.size(); i++) {
@@ -333,7 +372,7 @@ final class CodecSource {
                 StringBuilder body = new StringBuilder();
                 readProperty(body, readable.get(i));
                 out.append(body.toString().indent(4));
-                if (i + 1 < readable.size()) {
+                if (predicts && i + 1 < readable.size()) {
                     out.append("                    key = in.nextKeyIs(K_").append(readable.get(i + 1).name).append(") ? ")
                             .append(i + 1).append(" : keyIndex(in);\n");
                 } else {
@@ -647,6 +686,9 @@ final class CodecSource {
         }
         Element element = type.asElement();
         if (element.getKind() == ElementKind.ENUM) {
+            if (property != null && isEnumOf(property, type)) {
+                return "C_" + property.name + "[in.readOneOf(V_" + property.name + ")]";
+            }
             return name + ".valueOf(in.readString())";
         }
         if (name.equals("java.util.Optional")) {

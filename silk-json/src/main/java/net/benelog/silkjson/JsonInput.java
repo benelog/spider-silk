@@ -76,6 +76,18 @@ public final class JsonInput {
         1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f,
     };
 
+    /** The powers of ten below the eighth, which shift the first eight digits of a longer integer up past the rest. */
+    private static final long[] SMALL_POWERS_OF_TEN = {1, 10, 100, 1_000, 10_000, 100_000, 1_000_000, 10_000_000};
+
+    /** Each ASCII character as a string of its own, the one-character strings a document holds most. */
+    private static final String[] ASCII_STRINGS = new String[0x80];
+
+    static {
+        for (int c = 0; c < 0x80; c++) {
+            ASCII_STRINGS[c] = String.valueOf((char) c);
+        }
+    }
+
     private static final byte[] NO_BYTES = new byte[0];
     private static final char[] NO_CHARS = new char[0];
 
@@ -227,8 +239,8 @@ public final class JsonInput {
 
     /**
      * Moves to the next member when its key is that one as {@link JsonOutput}
-     * writes it, with no whitespace around it and the same escapes, and answers
-     * true; answers false and moves nowhere otherwise, which leaves the member
+     * writes it, with the same escapes and no whitespace between the key and
+     * its colon, and answers true; answers false and moves nowhere otherwise, which leaves the member
      * to {@link #nextKey()}: another key, the key written another way, or the
      * end of the object. A document written from the same declaration has its
      * keys this way, so a generated codec tries the key it declares next with
@@ -250,13 +262,54 @@ public final class JsonInput {
                     ? ((low ^ key.first0) & key.firstMask0) | ((high ^ key.first1) & key.firstMask1)
                     : ((low ^ key.next0) & key.nextMask0) | ((high ^ key.next1) & key.nextMask1);
             if (differ != 0 || (length > 16 && !restAt(p, words, length))) {
-                return false;
+                // A document spaced out, by a pretty printer or Python's
+                // separators, has whitespace before the key.
+                return ((in[p] & 0xFF) <= ' ' || (in[p + 1] & 0xFF) <= ' ') && spacedKeyIs(key, p);
             }
         } else if (!bytesAt(p, words, length)) {
             return false;
         }
         keyStart = p + length - key.firstLength + 1; // after the comma, if any, and the quote
         keyEnd = p + length - 2; // before the closing quote and the colon
+        keyEscaped = key.escaped;
+        keyAscii = key.ascii;
+        pos = p + length;
+        first = false;
+        return true;
+    }
+
+    /**
+     * {@link #nextKeyIs} for a member with whitespace before it or after its
+     * comma: the key is compared in its first form, the quote and the colon
+     * around it, where the whitespace ends. Whitespace between the key and its
+     * colon is left to {@link #nextKey()}.
+     */
+    private boolean spacedKeyIs(JsonKey key, int from) {
+        byte[] in = this.in;
+        int p = from;
+        if (!first && in[p] == ',' && in[p + 1] == ' ' && in[p + 2] == '"') {
+            p += 2; // Python's separator, one space after the comma
+        } else {
+            p = skipWhitespace(p);
+            if (!first) {
+                if (p >= in.length || in[p] != ',') {
+                    return false;
+                }
+                p = skipWhitespace(p + 1);
+            }
+        }
+        int length = key.firstLength;
+        if (p <= in.length - 16) {
+            long differ = ((LittleEndian.getLong(in, p) ^ key.first0) & key.firstMask0)
+                    | ((LittleEndian.getLong(in, p + 8) ^ key.first1) & key.firstMask1);
+            if (differ != 0 || (length > 16 && !restAt(p, key.first, length))) {
+                return false;
+            }
+        } else if (!bytesAt(p, key.first, length)) {
+            return false;
+        }
+        keyStart = p + 1;
+        keyEnd = p + length - 2;
         keyEscaped = key.escaped;
         keyAscii = key.ascii;
         pos = p + length;
@@ -476,9 +529,47 @@ public final class JsonInput {
         int end = plainRun(start);
         if (end < in.length && in[end] == '"') {
             pos = end + 1;
-            return latin1(in, start, end - start); // ASCII, so Latin-1 is UTF-8
+            int length = end - start;
+            if (length <= 1) {
+                // An empty string or a one-letter code, answered with no allocation.
+                return length == 0 ? "" : ASCII_STRINGS[in[start]];
+            }
+            return latin1(in, start, length); // ASCII, so Latin-1 is UTF-8
         }
         return readStringSlow(start, end);
+    }
+
+    /**
+     * The index of the string that comes next among those names, such as an
+     * enum's from {@link JsonKey#names}: a name written as {@link JsonOutput}
+     * writes it is compared where it stands, with no string made; one written
+     * with an escape is read as a string and then compared.
+     *
+     * @throws JsonException when the value is not a string, or none of them
+     */
+    public int readOneOf(JsonKey[] names) {
+        byte[] in = this.in;
+        int p = skipWhitespace(pos);
+        if (p <= in.length - 16) {
+            long low = LittleEndian.getLong(in, p);
+            long high = LittleEndian.getLong(in, p + 8);
+            for (int i = 0; i < names.length; i++) {
+                JsonKey name = names[i];
+                int length = name.firstLength - 1; // the quoted name, without the colon of its key form
+                if ((((low ^ name.first0) & name.valueMask0) | ((high ^ name.first1) & name.valueMask1)) == 0
+                        && (length <= 16 || restAt(p, name.first, length))) {
+                    pos = p + length;
+                    return i;
+                }
+            }
+        }
+        String value = readString();
+        for (int i = 0; i < names.length; i++) {
+            if (names[i].name().equals(value)) {
+                return i;
+            }
+        }
+        throw error("Not a name this value takes: " + shortened(value));
     }
 
     /**
@@ -531,6 +622,8 @@ public final class JsonInput {
         // The commonest case with no branch per digit: up to seven digits with
         // no leading zero, no fraction and no exponent, counted and converted
         // a word at a time.
+        int digitsFrom = p;
+        long magnitude = 0;
         if (p <= in.length - 8) {
             long word = LittleEndian.getLong(in, p);
             int digits = LittleEndian.digits(word);
@@ -541,14 +634,26 @@ public final class JsonInput {
                     long value = LittleEndian.digitsValue(word, digits);
                     return negative ? -value : value;
                 }
+            } else if (digits == 8 && (byte) word != '0' && p <= in.length - 16) {
+                // A time in milliseconds or a large id: the next word holds
+                // the digits past eight, and the loop below goes on from them.
+                magnitude = LittleEndian.digitsValue(word, 8);
+                long next = LittleEndian.getLong(in, p + 8);
+                int more = LittleEndian.digits(next);
+                if (more < 8) {
+                    magnitude = more == 0 ? magnitude
+                            : magnitude * SMALL_POWERS_OF_TEN[more] + LittleEndian.digitsValue(next, more);
+                    p += 8 + more;
+                } else {
+                    magnitude = magnitude * 100_000_000L + LittleEndian.digitsValue(next, 8);
+                    p += 16;
+                }
             }
         }
         // The common case in one pass: up to 18 digits with no leading zero,
         // no fraction and no exponent, accumulated as they are scanned.
         // Anything else takes the path that checks the whole grammar first.
-        int digitsFrom = p;
-        int stop = Math.min(in.length, p + 18);
-        long magnitude = 0;
+        int stop = Math.min(in.length, digitsFrom + 18);
         while (p < stop) {
             int digit = in[p] - '0';
             if (digit < 0 || digit > 9) {

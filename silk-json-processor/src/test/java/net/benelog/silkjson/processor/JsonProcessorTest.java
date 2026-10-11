@@ -64,7 +64,8 @@ class JsonProcessorTest {
         String source = result.generated("example.DeckJson");
         assertThat(source).contains("public final class DeckJson implements net.benelog.silkjson.JsonCodec<example.Deck>")
                 .contains("JsonKey.of(\"deck_name\")")
-                .contains("key = in.nextKeyIs(K_note) ? 2 : keyIndex(in);")
+                .contains("if (!in.nextKeyIs(K_note)) {")
+                .doesNotContain("? 2 : keyIndex(in);")
                 .contains("if (in.keyIs(K_name)) {")
                 .contains("return new example.Deck(p_id, p_name, p_note, p_active);")
                 .doesNotContain("reflect");
@@ -89,6 +90,9 @@ class JsonProcessorTest {
                 "{ \"a\" : 3 , \"id\" : 7 , \"desc\" : \"d\" , \"description\" : \"long\" , \"한글\" : \"값\" }",
                 "{\"\\u0069d\":7,\"desc\":\"d\",\"descriptio\\u006e\":\"long\",\"\\ud55c글\":\"값\",\"a\":3}",
                 "{\"id\":7,\"desc\":\"d\",\"description\":\"long\",\"한글\":\"값\",\"a\":3,\"unknown\":{\"id\":1}}",
+                "{\"id\": 7, \"desc\": \"d\", \"description\": \"long\", \"한글\": \"값\", \"a\": 3}",
+                "{\n  \"id\": 7,\n  \"desc\": \"d\",\n  \"description\": \"long\",\n  \"한글\": \"값\",\n  \"a\": 3\n}",
+                "{\n  \"a\": 3,\n  \"한글\": \"값\",\n  \"description\": \"long\",\n  \"desc\": \"d\",\n  \"id\": 7\n}",
         }) {
             assertThat(card.fromJson(json).toString()).as(json).isEqualTo(expected);
         }
@@ -104,6 +108,28 @@ class JsonProcessorTest {
                 // ,"de: two keys share the head, and are tried in declaration order
                 .contains("case 0x6564222c -> {\n                if (in.nextKeyIs(K_desc)) {\n                    return 1;\n"
                         + "                }\n                if (in.nextKeyIs(K_description)) {\n                    return 2;");
+    }
+
+    /** A type too wide for the chain reads in its loop, which tries the key declared next in place first. */
+    @Test
+    void aWideTypeReadsInItsLoopInAnyOrder() throws Exception {
+        StringBuilder components = new StringBuilder();
+        StringBuilder declared = new StringBuilder("{");
+        StringBuilder reversed = new StringBuilder("{");
+        for (int i = 0; i < 33; i++) {
+            components.append(i == 0 ? "" : ", ").append("int p").append(i);
+            declared.append(i == 0 ? "" : ",").append("\"p").append(i).append("\":").append(i);
+            reversed.append(i == 0 ? "" : ",").append("\"p").append(32 - i).append("\":").append(32 - i);
+        }
+        Compilation.Result result = compile(Map.of("example.Wide", "package example;" + IMPORTS
+                + "@JsonBound public record Wide(" + components + ") { }"));
+        JsonCodec<Object> wide = codec(result, "example.WideJson");
+
+        String json = declared.append("}").toString();
+        assertThat(wide.toJson(wide.fromJson(json))).isEqualTo(json);
+        assertThat(wide.toJson(wide.fromJson(reversed.append("}").toString()))).isEqualTo(json);
+        assertThat(result.generated("example.WideJson")).doesNotContain("break chain;")
+                .contains("key = in.nextKeyIs(K_p1) ? 1 : keyIndex(in);");
     }
 
     @Test
@@ -144,7 +170,13 @@ class JsonProcessorTest {
         assertThat(card.toJson(sparseRead)).doesNotContain("hint").doesNotContain("weight");
 
         assertThatThrownBy(() -> card.fromJson(document.replace("\"HARD\"", "\"MEDIUM\"")))
-                .isInstanceOf(IllegalArgumentException.class);
+                .isInstanceOf(JsonException.class).hasMessageContaining("Not a name this value takes: MEDIUM");
+        assertThat(card.fromJson(document.replace("\"HARD\"", "\"\\u0048ARD\"")).toString()).contains("level=HARD");
+        assertThat(result.generated("example.CardJson"))
+                .contains("private static final example.Level[] C_level = example.Level.values();")
+                .contains("JsonKey.names(C_level);")
+                .contains("out.put(K_level, V_level[p_level.ordinal()]);")
+                .contains("C_level[in.readOneOf(V_level)]");
         assertThatThrownBy(() -> card.fromJson(document.replace("\"2026-10-09\"", "\"yesterday\"")))
                 .isInstanceOf(java.time.DateTimeException.class);
         assertThatThrownBy(() -> card.fromJson(document.replace("\"small\":7", "\"small\":70000")))

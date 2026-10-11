@@ -85,7 +85,7 @@ xref:gradle-plugin.adoc#json[Gradle 플러그인]은 ``spiderSilk { json() }``�
 클래스는 공개 getter, setter, 공개 필드를 통해 바인딩되고, ``@JsonbCreator``나 공개 무인자 생성자를 통해 만들어진다.
 setter나 필드를 통해 설정되는 프로퍼티는 문서에 없으면 클래스 자신의 기본값을 유지한다.
 
-코덱이 아는 프로퍼티 타입은 원시 타입과 그 박싱 타입, `String`, `BigDecimal`, `BigInteger`, `UUID`, `URI`, 이름으로 쓰이는 enum, ISO-8601 텍스트로 쓰이는 ``java.time`` 타입, `Optional`, `OptionalInt`, `OptionalLong`, `OptionalDouble`, `List`, `Set`, `Collection`, `Iterable`, `Map<String, V>`, ``JsonValue`` 트리, 그리고 ``@JsonBound``가 붙은 다른 모든 타입이다.
+코덱이 아는 프로퍼티 타입은 원시 타입과 그 박싱 타입, `String`, `BigDecimal`, `BigInteger`, `UUID`, `URI`, 한 번만 인코딩한 상수 이름으로 쓰고 읽는 enum, ISO-8601 텍스트로 쓰이는 ``java.time`` 타입, `Optional`, `OptionalInt`, `OptionalLong`, `OptionalDouble`, `List`, `Set`, `Collection`, `Iterable`, `Map<String, V>`, ``JsonValue`` 트리, 그리고 ``@JsonBound``가 붙은 다른 모든 타입이다.
 컬렉션의 원소와 맵의 값도 같은 타입들이며, 필요한 만큼 깊이 중첩된다.
 그 밖의 타입은 프로퍼티를 지목하는 컴파일 에러이며, 길은 둘이다: 그 타입에 ``@JsonBound``를 붙이거나, ``@JsonbTypeAdapter``로 변환한다.
 

@@ -7,7 +7,10 @@ import java.util.Arrays;
  * A member name encoded once. A generated codec, or a writer that names the
  * same keys for every record, holds one per key: {@link JsonOutput} copies its
  * bytes instead of escaping the name again, and {@link JsonInput} compares a
- * parsed key against it without making a string.
+ * parsed key against it without making a string. A string value from a fixed
+ * set, an enum constant's name, is held the same way: written with
+ * {@link JsonOutput#put(JsonKey, JsonKey)} and read back with
+ * {@link JsonInput#readOneOf(JsonKey[])}.
  *
  * <pre>{@code
  * static final JsonKey ID = JsonKey.of("id");
@@ -50,6 +53,10 @@ public final class JsonKey {
     final long nextMask0;
     final long nextMask1;
 
+    /** The masks of the first form's bytes without its colon: the name as a string value, quoted. */
+    final long valueMask0;
+    final long valueMask1;
+
     /** Whether the name is written with an escape, and whether it is all ASCII: what a parser notes of a key it matched in place. */
     final boolean escaped;
     final boolean ascii;
@@ -79,6 +86,8 @@ public final class JsonKey {
         this.next1 = next.length > 1 ? next[1] : 0;
         this.nextMask0 = mask(nextLength, 0);
         this.nextMask1 = mask(nextLength, 1);
+        this.valueMask0 = mask(firstLength - 1, 0);
+        this.valueMask1 = mask(firstLength - 1, 1);
         this.escaped = firstLength != utf8.length + 3;
         this.ascii = name.chars().allMatch(c -> c < 0x80);
     }
@@ -94,6 +103,20 @@ public final class JsonKey {
 
     public static JsonKey of(String name) {
         return new JsonKey(name);
+    }
+
+    /**
+     * The names of an enum's constants, a key each, in the order of their
+     * ordinals: {@code JsonKey.names(Level.values())}. A generated codec
+     * writes a constant as {@code put(key, names[level.ordinal()])} and reads
+     * it back as {@code constants[in.readOneOf(names)]}.
+     */
+    public static JsonKey[] names(Enum<?>[] constants) {
+        JsonKey[] names = new JsonKey[constants.length];
+        for (int i = 0; i < constants.length; i++) {
+            names[i] = new JsonKey(constants[i].name());
+        }
+        return names;
     }
 
     public String name() {

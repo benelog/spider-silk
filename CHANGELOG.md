@@ -30,6 +30,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   An in-memory one answers `toBytes()`, or `length()` and `writeTo(stream)` followed by `release()`, which send the document from the buffer with no copy of it.
   A `JsonInput` reads a document's bytes one value at a time, through `object()`, `array()`, `nextKey()`, `nextKeyIs`, `keyHead()`, `nextElement()`, `keyIs`, `key()`, the `read` methods, `readValue()`, `skipValue()`, and `end()`, and builds no string of the document first.
   `JsonKey.of(name)` encodes a member name once for both.
+  `JsonKey.names(constants)` encodes an enum's constant names the same way: `put(key, name)` writes one, and `readOneOf(names)` reads one back as its index with no string made.
 - `silk-json`: `JsonWriter.tree(toTree)`, `JsonReader.tree(fromTree)`, `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, and `reader.fromJsonBytes(utf8)`.
 - `silk-json`: `JsonOutput.value(BigDecimal)` and `value(BigInteger)` write a decimal with every digit, and `JsonInput.readNumber()` answers a number's own text.
 - `silk-json`: `JsonInput.readFloat()` reads a number as the nearest `float`, rounded once from its digits, as `Float.parseFloat` reads it.
@@ -40,6 +41,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `silk-json-processor`: a new module, an annotation processor that generates `<Type>Json.CODEC` for every type annotated `@JsonBound` from its components, fields, and accessors and the `jakarta.json.bind` annotations on them: `@JsonbProperty`, `@JsonbTransient`, `@JsonbNillable`, `@JsonbPropertyOrder`, `@JsonbCreator`, `@JsonbDateFormat`, and `@JsonbTypeAdapter`.
   The generated code calls the type's own accessors and constructor, with no reflection, no registry, and nothing for a native image.
   A component is required unless it is `@Nullable` or an `Optional`, and `-Asilkjson.names=explicit` makes a property without a `@JsonbProperty` name a compile error.
+  An enum property is written and read through its constants' names encoded once, and a name that is none of them is refused with `JsonException`.
 - `spider-silk-gradle-plugin`: `spiderSilk { json() }` puts the processor on the `annotationProcessor` path and `jakarta.json.bind-api` on the compile classpath.
 - `spider-silk-maven-parent`: the processor is on the compiler's processor path for every child.
 - `benchmark`: a `json-post` case, in which each request sends the 100 records of `json-list` as a body, and `json-bench`, a JMH microbenchmark of the serializer and the parser alone against Jackson and fastjson2.

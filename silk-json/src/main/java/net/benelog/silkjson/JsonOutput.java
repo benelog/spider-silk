@@ -46,8 +46,9 @@ import org.jspecify.annotations.Nullable;
  * characters, a control character or a character outside ASCII, leave it.
  * That loop is where a long document spends its time. A string of 64
  * characters or more is narrowed by the JDK's ASCII encoder instead, whose
- * loop the compiler turns into vector instructions, and then checked a word
- * at a time.
+ * loop the compiler turns into vector instructions, searched for a quote and
+ * a backslash with {@link String#indexOf(int)}, and checked for a control
+ * character a word at a time.
  */
 public final class JsonOutput {
 
@@ -350,6 +351,27 @@ public final class JsonOutput {
             word(TRUE, 4);
         } else {
             word(FALSE, 5);
+        }
+        return this;
+    }
+
+    /**
+     * A string member whose value is a name encoded once, such as an enum
+     * constant's from {@link JsonKey#names}: its bytes are copied as a key's
+     * are, with no string to check.
+     */
+    public JsonOutput put(JsonKey key, JsonKey value) {
+        memberKey(key, OBJECT);
+        int length = value.firstLength - 1; // the quoted name, without its colon
+        if (length > 16) {
+            words(value.first, length);
+        } else {
+            ensure(16);
+            byte[] buf = this.buf;
+            int at = pos;
+            LittleEndian.putLong(buf, at, value.first0);
+            LittleEndian.putLong(buf, at + 8, value.first1);
+            pos = at + length;
         }
         return this;
     }
@@ -833,13 +855,17 @@ public final class JsonOutput {
      * A string of at least {@link #LONG_STRING} characters. The JDK's ASCII
      * encoder narrows its characters into the buffer, in a loop the compiler
      * turns into vector instructions, and stops at the first one outside
-     * ASCII; the bytes it wrote are then checked a word at a time for a quote,
-     * a backslash, or a control character. The plain run before the first of
-     * these is written as it stands, an escape is written where it is found,
-     * and a character outside ASCII leaves the rest of the string to
-     * {@link #rest}. Two passes over the string cost less than one character
-     * at a time once a string is this long.
+     * ASCII. The string's own {@link String#indexOf(int)}, another vector
+     * loop, finds its first quote and its first backslash, and the bytes
+     * narrowed before them are checked a word at a time for a control
+     * character only. The plain run before the first of these is written as
+     * it stands, and an escape is written where it is found, with the bytes
+     * narrowed after it moved up rather than narrowed again; a character
+     * outside ASCII leaves the rest of the string to {@link #rest}. Three
+     * passes over the string cost less than one character at a time once a
+     * string is this long.
      */
+    @SuppressWarnings("ReferenceEquality") // whether ensure() put another array in place
     private void longString(String s, int length) {
         char[] chars = this.chars;
         if (chars.length < length) {
@@ -849,12 +875,19 @@ public final class JsonOutput {
         s.getChars(0, length, chars, 0);
         ensure(length + 2);
         buf[pos++] = '"';
+        int quote = s.indexOf('"');
+        int backslash = s.indexOf('\\');
         int i = 0;
+        int narrowed = 0; // how many characters from i stand narrowed at pos
         while (i < length) {
-            int narrowed = narrow(chars, i, length);
-            int plain = plainBytes(buf, pos, narrowed);
+            if (narrowed == 0) {
+                narrowed = narrow(chars, i, length);
+            }
+            int escapeAt = Math.min(quote < 0 ? length : quote, backslash < 0 ? length : backslash);
+            int plain = controlFree(buf, pos, Math.min(narrowed, escapeAt - i));
             pos += plain;
             i += plain;
+            narrowed -= plain;
             if (i == length) {
                 break;
             }
@@ -863,12 +896,69 @@ public final class JsonOutput {
                 rest(chars, i, length);
                 break;
             }
-            ensure(length - i + 6); // the escape, and every character after it as one byte, and the closing quote
-            escapeAscii(c);
+            // c stands narrowed at pos; the narrowed characters after it move
+            // up by what its escape adds, rather than being narrowed again.
+            byte[] held = this.buf;
+            int at = pos;
+            ensure(length - i + 6);
+            if (this.buf != held || pos != at) {
+                narrowed = 0; // the buffer was sent or grown: narrow what is left again
+                continue;
+            }
+            byte[] buf = held;
+            int tail = narrowed - 1;
+            byte escape = switch (c) {
+                case '"' -> '"';
+                case '\\' -> '\\';
+                case '\n' -> 'n';
+                case '\r' -> 'r';
+                case '\t' -> 't';
+                case '\b' -> 'b';
+                case '\f' -> 'f';
+                default -> 0;
+            };
+            if (escape == 0) {
+                System.arraycopy(buf, at + 1, buf, at + 6, tail);
+                buf[at] = '\\';
+                buf[at + 1] = 'u';
+                buf[at + 2] = '0';
+                buf[at + 3] = '0';
+                buf[at + 4] = HEX[c >> 4];
+                buf[at + 5] = HEX[c & 0xF];
+                pos = at + 6;
+            } else {
+                System.arraycopy(buf, at + 1, buf, at + 2, tail);
+                buf[at] = '\\';
+                buf[at + 1] = escape;
+                pos = at + 2;
+            }
             i++;
+            narrowed = tail;
+            if (c == '"') {
+                quote = s.indexOf('"', i);
+            } else if (c == '\\') {
+                backslash = s.indexOf('\\', i);
+            }
         }
         ensure(1);
         buf[pos++] = '"';
+    }
+
+    /** How many of so many ASCII bytes at that index come before the first control character. */
+    private static int controlFree(byte[] buf, int from, int count) {
+        int p = from;
+        int end = from + count;
+        while (p <= end - 8) {
+            long controls = (LittleEndian.getLong(buf, p) - 0x2020202020202020L) & 0x8080808080808080L;
+            if (controls != 0) {
+                return p - from + (Long.numberOfTrailingZeros(controls) >>> 3);
+            }
+            p += 8;
+        }
+        while (p < end && buf[p] >= 0x20) {
+            p++;
+        }
+        return p - from;
     }
 
     /**
@@ -898,52 +988,6 @@ public final class JsonOutput {
         out.limit(out.capacity()).position(pos);
         encoder.encode(in, out, false);
         return in.position() - from;
-    }
-
-    /** How many of so many ASCII bytes at that index come before the first quote, backslash, or control character. */
-    private static int plainBytes(byte[] buf, int from, int count) {
-        int p = from;
-        int end = from + count;
-        while (p <= end - 8) {
-            long special = LittleEndian.special(LittleEndian.getLong(buf, p));
-            if (special != 0) {
-                return p - from + LittleEndian.plainBytes(special);
-            }
-            p += 8;
-        }
-        while (p < end) {
-            byte b = buf[p];
-            if (b < 0x20 || b == '"' || b == '\\') {
-                break;
-            }
-            p++;
-        }
-        return p - from;
-    }
-
-    /** An ASCII character a JSON string escapes, with room for it kept. */
-    private void escapeAscii(char c) {
-        byte escape = switch (c) {
-            case '"' -> '"';
-            case '\\' -> '\\';
-            case '\n' -> 'n';
-            case '\r' -> 'r';
-            case '\t' -> 't';
-            case '\b' -> 'b';
-            case '\f' -> 'f';
-            default -> 0;
-        };
-        if (escape == 0) {
-            buf[pos++] = '\\';
-            buf[pos++] = 'u';
-            buf[pos++] = '0';
-            buf[pos++] = '0';
-            buf[pos++] = HEX[c >> 4];
-            buf[pos++] = HEX[c & 0xF];
-        } else {
-            buf[pos++] = '\\';
-            buf[pos++] = escape;
-        }
     }
 
     /**

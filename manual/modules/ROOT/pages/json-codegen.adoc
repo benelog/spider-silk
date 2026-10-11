@@ -85,7 +85,7 @@ A record is bound through its components and its canonical constructor.
 A class is bound through its public getters, setters, and public fields, and is created through its `@JsonbCreator` or its public no-argument constructor.
 A property set through a setter or a field keeps the class's own default when the document leaves it out.
 
-The property types the codec knows are the primitives and their boxes, `String`, `BigDecimal`, `BigInteger`, `UUID`, `URI`, an enum as its name, a `java.time` type as its ISO-8601 text, `Optional`, `OptionalInt`, `OptionalLong`, `OptionalDouble`, `List`, `Set`, `Collection`, `Iterable`, `Map<String, V>`, the `JsonValue` tree, and any other type annotated `@JsonBound`.
+The property types the codec knows are the primitives and their boxes, `String`, `BigDecimal`, `BigInteger`, `UUID`, `URI`, an enum as its name, written and read through its constants' names encoded once, a `java.time` type as its ISO-8601 text, `Optional`, `OptionalInt`, `OptionalLong`, `OptionalDouble`, `List`, `Set`, `Collection`, `Iterable`, `Map<String, V>`, the `JsonValue` tree, and any other type annotated `@JsonBound`.
 A collection's elements and a map's values are those same types, nested as deep as needed.
 Any other type is a compile error naming the property, with two ways out: annotate the type `@JsonBound`, or adapt it with `@JsonbTypeAdapter`.
 

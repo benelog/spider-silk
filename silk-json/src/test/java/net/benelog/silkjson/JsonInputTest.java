@@ -79,6 +79,94 @@ class JsonInputTest {
                 .containsExactly("korean", "quoted", "plain", "id", "other");
     }
 
+    enum Shade { A, PALE_BLUE_GREEN_X, RATHER_LONG_NAME_OF_A_SHADE, $ }
+
+    /** A name from a fixed set is written from its key and read back by its index, compared in place or, when escaped or near the end, as a string. */
+    @Test
+    @SuppressWarnings("EnumOrdinal") // the index into the names is the point
+    void namesFromAFixedSetAreWrittenAndReadWithNoString() {
+        Shade[] shades = Shade.values();
+        JsonKey[] names = JsonKey.names(shades);
+        JsonKey shade = JsonKey.of("shade");
+        for (Shade written : shades) {
+            for (int pad = 0; pad < 20; pad++) {
+                JsonOutput out = JsonOutput.inMemory();
+                out.object().put(shade, names[written.ordinal()]).put(JsonKey.of("pad"), "x".repeat(pad)).end();
+                String json = out.toJson();
+                assertThat(json).isEqualTo("{\"shade\":\"" + written.name() + "\",\"pad\":\"" + "x".repeat(pad) + "\"}");
+                for (String document : List.of(json, "[" + json.substring(9, json.indexOf(',')) + "]")) {
+                    JsonInput in = JsonInput.of(document);
+                    if (document.startsWith("{")) {
+                        in.object();
+                        assertThat(in.nextKeyIs(shade)).isTrue();
+                    } else {
+                        in.array();
+                        assertThat(in.nextElement()).isTrue();
+                    }
+                    assertThat(shades[in.readOneOf(names)]).as(document).isEqualTo(written);
+                }
+            }
+        }
+        JsonReader<Shade> asShade = in -> shades[in.readOneOf(names)];
+        assertThat(asShade.fromJson("\"\\u0041\"")).isEqualTo(Shade.A);
+        assertThat(asShade.fromJson(" \"PALE_BLUE_GREEN_X\"  ")).isEqualTo(Shade.PALE_BLUE_GREEN_X);
+        assertThatThrownBy(() -> asShade.fromJson("\"PALE_BLUE_GREEN\"            ")).isInstanceOf(JsonException.class)
+                .hasMessageContaining("Not a name this value takes: PALE_BLUE_GREEN");
+        assertThatThrownBy(() -> asShade.fromJson("\"AB\"")).isInstanceOf(JsonException.class);
+        assertThatThrownBy(() -> asShade.fromJson("1")).isInstanceOf(JsonException.class)
+                .hasMessageContaining("Not a JSON string");
+    }
+
+    /** Whitespace before a key, or after its comma, as a pretty printer or Python's separators write it, is passed over; a comma is still required between members and refused before the end. */
+    @Test
+    void nextKeyIsPassesOverWhitespaceBeforeTheKey() {
+        JsonKey id = JsonKey.of("id");
+        JsonKey name = JsonKey.of("name");
+        JsonKey description = JsonKey.of("a_rather_long_property_name");
+        JsonInput in = JsonInput.of("{\n  \"id\": 1, \"name\": \"a\" ,\n\t\"a_rather_long_property_name\":\r\n2 ,  \"id\":3  }");
+
+        in.object();
+        assertThat(in.nextKeyIs(name)).isFalse();
+        assertThat(in.nextKeyIs(id)).isTrue();
+        assertThat(in.key()).isEqualTo("id");
+        assertThat(in.readLong()).isEqualTo(1);
+        assertThat(in.nextKeyIs(id)).as("another key after the whitespace").isFalse();
+        assertThat(in.nextKeyIs(name)).isTrue();
+        assertThat(in.readString()).isEqualTo("a");
+        assertThat(in.nextKeyIs(description)).as("whitespace before the comma too").isTrue();
+        assertThat(in.keyIs(description)).isTrue();
+        assertThat(in.readLong()).isEqualTo(2);
+        assertThat(in.nextKeyIs(id)).as("near the end, where only the compact form is compared").isFalse();
+        assertThat(in.nextKey()).isTrue();
+        assertThat(in.keyIs(id)).isTrue();
+        assertThat(in.readLong()).isEqualTo(3);
+        assertThat(in.nextKeyIs(id)).as("the end of the object").isFalse();
+        assertThat(in.nextKey()).isFalse();
+        in.end();
+
+        JsonInput missingComma = JsonInput.of("{\"id\":1 \"name\":2, \"padding to sixteen bytes\":0}");
+        missingComma.object();
+        assertThat(missingComma.nextKeyIs(id)).isTrue();
+        assertThat(missingComma.readLong()).isEqualTo(1);
+        assertThat(missingComma.nextKeyIs(name)).isFalse();
+        assertThatThrownBy(missingComma::nextKey).isInstanceOf(JsonException.class);
+
+        JsonInput trailingComma = JsonInput.of("{\"id\":1, \"name\":2,                   }");
+        trailingComma.object();
+        assertThat(trailingComma.nextKeyIs(id)).isTrue();
+        trailingComma.readLong();
+        assertThat(trailingComma.nextKeyIs(name)).isTrue();
+        trailingComma.readLong();
+        assertThat(trailingComma.nextKeyIs(id)).isFalse();
+        assertThatThrownBy(trailingComma::nextKey).isInstanceOf(JsonException.class);
+
+        JsonInput spaceInKey = JsonInput.of("{\" id\":1,                        \"id\":2}");
+        spaceInKey.object();
+        assertThat(spaceInKey.nextKeyIs(id)).as("a key that starts with a space is another key").isFalse();
+        assertThat(spaceInKey.nextKey()).isTrue();
+        assertThat(spaceInKey.key()).isEqualTo(" id");
+    }
+
     /** The key a reader expects next is matched where it stands, quotes and colon included, and anything else is left to nextKey(). */
     @Test
     void nextKeyIsMatchesTheExpectedKeyInPlaceAndMovesNowhereOtherwise() {
@@ -317,6 +405,45 @@ class JsonInputTest {
         assertThat(longs.fromJson("[1234567.0,7e0,0,-0]")).containsExactly(1234567L, 7L, 0L, 0L);
         for (String bad : List.of("[0123456,1]", "[-0123456,1]", "[1234567.5,1]", "[01]", "[-01]")) {
             assertThatThrownBy(() -> longs.fromJson(bad)).as(bad).isInstanceOf(JsonException.class);
+        }
+    }
+
+    /**
+     * Integers of 1 to 19 digits, either sign, with a leading zero or ending in a
+     * fraction or an exponent, at every distance from the end of the input:
+     * each read as {@link Long#parseLong} or {@link BigDecimal} reads
+     * the same text, or refused where the grammar refuses it.
+     */
+    @Test
+    void readsRandomIntegersAsTheJdkDoes() {
+        Random random = new Random(19);
+        JsonReader<List<Long>> longs = JsonReader.list(JsonInput::readLong);
+        for (int n = 0; n < 20_000; n++) {
+            StringBuilder digits = new StringBuilder();
+            int length = 1 + random.nextInt(19);
+            digits.append(random.nextInt(8) == 0 ? 0 : 1 + random.nextInt(9));
+            for (int d = 1; d < length; d++) {
+                digits.append(random.nextInt(10));
+            }
+            String number = (random.nextBoolean() ? "-" : "") + digits;
+            String tail = switch (random.nextInt(6)) {
+                case 0 -> ".0";
+                case 1 -> ".5";
+                case 2 -> "e0";
+                case 3 -> "E1";
+                default -> "";
+            };
+            String text = "[" + number + tail + "," + "1".repeat(random.nextInt(15)) + "1]";
+            boolean leadingZero = digits.length() > 1 && digits.charAt(0) == '0';
+            BigDecimal exact = leadingZero ? null : new BigDecimal(number + tail);
+            boolean integral = exact != null && exact.stripTrailingZeros().scale() <= 0
+                    && exact.compareTo(BigDecimal.valueOf(Long.MAX_VALUE)) <= 0
+                    && exact.compareTo(BigDecimal.valueOf(Long.MIN_VALUE)) >= 0;
+            if (integral) {
+                assertThat(longs.fromJson(text).get(0)).as(text).isEqualTo(exact.longValueExact());
+            } else {
+                assertThatThrownBy(() -> longs.fromJson(text)).as(text).isInstanceOf(JsonException.class);
+            }
         }
     }
 
