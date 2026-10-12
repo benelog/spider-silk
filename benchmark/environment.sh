@@ -18,3 +18,6 @@ echo "load average: $(cut -d' ' -f1-3 /proc/loadavg)"
 if [ -n "${GRAALVM_HOME:-}" ]; then
     "$GRAALVM_HOME/bin/native-image" --version 2>&1 | sed 's/^/native-image: /'
 fi
+if [ -n "${ORACLE_GRAALVM_HOME:-}" ]; then
+    "$ORACLE_GRAALVM_HOME/bin/native-image" --version 2>&1 | sed 's/^/oracle native-image: /'
+fi

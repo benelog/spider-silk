@@ -19,6 +19,8 @@ graalvmNative {
     binaries {
         main {
             buildArgs.add('--no-fallback')
+            // native-build.sh passes the PGO flags through -PnativeImageArgs.
+            buildArgs.addAll(providers.gradleProperty('nativeImageArgs').map { it.tokenize(' ') }.orElse([]))
         }
     }
 }

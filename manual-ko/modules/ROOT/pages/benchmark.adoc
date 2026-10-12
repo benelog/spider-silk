@@ -2,29 +2,31 @@
 :navtitle: 부록: 벤치마크
 
 이 부록은 리포지토리의 `benchmark/` 디렉터리에 있는 벤치마크를 한 번 실행한 결과를 보고하며, 이 벤치마크는 Spider Silk와 Spring MVC를 같은 머신에서 같은 JVM과 같은 부하로 측정한다.
-측정은 2026-10-11에 <<machine>>에 기술한 노트북에서, 1.1.0 릴리스 이후 159개 커밋을 지난 `main` 브랜치의 커밋 `11b9a13`에 Java 25를 요구하게 하는 변경을 더한 코드를 대상으로 했다.
+측정은 2026-10-12 밤에 <<machine>>에 기술한 노트북에서, 1.1.0 릴리스 이후 165개 커밋을 지난 `main` 브랜치의 커밋 `3d85b96`을 대상으로 했다.
 
 [#summary]
 == 요약
 
 아래 수치는 중앙값이며, 이 머신과 이 핸들러에만 해당한다.
 
-* 단순 텍스트는 Jetty 위의 Spider Silk가 Spring MVC보다 초당 약 1.43배 많은 요청을 처리하며, 작은 JSON 객체는 약 1.27배를 처리한다.
-같은 컨테이너인 Tomcat 위에서는 그 차이가 약 1.27배와 1.10배다.
-* 직렬화기가 대부분의 일을 하는 레코드 100개의 JSON 목록은 Jetty 위의 Spider Silk가 Jackson을 쓰는 Spring MVC보다 초당 1.71배 많은 요청을 처리하며, Tomcat 위에서는 1.42배를 처리한다.
+* 단순 텍스트와 작은 JSON 객체는 각각 Jetty 위의 Spider Silk가 Spring MVC보다 초당 약 1.42배 많은 요청을 처리한다.
+같은 컨테이너인 Tomcat 위에서는 그 차이가 약 1.31배와 1.24배다.
+* 직렬화기가 대부분의 일을 하는 레코드 100개의 JSON 목록은 Jetty 위의 Spider Silk가 Jackson을 쓰는 Spring MVC보다 초당 1.72배 많은 요청을 처리하며, Tomcat 위에서는 1.37배를 처리한다.
 * 파서가 대부분의 일을 하는, 같은 목록을 요청 본문에서 읽는 케이스는 어느 컨테이너에서든 Spider Silk가 초당 약 2배 많은 요청을 처리한다.
-* Spider Silk의 기본 엔진인 jte로 렌더링한 페이지는 Thymeleaf를 쓰는 Spring MVC보다 초당 약 3.3배 많은 요청을 처리한다.
-양쪽 모두 Thymeleaf를 쓰면 두 프레임워크는 5% 이내로 차이가 난다.
-* JVM 프로세스는 Jetty 위의 Spider Silk가 295 ms, Spring Boot가 908 ms에 부팅하며, 그 시점의 상주 메모리는 117 MB 대 216 MB다.
-* GraalVM 네이티브 이미지로는 Spider Silk가 24 ms, Spring MVC가 37 ms에 부팅하며, 이미지 빌드에는 각각 72초와 87초가 걸린다.
-네이티브 이미지는 모든 케이스에서 JVM보다 초당 25%~86% 적은 요청을 처리한다.
+* Spider Silk의 기본 엔진인 jte로 렌더링한 페이지는 Thymeleaf를 쓰는 Spring MVC보다 초당 약 3.1배 많은 요청을 처리한다.
+양쪽 모두 Thymeleaf를 쓰고 같은 컨테이너인 Tomcat 위에서 실행하면 두 프레임워크는 2% 이내로 차이가 난다.
+* JVM 프로세스는 Jetty 위의 Spider Silk가 295 ms, Spring Boot가 902 ms에 부팅하며, 그 시점의 상주 메모리는 117 MB 대 210 MB다.
+* GraalVM CE 네이티브 이미지로는 Spider Silk가 24 ms, Spring MVC가 37 ms에 부팅하며, 이미지 빌드에는 각각 72초와 85초가 걸린다.
+GraalVM CE 이미지는 모든 케이스에서 JVM보다 초당 20%~86% 적은 요청을 처리한다.
+* Oracle GraalVM의 프로파일 기반 최적화(PGO)로 빌드한 네이티브 이미지는 GraalVM CE 이미지보다 초당 1.18배~1.98배 많은 요청을 처리한다.
+Spider Silk의 PGO 이미지는 JVM 처리량의 79%~94%를, Spring MVC의 PGO 이미지는 27%~89%를 유지한다.
 
 [#targets]
 == 측정 대상
 
 === 대상 서버
 
-다섯 서버를 각자 별도 프로세스에서 측정했다.
+아홉 서버를 각자 별도 프로세스에서 측정했다.
 
 [cols="2,3,3",options="header"]
 |===
@@ -44,11 +46,27 @@
 
 | `spider-silk-jetty-native`
 | `spider-silk-jetty`와 같은 애플리케이션
-| GraalVM 네이티브 이미지
+| GraalVM CE 네이티브 이미지
+
+| `spider-silk-jetty-native-oracle`
+| `spider-silk-jetty`와 같은 애플리케이션
+| Oracle GraalVM 네이티브 이미지
+
+| `spider-silk-jetty-native-pgo`
+| `spider-silk-jetty`와 같은 애플리케이션
+| PGO를 적용한 Oracle GraalVM 네이티브 이미지
 
 | `spring-mvc-native`
 | `spring-mvc`와 같은 애플리케이션, AOT 처리를 거침
-| GraalVM 네이티브 이미지
+| GraalVM CE 네이티브 이미지
+
+| `spring-mvc-native-oracle`
+| `spring-mvc`와 같은 애플리케이션, AOT 처리를 거침
+| Oracle GraalVM 네이티브 이미지
+
+| `spring-mvc-native-pgo`
+| `spring-mvc`와 같은 애플리케이션, AOT 처리를 거침
+| PGO를 적용한 Oracle GraalVM 네이티브 이미지
 |===
 
 Spring Boot는 기본 설정으로 실행한다: 설정한 프로퍼티가 없으며, Tomcat, Jackson, Thymeleaf는 스타터가 가져오는 그대로다.
@@ -113,7 +131,11 @@ jte 페이지는 빈 줄, 그리고 텍스트 안의 ``"``와 ``'``를 이스케
 
 ``benchmark/run.sh``가 전체 실행을 이끈다.
 
-. ``native-build.sh``가 두 애플리케이션을 번갈아 가며, 깨끗한 프로젝트에서 각 네이티브 이미지를 세 번씩 빌드한다.
+. ``native-build.sh``가 애플리케이션마다 Oracle GraalVM의 ``--pgo-instrument``로 프로파일 기반 최적화용 계측 이미지를 빌드한다.
+``pgo-profile.sh``는 그 이미지를 애플리케이션이 처리하는 모든 케이스의 부하 아래에서 케이스마다 10초씩 실행하며, 이미지는 멈출 때 모은 횟수를 프로파일로 쓴다.
+Spider Silk는 인자가 시작할 때 엔진을 고르므로 jte용과 Thymeleaf용 프로파일 두 개를 얻는다.
+. 이어서 ``native-build.sh``가 두 애플리케이션을 번갈아 가며, 깨끗한 프로젝트에서 애플리케이션마다 세 가지 네이티브 이미지를 각각 세 번씩 빌드한다.
+PGO 이미지는 그 프로파일에 ``--pgo``를 주어 빌드하며, 이때 최적화 수준도 ``-O2``에서 ``-O3``로 올라간다.
 . 1분을 쉰 뒤, ``startup.sh``가 각 대상을 열 번씩 시작하며, 매 시작 전에 3초를 쉰다.
 이 스크립트는 프로세스를 띄우기 직전부터 ``/text``의 첫 ``200``까지를 10 ms 간격으로 폴링해 재고, 그 시점의 프로세스 상주 메모리를 읽는다.
 . 이어서 각 케이스마다 새 프로세스를 띄운다: 20초 워밍업, 30초 측정 후 프로세스를 멈춘다.
@@ -126,13 +148,16 @@ jte 페이지는 빈 줄, 그리고 텍스트 안의 ``"``와 ``'``를 이스케
 서버는 성능 코어 네 개인 CPU 0~3에, wrk는 저전력 효율 코어 네 개인 CPU 4~7에 고정한다.
 모든 JVM과 네이티브 이미지에는 ``-Xms1g -Xmx1g``를 준다.
 JVM은 Temurin 25이며 기본 컬렉터인 G1을 쓴다.
-네이티브 이미지는 GraalVM CE 25.2.4로 빌드하며, 이 배포판의 컬렉터는 Serial GC뿐이다.
+``-native`` 이미지는 GraalVM CE 25.2.4로 빌드하며, 이 배포판의 컬렉터는 Serial GC뿐이다.
+``-native-oracle``과 ``-native-pgo`` 이미지는 Oracle GraalVM 25.4.4로 빌드하며, 기본 컬렉터인 Serial GC를 그대로 쓴다.
+기본 설정으로 빌드하면 Oracle GraalVM은 기계 학습 모델로 코드에서 메서드마다 프로파일을 추론한다.
+PGO 이미지는 그 자리에 기록한 프로파일을 쓴다.
 
 보고하는 처리량과 각 지연 시간 백분위수는 세 라운드의 중앙값을 각각 따로 구한 것이다.
 라운드 간 대부분 케이스의 처리량은 중앙값에서 10% 이내에 머물렀다.
-`spider-silk-jetty`는 한 라운드에서 `text`의 중앙값보다 36% 높았고, `json-list`, `json-post`, `template-jte`에서 13%~17% 높았다.
-`spider-silk-jetty-native`는 `json`과 `template-jte`에서 중앙값보다 17% 높았다.
-`spring-mvc-native`는 `json-list`에서 중앙값보다 13% 높았고 `text`에서 10% 낮았다.
+`spider-silk-jetty`는 한 라운드에서 `text`의 중앙값보다 36% 높았고, `json-list`에서 13% 높았다.
+`spring-mvc`는 `json`에서 중앙값보다 11% 높았다.
+네이티브 이미지 중에서는 여덟 케이스에서 한 라운드가 중앙값보다 10%~15% 높았고, 두 케이스에서 11%~12% 낮았다: `json`의 `spring-mvc-native`와 `json-post`의 `spider-silk-jetty-native`다.
 세 라운드의 중앙값은 그런 라운드를 걸러 낸다.
 실행 중 실패한 요청은 없었다.
 
@@ -144,15 +169,16 @@ JVM은 Temurin 25이며 기본 컬렉터인 G1을 쓴다.
 | 머신 | Lenovo ThinkPad X1 Carbon Gen 13, AC 전원 연결
 | CPU | Intel Core Ultra 7 258V (Lunar Lake): 최대 4.8 GHz 성능 코어 4개와 최대 3.7 GHz 저전력 효율 코어 4개, 8스레드, L3 캐시 12 MiB
 | 메모리 | 30 GiB (32 GB LPDDR5X)
-| OS | Ubuntu 24.04.5 LTS, Linux 6.17.0-1032-oem
+| OS | Ubuntu 24.04.5 LTS, Linux 6.17.0-1033-oem
 | CPU 클럭 | `powersave` 거버너, `performance` 플랫폼 프로파일
 | JVM | Eclipse Temurin 25 (25+36-LTS)
-| 네이티브 이미지 | GraalVM CE 25.2.4 (native-image 25.0.4)
+| 네이티브 이미지 | GraalVM CE 25.2.4 (native-image 25.0.4), Oracle GraalVM 25.4.4 (native-image 25.0.4.1.1)
 | 빌드 | Gradle 9.5.1
 | 부하 생성기 | wrk 4.1.0 (Ubuntu 패키지 `wrk` 4.1.0-4build2)
 |===
 
-실행 중에도 데스크톱 세션은 켜져 있었으며, 웹 브라우저, 터미널, Dropbox, 유휴 상태의 로컬 텍스트 음성 변환 서버가 열려 있었고, 이들은 쉬는 동안 CPU 하나의 몇 퍼센트를 쓴다.
+실행 중에도 데스크톱 세션은 켜져 있었으며, 터미널, Dropbox, 유휴 상태의 로컬 텍스트 음성 변환 서버가 열려 있었고, 이들은 쉬는 동안 CPU 하나의 몇 퍼센트를 쓴다.
+웹 브라우저 창은 열려 있지 않았다.
 
 [#results]
 == 결과
@@ -167,60 +193,120 @@ CPU는 측정 동안 서버 자신이 쓴 CPU 시간이며, 400%는 측정 내�
 |===
 | 케이스 | 대상 | 초당 요청 수 | p50 | p90 | p99 | CPU
 
-.5+| `text`
-| `spider-silk-jetty` | 255,705 | 0.26 | 0.48 | 0.86 | 381%
-| `spider-silk-tomcat` | 226,397 | 0.25 | 0.47 | 0.60 | 286%
-| `spring-mvc` | 178,797 | 0.33 | 0.51 | 0.82 | 301%
-| `spider-silk-jetty-native` | 191,616 | 0.35 | 0.66 | 1.36 | 370%
-| `spring-mvc-native` | 128,198 | 0.47 | 0.73 | 1.93 | 312%
+.9+| `text`
+| `spider-silk-jetty` | 256,545 | 0.26 | 0.47 | 0.79 | 381%
+| `spider-silk-tomcat` | 237,567 | 0.24 | 0.44 | 0.60 | 281%
+| `spring-mvc` | 180,984 | 0.33 | 0.49 | 0.80 | 304%
+| `spider-silk-jetty-native` | 191,639 | 0.35 | 0.66 | 1.34 | 371%
+| `spider-silk-jetty-native-oracle` | 214,336 | 0.31 | 0.58 | 1.19 | 373%
+| `spider-silk-jetty-native-pgo` | 239,214 | 0.28 | 0.52 | 1.12 | 374%
+| `spring-mvc-native` | 117,689 | 0.50 | 0.77 | 2.06 | 320%
+| `spring-mvc-native-oracle` | 132,754 | 0.44 | 0.68 | 1.68 | 308%
+| `spring-mvc-native-pgo` | 152,600 | 0.38 | 0.63 | 1.56 | 299%
 
-.5+| `json`
-| `spider-silk-jetty` | 253,830 | 0.26 | 0.49 | 0.83 | 380%
-| `spider-silk-tomcat` | 220,661 | 0.25 | 0.47 | 0.61 | 288%
-| `spring-mvc` | 200,313 | 0.29 | 0.52 | 0.77 | 283%
-| `spider-silk-jetty-native` | 190,022 | 0.35 | 0.66 | 1.34 | 370%
-| `spring-mvc-native` | 113,463 | 0.51 | 0.82 | 2.08 | 313%
+.9+| `json`
+| `spider-silk-jetty` | 256,318 | 0.26 | 0.48 | 0.82 | 381%
+| `spider-silk-tomcat` | 224,852 | 0.25 | 0.45 | 0.61 | 287%
+| `spring-mvc` | 180,642 | 0.33 | 0.50 | 0.79 | 302%
+| `spider-silk-jetty-native` | 204,013 | 0.32 | 0.63 | 1.31 | 370%
+| `spider-silk-jetty-native-oracle` | 213,319 | 0.31 | 0.59 | 1.21 | 372%
+| `spider-silk-jetty-native-pgo` | 240,873 | 0.27 | 0.52 | 1.09 | 374%
+| `spring-mvc-native` | 124,780 | 0.48 | 0.76 | 1.98 | 312%
+| `spring-mvc-native-oracle` | 129,453 | 0.45 | 0.70 | 1.75 | 307%
+| `spring-mvc-native-pgo` | 155,736 | 0.37 | 0.61 | 1.59 | 302%
 
-.5+| `json-list`
-| `spider-silk-jetty` | 158,868 | 0.42 | 0.72 | 1.12 | 380%
-| `spider-silk-tomcat` | 131,754 | 0.45 | 0.65 | 1.05 | 325%
-| `spring-mvc` | 92,680 | 0.67 | 0.88 | 1.22 | 346%
-| `spider-silk-jetty-native` | 97,681 | 0.68 | 1.13 | 1.77 | 377%
-| `spring-mvc-native` | 13,630 | 3.95 | 10.04 | 35.09 | 387%
+.9+| `json-list`
+| `spider-silk-jetty` | 163,817 | 0.41 | 0.70 | 1.10 | 379%
+| `spider-silk-tomcat` | 130,528 | 0.46 | 0.66 | 1.05 | 326%
+| `spring-mvc` | 95,200 | 0.67 | 0.89 | 1.25 | 349%
+| `spider-silk-jetty-native` | 98,275 | 0.68 | 1.13 | 1.73 | 377%
+| `spider-silk-jetty-native-oracle` | 123,486 | 0.54 | 0.90 | 1.42 | 377%
+| `spider-silk-jetty-native-pgo` | 149,915 | 0.44 | 0.75 | 1.20 | 378%
+| `spring-mvc-native` | 13,610 | 3.95 | 10.07 | 32.79 | 388%
+| `spring-mvc-native-oracle` | 17,729 | 3.23 | 5.40 | 18.02 | 381%
+| `spring-mvc-native-pgo` | 25,394 | 2.28 | 3.93 | 9.77 | 373%
 
-.5+| `json-post`
-| `spider-silk-jetty` | 112,858 | 0.59 | 0.98 | 1.59 | 382%
-| `spider-silk-tomcat` | 109,506 | 0.56 | 0.78 | 1.29 | 333%
-| `spring-mvc` | 54,958 | 1.15 | 1.43 | 2.20 | 373%
-| `spider-silk-jetty-native` | 74,379 | 0.89 | 1.56 | 2.63 | 367%
-| `spring-mvc-native` | 7,473 | 8.60 | 21.11 | 36.41 | 345%
+.9+| `json-post`
+| `spider-silk-jetty` | 114,480 | 0.58 | 0.97 | 1.60 | 381%
+| `spider-silk-tomcat` | 111,260 | 0.55 | 0.81 | 1.34 | 320%
+| `spring-mvc` | 55,860 | 1.13 | 1.42 | 2.19 | 360%
+| `spider-silk-jetty-native` | 83,549 | 0.79 | 1.47 | 2.60 | 369%
+| `spider-silk-jetty-native-oracle` | 80,968 | 0.82 | 1.42 | 2.36 | 372%
+| `spider-silk-jetty-native-pgo` | 102,891 | 0.64 | 1.12 | 1.93 | 371%
+| `spring-mvc-native` | 7,654 | 8.87 | 18.27 | 28.53 | 330%
+| `spring-mvc-native-oracle` | 11,833 | 4.33 | 15.81 | 58.55 | 388%
+| `spring-mvc-native-pgo` | 15,050 | 3.63 | 8.32 | 31.50 | 385%
 
-.3+| `template-jte`
-| `spider-silk-jetty` | 197,862 | 0.34 | 0.61 | 1.09 | 377%
-| `spider-silk-tomcat` | 183,579 | 0.32 | 0.52 | 0.81 | 300%
-| `spider-silk-jetty-native` | 138,690 | 0.48 | 0.88 | 1.66 | 367%
+.5+| `template-jte`
+| `spider-silk-jetty` | 197,418 | 0.34 | 0.61 | 1.09 | 378%
+| `spider-silk-tomcat` | 182,370 | 0.32 | 0.51 | 0.81 | 302%
+| `spider-silk-jetty-native` | 140,651 | 0.47 | 0.88 | 1.66 | 367%
+| `spider-silk-jetty-native-oracle` | 160,281 | 0.41 | 0.76 | 1.50 | 369%
+| `spider-silk-jetty-native-pgo` | 181,412 | 0.37 | 0.69 | 1.39 | 370%
 
-.5+| `template-thymeleaf`
-| `spider-silk-jetty` | 63,519 | 1.05 | 1.75 | 2.72 | 381%
-| `spider-silk-tomcat` | 62,444 | 1.00 | 1.29 | 2.07 | 357%
-| `spring-mvc` | 60,331 | 1.04 | 1.39 | 2.03 | 353%
-| `spider-silk-jetty-native` | 28,378 | 2.33 | 4.10 | 6.71 | 368%
-| `spring-mvc-native` | 33,346 | 1.77 | 3.04 | 5.24 | 365%
+.9+| `template-thymeleaf`
+| `spider-silk-jetty` | 70,928 | 0.93 | 1.61 | 2.53 | 377%
+| `spider-silk-tomcat` | 62,910 | 0.99 | 1.31 | 2.09 | 357%
+| `spring-mvc` | 63,927 | 1.00 | 1.32 | 1.98 | 349%
+| `spider-silk-jetty-native` | 28,340 | 2.33 | 4.13 | 6.78 | 368%
+| `spider-silk-jetty-native-oracle` | 45,465 | 1.44 | 2.68 | 4.57 | 365%
+| `spider-silk-jetty-native-pgo` | 56,220 | 1.17 | 2.12 | 3.66 | 365%
+| `spring-mvc-native` | 36,143 | 1.69 | 2.60 | 5.09 | 358%
+| `spring-mvc-native-oracle` | 40,469 | 1.46 | 2.34 | 3.77 | 362%
+| `spring-mvc-native-pgo` | 56,804 | 1.06 | 1.55 | 2.72 | 350%
 |===
 
 아래 비율은 Spider Silk의 처리량을 Spring MVC의 처리량으로 나눈 값이므로, 1보다 크면 Spider Silk가 앞선다.
+마지막 세 열은 같은 GraalVM으로 빌드한 두 애플리케이션의 네이티브 이미지끼리 견준다.
 
-[cols="2,>1,>1,>1",options="header"]
+[cols="2,>1,>1,>1,>1,>1",options="header"]
 |===
-| 케이스 | Jetty 대 Spring MVC | Tomcat 대 Spring MVC | 네이티브 대 네이티브
+| 케이스 | Jetty 대 Spring MVC | Tomcat 대 Spring MVC | GraalVM CE | Oracle GraalVM | PGO
 
-| `text` | 1.43 | 1.27 | 1.49
-| `json` | 1.27 | 1.10 | 1.67
-| `json-list` | 1.71 | 1.42 | 7.17
-| `json-post` | 2.05 | 1.99 | 9.95
-| Spider Silk의 jte 대 Spring MVC의 Thymeleaf | 3.28 | 3.04 | 4.16
-| 양쪽 모두 Thymeleaf | 1.05 | 1.04 | 0.85
+| `text` | 1.42 | 1.31 | 1.63 | 1.61 | 1.57
+| `json` | 1.42 | 1.24 | 1.63 | 1.65 | 1.55
+| `json-list` | 1.72 | 1.37 | 7.22 | 6.97 | 5.90
+| `json-post` | 2.05 | 1.99 | 10.92 | 6.84 | 6.84
+| Spider Silk의 jte 대 Spring MVC의 Thymeleaf | 3.09 | 2.85 | 3.89 | 3.96 | 3.19
+| 양쪽 모두 Thymeleaf | 1.11 | 0.98 | 0.78 | 1.12 | 0.99
 |===
+
+[#native-vs-jvm]
+=== 네이티브 이미지와 JVM
+
+아래 각 칸은 네이티브 이미지의 처리량을 같은 애플리케이션의 JVM 처리량에 대한 비율로 나타낸 것이며, Spider Silk는 Jetty 위의 값이다.
+
+[cols="2,2,>1,>1,>1",options="header"]
+|===
+| 케이스 | 애플리케이션 | GraalVM CE | Oracle GraalVM | PGO
+
+.2+| `text`
+| Spider Silk | 75% | 84% | 93%
+| Spring MVC | 65% | 73% | 84%
+
+.2+| `json`
+| Spider Silk | 80% | 83% | 94%
+| Spring MVC | 69% | 72% | 86%
+
+.2+| `json-list`
+| Spider Silk | 60% | 75% | 92%
+| Spring MVC | 14% | 19% | 27%
+
+.2+| `json-post`
+| Spider Silk | 73% | 71% | 90%
+| Spring MVC | 14% | 21% | 27%
+
+| `template-jte`
+| Spider Silk | 71% | 81% | 92%
+
+.2+| `template-thymeleaf`
+| Spider Silk | 40% | 64% | 79%
+| Spring MVC | 57% | 63% | 89%
+|===
+
+Oracle GraalVM의 기본 설정은 GraalVM CE보다 0.97배~1.60배 많은 요청을 처리하며, 기록한 프로파일은 그 위에 1.12배~1.43배를 더한다.
+PGO 이미지는 한 곳을 빼고 모든 백분위수에서 GraalVM CE 이미지보다 지연 시간도 낮다.
+``spring-mvc-native-pgo``의 p99는 ``json-list``에서 GraalVM CE의 32.79 ms에 비해 9.77 ms이지만, ``json-post``에서는 p50이 8.87 ms에서 3.63 ms로 내려가는 동안 p99는 31.50 ms로 GraalVM CE의 28.53 ms보다 낫지 않다.
 
 === 부팅 시간과 메모리
 
@@ -231,34 +317,53 @@ CPU는 측정 동안 서버 자신이 쓴 CPU 시간이며, 400%는 측정 내�
 |===
 | 대상 | 부팅 시간 (중앙값) | 최소 | 최대 | 상주 메모리
 
-| `spider-silk-jetty` | 295 ms | 294 ms | 346 ms | 117 MB
-| `spider-silk-tomcat` | 345 ms | 342 ms | 359 ms | 117 MB
-| `spring-mvc` | 908 ms | 905 ms | 923 ms | 216 MB
-| `spider-silk-jetty-native` | 24 ms | 22 ms | 25 ms | 37 MB
-| `spring-mvc-native` | 37 ms | 36 ms | 53 ms | 74 MB
+| `spider-silk-jetty` | 295 ms | 292 ms | 300 ms | 117 MB
+| `spider-silk-tomcat` | 344 ms | 342 ms | 348 ms | 117 MB
+| `spring-mvc` | 902 ms | 887 ms | 911 ms | 210 MB
+| `spider-silk-jetty-native` | 24 ms | 21 ms | 24 ms | 37 MB
+| `spider-silk-jetty-native-oracle` | 24 ms | 23 ms | 41 ms | 40 MB
+| `spider-silk-jetty-native-pgo` | 23 ms | 9 ms | 24 ms | 28 MB
+| `spring-mvc-native` | 37 ms | 36 ms | 38 ms | 73 MB
+| `spring-mvc-native-oracle` | 37 ms | 37 ms | 38 ms | 75 MB
+| `spring-mvc-native-pgo` | 37 ms | 34 ms | 38 ms | 51 MB
 |===
 
-Spring Boot 자신의 로그는 JVM에서 ``Started SpringMvcBenchmark in 0.73 seconds``, 네이티브 이미지에서 ``in 0.025 seconds``를 보고한다.
+폴링은 curl 자체의 기동을 포함해 약 14 ms 간격으로 이루어지므로, 네이티브 이미지의 부팅 시간은 그 눈금 위에 놓인다.
+Spider Silk의 PGO 이미지는 열 번 중 네 번은 첫 폴링에 9~10 ms로, 나머지는 두 번째 폴링에 23~24 ms로 응답했다.
+PGO 이미지는 부팅 시점의 메모리도 적다: GraalVM CE의 37 MB와 73 MB에 비해 28 MB와 51 MB다.
+
+Spring Boot 자신의 로그는 JVM에서 ``Started SpringMvcBenchmark in 0.72 seconds``, GraalVM CE 네이티브 이미지에서 ``in 0.024 seconds``를 보고한다.
 표와의 차이는 JVM 자체의 기동 시간과 첫 응답까지의 시간이다.
 
-부하 중 JVM 프로세스는 760~890 MB를 차지했으며, 그 대부분은 ``-Xms1g``가 확보하는 1 GiB 힙이다.
-네이티브 이미지는 60~360 MB를 차지했으며, ``spring-mvc-native``의 ``json-post``에서 가장 많았다.
+부하 중 JVM 프로세스는 770~870 MB를 차지했으며, 그 대부분은 ``-Xms1g``가 확보하는 1 GiB 힙이다.
+네이티브 이미지는 55~351 MB를 차지했으며, ``spring-mvc-native``의 ``json-post``에서 가장 많았다.
 
 === 네이티브 이미지 빌드
 
-각 애플리케이션을 깨끗한 프로젝트에서 세 번씩 빌드했다.
+각 네이티브 이미지는 깨끗한 프로젝트에서 세 번씩, 계측 이미지는 한 번씩 빌드했다.
 빌드 시간은 애플리케이션 컴파일, 해당하는 경우 Spring의 AOT 처리, ``native-image`` 실행을 포함한다.
 애플리케이션이 의존하는 Spider Silk 모듈은 이미 컴파일되어 있었으므로 포함하지 않는다.
 
-[cols="2,>1,>1,>1,>1",options="header"]
+[cols="2,2,>1,>1,>1,>1",options="header"]
 |===
-| 애플리케이션 | 빌드 (중앙값) | `native-image` 단독 | `native-image` 최대 메모리 | 바이너리
+| 애플리케이션 | 이미지 | 빌드 (중앙값) | `native-image` 단독 | `native-image` 최대 메모리 | 바이너리
 
-| Spider Silk | 72.2 s | 70 s | 4.2 GiB | 63.6 MB
-| Spring MVC | 87.3 s | 84 s | 4.0 GiB | 73.9 MB
+.4+| Spider Silk
+| GraalVM CE | 71.5 s | 70 s | 4.2 GiB | 63.6 MB
+| Oracle GraalVM | 133.3 s | 131 s | 4.6 GiB | 74.1 MB
+| Oracle GraalVM, 계측 | 142.8 s | 141 s | 7.0 GiB | 167.6 MB
+| Oracle GraalVM, PGO | 86.5 s | 85 s | 4.5 GiB | 47.2 MB
+
+.4+| Spring MVC
+| GraalVM CE | 84.5 s | 81 s | 4.0 GiB | 73.9 MB
+| Oracle GraalVM | 152.1 s | 149 s | 4.9 GiB | 84.9 MB
+| Oracle GraalVM, 계측 | 171.3 s | 168 s | 9.1 GiB | 197.5 MB
+| Oracle GraalVM, PGO | 104.6 s | 102 s | 4.0 GiB | 55.1 MB
 |===
 
-``native-image``는 두 애플리케이션 모두에서 CPU 여덟 개를 약 6.5의 부하로 썼다.
+``native-image``는 모든 빌드에서 CPU 여덟 개를 6.5~7.1의 부하로 썼다.
+PGO 빌드는 Oracle GraalVM의 기본 빌드보다 시간이 약 3분의 1 덜 걸리며, 그 바이너리는 GraalVM CE의 바이너리보다 약 4분의 1 작다.
+PGO 이미지에는 먼저 계측 빌드와 프로파일 수집 실행이 필요하며, 계측 이미지는 GraalVM CE 이미지의 2.6배 크기다.
 JVM 애플리케이션의 의존성은 Spider Silk가 9.6 MB, Spring MVC가 21 MB다.
 
 [#json-microbenchmark]
@@ -477,13 +582,13 @@ HTTP 케이스에서 직렬화기와 파서는 각 요청의 한 몫이며, <<re
 == 결과 해석
 
 `text`와 `json` 케이스는 본문이 아주 작으므로 프레임워크가 요청에 더하는 비용을 잰다.
-같은 컨테이너인 Tomcat 위에서 Spider Silk는 Spring MVC보다 `text`에서 초당 27%, `json`에서 10% 많은 요청을 처리한다.
+같은 컨테이너인 Tomcat 위에서 Spider Silk는 Spring MVC보다 `text`에서 초당 31%, `json`에서 24% 많은 요청을 처리한다.
 두 프레임워크는 요청마다 하는 일이 다르다.
 Spider Silk에서 서블릿부터 핸들러까지의 경로는 스택 프레임 두 개이며, Spring MVC는 요청마다 핸들러 매핑, 인자 리졸버, 반환값 핸들러, 메시지 컨버터를 거친다.
-Jetty는 여기에 13%~15%를 더한다.
+Jetty는 여기에 8%~14%를 더한다.
 또한 이 64개 연결에서 코어 네 개를 계속 바쁘게 쓴 서버는 Jetty뿐이며, 두 Tomcat 대상은 약 300%에 머물렀다.
 
-`json-list` 케이스에서는 격차가 Jetty에서 1.71배, Tomcat에서 1.42배로 벌어지는데, 10 KB 문서는 프레임워크가 아니라 직렬화기의 일이기 때문이다.
+`json-list` 케이스에서는 격차가 Jetty에서 1.72배, Tomcat에서 1.37배로 벌어지는데, 10 KB 문서는 프레임워크가 아니라 직렬화기의 일이기 때문이다.
 생성된 코덱은 문서를 스레드의 버퍼에 쓰며, ``WebResponse.json``은 그 버퍼에서 복사 없이 본문을 보낸다.
 <<json-microbenchmark>>는 같은 목록에서 코덱이 Jackson 시간의 40%를 쓴다고 잰다.
 2026-10-09의 실행에서는 ``JsonWriter.list``가 문서 전체를 트리로 만든 뒤에야 쓰기 시작했고, 격차는 2%~5%였다.
@@ -496,17 +601,26 @@ Jetty는 여기에 13%~15%를 더한다.
 여기서는 파싱이 컨테이너보다 무거우므로 Jetty와 Tomcat이 서로 3% 이내로 차이 난다.
 
 템플릿 케이스에서는 프레임워크보다 엔진의 비중이 크다.
-jte는 템플릿을 컴파일된 Java로 실행하며, 템플릿을 해석하고 표현식 언어로 모델을 읽는 Thymeleaf보다 이 페이지를 약 세 배 빠르게 렌더링한다.
-양쪽 모두 Thymeleaf를 쓰면 프레임워크의 몫이 충분히 작아서 두 프레임워크가 5% 이내로 차이 난다.
+jte는 템플릿을 컴파일된 Java로 실행하며, 템플릿을 해석하고 표현식 언어로 모델을 읽는 Thymeleaf보다 이 페이지를 약 2.8배 빠르게 렌더링한다.
+양쪽 모두 Thymeleaf를 쓰면 프레임워크의 몫이 충분히 작아서 Tomcat 위의 두 프레임워크가 2% 이내로 차이 난다.
+Jetty는 Spider Silk의 Thymeleaf 페이지에 13%를 더한다.
 
 네이티브 이미지는 부팅 시간과 메모리를 얻는 대신 처리량을 내준다.
-네이티브 이미지는 JIT가 모으는 프로파일 없이 미리 컴파일된 코드를 G1 대신 GraalVM CE의 Serial GC 위에서 실행한다.
-할당이 많은 케이스가 가장 크게 손해를 본다: ``spring-mvc-native``는 같은 애플리케이션이 JVM에서 처리하는 양의 ``json-list``에서 15%, ``json-post``에서 14%를 처리하며, p99는 35 ms와 36 ms다.
-Spider Silk의 네이티브 이미지는 같은 케이스에서 JVM 처리량의 62%와 66%를 유지하며, 이는 <<json-microbenchmark>>의 코덱 시간과 같은 방향이다.
-Thymeleaf는 Spider Silk의 네이티브 이미지가 Spring보다 느린 유일한 케이스다.
+네이티브 이미지는 미리 컴파일된 코드를 G1 대신 Serial GC 위에서 실행한다.
+GraalVM CE에서는 할당이 많은 케이스가 가장 크게 손해를 본다: ``spring-mvc-native``는 같은 애플리케이션이 JVM에서 처리하는 양의 ``json-list``와 ``json-post``에서 모두 14%를 처리하며, p99는 33 ms와 29 ms다.
+Spider Silk의 GraalVM CE 이미지는 같은 케이스에서 JVM 처리량의 60%와 73%를 유지하며, 이는 <<json-microbenchmark>>의 코덱 시간과 같은 방향이다.
+GraalVM CE에서 Thymeleaf는 Spider Silk의 네이티브 이미지가 Spring보다 느린 유일한 케이스다.
 두 프레임워크는 Thymeleaf의 표현식을 다르게 평가한다: Spider Silk의 모듈은 ``Fortune``을 리플렉션으로 읽는 OGNL로, Spring의 통합 모듈은 SpEL로 평가한다.
-Oracle GraalVM은 G1 컬렉터와 프로파일 기반 최적화를 제공하며, 이들은 이 비용의 일부를 겨냥한다.
-둘 다 여기서는 측정하지 않았다.
+
+프로파일 기반 최적화는 두 애플리케이션 모두에서 GraalVM CE가 내준 처리량의 대부분을 되찾는다.
+JIT 컴파일러는 실행 중인 프로그램이 거친 분기와 타입을 보고 각 메서드를 컴파일하며, GraalVM CE 이미지는 그런 정보 없이 컴파일된다.
+PGO 이미지는 계측된 쌍둥이 이미지가 같은 케이스 아래에서 기록한 횟수를 보고 컴파일된다.
+Spider Silk의 PGO 이미지는 JVM 처리량의 79%~94%를, Spring MVC의 PGO 이미지는 27%~89%를 유지한다.
+이득의 일부는 Oracle GraalVM 자체의 몫이다: 기록이 아니라 코드에서 추론한 프로파일을 쓰는 기본 빌드만으로도 GraalVM CE보다 최대 1.60배 많은 요청을 처리한다.
+가장 큰 이득은 GraalVM CE가 가장 많이 잃은 곳에서 나온다: Spider Silk의 Thymeleaf, 그리고 Spring MVC의 ``json-list``와 ``json-post``이며, 각각 GraalVM CE 처리량의 2배에 가깝다.
+PGO에서는 두 Thymeleaf 페이지가 서로 1% 이내로 차이 난다.
+프로파일은 이후에 측정한 바로 그 요청 아래에서 기록했으며, 이는 <<limits>>가 짚듯 가장 유리한 프로파일이다.
+Oracle GraalVM이 함께 제공하는 G1 컬렉터는 측정하지 않았다.
 
 [#limits]
 == 한계
@@ -520,6 +634,8 @@ wrk는 가장 빠른 케이스도 따라잡았으므로, 처리량을 정한 것
 번갈아 실행한 라운드가 그 편차를 모든 대상에 고르게 나눈다.
 * 핸들러가 I/O를 하지 않으므로, 이 수치는 프레임워크, 직렬화기, 템플릿 엔진만을 잰다.
 데이터베이스를 기다리는 애플리케이션은 요청 시간의 대부분을 거기서 쓰며, 위의 차이는 그만큼 줄어든다.
+* PGO 이미지는 측정한 바로 그 케이스 아래에서 프로파일을 모았다.
+애플리케이션의 프로파일은 프로파일 수집 부하가 닿은 코드만을 다루므로, 그 이득은 그 부하가 운영 트래픽과 얼마나 맞는지에 달려 있다.
 * Jetty 대상의 응답은 Tomcat 대상의 응답보다 26바이트 길며, 대부분은 ``Server: Jetty(12.1.13)`` 헤더다.
 
 [#reproducing]
@@ -532,7 +648,8 @@ wrk는 가장 빠른 케이스도 따라잡았으므로, 처리량을 정한 것
 ----
 sudo apt install wrk # or: brew install wrk
 sdk install java 25.2.4-graalce # for the native images
-GRAALVM_HOME=~/.sdkman/candidates/java/25.2.4-graalce benchmark/run.sh
+sdk install java 25.4.4+1-graal # for the Oracle GraalVM and PGO images
+GRAALVM_HOME=~/.sdkman/candidates/java/25.2.4-graalce ORACLE_GRAALVM_HOME=~/.sdkman/candidates/java/25.4.4+1-graal benchmark/run.sh
 ----
 
 실행은 ``benchmark/results/<timestamp>/``에 원시 CSV 파일, wrk 출력, 각 서버의 로그, 케이스마다의 응답 표본, 머신 설명을 쓴다.
@@ -546,5 +663,6 @@ taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench -jvmArgs "-Xms
 ----
 
 ``GRAALVM_HOME``이 없으면 JVM 대상만 측정한다.
-전체 실행은 이 머신에서 약 75분이 걸린다.
-``ROUNDS=1 BUILD_ROUNDS=1 STARTS=3 WARMUP=5s DURATION=10s``로는 약 15분 만에 대략적인 그림을 얻는다.
+``ORACLE_GRAALVM_HOME``이 없으면 Oracle GraalVM과 PGO 대상을 뺀다.
+전체 실행은 이 머신에서 2시간 51분이 걸렸으며, Oracle GraalVM 대상 없이는 약 80분이 걸린다.
+``ROUNDS=1 BUILD_ROUNDS=1 STARTS=3 WARMUP=5s DURATION=10s``로는 Oracle GraalVM 대상 없이 약 15분 만에 대략적인 그림을 얻는다.

@@ -327,6 +327,19 @@ JMH 1.37, 포크 2, 워밍업·측정 각 5회×1초, CPU 0~3(P코어), `-Xms1g 
   Jetty 대상은 몇 케이스에서 한 라운드만 중앙값보다 13~36% 높았고(`text` 1회차 348,563), 나머지는 10% 안이다.
   전원 프로파일이 2026-10-09(`balanced`)와 달라 절대값은 그 실행과 비교할 수 없다.
 
+### 9. Oracle GraalVM과 PGO (2026-10-12 밤)
+
+- HTTP 전체 실행(`benchmark/results/20261012-233209`, `performance` 프로파일, 오류 0, 2시간 51분)에 Oracle GraalVM 25.4.4로 빌드한 `-native-oracle`(기본값, ML 추론 프로파일, `-O2`)과 `-native-pgo`(계측 이미지를 케이스마다 10초 돌려 얻은 프로파일, `-O3` 자동) 대상을 더했다.
+  둘 다 Serial GC로 두어 GraalVM CE와의 차이를 컴파일러로 좁혔다.
+- PGO 이미지는 GraalVM CE 이미지의 1.18~1.98배를 처리한다.
+  Spider Silk는 JVM의 79~94%(`json-list` 92%, `json-post` 90%, Thymeleaf 79%), Spring MVC는 27~89%다.
+  Oracle 기본값만으로 CE의 0.97~1.60배, 기록한 프로파일이 그 위에 1.12~1.43배를 더한다.
+  Spider Silk의 `json-post`만 Oracle 기본값이 CE보다 3% 느렸다.
+- PGO 빌드는 Oracle 기본 빌드보다 약 3분의 1 빠르고(86.5 대 133.3초), 바이너리는 CE보다 약 4분의 1 작다(47.2 대 63.6 MB).
+  계측 빌드는 최대 7.0·9.1 GiB를 쓰고 바이너리가 CE의 2.6배다.
+- JVM 수치는 전날 실행과 대부분 5% 안에서 맞았다.
+  Spring MVC의 `json`은 200,313에서 180,642 req/s로 10% 내려가 Jetty 격차가 1.27에서 1.42배가 됐고, Jetty의 Thymeleaf는 63,519에서 70,928로 12% 올라 양쪽 Thymeleaf가 Jetty 1.11, Tomcat 0.98배다.
+
 ## 실패하거나 기각한 작업
 
 ### 설계

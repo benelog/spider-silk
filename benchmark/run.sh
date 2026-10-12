@@ -14,16 +14,13 @@
 #
 # The GraalVM native images join the run when GRAALVM_HOME names a GraalVM
 # JDK: native-build.sh builds them first, timing each build, and the -native
-# targets are measured beside the JVM ones.
+# targets are measured beside the JVM ones. ORACLE_GRAALVM_HOME, naming an
+# Oracle GraalVM JDK, adds the -native-oracle and -native-pgo targets.
 set -euo pipefail
 cd "$(dirname "$0")"
 
 source ./targets.sh
 
-WRK=${WRK:-wrk}
-CLIENT_CPUS=${CLIENT_CPUS:-4-7}
-THREADS=${THREADS:-4}
-CONNECTIONS=${CONNECTIONS:-64}
 WARMUP=${WARMUP:-20s}
 DURATION=${DURATION:-30s}
 ROUNDS=${ROUNDS:-3}

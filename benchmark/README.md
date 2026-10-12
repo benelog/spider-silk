@@ -11,6 +11,7 @@ The manual's [Performance Benchmark](../manual/modules/ROOT/pages/benchmark.adoc
 - `items.json`: the 100 records the `json-list` case answers with, which the `json-post` case sends as a body through `post-items.lua`.
 - `run.sh`: runs the whole benchmark through the scripts below, starts a fresh process per case, warms it up, measures it with [wrk](https://github.com/wg/wrk), and writes `results/<timestamp>/`.
 - `native-build.sh`: builds both applications as GraalVM native images from a clean project and times each build.
+- `pgo-profile.sh`: runs an application's instrumented native image under load and keeps the profile that its optimized image is built from.
 - `startup.sh`: times each target's startup on an idle machine.
 - `targets.sh`: the targets and cases the scripts share.
 - `summarize.sh`: reduces a result directory to medians.
@@ -23,14 +24,22 @@ It includes the root build, so the Spider Silk side runs the modules of this wor
 
 It needs Linux (`taskset` and `/proc`), Java 25 or later, curl, and wrk.
 The native images also need a GraalVM JDK named by `GRAALVM_HOME`; without it, `run.sh` measures the JVM cases only.
+An Oracle GraalVM JDK named by `ORACLE_GRAALVM_HOME` adds two more native targets for each application: one built with Oracle GraalVM's defaults (`-native-oracle`), and one built with profile-guided optimization (`-native-pgo`).
 
 ```bash
 sudo apt install wrk # or: brew install wrk
 sdk install java 25.2.4-graalce # for the native images
-GRAALVM_HOME=~/.sdkman/candidates/java/25.2.4-graalce benchmark/run.sh
+sdk install java 25.4.4+1-graal # for the Oracle GraalVM and PGO images
+GRAALVM_HOME=~/.sdkman/candidates/java/25.2.4-graalce ORACLE_GRAALVM_HOME=~/.sdkman/candidates/java/25.4.4+1-graal benchmark/run.sh
 ```
 
-The default run takes about 75 minutes: three native builds of each application, ten timed starts of each target, then 23 cases in three rounds, each with a fresh process, 20 seconds of warm-up, and 30 seconds of measurement.
+Profile-guided optimization takes three steps for each application, all in `native-build.sh`.
+It builds an image with `--pgo-instrument` once, and `pgo-profile.sh` runs it under the load of every case the application serves, `PROFILE_DURATION` (10 seconds) each.
+The instrumented image writes what it counted to a `.iprof` file when it stops, one for each command line, so Spider Silk gets one for jte and one for Thymeleaf.
+Each build round then builds the optimized image with `--pgo` on those files.
+
+The default run takes about 80 minutes: three native builds of each application, ten timed starts of each target, then 23 cases in three rounds, each with a fresh process, 20 seconds of warm-up, and 30 seconds of measurement.
+With `ORACLE_GRAALVM_HOME` it takes about three hours: an instrumented build and a profiling run of each application, nine native builds of each, ten timed starts of each of nine targets, and 45 cases in three rounds.
 The server runs on CPUs 0-3 and wrk on CPUs 4-7, so a machine with fewer than eight CPUs needs `SERVER_CPUS` and `CLIENT_CPUS` set.
 Every setting is an environment variable, listed at the top of `run.sh`:
 

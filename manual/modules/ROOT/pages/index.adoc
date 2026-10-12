@@ -233,22 +233,23 @@ codex plugin add spider-silk@spider-silk
 ----
 
 == Performance
-In the xref:benchmark.adoc[benchmark] in the appendix, Spider Silk on Jetty answers plain text about 1.43 times as fast as Spring MVC and a JSON list of 100 records about 1.7 times, and its JVM process starts in a third of the time.
+In the xref:benchmark.adoc[benchmark] in the appendix, Spider Silk on Jetty answers plain text about 1.42 times as fast as Spring MVC and a JSON list of 100 records about 1.7 times, and its JVM process starts in a third of the time.
 The benchmark ran both frameworks on one laptop with the same JVM and the same load, against Spring Boot 4.1 with Spring MVC, Jackson, and Thymeleaf on its defaults.
 
 [cols="3,>2,>2",options="header"]
 |===
 | Measure | Spider Silk (Jetty) | Spring MVC
 
-| Plain text, requests/s | 255,705 | 178,797
-| Small JSON object, requests/s | 253,830 | 200,313
-| JSON list of 100 records, requests/s | 158,868 | 92,680
-| JSON list of 100 records as a request body, requests/s | 112,858 | 54,958
-| HTML page, requests/s (jte vs. Thymeleaf) | 197,862 | 60,331
-| Startup on the JVM | 295 ms | 908 ms
+| Plain text, requests/s | 256,545 | 180,984
+| Small JSON object, requests/s | 256,318 | 180,642
+| JSON list of 100 records, requests/s | 163,817 | 95,200
+| JSON list of 100 records as a request body, requests/s | 114,480 | 55,860
+| HTML page, requests/s (jte vs. Thymeleaf) | 197,418 | 63,927
+| Startup on the JVM | 295 ms | 902 ms
 | Startup as a GraalVM native image | 24 ms | 37 ms
 |===
 
 At the JSON list, where the serializer does most of the work, Spider Silk answers about 1.7 times as many requests as Spring MVC with Jackson, and about twice as many when it reads the list from a request body.
-With Thymeleaf on both sides, the two render a page within 5% of each other, so the margin on the HTML page is jte's.
+With Thymeleaf on both sides and the same container, the two render a page within 2% of each other, so the margin on the HTML page is jte's.
 The appendix covers the method, the machine, the native images, and the limits of these numbers.
+It also measures native images built with Oracle GraalVM's profile-guided optimization, which keep 79% to 94% of Spider Silk's throughput on the JVM.
