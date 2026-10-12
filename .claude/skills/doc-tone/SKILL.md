@@ -3,10 +3,10 @@ name: doc-tone
 description: >-
   The prose style for this repository's documentation: lead with the conclusion, one idea per sentence,
   the register of a technical reference manual.
-  Use this skill when writing or editing any prose under `manual/` (the Antora pages), `README.adoc`,
-  or `notes/` (positioning.md, decisions.md) — a new chapter, a new section, a rewrite, or a paragraph
-  added to an existing page. It governs how a sentence is built, not what the documentation says,
-  and how a `//` comment sits in a code block.
+  Use this skill when writing or editing any prose under `manual/` (the Antora pages), `manual-ko/`
+  (their Korean translation), `README.adoc`, or `notes/` (positioning.md, decisions.md) — a new chapter,
+  a new section, a rewrite, a translation, or a paragraph added to an existing page.
+  It governs how a sentence is built, not what the documentation says, and how a `//` comment sits in a code block.
 ---
 
 # Documentation tone

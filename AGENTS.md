@@ -61,7 +61,7 @@
   A page embeds a diagram with a captioned `image::name.svg[alt,link=self]`, after the sentence that states what the diagram shows.
 - **The prose style is a skill**: `.claude/skills/doc-tone/SKILL.md`.
   Lead with the conclusion, one idea per sentence, the register of a technical reference manual.
-  It covers `manual/`, `README.adoc`, and `notes/` alike, and carries the before/after examples and the verification steps.
+  It covers `manual/`, `manual-ko/`, `README.adoc`, and `notes/` alike, and carries the before/after examples and the verification steps.
 
 ## Build / Verification
 
