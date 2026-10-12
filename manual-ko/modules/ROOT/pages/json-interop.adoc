@@ -40,7 +40,7 @@ static final ObjectMapper MAPPER = new ObjectMapper();
 app.get("/api/decks", req -> {
     try {
         String resBody = MAPPER.writeValueAsString(deckService.decks());
-        return WebResponse.json(resBody);
+        return WebResponse.rawJson(resBody);
     } catch (JsonProcessingException e) {
         throw new IllegalStateException(e);
     }
@@ -54,7 +54,7 @@ app.post("/api/decks", req -> {
         throw new HttpException(HttpStatus.BAD_REQUEST, "Malformed JSON body");
     }
     String resBody = MAPPER.writeValueAsString(deckService.create(body.name()));
-    return WebResponse.json(resBody);
+    return WebResponse.rawJson(resBody);
 });
 ----
 
@@ -72,13 +72,13 @@ static final Gson GSON = new Gson();
 
 app.get("/api/decks", req -> {
     String resBody = GSON.toJson(deckService.decks());
-    return WebResponse.json(resBody);
+    return WebResponse.rawJson(resBody);
 });
 
 app.post("/api/decks", req -> {
     NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
     String resBody = GSON.toJson(deckService.create(body.name()));
-    return WebResponse.json(resBody);
+    return WebResponse.rawJson(resBody);
 });
 ----
 
@@ -109,7 +109,7 @@ static final JsonType<Deck> DECK = JSONB.type(Deck.class);
 
 app.get("/api/decks/{deckId}", req -> {
     String resBody = DECK.toJson(deckService.deck(req.pathParamLong("deckId")));
-    return WebResponse.json(resBody);
+    return WebResponse.rawJson(resBody);
 });
 ----
 
@@ -131,7 +131,7 @@ DSL-JSON의 ``@CompiledJson``도 같은 방식으로 동작하는데, 알아둘 
 
 라우팅, 파라미터 추출, 요청과 응답 봉투는 JSON 라이브러리와 무관하게 그대로다.
 애플리케이션은 한 엔드포인트를 라이브러리로 바인딩하고 다음 엔드포인트를 손으로 작성할 수 있다.
-``WebResponse.json``은 ``String``을 받을 뿐 그것이 어디서 왔는지 묻지 않는다.
+``WebResponse.rawJson``은 ``String``을 받을 뿐 그것이 어디서 왔는지 묻지 않는다.
 
 NOTE: 이 페이지의 스니펫은 예시이며 빌드의 일부가 아니다.
 이 프로젝트의 어느 모듈도 Jackson, Gson, avaje-jsonb에 의존하지 않는다.

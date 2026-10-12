@@ -113,7 +113,7 @@ An app with three hundred DTOs, or a wire format generated from a schema it does
 
 ```java
 // Out: a document something else already serialized
-return WebResponse.json(MAPPER.writeValueAsString(decks));
+return WebResponse.rawJson(MAPPER.writeValueAsString(decks));
 
 // In: the body, unread. bodyStream() is bytes (Jackson), bodyReader() is characters (Gson)
 NewDeck body = MAPPER.readValue(req.bodyStream(), NewDeck.class);

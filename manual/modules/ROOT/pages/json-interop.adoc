@@ -40,7 +40,7 @@ static final ObjectMapper MAPPER = new ObjectMapper();
 app.get("/api/decks", req -> {
     try {
         String resBody = MAPPER.writeValueAsString(deckService.decks());
-        return WebResponse.json(resBody);
+        return WebResponse.rawJson(resBody);
     } catch (JsonProcessingException e) {
         throw new IllegalStateException(e);
     }
@@ -54,7 +54,7 @@ app.post("/api/decks", req -> {
         throw new HttpException(HttpStatus.BAD_REQUEST, "Malformed JSON body");
     }
     String resBody = MAPPER.writeValueAsString(deckService.create(body.name()));
-    return WebResponse.json(resBody);
+    return WebResponse.rawJson(resBody);
 });
 ----
 
@@ -72,13 +72,13 @@ static final Gson GSON = new Gson();
 
 app.get("/api/decks", req -> {
     String resBody = GSON.toJson(deckService.decks());
-    return WebResponse.json(resBody);
+    return WebResponse.rawJson(resBody);
 });
 
 app.post("/api/decks", req -> {
     NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
     String resBody = GSON.toJson(deckService.create(body.name()));
-    return WebResponse.json(resBody);
+    return WebResponse.rawJson(resBody);
 });
 ----
 
@@ -109,7 +109,7 @@ static final JsonType<Deck> DECK = JSONB.type(Deck.class);
 
 app.get("/api/decks/{deckId}", req -> {
     String resBody = DECK.toJson(deckService.deck(req.pathParamLong("deckId")));
-    return WebResponse.json(resBody);
+    return WebResponse.rawJson(resBody);
 });
 ----
 
@@ -131,7 +131,7 @@ It keeps a runtime reflection fallback for types the processor did not see, so "
 
 Routing, parameter extraction, and the request and response envelope are unchanged by a JSON library.
 An application can bind one endpoint with a library and hand-write the next.
-`WebResponse.json` takes a `String` and does not ask where it came from.
+`WebResponse.rawJson` takes a `String` and does not ask where it came from.
 
 NOTE: The snippets on this page are illustrations, not part of the build.
 No module of this project depends on Jackson, Gson, or avaje-jsonb.
