@@ -17,7 +17,7 @@
   It lives in this repository until its API settles.
 - **Test-only code lives in spider-silk-test.**
   The `WebTest` harness is its own module, so core's jar carries no test code.
-  Core's tests depend on it (`testImplementation project(':spider-silk-test')`); do not move it back into core.
+  Core's tests depend on it (`testImplementation project(':spider-silk-test')`); it does not move into core.
 - **No reflection.**
   There is no annotation scanning, no proxies, and no automatic binding in core or in silk-json.
   Do not make changes that break this principle.
@@ -45,7 +45,7 @@
   Pages are AsciiDoc under `manual/modules/ROOT/pages/`, one chapter per file, listed in `manual/modules/ROOT/nav.adoc`.
   A new chapter is a new page plus a `nav.adoc` entry, nested under one of the existing groups (`**`, not `*`); only Introduction and Installation sit at the top level.
   `README.adoc` stays a Quick Start: why Spider Silk, installation, hello world, the agent-skill install, and links into the site.
-  Do not grow the README back into the manual.
+  Everything past the Quick Start belongs in the manual, not the README.
 - **The Korean manual lives in `manual-ko/`, the Antora component `ko`, and mirrors `manual/` page for page.**
   The English page is the source: a change to a page under `manual/` is a change to the same page under `manual-ko/` in the same commit, sentence for sentence, and a new chapter is added to both `nav.adoc` files.
   The Korean prose is 해라체 평서문 in the register of a technical reference manual, one sentence per line, with code blocks, xref targets, anchors, and image paths kept identical to the English page; only the alt text and the link text are translated.

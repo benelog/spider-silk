@@ -143,4 +143,4 @@ grep -rnE '\S {2,}//|//  +\S' <files> # a // comment aligned into a column, or p
 diff <(git show HEAD:<file> | grep '^#') <(grep '^#' <file>) # headings, and therefore anchors, unchanged
 ```
 
-Commit per group of pages rather than in one sweep, so a broken anchor is easy to place.
+When you are asked to commit, commit per group of pages rather than in one sweep, so a broken anchor is easy to place.
