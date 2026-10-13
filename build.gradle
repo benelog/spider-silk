@@ -171,7 +171,7 @@ configure(subprojects.findAll {
     // the API. NullAway checks them against the code at compile time.
     dependencies {
         api 'org.jspecify:jspecify:1.0.1'
-        errorprone 'com.uber.nullaway:nullaway:0.14.1'
+        errorprone 'com.uber.nullaway:nullaway:0.14.2'
     }
 
     tasks.named('compileJava', JavaCompile) {
