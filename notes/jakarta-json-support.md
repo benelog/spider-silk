@@ -3,7 +3,7 @@
 silk-json이 Jakarta JSON Binding(JSON-B)과 Jakarta JSON Processing(JSON-P)을 어디까지 지원할 수 있는지 조사한 기록이다.
 결론은 둘이 다르다: JSON-B의 완전한 지원(TCK 통과)은 리플렉션 없이 불가능하고, JSON-P는 원칙을 지키면서 TCK 통과까지 노릴 수 있다.
 core API의 `JsonValue`와 `JsonSink`는 JSON-P로 바꾸지 않고, JSON-P 트리는 `silk-json-p`의 `JsonWriter`와 `JsonReader`로 주고받는다("core API에 JSON-P를 쓸 수 있는가").
-Jackson도 `spider-silk-jackson` 모듈로 같은 자리에 붙고, 쓰기에는 `JsonOutput` 위의 `JsonGenerator` 구현이 필요하다("Jackson을 같은 방식으로 붙일 수 있는가").
+Jackson은 `spider-silk-jackson` 모듈로 같은 자리에 붙었고, 쓰기는 `JsonOutput` 위의 `JsonGenerator` 구현으로 한다("Jackson을 같은 방식으로 붙일 수 있는가").
 근거는 `AGENTS.md`의 설계 원칙, 결정 76·77(`notes/decisions.md`), 2026-10-10 시점의 `silk-json`과 `silk-json-processor` 코드이다.
 다른 라이브러리가 두 스펙을 어떻게 지원하는지는 2026-10-13에 조사해 마지막 절에 적었다.
 
@@ -203,11 +203,12 @@ sink.write(value, JsonP.WRITER);
 
 Jackson도 core API를 바꾸지 않고 `JsonWriter<T>`와 `JsonReader<T>`의 자리에 붙는다.
 읽기는 silk-json을 고치지 않고 되고, 쓰기는 Jackson의 `JsonGenerator`를 `JsonOutput` 위에 구현해야 한다.
-2026-10-13의 core와 silk-json 코드를 근거로 검토했고, 구현과 측정은 하지 않았다.
+2026-10-13의 core와 silk-json 코드를 근거로 검토했고, 같은 날 `spider-silk-jackson`으로 구현했다.
+2026-10-14에 읽기를 측정했고, 중첩 경로를 빠르게 하려고 silk-json에 `JsonInput.readValueBytes()`를 더했다.
 
 | 층 | 방법 | silk-json의 변경 |
 |---|---|---|
-| 바인딩 읽기 | `fromJsonBytes`를 재정의해 `mapper.readValue(utf8, type)`를 부른다 | 없다 |
+| 바인딩 읽기 | `fromJsonBytes`를 재정의해 `mapper.readValue(utf8, type)`를 부른다 | 없다. 중첩 경로에 `readValueBytes()`를 더했다 |
 | 바인딩 쓰기 | Jackson의 `JsonGenerator`를 `JsonOutput` 위에 구현한다 | 없다. 모듈의 작업이 크다 |
 | 트리(`JsonNode`) | JSON-P 트리의 `WRITER`, `OBJECT`와 같다 | 읽기에 peek가 필요하다 |
 
@@ -231,9 +232,14 @@ public T fromJsonBytes(byte[] utf8) {
 - Jackson 3의 예외는 unchecked이다.
   입력의 오류만 `JsonException`으로 바꾸면 core의 400 계약(결정 8)을 지킨다.
 - `InvalidDefinitionException`은 매핑 정의의 오류, 곧 프로그래머의 버그이므로 500으로 남긴다.
-- `read(JsonInput)`은 `JsonReader.list(...)` 같은 중첩에서만 불리고, 처음에는 `UnsupportedOperationException`으로 막는다.
-  지원하려면 `JsonInput`이 다음 값의 바이트를 내주어야 한다.
-  `skipValue()`가 이미 그 범위를 훑으므로 추가는 작다.
+- `read(JsonInput)`은 `JsonReader.list(...)` 같은 중첩에서만 불린다.
+  구현은 `JsonInput.readValueBytes()`로 다음 값의 바이트를 쓰인 그대로 꺼내 Jackson에 넘긴다.
+  이 메서드는 2026-10-14에 이 경로를 위해 silk-json에 더했다.
+  `skipValue()`와 같은 문법 검사를 거친 바이트의 복사본을 돌려준다.
+  처음 구현은 `readValue()`로 트리를 읽어 바이트로 되쓴 뒤 넘겼고, 값 하나를 세 번 처리했다.
+  두 구현의 수치는 `notes/json-performance-tuning.md`의 10절에 있다.
+- JSON null 본문은 `JsonException`으로 거부해, 핸들러가 값 대신 null을 받지 않게 한다.
+- 생성자가 던진 `IllegalArgumentException`은 Jackson이 `ValueInstantiationException`으로 감싸므로, 원인을 꺼내 다시 던져 400을 지킨다.
 
 ### 쓰기
 
@@ -262,14 +268,16 @@ core는 `writer.write(value, out)`로 `JsonOutput`에 쓰게 하고, `JsonOutput
 - `bodyNdjson(reader)`가 줄마다 Jackson으로 읽는다.
 
 ```java
-static final JsonWriter<Deck> DECK = Jackson.writer(MAPPER);
-static final JsonReader<NewDeck> NEW_DECK = Jackson.reader(MAPPER, NewDeck.class);
+static final JacksonCodecs JACKSON = new JacksonCodecs(JsonMapper.builder().build());
+static final JsonWriter<Deck> DECK = JACKSON.writer(Deck.class);
+static final JsonReader<NewDeck> NEW_DECK = JACKSON.reader(NewDeck.class);
 
 NewDeck body = req.bodyJson(NEW_DECK);
 return WebResponse.json(deck, DECK);
 ```
 
-`Jackson`은 가칭이다.
+검토 때의 가칭은 `Jackson.writer(MAPPER)`와 `Jackson.reader(MAPPER, NewDeck.class)`처럼 매퍼를 매번 인자로 받았다.
+구현은 매퍼를 `JacksonCodecs`의 생성자에서 한 번 받아, 메서드 인자에 매퍼가 되풀이되지 않게 했다.
 
 ### 모듈: `spider-silk-jackson`
 

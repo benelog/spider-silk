@@ -1,5 +1,5 @@
-# Jetty, jte, Tomcat, Undertow, FreeMarker, Handlebars, and Thymeleaf are
-# declared `api`, so their versions are the versions this framework's users
+# Jetty, jte, Tomcat, Undertow, FreeMarker, Handlebars, Thymeleaf, and Jackson
+# are declared `api`, so their versions are the versions this framework's users
 # carry: an advisory against any of them is an advisory against Spider Silk.
 # These entries turn that into a pull request instead of a surprise.
 #

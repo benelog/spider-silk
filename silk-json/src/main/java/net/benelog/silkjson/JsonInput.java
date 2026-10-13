@@ -32,8 +32,9 @@ import org.jspecify.annotations.Nullable;
  * <p>{@link #object()} and {@link #array()} enter a container, and
  * {@link #nextKey()} and {@link #nextElement()} step through it and leave it
  * when they answer false. A value is read with one of the {@code read}
- * methods, taken whole as a tree with {@link #readValue()}, or passed over
- * with {@link #skipValue()}. {@link #end()} checks that nothing follows.
+ * methods, taken whole as a tree with {@link #readValue()} or as the bytes
+ * it is written in with {@link #readValueBytes()}, or passed over with
+ * {@link #skipValue()}. {@link #end()} checks that nothing follows.
  *
  * <p>The syntax is RFC 8259's, with no extension, as {@link Json#parse}
  * states it, and every failure is a {@link JsonException} that says where.
@@ -768,6 +769,20 @@ public final class JsonInput {
     /** The whole value that comes next, as a tree. */
     public JsonValue readValue() {
         return JsonPrimitive.wrap(parse());
+    }
+
+    /**
+     * The whole value that comes next, as the bytes it is written in, its
+     * syntax checked on the way as {@link #skipValue()} checks it. The bytes
+     * are a copy, from the value's first byte to its last, with no whitespace
+     * around them: a document of its own, for another parser to read or for a
+     * store to keep as it came.
+     */
+    public byte[] readValueBytes() {
+        int start = skipWhitespace(pos);
+        pos = start;
+        skipValue();
+        return Arrays.copyOfRange(in, start, pos);
     }
 
     /** Passes over the whole value that comes next, checking its syntax and nothing else. */

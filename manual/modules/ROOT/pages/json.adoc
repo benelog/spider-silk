@@ -86,7 +86,7 @@ A body that is not an object throws `JsonException`, which `req.bodyJson(reader)
 
 A reader written against the input itself never builds a tree, which is what a generated codec does.
 `object()` enters an object, `nextKey()` steps to each member and leaves the object when it answers false, and `keyIs(key)` matches the member's name against a `JsonKey` without making a string of it.
-The `read` methods take a value, `readValue()` takes one whole as a tree, and `skipValue()` passes one over:
+The `read` methods take a value, `readValue()` takes one whole as a tree, `readValueBytes()` takes one whole as the bytes it is written in, and `skipValue()` passes one over:
 
 [source,java]
 ----

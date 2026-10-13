@@ -121,6 +121,9 @@ Hello, silk
 | `spider-silk-jetty-websocket`
 | xref:websocket.adoc[`WebSockets`]: 라우트 곁의 WebSocket 엔드포인트, Jetty 전용
 
+| `spider-silk-jackson`
+| xref:json-interop.adoc#jackson[`JacksonCodecs`]: 핸들러가 받는 `JsonWriter`와 `JsonReader` 뒤의 Jackson 3
+
 | `spider-silk-openapi`
 | xref:openapi.adoc[`OpenApi`]: 라우트 목록을 담은 OpenAPI 3.1 문서
 

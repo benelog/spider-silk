@@ -109,7 +109,24 @@ app.post("/api/decks/{deckId}/cards.ndjson", req -> {
 ### Binding JSON with another library
 
 Hand-written mapping is core's decision for core, not for the application.
-An app with three hundred DTOs, or a wire format generated from a schema it does not own, has a reason to bind with a library — so when the user asks for Jackson, Gson, or avaje-jsonb, wire it through the seam rather than refusing:
+An app with three hundred DTOs, or a wire format generated from a schema it does not own, has a reason to bind with a library — so when the user asks for one, wire it in rather than refusing.
+
+Jackson 3 has a module, `spider-silk-jackson`. `JacksonCodecs` takes the `ObjectMapper` once, in its constructor, and makes the writers and readers core already takes:
+
+```java
+static final JacksonCodecs JACKSON = new JacksonCodecs(JsonMapper.builder().build()); // or new JacksonCodecs() for the defaults
+static final JsonWriter<Deck> DECK = JACKSON.writer(Deck.class);
+static final JsonReader<NewDeck> NEW_DECK = JACKSON.reader(NewDeck.class);
+// writer() writes any value as its run-time type; TypeReference overloads and codec(...) cover generics and both directions
+
+NewDeck body = req.bodyJson(NEW_DECK); // Jackson's input errors are a 400, a mapping it cannot build a 500
+return WebResponse.json(deck, DECK); // serialized straight into the response buffer, never as a String
+```
+
+- They work in `bodyNdjson`, `jsonArray`/`ndjson` sinks, and inside `JsonWriter.list`/`JsonReader.list` as well.
+- Do not pass the mapper to each call or wrap Jackson's output in `rawJson`: the module exists so a handler names a type and nothing else.
+
+For Jackson 2 (`com.fasterxml.jackson`), Gson, or avaje-jsonb, wire it through the seam:
 
 ```java
 // Out: a document something else already serialized
@@ -125,7 +142,7 @@ NewDeck body = GSON.fromJson(req.bodyReader(), NewDeck.class);
   Mixing the two throws `IllegalStateException` whichever comes second, and the stream and the reader exclude each other too.
 - A form-encoded POST is spent by its first `param()` read, since the container parses the form by reading the body.
   `bodyStream()` afterwards answers an empty stream rather than throwing, and a body read as bytes first leaves `formParamOrNull()` with no fields.
-- Core has not been told the body is JSON, so the library's own failures are the application's to answer: map them with `app.exception(JsonProcessingException.class, ...)` or throw `HttpException(HttpStatus.BAD_REQUEST, ...)`.
+- Through the seam, core has not been told the body is JSON, so the library's own failures are the application's to answer: map them with `app.exception(JsonProcessingException.class, ...)` or throw `HttpException(HttpStatus.BAD_REQUEST, ...)`.
 - Under a [native image](servers-and-deployment.md#graalvm-native-image), Jackson and Gson need a reflection entry per bound type; avaje-jsonb generates an adapter per type at compile time and needs none.
 
 ## A file on disk

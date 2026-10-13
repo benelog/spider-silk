@@ -12,6 +12,9 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 
 ### Added
 
+- `spider-silk-jackson`: Jackson 3 behind the `JsonWriter` and `JsonReader` that core takes.
+  `JacksonCodecs` takes the `ObjectMapper` once, in its constructor, and `writer(type)`, `reader(type)`, and `codec(type)` bind with it, so a handler names a type and never the mapper.
+  A writer serializes through a Jackson generator over core's `JsonOutput`, straight into the response buffer, and a reader answers 400 for input Jackson rejects.
 - `spider-silk-core`: `AppServlet.NO_MULTIPART_PARAMETER`, the servlet init parameter a server sets when it registers the servlet with no multipart configuration.
   `JettyServer.multipart(null)` sets it, and a parameter read of a multipart request then answers from the query string, as on Tomcat and Undertow.
 - `spider-silk-core`: `req.session()` answers a `WebSession`, with `get(key)`, `get(key, type)`, `set(key, value)`, `remove(key)`, and `invalidate()`.
@@ -28,7 +31,8 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `silk-json`: `JsonOutput` and `JsonInput`, the byte-level engine every JSON goes through.
   A `JsonOutput` writes UTF-8 straight into a buffer, in memory or to a stream, through `object()`, `array()`, `end()`, `put`, `name`, `value`, `values`, and `newline()`.
   An in-memory one answers `toBytes()`, or `length()` and `writeTo(stream)` followed by `release()`, which send the document from the buffer with no copy of it.
-  A `JsonInput` reads a document's bytes one value at a time, through `object()`, `array()`, `nextKey()`, `nextKeyIs`, `keyHead()`, `nextElement()`, `keyIs`, `key()`, the `read` methods, `readValue()`, `skipValue()`, and `end()`, and builds no string of the document first.
+  A `JsonInput` reads a document's bytes one value at a time, through `object()`, `array()`, `nextKey()`, `nextKeyIs`, `keyHead()`, `nextElement()`, `keyIs`, `key()`, the `read` methods, `readValue()`, `readValueBytes()`, `skipValue()`, and `end()`, and builds no string of the document first.
+  `readValueBytes()` answers a copy of the next value's bytes as they stand in the document, its syntax checked as `skipValue()` checks it, for another parser to read or a store to keep as it came.
   `JsonKey.of(name)` encodes a member name once for both.
   `JsonKey.names(constants)` encodes an enum's constant names the same way: `put(key, name)` and `value(name)` write one, and `readOneOf(names)` reads one back as its index with no string made.
 - `silk-json`: `JsonWriter.tree(toTree)`, `JsonReader.tree(fromTree)`, `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, and `reader.fromJsonBytes(utf8)`.

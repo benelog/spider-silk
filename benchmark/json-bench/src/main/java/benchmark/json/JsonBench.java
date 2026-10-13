@@ -14,6 +14,7 @@ import net.benelog.silkjson.JsonCodec;
 import net.benelog.silkjson.JsonOutput;
 import net.benelog.silkjson.JsonReader;
 import net.benelog.silkjson.JsonWriter;
+import net.benelog.spidersilk.jackson.JacksonCodecs;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -44,6 +45,9 @@ import tools.jackson.databind.json.JsonMapper;
  * measure the shapes a document takes outside this codec. 100 orders with
  * an enum each measure a value written from a fixed set of names. Writing the list to a stream from the thread's buffer measures
  * what a response body costs once the copy {@code toBytes()} makes is gone.
+ * The list read through spider-silk-jackson, whole and with a Jackson reader
+ * nested in silk-json's list reader, measures the adapter and the path a
+ * nested reader takes.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -102,6 +106,15 @@ public class JsonBench {
     static final JsonCodec<List<Place>> PLACES_GENERATED = JsonCodec.list(PlaceJson.CODEC);
     static final JsonCodec<List<Order>> ORDERS_GENERATED = JsonCodec.list(OrderJson.CODEC);
 
+    /** Jackson behind silk-json's reader, with the defaults the {@code jackson} field has. */
+    static final JacksonCodecs JACKSON = new JacksonCodecs(JsonMapper.builder().build());
+
+    /** A Jackson reader for one record, nested in silk-json's list reader: the path a reader inside another takes. */
+    static final JsonReader<List<Item>> ITEMS_JACKSON_NESTED = JsonReader.list(JACKSON.reader(Item.class));
+
+    /** The whole list handed to Jackson through the adapter, with no reader around it. */
+    static final JsonReader<List<Item>> ITEMS_JACKSON_CODECS = JACKSON.reader(new TypeReference<List<Item>>() { });
+
     final JsonMapper jackson = JsonMapper.builder().build();
     final TypeReference<List<Item>> listType = new TypeReference<>() { };
     final TypeReference<List<Place>> placesType = new TypeReference<>() { };
@@ -113,6 +126,10 @@ public class JsonBench {
     public void setup() {
         listBytes = ITEMS_GENERATED.toJsonBytes(ITEMS);
         placesBytes = PLACES_GENERATED.toJsonBytes(PLACES);
+        if (!ITEMS_JACKSON_NESTED.fromJsonBytes(listBytes).equals(ITEMS)
+                || !ITEMS_JACKSON_CODECS.fromJsonBytes(listBytes).equals(ITEMS)) {
+            throw new IllegalStateException("A Jackson reader read the list as other records");
+        }
     }
 
     /**
@@ -469,6 +486,18 @@ public class JsonBench {
     @Benchmark
     public List<Item> readList_jackson() {
         return jackson.readValue(listBytes, listType);
+    }
+
+    /** Jackson through spider-silk-jackson, a record at a time inside silk-json's list reader. */
+    @Benchmark
+    public List<Item> readList_jacksonNested() {
+        return ITEMS_JACKSON_NESTED.fromJsonBytes(listBytes);
+    }
+
+    /** Jackson through spider-silk-jackson, the whole list at once: what the adapter adds to {@code readList_jackson}. */
+    @Benchmark
+    public List<Item> readList_jacksonCodecs() {
+        return ITEMS_JACKSON_CODECS.fromJsonBytes(listBytes);
     }
 
     @Benchmark

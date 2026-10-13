@@ -86,7 +86,7 @@ static final JsonReader<CardDraft> CARD_DRAFT = JsonReader.object(object -> new 
 
 입력 자체를 상대로 작성한 리더는 트리를 전혀 만들지 않으며, 생성된 코덱이 바로 그렇게 한다.
 ``object()``는 객체에 들어가고, ``nextKey()``는 각 멤버로 나아가다 false를 답하며 객체를 벗어나고, ``keyIs(key)``는 멤버 이름의 문자열을 만들지 않고 ``JsonKey``와 맞춰 본다.
-`read` 메서드들은 값을 꺼내고, ``readValue()``는 값 하나를 통째로 트리로 꺼내며, ``skipValue()``는 값 하나를 건너뛴다:
+`read` 메서드들은 값을 꺼내고, ``readValue()``는 값 하나를 통째로 트리로 꺼내고, ``readValueBytes()``는 값 하나를 통째로 쓰인 그대로의 바이트로 꺼내며, ``skipValue()``는 값 하나를 건너뛴다:
 
 [source,java]
 ----

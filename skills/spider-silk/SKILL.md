@@ -40,7 +40,8 @@ Spider Silk is built around explicitness, and code that fights this reads as wro
    Never introduce annotation-based routing or classpath scanning: those fight the framework itself, and there is no seam for them.
    JSON mapping is explicit: a hand-written `JsonWriter`/`JsonReader` lambda, or a codec the build generates from a `@JsonBound` type — neither reflects, and that is a feature, not a gap to fill, so do not reach for a binding library unasked.
    A library the *application* adds is a different question, and the answer to it is not "no".
-   When the user asks for Jackson, Gson, or avaje-jsonb, wire it through the seam that exists for exactly that: `WebResponse.rawJson(String)` on the way out, `req.bodyStream()` or `bodyReader()` on the way in.
+   When the user asks for Jackson 3, add `spider-silk-jackson`: `new JacksonCodecs(mapper)` takes the mapper once, and its `writer(Type.class)` and `reader(Type.class)` go wherever core takes a `JsonWriter` or `JsonReader`.
+   For Jackson 2, Gson, or avaje-jsonb, wire it through the seam that exists for exactly that: `WebResponse.rawJson(String)` on the way out, `req.bodyStream()` or `bodyReader()` on the way in.
    [references/content.md](references/content.md) has the shape.
 2. **A handler is a function from a request to a response**: `WebResponse handle(WebRequest req)`.
    Handlers return a `WebResponse` value; they never write to a servlet response directly (except a deliberate `WebResponse.raw(...)`).
@@ -70,7 +71,7 @@ dependencies {
 ```
 
 The most common first-run failure is `Plugin [id: 'net.benelog.spidersilk'] was not found`: Gradle searches the Plugin Portal alone for a plugin id unless `settings.gradle` adds `mavenCentral()` to `pluginManagement.repositories`.
-Modules come in four groups: core (`spider-silk-core`, `spider-silk-test`), optional extensions (Tomcat/Undertow servers, FreeMarker/Handlebars/Thymeleaf templates, Jetty WebSocket, OpenAPI, an OpenTelemetry agent extension), optional build conventions (Gradle plugin, Maven parent), and the example app.
+Modules come in four groups: core (`spider-silk-core`, `spider-silk-test`), optional extensions (Tomcat/Undertow servers, FreeMarker/Handlebars/Thymeleaf templates, Jetty WebSocket, Jackson binding, OpenAPI, an OpenTelemetry agent extension), optional build conventions (Gradle plugin, Maven parent), and the example app.
 Add an extension only when the user asks for what it provides.
 For Maven, the module tables, exclusions, the Gradle plugin, and the Maven parent, read [references/setup.md](references/setup.md).
 

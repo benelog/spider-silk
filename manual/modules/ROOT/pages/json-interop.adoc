@@ -4,6 +4,7 @@
 An application can bind JSON with a library of its own, through a seam of two methods that core already has.
 Core's JSON is hand-written or generated from the type on purpose, but that decision is the framework's to make for core, not for the application.
 An application with three hundred DTOs, or one whose wire format is generated from a schema it does not own, has a reason to bind objects with a library.
+Jackson has a module of its own, <<jackson,`spider-silk-jackson`>>, which binds through the `JsonWriter` and `JsonReader` that core already takes.
 
 == The seam
 
@@ -31,7 +32,78 @@ What a handler reads through `raw()` bypasses this bookkeeping.
 A form-encoded POST is also spent by its first `param()` read, because the container parses the form by reading the body to its end.
 `bodyStream()` then answers an empty stream rather than throwing, and a body read as bytes first leaves `formParam()` with no fields.
 
+[#jackson]
 == Jackson
+
+`spider-silk-jackson` binds with Jackson 3 through the `JsonWriter` and `JsonReader` that core already takes.
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation '{project-group}:spider-silk-jackson:{project-version}'
+}
+----
+
+`JacksonCodecs` takes the `ObjectMapper` once, in its constructor.
+Every writer and reader it makes binds with that mapper, so a handler names a type and never the mapper.
+
+[source,java]
+----
+static final JacksonCodecs JACKSON = new JacksonCodecs(JsonMapper.builder().build());
+static final JsonWriter<Deck> DECK = JACKSON.writer(Deck.class);
+static final JsonReader<NewDeck> NEW_DECK = JACKSON.reader(NewDeck.class);
+
+app.post("/api/decks", req -> {
+    NewDeck body = req.bodyJson(NEW_DECK);
+    return WebResponse.json(deckService.create(body.name()), DECK);
+});
+----
+
+`new JacksonCodecs()` binds with a `JsonMapper` on Jackson's defaults.
+A mapper of your own carries its modules, its naming strategy, and its features into every writer and reader.
+
+[cols="2,3",options="header"]
+|===
+| Method | Answers
+
+| `writer(Class<T>)`, `writer(TypeReference<T>)`
+| A `JsonWriter<T>` whose serializer Jackson looks up once, for the declared type
+
+| `writer()`
+| A `JsonWriter<Object>` that writes a value as the type it is at run time
+
+| `reader(Class<T>)`, `reader(TypeReference<T>)`
+| A `JsonReader<T>`
+
+| `codec(Class<T>)`, `codec(TypeReference<T>)`
+| A `JsonCodec<T>`, both directions for one type
+|===
+
+The writer hands Jackson a generator over the `JsonOutput` that core passes in.
+The document is therefore serialized once, straight into the buffer the response goes out from, and its `Content-Length` is counted as for any other writer.
+No text Jackson produced is parsed again.
+
+The reader parses the body's bytes with Jackson.
+Input that Jackson rejects answers 400, as a hand-written reader's rejection does: bad syntax, a value of the wrong type, trailing content, and a creator that throws `IllegalArgumentException`.
+A body that is JSON null answers 400 as well, so a handler never receives null in place of a value.
+A mapping that Jackson cannot build is the program's mistake, not the client's, and answers 500.
+
+Both work wherever core takes a writer or a reader.
+`req.bodyNdjson(NEW_DECK)` reads each line with Jackson, and `sink.write(deck, DECK)` writes each element of a `jsonArray` or `ndjson` response.
+Inside `JsonWriter.list` and `JsonReader.list`, they write and read one element at a time.
+A list reads faster handed to Jackson whole, through `JACKSON.reader(new TypeReference<List<NewDeck>>() { })`.
+An element reader inside `JsonReader.list` starts a Jackson parser for every element, and takes about 1.75 times as long to read a list of 100 records.
+
+A `JsonOutput` holds only checked JSON.
+A value marked `@JsonRawValue` is therefore parsed and written as the value it holds, and a raw fragment written through `writeRaw` is refused.
+
+Jackson binds by reflection, and this module is where an application chooses it.
+A xref:native-image.adoc[native image] then needs a reflection entry for every bound type.
+
+=== Through the seam
+
+The module carries Jackson 3, whose package is `tools.jackson`.
+Jackson 2, whose package is `com.fasterxml.jackson`, goes through the seam instead:
 
 [source,java]
 ----
@@ -133,5 +205,5 @@ Routing, parameter extraction, and the request and response envelope are unchang
 An application can bind one endpoint with a library and hand-write the next.
 `WebResponse.rawJson` takes a `String` and does not ask where it came from.
 
-NOTE: The snippets on this page are illustrations, not part of the build.
-No module of this project depends on Jackson, Gson, or avaje-jsonb.
+NOTE: The snippets on this page, apart from those of `spider-silk-jackson`, are illustrations, not part of the build.
+Only `spider-silk-jackson` depends on Jackson, and no module of this project depends on Gson or avaje-jsonb.

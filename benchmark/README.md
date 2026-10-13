@@ -61,6 +61,8 @@ The `KoreanList`, `ReversedList`, and `LongStringList` cases read the same recor
 The `PythonList` and `PrettyList` cases read the same records spaced out, with the separators of Python's `json.dumps` and indented by two spaces, `BigIdList` reads them with ids of 13 and 18 digits, and `ShortStringList` with strings of no character or one.
 The `Orders` cases write and read 100 orders whose status is an enum.
 `writeList_stream` writes the records into the thread's buffer and sends them to a stream with no copy, as a JSON response body is sent, beside fastjson2's `JSON.writeTo`.
+`readList_jacksonCodecs` reads the records through `spider-silk-jackson`, the whole list handed to Jackson at once, and its distance from `readList_jackson` is what the adapter adds.
+`readList_jacksonNested` reads them with a Jackson reader for one record nested in silk-json's `JsonReader.list`, the path a Jackson reader takes inside another reader.
 The `fastjson2Reflect` cases run fastjson2 with `-Dfastjson2.creator=reflect`, the mode it takes in a native image, where it builds no classes at run time.
 The documents those reads take are made in a `@State` that only they use, since a document set up for every case would train the JIT compiler on strings that the other cases never see.
 

@@ -136,11 +136,16 @@ Every module depends on `spider-silk-core`, and core depends on none of them but
 The default web server is Jetty, and the default template engine is jte.
 | `gg.jte:jte`, embedded Jetty (`jetty-ee10-servlet`), `silk-json`
 
-| JSON
+.2+| JSON
 | xref:json.adoc#silk-json[`silk-json`]
 | The JSON library core is built on: writers, readers, the tree, and `@JsonBound`.
 It is a library of its own, so an application on another framework can use it too.
 | the JDK only at run time
+
+| xref:json-interop.adoc#jackson[`spider-silk-jackson`]
+| Binds with Jackson through the `JsonWriter` and `JsonReader` that handlers take.
+The `ObjectMapper` is handed over once, to the constructor of `JacksonCodecs`.
+| core, `jackson-databind` 3.1.x
 
 .2+| Web server
 | xref:tomcat.adoc[`spider-silk-tomcat`]

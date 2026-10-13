@@ -136,11 +136,16 @@ Spider Silk는 기본 기술 스택 외에도 많이 쓰이는 기술을 사용�
 기본 웹 서버는 Jetty, 기본 템플릿 엔진은 jte다.
 | `gg.jte:jte`, 내장 Jetty (`jetty-ee10-servlet`), `silk-json`
 
-| JSON
+.2+| JSON
 | xref:json.adoc#silk-json[`silk-json`]
 | core가 그 위에 지어진 JSON 라이브러리: 라이터, 리더, 트리, 그리고 ``@JsonBound``.
 독립된 라이브러리이므로 다른 프레임워크 위의 애플리케이션도 쓸 수 있다.
 | 실행 시점에는 JDK만
+
+| xref:json-interop.adoc#jackson[`spider-silk-jackson`]
+| 핸들러가 받는 ``JsonWriter``와 ``JsonReader``를 통해 Jackson으로 바인딩한다.
+``ObjectMapper``는 ``JacksonCodecs``의 생성자에 한 번 건넨다.
+| core, `jackson-databind` 3.1.x
 
 .2+| 웹 서버
 | xref:tomcat.adoc[`spider-silk-tomcat`]

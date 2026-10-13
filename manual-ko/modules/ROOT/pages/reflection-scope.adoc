@@ -23,6 +23,7 @@ xref:json-codegen.adoc[`silk-json-processor`]가 생성하는 코덱은 이 규�
 프로세서는 javac 안에서 실행되고, 써내는 코드는 타입 자신의 접근자와 생성자를 부르며, 런타임에 이름으로 찾는 것은 없는데, 이는 jte가 템플릿에서 택한 것과 같은 절충이다.
 애플리케이션이 추가하는 JSON 바인딩 라이브러리는 템플릿 모듈과 같은 조건에 놓인다: 가져오면 그 리플렉션도 함께 가져온 것이다.
 Jackson과 Gson은 필드를 리플렉션으로 읽고 쓰므로, 바인딩되는 모든 타입은 xref:native-image.adoc[네이티브 이미지] 설정에 항목이 필요하다.
+xref:json-interop.adoc#jackson[`spider-silk-jackson`]은 Jackson을 코어의 ``JsonWriter``와 ``JsonReader`` 뒤에 두며, Jackson의 리플렉션은 코어가 아니라 그 모듈에 머문다.
 avaje-jsonb는 컴파일 시점에 타입별 어댑터를 생성하므로 silk-json의 코덱처럼 항목이 필요 없다.
 라이브러리에는 어느 쪽이든 core가 관여하지 않는다: xref:json-interop.adoc[이음새(seam)]는 ``WebResponse.rawJson(String)``과 ``req.bodyStream()``이며, 손으로 쓴 라이터나 생성된 코덱에 머무는 애플리케이션은 와이어 포맷을 리플렉션 없이 유지한다.
 

@@ -4,6 +4,7 @@
 애플리케이션은 코어에 이미 있는 두 메서드로 이루어진 이음새(seam)를 통해 자체 라이브러리로 JSON을 바인딩할 수 있다.
 코어의 JSON은 의도적으로 손으로 작성하거나 타입에서 생성한 것이지만, 그 결정은 프레임워크가 코어를 위해 내린 것이지 애플리케이션을 위해 내린 것이 아니다.
 DTO가 삼백 개인 애플리케이션이나, 소유하지 않은 스키마에서 와이어 포맷이 생성되는 애플리케이션은 라이브러리로 객체를 바인딩할 이유가 있다.
+Jackson에는 전용 모듈 <<jackson,`spider-silk-jackson`>>이 있으며, 이 모듈은 코어가 이미 받는 ``JsonWriter``와 ``JsonReader``를 통해 바인딩한다.
 
 == 이음새
 
@@ -31,7 +32,78 @@ public BufferedReader bodyReader() // the characters, unparsed
 폼 인코딩된 POST도 첫 `param()` 읽기로 소진되는데, 컨테이너가 본문을 끝까지 읽어 폼을 파싱하기 때문이다.
 그 뒤 ``bodyStream()``은 예외를 던지는 대신 빈 스트림을 답하고, 바이트로 먼저 읽은 본문은 ``formParam()``에 아무 필드도 남기지 않는다.
 
+[#jackson]
 == Jackson
+
+``spider-silk-jackson``은 코어가 이미 받는 ``JsonWriter``와 ``JsonReader``를 통해 Jackson 3로 바인딩한다.
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation '{project-group}:spider-silk-jackson:{project-version}'
+}
+----
+
+``JacksonCodecs``는 ``ObjectMapper``를 생성자에서 한 번 받는다.
+그것이 만드는 모든 라이터와 리더가 그 매퍼로 바인딩하므로, 핸들러는 타입만 지명하고 매퍼는 지명하지 않는다.
+
+[source,java]
+----
+static final JacksonCodecs JACKSON = new JacksonCodecs(JsonMapper.builder().build());
+static final JsonWriter<Deck> DECK = JACKSON.writer(Deck.class);
+static final JsonReader<NewDeck> NEW_DECK = JACKSON.reader(NewDeck.class);
+
+app.post("/api/decks", req -> {
+    NewDeck body = req.bodyJson(NEW_DECK);
+    return WebResponse.json(deckService.create(body.name()), DECK);
+});
+----
+
+``new JacksonCodecs()``는 Jackson 기본값의 ``JsonMapper``로 바인딩한다.
+직접 만든 매퍼는 그 모듈, 이름 전략, 기능을 모든 라이터와 리더에 가져간다.
+
+[cols="2,3",options="header"]
+|===
+| 메서드 | 돌려주는 것
+
+| `writer(Class<T>)`, `writer(TypeReference<T>)`
+| 선언된 타입에 대해 Jackson이 직렬화기를 한 번 찾아 두는 `JsonWriter<T>`
+
+| `writer()`
+| 값을 런타임의 타입대로 쓰는 `JsonWriter<Object>`
+
+| `reader(Class<T>)`, `reader(TypeReference<T>)`
+| `JsonReader<T>`
+
+| `codec(Class<T>)`, `codec(TypeReference<T>)`
+| 한 타입의 양방향인 `JsonCodec<T>`
+|===
+
+라이터는 코어가 넘기는 ``JsonOutput`` 위의 생성기를 Jackson에 건넨다.
+따라서 문서는 응답이 나가는 버퍼에 곧바로 한 번 직렬화되고, ``Content-Length``는 다른 라이터처럼 계산된다.
+Jackson이 만든 텍스트를 다시 파싱하는 일은 없다.
+
+리더는 본문의 바이트를 Jackson으로 파싱한다.
+Jackson이 거부하는 입력은 손으로 작성한 리더가 거부할 때처럼 400으로 답한다: 잘못된 문법, 타입이 틀린 값, 뒤따르는 내용, ``IllegalArgumentException``을 던지는 생성자가 그렇다.
+JSON null인 본문도 400으로 답하므로, 핸들러는 값 대신 null을 받는 일이 없다.
+Jackson이 만들 수 없는 매핑은 클라이언트가 아니라 프로그램의 실수이며, 500으로 답한다.
+
+둘 다 코어가 라이터나 리더를 받는 곳이면 어디서나 동작한다.
+``req.bodyNdjson(NEW_DECK)``은 각 줄을 Jackson으로 읽고, ``sink.write(deck, DECK)``는 `jsonArray`나 `ndjson` 응답의 각 요소를 쓴다.
+`JsonWriter.list`와 `JsonReader.list` 안에서는 요소를 하나씩 쓰고 읽는다.
+리스트는 ``JACKSON.reader(new TypeReference<List<NewDeck>>() { })``로 Jackson에 통째로 맡기는 편이 빠르다.
+`JsonReader.list` 안의 요소 리더는 요소마다 Jackson 파서를 새로 시작하며, 레코드 100개의 리스트를 읽는 데 약 1.75배의 시간이 든다.
+
+``JsonOutput``은 검사한 JSON만 담는다.
+그래서 ``@JsonRawValue``가 붙은 값은 파싱해 그 안의 값으로 쓰고, ``writeRaw``로 쓰는 원시 조각은 거부한다.
+
+Jackson은 리플렉션으로 바인딩하며, 이 모듈은 애플리케이션이 그것을 택하는 자리다.
+그러면 xref:native-image.adoc[네이티브 이미지]에는 바인딩되는 모든 타입에 리플렉션 항목이 필요하다.
+
+=== 이음새를 통해
+
+이 모듈은 패키지가 ``tools.jackson``인 Jackson 3를 담는다.
+패키지가 ``com.fasterxml.jackson``인 Jackson 2는 대신 이음새를 거친다:
 
 [source,java]
 ----
@@ -133,5 +205,5 @@ DSL-JSON의 ``@CompiledJson``도 같은 방식으로 동작하는데, 알아둘 
 애플리케이션은 한 엔드포인트를 라이브러리로 바인딩하고 다음 엔드포인트를 손으로 작성할 수 있다.
 ``WebResponse.rawJson``은 ``String``을 받을 뿐 그것이 어디서 왔는지 묻지 않는다.
 
-NOTE: 이 페이지의 스니펫은 예시이며 빌드의 일부가 아니다.
-이 프로젝트의 어느 모듈도 Jackson, Gson, avaje-jsonb에 의존하지 않는다.
+NOTE: 이 페이지의 스니펫은 ``spider-silk-jackson``의 것을 빼면 예시이며 빌드의 일부가 아니다.
+Jackson에는 ``spider-silk-jackson``만 의존하고, 이 프로젝트의 어느 모듈도 Gson이나 avaje-jsonb에 의존하지 않는다.

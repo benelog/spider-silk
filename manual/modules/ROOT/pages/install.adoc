@@ -121,6 +121,9 @@ Add one only when you want what it names instead of, or beside, the core default
 | `spider-silk-jetty-websocket`
 | xref:websocket.adoc[`WebSockets`]: WebSocket endpoints beside the routes, on Jetty only
 
+| `spider-silk-jackson`
+| xref:json-interop.adoc#jackson[`JacksonCodecs`]: Jackson 3 behind the `JsonWriter` and `JsonReader` handlers take
+
 | `spider-silk-openapi`
 | xref:openapi.adoc[`OpenApi`]: the route list as an OpenAPI 3.1 document
 

@@ -340,6 +340,40 @@ JMH 1.37, 포크 2, 워밍업·측정 각 5회×1초, CPU 0~3(P코어), `-Xms1g 
 - JVM 수치는 전날 실행과 대부분 5% 안에서 맞았다.
   Spring MVC의 `json`은 200,313에서 180,642 req/s로 10% 내려가 Jetty 격차가 1.27에서 1.42배가 됐고, Jetty의 Thymeleaf는 63,519에서 70,928로 12% 올라 양쪽 Thymeleaf가 Jetty 1.11, Tomcat 0.98배다.
 
+### 10. Jackson 중첩 읽기와 `JsonInput.readValueBytes()` (2026-10-14)
+
+`spider-silk-jackson`의 리더를 silk-json 리더 안에 넣으면(`JsonReader.list(JACKSON.reader(Item.class))`) 느린 경로를 탄다.
+`JsonInput.readValueBytes()`를 더해 그 경로를 33% 줄였고, 남은 격차는 원소마다 Jackson 파서를 새로 여는 비용이다.
+
+- 1단계 구현은 `fromJsonBytes(in.readValue().toJsonBytes())`였다.
+  silk-json이 트리를 만들고, 그 트리를 바이트로 되쓰고, Jackson이 그 바이트를 파싱하므로 값 하나를 세 번 처리했다.
+- 2단계 구현은 `fromJsonBytes(in.readValueBytes())`다.
+  `readValueBytes()`는 `skipValue()`로 문법을 검사한 범위를 복사해 돌려준다.
+- `bodyJson(reader)`와 `bodyNdjson(reader)`는 `fromJsonBytes`를 바로 부르므로 이 경로를 타지 않는다.
+- 새 케이스는 `readList_jacksonNested`(중첩 경로)와 `readList_jacksonCodecs`(`TypeReference<List<Item>>`로 리스트를 통째로 어댑터에 맡김)다.
+  둘 다 `listBytes`(레코드 100개)를 읽는다.
+- 측정: JDK 25+36(Temurin), `taskset -c 0-3`, `-Xms1g -Xmx1g -prof gc`, 포크 2, 5×1초, AC 전원, `performance` 프로파일, 커밋 `cb14978` 위의 작업 트리.
+  두 단계는 같은 세션에서 연달아 쟀다.
+
+| 케이스 | 1단계 µs/op | 1단계 B/op | 2단계 µs/op | 2단계 B/op |
+|---|---|---|---|---|
+| `readList_generated` | 5.80 ± 0.24 | 17,616 | 6.64 ± 0.16 | 17,616 |
+| `readList_tree` | 16.99 ± 0.26 | 37,776 | 17.00 ± 0.29 | 37,776 |
+| `readList_jackson` | 26.19 ± 0.84 | 52,760 | 27.58 ± 0.31 | 51,160 |
+| `readList_jacksonCodecs` | 28.28 ± 1.51 | 51,808 | 28.36 ± 0.40 | 52,628 |
+| `readList_jacksonNested` | 74.34 ± 2.29 | 180,377 | 49.57 ± 0.64 | 138,682 |
+
+- 어댑터 자체의 비용은 `readList_jacksonCodecs`와 `readList_jackson`의 차이로, 3~8%(0.8~2.1 µs)이고 할당은 같다.
+- 중첩 경로는 74.3에서 49.6 µs로 33% 줄었고, 할당은 180 KB에서 139 KB로 41 KB 줄었다.
+  그래도 `readList_jacksonCodecs`의 1.75배이고, 할당은 86 KB 더 많다.
+- 남은 86 KB 가운데 `readValueBytes()`의 복사는 문서 크기인 약 10 KB뿐이다.
+  나머지 약 76 KB, 원소 하나에 약 760 B는 `ObjectReader.readValue(byte[])`가 원소마다 파서와 그 문맥을 새로 만드는 비용이다.
+  그래서 원본 배열의 범위를 그대로 넘기는 복사 없는 형태는 만들지 않는다: 줄일 수 있는 것은 할당 격차의 8분의 1 남짓이고, 요청 본문 배열을 콜백에 드러낸다.
+- `readList_generated`는 2단계에서 14% 느리게 나왔지만, 생성 코덱은 `readValueBytes()`를 부르지 않고 바뀐 코드를 지나지 않는다.
+  같은 세션의 두 실행 사이 편차로 보고, 이 결론에는 쓰지 않는다.
+- 결론: 리스트는 `TypeReference<List<…>>`로 Jackson에 통째로 맡기는 편이 1.75배 빠르다.
+  매뉴얼의 Jackson 절(`json-interop.adoc`)에 이 문장을 더했다.
+
 ## 실패하거나 기각한 작업
 
 ### 설계

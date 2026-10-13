@@ -83,7 +83,7 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
   `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, ``reader.fromJsonBytes(utf8)``는 요청 밖에서 하나를 실행한다
 * `JsonOutput`: `object()`, `array()`, `end()`, `name(key)`, `put(key, ...)`, `putNull(key)`, `value(...)`, `nullValue()`, `values(strings)`, `newline()`.
   ``JsonOutput.inMemory()``는 ``toBytes()``와 ``toJson()``을, 또는 ``length()``와 ``writeTo(stream)``에 이은 ``release()``를 답하고, ``JsonOutput.to(stream)``은 ``flush()``에서 버퍼를 보낸다
-* `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `keyHead()`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readFloat()`, `readNumber()`, `readOneOf(names)`, `readBoolean()`, `readNull()`, `readValue()`, `skipValue()`, `end()`, `error(message)`, 그 바탕은 ``JsonInput.of(utf8)``이나 ``JsonInput.of(text)``다
+* `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `keyHead()`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readFloat()`, `readNumber()`, `readOneOf(names)`, `readBoolean()`, `readNull()`, `readValue()`, `readValueBytes()`, `skipValue()`, `end()`, `error(message)`, 그 바탕은 ``JsonInput.of(utf8)``이나 ``JsonInput.of(text)``다
 * `JsonKey.of(name)`: `put`, `name`, ``keyIs``를 위해 한 번만 인코딩한 멤버 이름
 * `JsonKey.names(constants)`: `put(key, name)`, `value(name)`, ``readOneOf``를 위해 한 번만 인코딩한 enum 상수 이름들
 * `@JsonBound`: 애너테이션이 붙은 타입이나 그것이 지명한 타입의 코덱을 ``silk-json-processor``가 컴파일 시점에 ``<Type>Json.CODEC``으로 생성한다; xref:json-codegen.adoc[생성되는 JSON 코덱]을 참고한다

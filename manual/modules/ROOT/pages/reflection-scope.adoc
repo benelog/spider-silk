@@ -23,6 +23,7 @@ The codecs xref:json-codegen.adoc[`silk-json-processor`] generates stay on core'
 The processor runs inside javac, the code it writes calls the type's own accessors and constructor, and nothing is looked up by name at run time, which is the same trade jte makes for templates.
 A JSON binding library an application adds is on the same terms as a template module: take it and you have taken its reflection with it.
 Jackson and Gson read and write fields reflectively, so every bound type needs an entry in a xref:native-image.adoc[native image] config.
+xref:json-interop.adoc#jackson[`spider-silk-jackson`] puts Jackson behind core's `JsonWriter` and `JsonReader`, and Jackson's reflection stays in that module rather than in core.
 avaje-jsonb generates an adapter per type at compile time and needs none, as silk-json's codecs need none.
 Core is not involved in a library either way: xref:json-interop.adoc[the seam] is `WebResponse.rawJson(String)` and `req.bodyStream()`, and an application that stays on the hand-written writers or the generated codecs keeps its wire format reflection-free.
 

@@ -83,7 +83,7 @@ The package belongs to xref:json.adoc#silk-json[silk-json], the JSON library cor
   `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, and `reader.fromJsonBytes(utf8)` run one outside a request
 * `JsonOutput`: `object()`, `array()`, `end()`, `name(key)`, `put(key, ...)`, `putNull(key)`, `value(...)`, `nullValue()`, `values(strings)`, and `newline()`.
   `JsonOutput.inMemory()` answers `toBytes()` and `toJson()`, or `length()` and `writeTo(stream)` followed by `release()`, and `JsonOutput.to(stream)` sends its buffer on `flush()`
-* `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `keyHead()`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readFloat()`, `readNumber()`, `readOneOf(names)`, `readBoolean()`, `readNull()`, `readValue()`, `skipValue()`, `end()`, and `error(message)`, over `JsonInput.of(utf8)` or `JsonInput.of(text)`
+* `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `keyHead()`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readFloat()`, `readNumber()`, `readOneOf(names)`, `readBoolean()`, `readNull()`, `readValue()`, `readValueBytes()`, `skipValue()`, `end()`, and `error(message)`, over `JsonInput.of(utf8)` or `JsonInput.of(text)`
 * `JsonKey.of(name)`: a member name encoded once, for `put`, `name`, and `keyIs`
 * `JsonKey.names(constants)`: an enum's constant names encoded once, for `put(key, name)`, `value(name)`, and `readOneOf`
 * `@JsonBound`: the codec of the annotated type, or of the type it names, generated at compile time as `<Type>Json.CODEC` by `silk-json-processor`; see xref:json-codegen.adoc[Generated JSON Codecs]

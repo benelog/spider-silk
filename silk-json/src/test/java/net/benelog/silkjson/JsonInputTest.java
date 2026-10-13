@@ -593,6 +593,52 @@ class JsonInputTest {
         in.end();
     }
 
+    /** The bytes of a value are the ones it is written in, from its first byte to its last, and reading goes on after it. */
+    @Test
+    void readValueBytesTakesAValueAsItIsWritten() {
+        List<String> values = List.of("{\"a\" : [1, {\"b\":\"c\"}] }", "[ ]", "\"say \\\"hi\\\" \\u00e9 한글\"", "-12.5e+3",
+                "0", "true", "false", "null");
+        JsonInput in = JsonInput.of(" [ " + String.join(" ,\n ", values) + " ] ");
+        in.array();
+        for (String value : values) {
+            assertThat(in.nextElement()).isTrue();
+            assertThat(new String(in.readValueBytes(), StandardCharsets.UTF_8)).isEqualTo(value);
+        }
+        assertThat(in.nextElement()).isFalse();
+        in.end();
+
+        JsonInput last = JsonInput.of("{\"id\":1,\"tags\": [\"a\"] \n}");
+        last.object();
+        assertThat(last.nextKey()).isTrue();
+        last.skipValue();
+        assertThat(last.nextKey()).isTrue();
+        assertThat(last.readValueBytes()).isEqualTo("[\"a\"]".getBytes(StandardCharsets.UTF_8));
+        assertThat(last.nextKey()).isFalse();
+        last.end();
+    }
+
+    /** A value whose bytes are taken is checked as one skipped is, and a failure names its place in the whole document. */
+    @Test
+    void readValueBytesRefusesWhatSkipValueRefuses() {
+        for (String bad : List.of("\"\\x\"", "\"a\nb\"", "tru", "[1,]", "{\"a\" 1}", "01", "{\"a\":")) {
+            assertThatThrownBy(() -> {
+                JsonInput in = JsonInput.of("[" + bad + "]");
+                in.array();
+                in.nextElement();
+                in.readValueBytes();
+            }).as(bad).isInstanceOf(JsonException.class);
+        }
+        assertThatThrownBy(() -> {
+            JsonInput in = JsonInput.of("[1, {\"a\":tru}]");
+            in.array();
+            in.nextElement();
+            in.skipValue();
+            in.nextElement();
+            in.readValueBytes();
+        }).hasMessageStartingWith("Near character 9:");
+        assertThatThrownBy(() -> JsonInput.of("   ").readValueBytes()).hasMessageContaining("Missing value");
+    }
+
     /** What is skipped is still checked: a bad escape or a control character in a skipped string is a syntax error. */
     @Test
     void aSkippedValueIsStillHeldToTheGrammar() {
