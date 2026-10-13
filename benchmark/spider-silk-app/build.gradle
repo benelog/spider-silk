@@ -1,6 +1,6 @@
 plugins {
     id 'gg.jte.gradle' version '3.2.4'
-    id 'org.graalvm.buildtools.native' version '1.1.13'
+    id 'org.graalvm.buildtools.native' version '1.1.14'
 }
 
 // No version: the included root build answers for these coordinates.
