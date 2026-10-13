@@ -1,12 +1,12 @@
 # Benchmark
 
-This directory measures Spider Silk against Spring MVC on the same machine, with the same JVM and the same load.
+This directory measures Spider Silk against Spring Boot on the same machine, with the same JVM and the same load.
 The manual's [Performance Benchmark](../manual/modules/ROOT/pages/benchmark.adoc) appendix reports a run of it and explains the method.
 
 ## What is here
 
 - `spider-silk-app/`: the Spider Silk application, on Jetty or Tomcat, rendering with jte or Thymeleaf, with its JSON through the codecs generated from its records.
-- `spring-mvc-app/`: the Spring Boot application, with Spring MVC, Jackson, and Thymeleaf on Spring Boot's defaults.
+- `spring-boot-app/`: the Spring Boot application, with Spring Web MVC, Jackson, and Thymeleaf on Spring Boot's defaults.
 - `json-bench/`: a JMH microbenchmark of the JSON serializer and parser alone, on the documents the HTTP cases send and on a document of decimals, against Jackson and fastjson2.
 - `items.json`: the 100 records the `json-list` case answers with, which the `json-post` case sends as a body through `post-items.lua`.
 - `run.sh`: runs the whole benchmark through the scripts below, starts a fresh process per case, warms it up, measures it with [wrk](https://github.com/wg/wrk), and writes `results/<timestamp>/`.

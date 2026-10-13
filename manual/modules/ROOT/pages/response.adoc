@@ -151,7 +151,7 @@ WebResponse.redirect("/api/v2/decks", HttpStatus.PERMANENT_REDIRECT); // 308, ke
 
 302 is the default because a redirect is reversible only while it is temporary.
 Browsers and intermediaries cache a 301, often indefinitely, so a wrong one keeps sending visitors to the wrong place long after the code is fixed.
-302 is also what `HttpServletResponse.sendRedirect` sends, and what Javalin, Spark, Spring MVC, Express, Rails, and Django all default to.
+302 is also what `HttpServletResponse.sendRedirect` sends, and what Javalin, Spark, Spring Web MVC, Express, Rails, and Django all default to.
 
 The second argument states another status, and takes an `HttpStatus` rather than an int for the same reason every other status does.
 It rejects anything that is not a 3xx.

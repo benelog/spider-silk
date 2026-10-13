@@ -39,7 +39,7 @@ The model's keys are the variables a template reads, so `${deck.title}` reaches 
 == What a model is, and what it is not
 
 The module uses the servlet-free half of Thymeleaf: a template name, a model, and the writer to render into.
-There is no `WebContext`, so the expressions a Spring MVC page uses, such as `#request`, `#session`, and `@bean`, are not available.
+There is no `WebContext`, so the expressions a Spring Web MVC page uses, such as `#request`, `#session`, and `@bean`, are not available.
 Whatever the handler puts in the `Map` is what the page can read, and nothing else.
 
 == A root or a suffix of your own

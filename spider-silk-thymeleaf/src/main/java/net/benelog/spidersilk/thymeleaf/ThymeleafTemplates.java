@@ -29,7 +29,7 @@ import net.benelog.spidersilk.TemplateRenderer;
  * place of the default.
  *
  * <p>This is the servlet-free half of Thymeleaf — a template name, a model, and
- * a writer. There is no {@code WebContext}, so the expressions a Spring MVC
+ * a writer. There is no {@code WebContext}, so the expressions a Spring Web MVC
  * page reaches for ({@code #request}, {@code #session}, {@code @bean}) are not
  * there; a model entry is.
  */

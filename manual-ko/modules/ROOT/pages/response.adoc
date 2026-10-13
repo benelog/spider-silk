@@ -151,7 +151,7 @@ WebResponse.redirect("/api/v2/decks", HttpStatus.PERMANENT_REDIRECT); // 308, ke
 
 302가 기본인 이유는 리다이렉트가 임시인 동안에만 되돌릴 수 있기 때문이다.
 브라우저와 중간 장치는 301을 종종 무기한으로 캐시하므로, 잘못된 301은 코드가 고쳐진 뒤로도 한참 동안 방문자를 잘못된 곳으로 계속 보낸다.
-302는 ``HttpServletResponse.sendRedirect``가 보내는 상태이기도 하며, Javalin, Spark, Spring MVC, Express, Rails, Django가 모두 기본으로 쓰는 상태이다.
+302는 ``HttpServletResponse.sendRedirect``가 보내는 상태이기도 하며, Javalin, Spark, Spring Web MVC, Express, Rails, Django가 모두 기본으로 쓰는 상태이다.
 
 두 번째 인자는 다른 상태를 지정하며, 다른 모든 상태와 같은 이유로 int가 아닌 ``HttpStatus``를 받는다.
 3xx가 아닌 것은 거부한다.

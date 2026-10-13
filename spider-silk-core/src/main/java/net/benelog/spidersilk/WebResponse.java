@@ -491,7 +491,7 @@ public final class WebResponse {
      * indefinitely — so a wrong one keeps sending visitors to the wrong place
      * long after the code is fixed, and there is no way to call it back. It is
      * also what the servlet API's own {@code sendRedirect} sends, and what
-     * Javalin, Spark, Spring MVC, Express, Rails, and Django all default to; a
+     * Javalin, Spark, Spring Web MVC, Express, Rails, and Django all default to; a
      * framework that defaulted to 301 would be surprising in the one direction
      * that cannot be undone.
      *

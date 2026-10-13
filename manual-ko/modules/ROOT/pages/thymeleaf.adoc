@@ -39,7 +39,7 @@ new App()
 == 모델인 것과 모델이 아닌 것
 
 이 모듈은 Thymeleaf의 서블릿 없는 절반을 쓴다: 템플릿 이름, 모델, 렌더링 결과를 쓸 라이터다.
-``WebContext``가 없으므로, `#request`, `#session`, ``@bean``처럼 Spring MVC 페이지가 쓰는 표현식은 쓸 수 없다.
+``WebContext``가 없으므로, `#request`, `#session`, ``@bean``처럼 Spring Web MVC 페이지가 쓰는 표현식은 쓸 수 없다.
 핸들러가 ``Map``에 넣은 것이 페이지가 읽을 수 있는 것이며, 그 밖에는 없다.
 
 == 직접 정하는 루트나 접미사

@@ -405,7 +405,7 @@ A third server was built to show what the seam costs, not just that it works.
 `redirect` defaults to 302, because a 302 can be taken back and a 301 cannot.
 
 - Browsers and intermediaries cache a 301, often indefinitely, so a wrong one outlives the fix.
-- `HttpServletResponse.sendRedirect`, Javalin, Spark, Spring MVC, Express, Rails, and Django all default to 302.
+- `HttpServletResponse.sendRedirect`, Javalin, Spark, Spring Web MVC, Express, Rails, and Django all default to 302.
 - `redirect(location, HttpStatus)` overrides it, taking the enum for decision 21's reason.
 - A status outside 3xx is rejected, because a `Location` on a 200 is no redirect, and failing at the call beats a response no client will follow.
 
@@ -1448,7 +1448,7 @@ An extension of the agent reports the route a request matched, because the agent
 The instrumentation came over from Spider Sense, so the core method it advises and the advice change in one build.
 
 - **An agent extension, not a library.**
-  - The agent already makes the server span, and the module only tells it the route, through `HttpServerRoute.update` with the controller as the source, as the agent's Spring MVC instrumentation does.
+  - The agent already makes the server span, and the module only tells it the route, through `HttpServerRoute.update` with the controller as the source, as the agent's Spring Web MVC instrumentation does.
   - The application's code and class path stay as they are: the jar goes to `-Dotel.javaagent.extensions`.
 - **It advises `WebRequest.withRoute`, which stays internal.**
   - The router calls it on the request thread once a route matched, before any filter or handler of the route.
@@ -1468,7 +1468,7 @@ Rejected: making `withRoute` public, which would freeze an internal seam for one
 ### 75. `WebResponse.json` answers with `Bytes`, written as UTF-8 straight from the tree
 
 The tree is written once, as UTF-8 into a byte array, and that array is the body.
-The benchmark's list of 100 records answered 0.6 times what Spring MVC with Jackson did, and now answers 1.05 times as much on Jetty and 1.02 times on Tomcat.
+The benchmark's list of 100 records answered 0.6 times what Spring Boot with Jackson did, and now answers 1.05 times as much on Jetty and 1.02 times on Tomcat.
 
 - **The string went.**
   - The tree became a `StringBuilder` filled a character at a time, then a `String`, then the servlet encoded it again.

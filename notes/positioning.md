@@ -32,7 +32,7 @@ The README and the manual lead with this line: a servlet-native web layer with n
 
 ## The landscape
 
-| | Spider Silk | Javalin 7 | Spark 2.9 | Helidon SE 4 | Spring Boot MVC |
+| | Spider Silk | Javalin 7 | Spark 2.9 | Helidon SE 4 | Spring Boot |
 |---|---|---|---|---|---|
 | Route registration | lambdas | lambdas | static lambdas | lambdas | annotations |
 | Handler shape | returns a `WebResponse` | writes to `Context` | returns a body, writes `Response` | writes to `ServerResponse` | returns a value |

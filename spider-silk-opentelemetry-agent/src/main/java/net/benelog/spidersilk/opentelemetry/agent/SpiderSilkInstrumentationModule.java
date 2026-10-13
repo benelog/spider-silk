@@ -12,7 +12,7 @@ import net.bytebuddy.matcher.ElementMatcher;
  *
  * <p>A Spider Silk application is one servlet mapped at {@code /*}, so the agent's servlet
  * instrumentation reports that mapping as the {@code http.route} of every request, and every
- * request becomes the one span {@code GET /*}. The agent instruments the router of Spring MVC, and
+ * request becomes the one span {@code GET /*}. The agent instruments the router of Spring Web MVC, and
  * this module does the same for Spider Silk's.
  *
  * <p>It applies only where Spider Silk is on the class path, and

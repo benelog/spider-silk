@@ -168,7 +168,7 @@ JMH 1.37, 포크 2, 워밍업·측정 각 5회×1초, CPU 0~3(P코어), `-Xms1g 
 - 트리를 `StringBuilder`에 문자 단위로 채워 `String`을 만들고 서블릿이 다시 인코딩하던 경로를 없앴다.
   트리를 한 번, UTF-8로 바이트 배열에 쓰고 그 배열이 응답 바디가 된다.
 - 10 KB 바디가 114 KB 할당과 24 µs(Jackson 440 B·9 µs)이던 것을 줄였다.
-  HTTP `json-list`는 Spring MVC 대비 0.6배에서 Jetty 1.05배, Tomcat 1.02배가 됐다.
+  HTTP `json-list`는 Spring Boot 대비 0.6배에서 Jetty 1.05배, Tomcat 1.02배가 됐다.
 - `JsonObject`는 `LinkedHashMap` 대신 배열 둘(16개 넘으면 인덱스)이다.
   `put(key, "x")`는 `String`을 그대로 담아, 필드 다섯 개 레코드의 할당이 열두 개 안팎에서 세 개로 줄었다.
 - 문자열은 `getChars`로 한 번 복사해 그 배열에서 검사한다(`charAt` 금지의 시작).
@@ -320,10 +320,10 @@ JMH 1.37, 포크 2, 워밍업·측정 각 5회×1초, CPU 0~3(P코어), `-Xms1g 
   어느 쪽도 JVM과의 약 2배 차이를 닫지 못하므로 `native-bench.sh`와 부록은 기본값으로 둔다.
   이번 기준 이미지의 수치는 저녁 표와 10% 안에서 달랐다(`readPlaces` 8.76 대 9.6 µs, `writeList` 10.99 대 12.2 µs).
 - HTTP 전체 실행(`benchmark/results/20261011-163550`, `performance` 프로파일, 오류 0): 생성 코덱과 빌린 버퍼 본문이 들어간 첫 HTTP 실행이다.
-  `json-list`는 Jetty 158,868 대 Spring MVC 92,680 req/s(1.71배), Tomcat 1.42배로, 2026-10-09의 1.05·1.02배에서 벌어졌다.
+  `json-list`는 Jetty 158,868 대 Spring Boot 92,680 req/s(1.71배), Tomcat 1.42배로, 2026-10-09의 1.05·1.02배에서 벌어졌다.
   `json-post`는 Jetty 112,858, Tomcat 109,506 대 54,958 req/s로 약 2배다.
-  네이티브는 Spider Silk가 `json-list`·`json-post`에서 JVM의 62%·66%를 유지하고, `spring-mvc-native`는 15%·14%다.
-  `text`·`json`은 1.43·1.27배(Jetty), 1.27·1.10배(Tomcat)로, Spring MVC의 `json`이 `text`보다 12% 높게 나와 `json` 격차가 좁아 보인다.
+  네이티브는 Spider Silk가 `json-list`·`json-post`에서 JVM의 62%·66%를 유지하고, `spring-boot-native`는 15%·14%다.
+  `text`·`json`은 1.43·1.27배(Jetty), 1.27·1.10배(Tomcat)로, Spring Boot의 `json`이 `text`보다 12% 높게 나와 `json` 격차가 좁아 보인다.
   Jetty 대상은 몇 케이스에서 한 라운드만 중앙값보다 13~36% 높았고(`text` 1회차 348,563), 나머지는 10% 안이다.
   전원 프로파일이 2026-10-09(`balanced`)와 달라 절대값은 그 실행과 비교할 수 없다.
 
@@ -332,13 +332,13 @@ JMH 1.37, 포크 2, 워밍업·측정 각 5회×1초, CPU 0~3(P코어), `-Xms1g 
 - HTTP 전체 실행(`benchmark/results/20261012-233209`, `performance` 프로파일, 오류 0, 2시간 51분)에 Oracle GraalVM 25.4.4로 빌드한 `-native-oracle`(기본값, ML 추론 프로파일, `-O2`)과 `-native-pgo`(계측 이미지를 케이스마다 10초 돌려 얻은 프로파일, `-O3` 자동) 대상을 더했다.
   둘 다 Serial GC로 두어 GraalVM CE와의 차이를 컴파일러로 좁혔다.
 - PGO 이미지는 GraalVM CE 이미지의 1.18~1.98배를 처리한다.
-  Spider Silk는 JVM의 79~94%(`json-list` 92%, `json-post` 90%, Thymeleaf 79%), Spring MVC는 27~89%다.
+  Spider Silk는 JVM의 79~94%(`json-list` 92%, `json-post` 90%, Thymeleaf 79%), Spring Boot는 27~89%다.
   Oracle 기본값만으로 CE의 0.97~1.60배, 기록한 프로파일이 그 위에 1.12~1.43배를 더한다.
   Spider Silk의 `json-post`만 Oracle 기본값이 CE보다 3% 느렸다.
 - PGO 빌드는 Oracle 기본 빌드보다 약 3분의 1 빠르고(86.5 대 133.3초), 바이너리는 CE보다 약 4분의 1 작다(47.2 대 63.6 MB).
   계측 빌드는 최대 7.0·9.1 GiB를 쓰고 바이너리가 CE의 2.6배다.
 - JVM 수치는 전날 실행과 대부분 5% 안에서 맞았다.
-  Spring MVC의 `json`은 200,313에서 180,642 req/s로 10% 내려가 Jetty 격차가 1.27에서 1.42배가 됐고, Jetty의 Thymeleaf는 63,519에서 70,928로 12% 올라 양쪽 Thymeleaf가 Jetty 1.11, Tomcat 0.98배다.
+  Spring Boot의 `json`은 200,313에서 180,642 req/s로 10% 내려가 Jetty 격차가 1.27에서 1.42배가 됐고, Jetty의 Thymeleaf는 63,519에서 70,928로 12% 올라 양쪽 Thymeleaf가 Jetty 1.11, Tomcat 0.98배다.
 
 ### 10. Jackson 중첩 읽기와 `JsonInput.readValueBytes()` (2026-10-14)
 

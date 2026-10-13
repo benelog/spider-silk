@@ -1,7 +1,7 @@
 = Appendix: Performance Benchmark
 :navtitle: Appendix: Benchmark
 
-This appendix reports one run of the benchmark in the repository's `benchmark/` directory, which measures Spider Silk against Spring MVC on the same machine, with the same JVM and the same load.
+This appendix reports one run of the benchmark in the repository's `benchmark/` directory, which measures Spider Silk against Spring Boot on the same machine, with the same JVM and the same load.
 The run took place on the night of 2026-10-12 on the laptop described under <<machine>>, against `main` at commit `3d85b96`, 165 commits after the 1.1.0 release.
 
 [#summary]
@@ -9,17 +9,17 @@ The run took place on the night of 2026-10-12 on the laptop described under <<ma
 
 The numbers below are medians, and they hold for this machine and these handlers only.
 
-* Plain text and a small JSON object each answer about 1.42 times as many requests per second on Spider Silk with Jetty as on Spring MVC.
+* Plain text and a small JSON object each answer about 1.42 times as many requests per second on Spider Silk with Jetty as on Spring Boot.
 On the same container, Tomcat, the margins are about 1.31 and 1.24 times.
-* A JSON list of 100 records, where the serializer does most of the work, answers 1.72 times as many requests per second on Spider Silk with Jetty as on Spring MVC with Jackson, and 1.37 times on Tomcat.
+* A JSON list of 100 records, where the serializer does most of the work, answers 1.72 times as many requests per second on Spider Silk with Jetty as on Spring Boot with Jackson, and 1.37 times on Tomcat.
 * The same list read from a request body, where the parser does most of the work, answers about twice as many requests per second on Spider Silk, on either container.
-* A page rendered with jte, Spider Silk's default engine, answers about 3.1 times as many requests per second as Spring MVC with Thymeleaf.
+* A page rendered with jte, Spider Silk's default engine, answers about 3.1 times as many requests per second as Spring Boot with Thymeleaf.
 With Thymeleaf on both sides and the same container, Tomcat, the two are within 2% of each other.
 * A JVM process starts in 295 ms on Spider Silk with Jetty and in 902 ms on Spring Boot, and holds 117 MB against 210 MB of resident memory at that point.
-* As GraalVM CE native images, Spider Silk starts in 24 ms and Spring MVC in 37 ms, and building the image takes 72 s and 85 s respectively.
+* As GraalVM CE native images, Spider Silk starts in 24 ms and Spring Boot in 37 ms, and building the image takes 72 s and 85 s respectively.
 The GraalVM CE images answer fewer requests per second than the JVM in every case, by 20% to 86%.
 * Built with Oracle GraalVM's profile-guided optimization (PGO), the native images answer 1.18 to 1.98 times as many requests per second as the GraalVM CE images.
-Spider Silk's PGO image keeps 79% to 94% of its JVM's throughput, and Spring MVC's 27% to 89%.
+Spider Silk's PGO image keeps 79% to 94% of its JVM's throughput, and Spring Boot's 27% to 89%.
 
 [#targets]
 == What was measured
@@ -40,8 +40,8 @@ Nine servers were measured, each in a process of its own.
 | Spider Silk, `spider-silk-tomcat` on embedded Tomcat 11.0.26, jte 3.2.4 or Thymeleaf 3.1.5
 | JVM
 
-| `spring-mvc`
-| Spring Boot 4.1.1 (Spring Framework 7.0.9), Spring MVC, embedded Tomcat 11.0.24, Jackson 3.1.5, Thymeleaf 3.1.5
+| `spring-boot`
+| Spring Boot 4.1.1 (Spring Framework 7.0.9), Spring Web MVC, embedded Tomcat 11.0.24, Jackson 3.1.5, Thymeleaf 3.1.5
 | JVM
 
 | `spider-silk-jetty-native`
@@ -56,16 +56,16 @@ Nine servers were measured, each in a process of its own.
 | the same application as `spider-silk-jetty`
 | Oracle GraalVM native image with PGO
 
-| `spring-mvc-native`
-| the same application as `spring-mvc`, AOT-processed
+| `spring-boot-native`
+| the same application as `spring-boot`, AOT-processed
 | GraalVM CE native image
 
-| `spring-mvc-native-oracle`
-| the same application as `spring-mvc`, AOT-processed
+| `spring-boot-native-oracle`
+| the same application as `spring-boot`, AOT-processed
 | Oracle GraalVM native image
 
-| `spring-mvc-native-pgo`
-| the same application as `spring-mvc`, AOT-processed
+| `spring-boot-native-pgo`
+| the same application as `spring-boot`, AOT-processed
 | Oracle GraalVM native image with PGO
 |===
 
@@ -81,7 +81,7 @@ Each case is one request that gets the same answer on both frameworks.
 
 [cols="2,1,4,4,1",options="header"]
 |===
-| Case | Path | Spider Silk | Spring MVC | Body
+| Case | Path | Spider Silk | Spring Boot | Body
 
 | `text`
 | `/text`
@@ -156,8 +156,8 @@ The PGO image uses the recorded profile in its place.
 The reported throughput and each latency percentile are medians of the three rounds, taken separately.
 Across the rounds, the throughput of most cases stayed within 10% of its median.
 `spider-silk-jetty` ran 36% above its median under `text` in one round, and 13% above it under `json-list`.
-`spring-mvc` ran 11% above its median under `json`.
-Among the native images, a single round ran 10% to 15% above its median in eight cases, and 11% to 12% below it in two: `spring-mvc-native` under `json` and `spider-silk-jetty-native` under `json-post`.
+`spring-boot` ran 11% above its median under `json`.
+Among the native images, a single round ran 10% to 15% above its median in eight cases, and 11% to 12% below it in two: `spring-boot-native` under `json` and `spider-silk-jetty-native` under `json-post`.
 The median of three rounds sets such a round aside.
 No request failed in the run.
 
@@ -196,46 +196,46 @@ CPU is the server's own CPU time during the measurement, where 400% means four c
 .9+| `text`
 | `spider-silk-jetty` | 256,545 | 0.26 | 0.47 | 0.79 | 381%
 | `spider-silk-tomcat` | 237,567 | 0.24 | 0.44 | 0.60 | 281%
-| `spring-mvc` | 180,984 | 0.33 | 0.49 | 0.80 | 304%
+| `spring-boot` | 180,984 | 0.33 | 0.49 | 0.80 | 304%
 | `spider-silk-jetty-native` | 191,639 | 0.35 | 0.66 | 1.34 | 371%
 | `spider-silk-jetty-native-oracle` | 214,336 | 0.31 | 0.58 | 1.19 | 373%
 | `spider-silk-jetty-native-pgo` | 239,214 | 0.28 | 0.52 | 1.12 | 374%
-| `spring-mvc-native` | 117,689 | 0.50 | 0.77 | 2.06 | 320%
-| `spring-mvc-native-oracle` | 132,754 | 0.44 | 0.68 | 1.68 | 308%
-| `spring-mvc-native-pgo` | 152,600 | 0.38 | 0.63 | 1.56 | 299%
+| `spring-boot-native` | 117,689 | 0.50 | 0.77 | 2.06 | 320%
+| `spring-boot-native-oracle` | 132,754 | 0.44 | 0.68 | 1.68 | 308%
+| `spring-boot-native-pgo` | 152,600 | 0.38 | 0.63 | 1.56 | 299%
 
 .9+| `json`
 | `spider-silk-jetty` | 256,318 | 0.26 | 0.48 | 0.82 | 381%
 | `spider-silk-tomcat` | 224,852 | 0.25 | 0.45 | 0.61 | 287%
-| `spring-mvc` | 180,642 | 0.33 | 0.50 | 0.79 | 302%
+| `spring-boot` | 180,642 | 0.33 | 0.50 | 0.79 | 302%
 | `spider-silk-jetty-native` | 204,013 | 0.32 | 0.63 | 1.31 | 370%
 | `spider-silk-jetty-native-oracle` | 213,319 | 0.31 | 0.59 | 1.21 | 372%
 | `spider-silk-jetty-native-pgo` | 240,873 | 0.27 | 0.52 | 1.09 | 374%
-| `spring-mvc-native` | 124,780 | 0.48 | 0.76 | 1.98 | 312%
-| `spring-mvc-native-oracle` | 129,453 | 0.45 | 0.70 | 1.75 | 307%
-| `spring-mvc-native-pgo` | 155,736 | 0.37 | 0.61 | 1.59 | 302%
+| `spring-boot-native` | 124,780 | 0.48 | 0.76 | 1.98 | 312%
+| `spring-boot-native-oracle` | 129,453 | 0.45 | 0.70 | 1.75 | 307%
+| `spring-boot-native-pgo` | 155,736 | 0.37 | 0.61 | 1.59 | 302%
 
 .9+| `json-list`
 | `spider-silk-jetty` | 163,817 | 0.41 | 0.70 | 1.10 | 379%
 | `spider-silk-tomcat` | 130,528 | 0.46 | 0.66 | 1.05 | 326%
-| `spring-mvc` | 95,200 | 0.67 | 0.89 | 1.25 | 349%
+| `spring-boot` | 95,200 | 0.67 | 0.89 | 1.25 | 349%
 | `spider-silk-jetty-native` | 98,275 | 0.68 | 1.13 | 1.73 | 377%
 | `spider-silk-jetty-native-oracle` | 123,486 | 0.54 | 0.90 | 1.42 | 377%
 | `spider-silk-jetty-native-pgo` | 149,915 | 0.44 | 0.75 | 1.20 | 378%
-| `spring-mvc-native` | 13,610 | 3.95 | 10.07 | 32.79 | 388%
-| `spring-mvc-native-oracle` | 17,729 | 3.23 | 5.40 | 18.02 | 381%
-| `spring-mvc-native-pgo` | 25,394 | 2.28 | 3.93 | 9.77 | 373%
+| `spring-boot-native` | 13,610 | 3.95 | 10.07 | 32.79 | 388%
+| `spring-boot-native-oracle` | 17,729 | 3.23 | 5.40 | 18.02 | 381%
+| `spring-boot-native-pgo` | 25,394 | 2.28 | 3.93 | 9.77 | 373%
 
 .9+| `json-post`
 | `spider-silk-jetty` | 114,480 | 0.58 | 0.97 | 1.60 | 381%
 | `spider-silk-tomcat` | 111,260 | 0.55 | 0.81 | 1.34 | 320%
-| `spring-mvc` | 55,860 | 1.13 | 1.42 | 2.19 | 360%
+| `spring-boot` | 55,860 | 1.13 | 1.42 | 2.19 | 360%
 | `spider-silk-jetty-native` | 83,549 | 0.79 | 1.47 | 2.60 | 369%
 | `spider-silk-jetty-native-oracle` | 80,968 | 0.82 | 1.42 | 2.36 | 372%
 | `spider-silk-jetty-native-pgo` | 102,891 | 0.64 | 1.12 | 1.93 | 371%
-| `spring-mvc-native` | 7,654 | 8.87 | 18.27 | 28.53 | 330%
-| `spring-mvc-native-oracle` | 11,833 | 4.33 | 15.81 | 58.55 | 388%
-| `spring-mvc-native-pgo` | 15,050 | 3.63 | 8.32 | 31.50 | 385%
+| `spring-boot-native` | 7,654 | 8.87 | 18.27 | 28.53 | 330%
+| `spring-boot-native-oracle` | 11,833 | 4.33 | 15.81 | 58.55 | 388%
+| `spring-boot-native-pgo` | 15,050 | 3.63 | 8.32 | 31.50 | 385%
 
 .5+| `template-jte`
 | `spider-silk-jetty` | 197,418 | 0.34 | 0.61 | 1.09 | 378%
@@ -247,27 +247,27 @@ CPU is the server's own CPU time during the measurement, where 400% means four c
 .9+| `template-thymeleaf`
 | `spider-silk-jetty` | 70,928 | 0.93 | 1.61 | 2.53 | 377%
 | `spider-silk-tomcat` | 62,910 | 0.99 | 1.31 | 2.09 | 357%
-| `spring-mvc` | 63,927 | 1.00 | 1.32 | 1.98 | 349%
+| `spring-boot` | 63,927 | 1.00 | 1.32 | 1.98 | 349%
 | `spider-silk-jetty-native` | 28,340 | 2.33 | 4.13 | 6.78 | 368%
 | `spider-silk-jetty-native-oracle` | 45,465 | 1.44 | 2.68 | 4.57 | 365%
 | `spider-silk-jetty-native-pgo` | 56,220 | 1.17 | 2.12 | 3.66 | 365%
-| `spring-mvc-native` | 36,143 | 1.69 | 2.60 | 5.09 | 358%
-| `spring-mvc-native-oracle` | 40,469 | 1.46 | 2.34 | 3.77 | 362%
-| `spring-mvc-native-pgo` | 56,804 | 1.06 | 1.55 | 2.72 | 350%
+| `spring-boot-native` | 36,143 | 1.69 | 2.60 | 5.09 | 358%
+| `spring-boot-native-oracle` | 40,469 | 1.46 | 2.34 | 3.77 | 362%
+| `spring-boot-native-pgo` | 56,804 | 1.06 | 1.55 | 2.72 | 350%
 |===
 
-The ratios below divide Spider Silk's throughput by Spring MVC's, so a value above 1 favors Spider Silk.
+The ratios below divide Spider Silk's throughput by Spring Boot's, so a value above 1 favors Spider Silk.
 The last three columns set the two applications' native images from the same GraalVM against each other.
 
 [cols="2,>1,>1,>1,>1,>1",options="header"]
 |===
-| Case | Jetty vs. Spring MVC | Tomcat vs. Spring MVC | GraalVM CE | Oracle GraalVM | PGO
+| Case | Jetty vs. Spring Boot | Tomcat vs. Spring Boot | GraalVM CE | Oracle GraalVM | PGO
 
 | `text` | 1.42 | 1.31 | 1.63 | 1.61 | 1.57
 | `json` | 1.42 | 1.24 | 1.63 | 1.65 | 1.55
 | `json-list` | 1.72 | 1.37 | 7.22 | 6.97 | 5.90
 | `json-post` | 2.05 | 1.99 | 10.92 | 6.84 | 6.84
-| Spider Silk's jte vs. Spring MVC's Thymeleaf | 3.09 | 2.85 | 3.89 | 3.96 | 3.19
+| Spider Silk's jte vs. Spring Boot's Thymeleaf | 3.09 | 2.85 | 3.89 | 3.96 | 3.19
 | Thymeleaf on both sides | 1.11 | 0.98 | 0.78 | 1.12 | 0.99
 |===
 
@@ -282,31 +282,31 @@ Each cell below is a native image's throughput as a share of the same applicatio
 
 .2+| `text`
 | Spider Silk | 75% | 84% | 93%
-| Spring MVC | 65% | 73% | 84%
+| Spring Boot | 65% | 73% | 84%
 
 .2+| `json`
 | Spider Silk | 80% | 83% | 94%
-| Spring MVC | 69% | 72% | 86%
+| Spring Boot | 69% | 72% | 86%
 
 .2+| `json-list`
 | Spider Silk | 60% | 75% | 92%
-| Spring MVC | 14% | 19% | 27%
+| Spring Boot | 14% | 19% | 27%
 
 .2+| `json-post`
 | Spider Silk | 73% | 71% | 90%
-| Spring MVC | 14% | 21% | 27%
+| Spring Boot | 14% | 21% | 27%
 
 | `template-jte`
 | Spider Silk | 71% | 81% | 92%
 
 .2+| `template-thymeleaf`
 | Spider Silk | 40% | 64% | 79%
-| Spring MVC | 57% | 63% | 89%
+| Spring Boot | 57% | 63% | 89%
 |===
 
 Oracle GraalVM's defaults answer 0.97 to 1.60 times as many requests as GraalVM CE, and the recorded profile adds another 1.12 to 1.43 times on top of them.
 The PGO images also answer with lower latency than the GraalVM CE images at every percentile but one.
-`spring-mvc-native-pgo` has a p99 of 9.77 ms under `json-list` against 32.79 ms on GraalVM CE, but under `json-post` its p99 of 31.50 ms is no better than GraalVM CE's 28.53 ms, while its p50 falls from 8.87 ms to 3.63 ms.
+`spring-boot-native-pgo` has a p99 of 9.77 ms under `json-list` against 32.79 ms on GraalVM CE, but under `json-post` its p99 of 31.50 ms is no better than GraalVM CE's 28.53 ms, while its p50 falls from 8.87 ms to 3.63 ms.
 
 === Startup and memory
 
@@ -319,24 +319,24 @@ Memory is the process's resident set size at that moment.
 
 | `spider-silk-jetty` | 295 ms | 292 ms | 300 ms | 117 MB
 | `spider-silk-tomcat` | 344 ms | 342 ms | 348 ms | 117 MB
-| `spring-mvc` | 902 ms | 887 ms | 911 ms | 210 MB
+| `spring-boot` | 902 ms | 887 ms | 911 ms | 210 MB
 | `spider-silk-jetty-native` | 24 ms | 21 ms | 24 ms | 37 MB
 | `spider-silk-jetty-native-oracle` | 24 ms | 23 ms | 41 ms | 40 MB
 | `spider-silk-jetty-native-pgo` | 23 ms | 9 ms | 24 ms | 28 MB
-| `spring-mvc-native` | 37 ms | 36 ms | 38 ms | 73 MB
-| `spring-mvc-native-oracle` | 37 ms | 37 ms | 38 ms | 75 MB
-| `spring-mvc-native-pgo` | 37 ms | 34 ms | 38 ms | 51 MB
+| `spring-boot-native` | 37 ms | 36 ms | 38 ms | 73 MB
+| `spring-boot-native-oracle` | 37 ms | 37 ms | 38 ms | 75 MB
+| `spring-boot-native-pgo` | 37 ms | 34 ms | 38 ms | 51 MB
 |===
 
 The polls come about 14 ms apart, curl's own start included, so the native images' startup times fall on that grid.
 Spider Silk's PGO image answered the first poll in four of its ten starts, at 9 to 10 ms, and the second poll in the rest, at 23 to 24 ms.
 The PGO images hold less memory at startup: 28 MB and 51 MB against 37 MB and 73 MB on GraalVM CE.
 
-Spring Boot's own log reports `Started SpringMvcBenchmark in 0.72 seconds` on the JVM and `in 0.024 seconds` as a GraalVM CE native image.
+Spring Boot's own log reports `Started SpringBootBenchmark in 0.72 seconds` on the JVM and `in 0.024 seconds` as a GraalVM CE native image.
 The difference from the table is the JVM's own startup and the time to the first answer.
 
 Under load, a JVM process held 770 to 870 MB, most of it the 1 GiB heap that `-Xms1g` reserves.
-The native images held 55 to 351 MB, the most under `json-post` on `spring-mvc-native`.
+The native images held 55 to 351 MB, the most under `json-post` on `spring-boot-native`.
 
 === Native image builds
 
@@ -354,7 +354,7 @@ The Spider Silk modules the application depends on were already compiled and are
 | Oracle GraalVM, instrumented | 142.8 s | 141 s | 7.0 GiB | 167.6 MB
 | Oracle GraalVM, PGO | 86.5 s | 85 s | 4.5 GiB | 47.2 MB
 
-.4+| Spring MVC
+.4+| Spring Boot
 | GraalVM CE | 84.5 s | 81 s | 4.0 GiB | 73.9 MB
 | Oracle GraalVM | 152.1 s | 149 s | 4.9 GiB | 84.9 MB
 | Oracle GraalVM, instrumented | 171.3 s | 168 s | 9.1 GiB | 197.5 MB
@@ -364,7 +364,7 @@ The Spider Silk modules the application depends on were already compiled and are
 `native-image` used all eight CPUs, at a load of 6.5 to 7.1, in every build.
 The PGO build takes about a third less time than Oracle GraalVM's default build, and its binary is about a quarter smaller than GraalVM CE's.
 A PGO image needs the instrumented build and the profiling run first, and the instrumented image is 2.6 times the size of the GraalVM CE image.
-The JVM applications' dependencies come to 9.6 MB for Spider Silk and 21 MB for Spring MVC.
+The JVM applications' dependencies come to 9.6 MB for Spider Silk and 21 MB for Spring Boot.
 
 [#json-microbenchmark]
 === The serializer and the parser alone
@@ -582,9 +582,9 @@ In the HTTP cases the serializer and the parser are a share of each request, and
 == Reading the results
 
 The `text` and `json` cases measure what a framework adds to a request, since the body is tiny.
-On the same container, Tomcat, Spider Silk answers 31% more requests per second than Spring MVC under `text` and 24% more under `json`.
+On the same container, Tomcat, Spider Silk answers 31% more requests per second than Spring Boot under `text` and 24% more under `json`.
 The two differ in the work done per request.
-Spider Silk's path from the servlet to the handler is two stack frames, while Spring MVC resolves a handler mapping, argument resolvers, return-value handlers, and message converters on every request.
+Spider Silk's path from the servlet to the handler is two stack frames, while Spring Web MVC resolves a handler mapping, argument resolvers, return-value handlers, and message converters on every request.
 Jetty adds another 8% to 14% on top.
 It is also the only server that kept four cores busy at these 64 connections, while both Tomcat targets stayed at about 300%.
 
@@ -595,7 +595,7 @@ In the run of 2026-10-09, `JsonWriter.list` built the whole document as a tree b
 An application that sends large documents has two other paths: the streaming writer in xref:large-json.adoc[Large JSON and NDJSON], and a binding library such as Jackson through xref:json-interop.adoc[External JSON Binding].
 Neither was measured here.
 
-The `json-post` case measures the parser, and Spider Silk answers about twice as many requests per second as Spring MVC on either container.
+The `json-post` case measures the parser, and Spider Silk answers about twice as many requests per second as Spring Boot on either container.
 The generated codec reads the body's bytes straight into records, with no tree and no reflection.
 <<json-microbenchmark>> measures it at 24% of Jackson's time on the same list.
 Jetty and Tomcat land within 3% of each other here, since the parse outweighs the container.
@@ -607,7 +607,7 @@ Jetty adds 13% to Spider Silk's Thymeleaf page.
 
 The native images give up throughput for startup and memory.
 They run code compiled ahead of time, on the Serial GC instead of G1.
-The allocation-heavy cases suffer most on GraalVM CE: `spring-mvc-native` answers 14% of what the same application does on the JVM under `json-list` and under `json-post`, with a p99 of 33 ms and 29 ms.
+The allocation-heavy cases suffer most on GraalVM CE: `spring-boot-native` answers 14% of what the same application does on the JVM under `json-list` and under `json-post`, with a p99 of 33 ms and 29 ms.
 Spider Silk's GraalVM CE image keeps 60% and 73% of its JVM's throughput under the same cases, in line with the codec's times in <<json-microbenchmark>>.
 On GraalVM CE, Thymeleaf is the one case where Spider Silk's native image is slower than Spring's.
 The two evaluate Thymeleaf's expressions differently: Spider Silk's module through OGNL, which reads `Fortune` by reflection, and Spring's integration through SpEL.
@@ -615,9 +615,9 @@ The two evaluate Thymeleaf's expressions differently: Spider Silk's module throu
 Profile-guided optimization recovers most of the throughput that GraalVM CE gives up, for both applications.
 A JIT compiler compiles each method with the branches and types the running program has taken, and a GraalVM CE image is compiled with none of that.
 The PGO image is compiled with the counts its instrumented twin recorded under the same cases.
-Spider Silk's PGO image keeps 79% to 94% of its JVM's throughput, and Spring MVC's 27% to 89%.
+Spider Silk's PGO image keeps 79% to 94% of its JVM's throughput, and Spring Boot's 27% to 89%.
 Part of the gain is Oracle GraalVM's own: its default build, with a profile inferred from the code instead of recorded, already answers up to 1.60 times as many requests as GraalVM CE.
-The largest gains are where GraalVM CE lost the most: Thymeleaf on Spider Silk, and `json-list` and `json-post` on Spring MVC, each close to twice GraalVM CE's throughput.
+The largest gains are where GraalVM CE lost the most: Thymeleaf on Spider Silk, and `json-list` and `json-post` on Spring Boot, each close to twice GraalVM CE's throughput.
 With PGO, the two Thymeleaf pages land within 1% of each other.
 The profile was recorded under the same requests that were then measured, which is the most favorable profile there is, as <<limits>> notes.
 The G1 collector, which Oracle GraalVM also offers, was not measured.

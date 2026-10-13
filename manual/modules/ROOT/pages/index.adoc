@@ -238,12 +238,12 @@ codex plugin add spider-silk@spider-silk
 ----
 
 == Performance
-In the xref:benchmark.adoc[benchmark] in the appendix, Spider Silk on Jetty answers plain text about 1.42 times as fast as Spring MVC and a JSON list of 100 records about 1.7 times, and its JVM process starts in a third of the time.
-The benchmark ran both frameworks on one laptop with the same JVM and the same load, against Spring Boot 4.1 with Spring MVC, Jackson, and Thymeleaf on its defaults.
+In the xref:benchmark.adoc[benchmark] in the appendix, Spider Silk on Jetty answers plain text about 1.42 times as fast as Spring Boot and a JSON list of 100 records about 1.7 times, and its JVM process starts in a third of the time.
+The benchmark ran both frameworks on one laptop with the same JVM and the same load, against Spring Boot 4.1 with Spring Web MVC, Jackson, and Thymeleaf on its defaults.
 
 [cols="3,>2,>2",options="header"]
 |===
-| Measure | Spider Silk (Jetty) | Spring MVC
+| Measure | Spider Silk (Jetty) | Spring Boot
 
 | Plain text, requests/s | 256,545 | 180,984
 | Small JSON object, requests/s | 256,318 | 180,642
@@ -254,7 +254,21 @@ The benchmark ran both frameworks on one laptop with the same JVM and the same l
 | Startup as a GraalVM native image | 24 ms | 37 ms
 |===
 
-At the JSON list, where the serializer does most of the work, Spider Silk answers about 1.7 times as many requests as Spring MVC with Jackson, and about twice as many when it reads the list from a request body.
+At the JSON list, where the serializer does most of the work, Spider Silk answers about 1.7 times as many requests as Spring Boot with Jackson, and about twice as many when it reads the list from a request body.
 With Thymeleaf on both sides and the same container, the two render a page within 2% of each other, so the margin on the HTML page is jte's.
+As a GraalVM native image, Spider Silk keeps more of its JVM throughput than Spring Boot does, both as a GraalVM CE image and as an Oracle GraalVM image built with profile-guided optimization (PGO).
+Each cell below is a native image's throughput as a share of the same application's on the JVM.
+
+[cols="3,>1,>1,>1,>1",options="header"]
+|===
+| Case | Spider Silk, GraalVM CE | Spring Boot, GraalVM CE | Spider Silk, PGO | Spring Boot, PGO
+
+| Plain text | 75% | 65% | 93% | 84%
+| Small JSON object | 80% | 69% | 94% | 86%
+| JSON list of 100 records | 60% | 14% | 92% | 27%
+| JSON list of 100 records as a request body | 73% | 14% | 90% | 27%
+| HTML page (jte vs. Thymeleaf) | 71% | 57% | 92% | 89%
+|===
+
+With Thymeleaf on both sides, Spider Silk's images keep less: 40% on GraalVM CE and 79% with PGO, against Spring Boot's 57% and 89%.
 The appendix covers the method, the machine, the native images, and the limits of these numbers.
-It also measures native images built with Oracle GraalVM's profile-guided optimization, which keep 79% to 94% of Spider Silk's throughput on the JVM.

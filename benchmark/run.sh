@@ -10,7 +10,7 @@
 # Every setting below and in targets.sh is an environment variable, for instance
 #   ROUNDS=1 WARMUP=5s DURATION=10s ./run.sh
 # ONLY is an extended regular expression over "target|case" that keeps the
-# cases it matches, for instance ONLY='json' or ONLY='spring-mvc|text'.
+# cases it matches, for instance ONLY='json' or ONLY='spring-boot|text'.
 #
 # The GraalVM native images join the run when GRAALVM_HOME names a GraalVM
 # JDK: native-build.sh builds them first, timing each build, and the -native

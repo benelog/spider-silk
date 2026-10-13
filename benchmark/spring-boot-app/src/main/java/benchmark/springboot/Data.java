@@ -1,4 +1,4 @@
-package benchmark.springmvc;
+package benchmark.springboot;
 
 import java.util.ArrayList;
 import java.util.Comparator;

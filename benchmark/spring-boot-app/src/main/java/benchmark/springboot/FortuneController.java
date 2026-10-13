@@ -1,4 +1,4 @@
-package benchmark.springmvc;
+package benchmark.springboot;
 
 import org.springframework.aot.hint.annotation.RegisterReflectionForBinding;
 import org.springframework.stereotype.Controller;

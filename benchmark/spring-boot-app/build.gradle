@@ -10,11 +10,11 @@ dependencies {
 }
 
 application {
-    mainClass = 'benchmark.springmvc.SpringMvcBenchmark'
+    mainClass = 'benchmark.springboot.SpringBootBenchmark'
 }
 
 // With the Spring Boot plugin beside it, `nativeCompile` runs Spring's AOT
-// processing first and builds build/native/nativeCompile/spring-mvc-app.
+// processing first and builds build/native/nativeCompile/spring-boot-app.
 graalvmNative {
     binaries {
         main {

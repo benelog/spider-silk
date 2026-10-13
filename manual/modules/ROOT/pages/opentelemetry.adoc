@@ -8,7 +8,7 @@ A span reads `GET /api/decks/\{deckId}` instead of `++GET /*++`, and its `http.r
 
 A Spider Silk application is one servlet mapped at `++/*++`, with Spider Silk's router above it.
 The agent's servlet instrumentation reports that mapping as the `http.route` of every request, so every request becomes the one span `++GET /*++`.
-The agent instruments the router of Spring MVC and reports a handler's pattern instead, but it has no instrumentation for Spider Silk's router.
+The agent instruments the router of Spring Web MVC and reports a handler's pattern instead, but it has no instrumentation for Spider Silk's router.
 This module is that instrumentation.
 
 == Installation
@@ -31,7 +31,7 @@ The application's code does not change.
 The route reported is the one xref:route-introspection.adoc#matched-route[`req.route()`] reports, as registered and with group prefixes resolved.
 That form is already the path-template syntax of `http.route`, so the module passes it on unchanged.
 The route is reported once the router has matched it, before any filter or handler of the route runs.
-It goes in with the controller as its source, which outranks the servlet mapping, as a Spring MVC handler's pattern does.
+It goes in with the controller as its source, which outranks the servlet mapping, as a Spring Web MVC handler's pattern does.
 
 A request no route matched keeps `++/*++`: a static file, a 404, a 405, and the automatic OPTIONS answer.
 A HEAD answered by a GET route reports that GET route.

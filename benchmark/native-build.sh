@@ -21,7 +21,7 @@ OUT=${1:?usage: native-build.sh <result directory>}
 BUILD_ROUNDS=${BUILD_ROUNDS:-3}
 : "${GRAALVM_HOME:?GRAALVM_HOME must name a GraalVM JDK}"
 ORACLE_GRAALVM_HOME=${ORACLE_GRAALVM_HOME:-}
-APPS="spider-silk-app spring-mvc-app"
+APPS="spider-silk-app spring-boot-app"
 
 mkdir -p "$OUT/logs" build/native
 echo "round,app,build_seconds,native_image_seconds,native_image_peak_rss_gib,binary_mb" > "$OUT/native-build.csv"

@@ -7,5 +7,5 @@ rootProject.name = 'spider-silk-benchmark'
 includeBuild('..')
 
 include 'spider-silk-app'
-include 'spring-mvc-app'
+include 'spring-boot-app'
 include 'json-bench'
