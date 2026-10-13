@@ -10,7 +10,7 @@ dependencies {
     // api, not implementation: the constructor takes Jackson's ObjectMapper and
     // the factories take its TypeReference, so a consumer needs them on its
     // compile classpath. 3.x is tools.jackson, a package apart from 2.x.
-    api 'tools.jackson.core:jackson-databind:3.1.5'
+    api 'tools.jackson.core:jackson-databind:3.2.3'
 
     testImplementation project(':spider-silk-test')
     testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
