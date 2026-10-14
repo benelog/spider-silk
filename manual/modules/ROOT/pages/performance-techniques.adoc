@@ -1,0 +1,289 @@
+= Appendix: Performance Techniques
+:navtitle: Appendix: Performance Techniques
+
+This appendix lists the techniques Spider Silk uses to keep a request cheap, from the route lookup to the bytes of a JSON body.
+Each entry states what the technique does, and the measurement that justified it where one was taken.
+The numbers come from xref:benchmark.adoc[Appendix: Benchmark] and from the measurements `notes/decisions.md` records, and they hold for the machine the benchmark describes.
+
+[#principles]
+== Principles
+
+Three rules shape every technique below.
+
+* What runs is what the code says.
+Core and silk-json use no reflection, no proxies, no classpath scanning, and no `ServiceLoader`, so a request runs as direct calls through interfaces and lambdas.
+xref:reflection-scope.adoc[The Scope of "No Reflection"] draws the line.
+* Work moves from the request to startup or to the build.
+A route table, a filter list, a JSON codec, and a template are each prepared once, and a request only reads them.
+* A change stays only when a measurement shows that it pays.
+Each candidate was measured back to back against the build before it.
+A candidate that did not pay is recorded as a Rejected line in `notes/decisions.md`, and <<rejected>> lists the instructive ones.
+
+[#request-path]
+== The request path
+
+[#snapshot]
+=== A routing snapshot built once
+
+Registration closes when `AppServlet` is initialized, and the application is then frozen into one immutable snapshot.
+The snapshot holds a copy of the router, the filter lists, and the handler maps, each an unmodifiable collection.
+A request reads the snapshot through one `volatile` field and takes no lock.
+Each server initializes the servlet at startup rather than on the first request: Jetty with init order 0, and Tomcat and Undertow with load-on-startup 0.
+The snapshot is therefore ready before the first request arrives.
+
+[#route-index]
+=== Routes indexed by method and first segment
+
+The router keeps one table per HTTP method, and each table buckets its routes by their first literal segment.
+A route whose first segment is a variable goes into every bucket, so the merge happens at registration rather than per request.
+A lookup is two map lookups and a walk over one bucket, which is already in registration order.
+The tie-break of a full scan therefore holds: `/study/today` registered before `+/study/{mode}+` still wins, as xref:routing.adoc[Routing] states.
+
+Within a bucket, a pattern is compared with the path segment by segment, with `equals` and no regular expression.
+A pattern with no variable answers with a shared empty map, so a request to a static route allocates no parameter map.
+The path is split once per request, and the router, the filters, and CORS read the same array.
+The `Allow` set of a 405 or an `OPTIONS` answer is worked out only when no route matched, never on a hit.
+
+[#call-stack]
+=== Two frames to the handler
+
+Between the container's `HttpServlet.service` and the handler there are two framework frames: `AppServlet.service` and `AppServlet.dispatch`.
+Filters run as flat loops over immutable lists rather than as a nested chain.
+Registering filters, CORS, gzip, security headers, and a request logger therefore adds no frame.
+`CallStackDepthTest` asserts both in the build, and the Tomcat and Undertow modules assert the same against their containers.
+
+The benchmark measures what this saves.
+On the same container, Tomcat, Spider Silk answers 31% more requests per second than Spring Boot under `text` and 24% more under `json`.
+Spring Web MVC resolves a handler mapping, argument resolvers, return-value handlers, and message converters on every request, as xref:benchmark.adoc#reading[Reading the results] describes.
+
+[#lazy-request]
+=== A request read on demand
+
+A request parses only what the handler asks for.
+
+* The query string is parsed on the first read and kept.
+The percent decoder returns the same `String` when a value holds no `%` and no `+`.
+* `param` reads the query string alone unless the request is a `POST`, a `PUT`, or a `PATCH` with a form content type.
+The container's form parsing therefore does not run for any other request.
+* The body is read once and kept as bytes, and its text is decoded once and kept beside them.
+`bodyJson` parses the bytes as they arrived, with no string of the body.
+* The body's buffer is sized from `Content-Length`, up to 1 MB.
+A body larger than its limit is refused from `Content-Length` before a byte is read, as xref:request.adoc#body-limits[Body size limits] describes.
+* An NDJSON body holds at most one line and one 8 KB chunk in memory.
+* Reading the session creates none, and the flash check on every request asks the container for an existing session only.
+* The `RequestCompletion` a request logger receives is built only when a logger is registered.
+
+[#response]
+== The response
+
+[#value-then-write]
+=== An answer as a value, written once
+
+A handler answers with a `WebResponse` value whose body is one of a sealed set of kinds, and the servlet writes it after every filter has answered.
+A template is rendered and a JSON document is written before the headers go out.
+The servlet therefore knows the length of every in-memory body, sets `Content-Length`, and sends no chunked encoding.
+
+* A `Bytes` body keeps the caller's array, with no defensive copy.
+* A `HEAD` request on an in-memory body sets the length and writes nothing.
+On a streamed body whose length is known, the writer never runs, so a file is never opened.
+* A template renders into a `Writer` over a `StringBuilder`, which avoids the synchronized appends of `StringWriter`.
+* The header map is copy-on-write and keyed by the lower-cased name.
+CORS and security headers add their fields in one copy, and a field already present costs no copy.
+
+[#lent-buffer]
+=== A JSON body written where it is sent
+
+A `WebResponse.json` body holds the value and its writer, not the document.
+The servlet writes the document into the thread's buffer when the answer goes out, sets `Content-Length` from its length, and sends the bytes straight from that buffer.
+No array the size of the document is copied out.
+
+* A platform thread keeps its buffer, up to 64 KB, as a plain `byte[]` in a `ThreadLocal`.
+The next document neither grows nor zeroes it.
+* A virtual thread keeps no buffer, since it lives for one task.
+* The servlet releases the buffer in a `finally` block, after a `GET`, a `HEAD`, a gzip, and a failed write alike.
+* Gzip deflates from the same buffer, so a compressed document is written once.
+
+The buffer never leaves the servlet.
+A `WebResponse` is a public immutable value that a constant or a filter can hold, and a body that carried the buffer would read another request's document once the buffer went back to the thread.
+
+The copy this removed was 16% of a write profile.
+In the benchmark's `json-list` case, the allocation per request fell from 14.4 KB to 3.8 KB on Jetty and from 13.2 KB to 2.6 KB on Tomcat.
+
+[#gzip]
+=== Compression that pays for itself
+
+Gzip is off until `App#gzip` names it, as xref:cors-compression-and-security-headers.adoc[CORS, Compression, and Security] describes.
+Once on, it compresses only what gains from it.
+
+* A text body is measured against the threshold, 1024 bytes by default, without being encoded.
+A character takes one to three bytes in UTF-8, so the string's length decides most bodies, and the bytes are counted only when the bounds straddle the threshold.
+* A body whose compressed form is not smaller goes out as it was.
+* A streamed body is compressed as it is written, with a sync flush.
+Array writes pass through as arrays, since `FilterOutputStream` would otherwise write one byte at a time.
+* A `HEAD` request on a compressed stream does not read the file.
+
+[#static-files]
+=== Static files
+
+A static file is answered from its metadata until its bytes are needed, as xref:static-files.adoc[Static Files] describes.
+
+* The `ETag` and `Last-Modified` come from the file's attributes, so a `304` is decided without opening the file.
+* The file is opened only when its body is written.
+A `HEAD`, a `304`, or an answer a filter replaced opens nothing.
+* The body is copied as a stream with `transferTo`, never loaded whole.
+* A file whose modification time a build stamped gets a CRC-32 tag of its content, worked out once per path, time, and length and then kept.
+A jar entry's CRC comes from the jar's central directory, so the entry is not read for it.
+* `precompressed()` serves a `.br` or `.gz` sibling, so an asset is not deflated per request.
+It is off by default, since it costs every static request up to two lookups for siblings that are usually absent.
+* The `Cache-Control` value is built when the static files are configured, and the content-type table is a static immutable map.
+
+[#json]
+== The JSON engine
+
+silk-json writes and reads JSON at the speed of fastjson2 with neither `sun.misc.Unsafe` nor reflection.
+xref:benchmark.adoc#json-microbenchmark[The serializer and the parser alone] measures a generated codec writing a list of 100 records in 40% of Jackson's time and reading it in 24%.
+The techniques below produce that figure.
+
+[#bytes]
+=== Bytes in, bytes out
+
+Every document goes through one byte-level writer, `JsonOutput`, and one byte-level pull parser, `JsonInput`.
+A mapping is a lambda over them or a codec the build generates, and no tree stands between the value and the bytes.
+
+The first engine filled a `StringBuilder` a character at a time, made a `String`, and had the servlet encode it again.
+A body of 10 KB cost 114 KB of allocation that way.
+Written through the tree of `JsonObject` and `JsonArray` values, the list of 100 records took 12.6 µs and 29.8 KB out and 25.5 µs and 82 KB in.
+Written straight into the output and read straight off the input, it takes 5.2 µs and 11 KB out and 6.0 µs and 18 KB in.
+
+[#codecs]
+=== Codecs generated at compile time
+
+`silk-json-processor` runs inside javac and generates a `JsonCodec` for each `@JsonBound` type, as xref:json-codegen.adoc[Generated JSON Codecs] describes.
+The generated code calls the type's accessors and constructor, so it is straight-line code with no lookup at run time.
+
+* `JsonKey.of(name)` holds a member's name as written, with and without the comma before it.
+A codec writes a key with two eight-byte stores and never escapes it per record.
+* `put(JsonKey, value)` checks the writer's state once and writes the key and the value in one call.
+* A generated read tries the key declared next with `nextKeyIs`, which compares comma, quotes, name, and colon in place.
+* Once a document leaves the declared order, each key goes to a `switch` on `JsonInput.keyHead()`, the four bytes where the next member stands.
+Together with the read of the declared order, this took reading the list with its keys reversed from 9.5 µs to 7.2 µs.
+* `nextKeyIs` passes over whitespace before a key and checks for a comma and one space first.
+This took reading the list as Python's `json.dumps` spaces it from 10.0 µs to 6.6 µs, and indented from 11.6 µs to 8.6 µs.
+* An enum's constant names are encoded once as `JsonKey` values, copied out as a key is, and compared in place on the way in.
+This took 100 orders from 2.9 µs to 2.4 µs out and from 4.6 µs to 3.0 µs in.
+
+Generating on top of jackson-core, as avaje-jsonb does, was measured and rejected: its generator wrote the same list in 13.7 µs.
+
+[#swar]
+=== Eight bytes at a time
+
+`LittleEndian` reads and writes eight bytes at a time through `MethodHandles.byteArrayViewVarHandle`.
+The compiler makes each call one load or one store, with the index check of an array access.
+It looks up no class and no member, and it holds no memory offset, so a native image built from it needs no configuration.
+
+* A string is scanned a word at a time for a quote, a backslash, a control character, or a byte past ASCII.
+* An integer of up to seven digits is counted a word at a time and converted with three multiplications.
+* An integer of 8 to 16 digits is read two words at a time, which took 100 ids of 18 digits from 6.5 µs to 5.9 µs.
+
+Reading the list went from 13.0 µs to 6.0 µs this way, and writing it from 7.0 µs to 5.2 µs.
+
+[#writing-strings]
+=== Writing strings
+
+A string is copied once with `getChars` and checked in that array, never read with `String.charAt`.
+`charAt` has one profile for the whole process, and once a string outside Latin-1 passes through it, every loop that calls it compiles slower.
+
+* A quote or a backslash is escaped in the loop that writes plain ASCII, and that loop compares each character instead of looking it up in a table.
+This took writing the list from 5.3 µs to 4.7 µs.
+* A number below 1000 goes out with one store from a table, and a three-byte character, such as a Korean syllable, with one four-byte store.
+* A string of 64 characters or more takes another path.
+The JDK's `US_ASCII` encoder narrows it into the buffer through an intrinsic of the JIT compiler, and `String.indexOf`, another intrinsic, finds its quotes and backslashes.
+The narrowed bytes are checked eight at a time for control characters only.
+An escape moves the narrowed bytes after it up rather than narrowing them again.
+These took 100 records with a 200-character description from 15.0 µs to 6.9 µs.
+
+fastjson2 still writes the records whose short strings need no escape 1.17 times as fast.
+It reads the `String`'s own Latin-1 bytes through `sun.misc.Unsafe`, which the JDK is retiring.
+Copying a string's bytes with no check at all writes the plain list in 2.7 µs against fastjson2's 3.7 µs, so the gap is the string's representation, all of it.
+
+[#reading-strings]
+=== Reading strings
+
+* A string with bytes past ASCII is checked and decoded into characters in one pass, and the ASCII before them is widened without a check.
+This took reading the list in Korean from 11.0 µs to 5.6 µs, against fastjson2's 7.9 µs.
+* An empty or one-character string comes from a table with no allocation.
+This took records of such strings from 3.4 µs and 13.9 KB to 2.8 µs and 5.5 KB.
+* A key repeated across the records of one document is one string on the way in.
+
+[#numbers]
+=== Numbers with a fraction
+
+A number with a fraction is converted from its digits and to them, with no string made.
+
+* `readDouble` takes one multiplication or division for a significand up to 2^53^ with a power of ten from -22 to 22 (Clinger's fast path).
+The rest of 19 digits takes Eisel-Lemire's 128-bit product, and only a longer number or an undecided rounding goes to `Double.parseDouble`.
+This took reading 100 places with three such numbers each from 12.6 µs and 43.9 KB to 5.3 µs and 11.1 KB.
+* `readFloat` rounds once from the digits, since `(float) readDouble()` rounds twice and can land on the wrong float.
+* A double goes out through Schubfach, the algorithm of `Double.toString` since JDK 19, and its digits are laid out in the buffer eight to a word.
+This took writing the places from 16.5 µs and 35.6 KB to 9.3 µs and 8.5 KB.
+
+[#templates]
+== Templates
+
+jte, the default engine, compiles a template to Java, so `${deck.title}` becomes a method call in a generated class.
+In production the build precompiles the templates, as xref:templates.adoc#production[Development and production] describes.
+The benchmark's page renders about 2.8 times as fast with jte as with Thymeleaf, which interprets the template and reads the model through an expression language.
+
+* The default `JteTemplates` is created on the first render, so an application that renders no template never sets up jte.
+The field is checked twice around a `volatile` read rather than behind a lock that every request would take.
+* A `Model` reaches the engine as the unmodifiable map it already holds, with no copy.
+* The FreeMarker, Handlebars, and Thymeleaf modules keep each parsed template in their engine's cache.
+
+[#startup]
+== Startup and the native image
+
+Startup has nothing to scan, since routes are lambdas and a codec is generated code.
+
+* Core depends on `jetty-ee10-servlet` alone, not on the Jetty modules that scan annotations and read `web.xml`.
+* The Tomcat module adds its context with `tomcat-embed-core` alone, and the Undertow module gives its deployment an empty resource manager.
+* A JVM process starts in 295 ms on Spider Silk with Jetty against 902 ms on Spring Boot, and holds 117 MB against 210 MB at that point.
+
+Core and silk-json need no reflection configuration in a native image, since neither looks up a class or a member by name.
+A GraalVM CE image starts in 24 ms.
+Built with Oracle GraalVM's profile-guided optimization, Spider Silk's image keeps 79% to 94% of its JVM's throughput, as xref:benchmark.adoc#native-vs-jvm[Native images against the JVM] reports.
+xref:native-image.adoc[GraalVM Native Image] describes the build.
+
+[#threads]
+== Threads
+
+Virtual threads are a setting of the server, documented rather than wrapped, as xref:server.adoc#virtual-threads[Virtual threads] describes.
+They pay off only when handlers block.
+On a virtual thread, the JSON writer keeps no buffer between documents, so <<lent-buffer>> saves the copy but not the allocation.
+An SSE stream holds one thread, and the pattern that splits an event's lines is compiled once rather than per call.
+
+[#rejected]
+== Measured and rejected
+
+The candidates below were measured and did not pay.
+`notes/decisions.md` records the rest.
+
+* An output that writes a generated codec's bytes unchecked wrote the list 5% faster, and would let a codec write a document that is not JSON.
+* A pass over the whole string that only flags what needs an escape took the list from 5.3 µs to between 7.4 µs and 9.2 µs.
+The JIT compiler of JDK 25 vectorizes neither the narrowing of a `char` to a `byte` nor the flag.
+* `MemorySegment.setString`, the one public call that copies a string's Latin-1 bytes with no widening, wrote the list in 5.43 µs against 4.91 µs.
+Its own cost outweighs the copy it saves.
+* A `switch` on a hash of the key's head read the reversed records in the same 7.35 µs, and the indented and the `json.dumps` ones 3% to 4% slower.
+* Passing an indent's spaces eight at a time read the indented records 7% slower and the `json.dumps` ones 17% slower, since a run of whitespace in a document is a newline and a few spaces.
+* Writing a double's digits from a table of pairs wrote the places in 10.0 µs against 9.3 µs.
+* Counting a number's digits eight at a time read the places in 5.7 µs to 6.1 µs against 5.3 µs, since a run of two to six digits ends before a word pays.
+* Writing a JSON body straight to the servlet's stream leaves no length for `Content-Length`, and a failure halfway would leave half a document sent.
+
+[#not-done]
+== What the framework leaves out
+
+Some common techniques are absent, and an application that needs one puts a proxy or a CDN in front.
+
+* A static file is not answered to a `Range` request with a `206`.
+* A file is copied with `transferTo`, with no `sendfile` or other zero-copy path.
+* Each compressed response builds its own `GZIPOutputStream`, with no `Deflater` kept between responses.
+* The `Date` header is the container's, and a static file's `ETag` and `Last-Modified` are formatted per response.

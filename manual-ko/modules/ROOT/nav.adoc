@@ -46,3 +46,4 @@
 ** xref:example-flashcard.adoc[예제: Flashcard]
 ** xref:agent-skill.adoc[에이전트 스킬]
 ** xref:benchmark.adoc[부록: 벤치마크]
+** xref:performance-techniques.adoc[부록: 성능 최적화 기법]

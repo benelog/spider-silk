@@ -46,3 +46,4 @@
 ** xref:example-flashcard.adoc[Example: Flashcard]
 ** xref:agent-skill.adoc[The Agent Skill]
 ** xref:benchmark.adoc[Appendix: Benchmark]
+** xref:performance-techniques.adoc[Appendix: Performance Techniques]
