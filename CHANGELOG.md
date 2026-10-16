@@ -262,6 +262,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `spider-silk-openapi`: a `*` inside a segment, such as `/files/*.txt`, is exported as the literal the router matches, where it was refused as a wildcard, and braces inside a literal segment are percent-encoded, so `/files/{name}.json` no longer exports an undeclared parameter.
 - `spider-silk-opentelemetry-agent`: `http.route` includes the servlet context path, `/shop/decks/{deckId}` under `/shop`, as the semantic conventions require.
 - `spider-silk-test`: a form body whose escape will not decode in its charset, such as `%FF` under UTF-8, answers 400 from `TestRequest`, as Jetty does, where it decoded to U+FFFD.
+- `spider-silk-core`: an `HttpException` thrown by an exception handler answers with its status and goes to `statusPage(status, ...)`, as one thrown by a handler or a filter does, where it answered 500.
 
 ## [1.1.0] - 2026-09-17
 

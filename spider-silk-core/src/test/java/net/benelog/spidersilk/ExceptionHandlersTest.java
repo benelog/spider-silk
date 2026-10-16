@@ -138,6 +138,49 @@ class ExceptionHandlersTest {
         });
     }
 
+    /**
+     * An exception handler that throws an HttpException answers with its status,
+     * as a handler or a filter that throws one does, and the body comes from
+     * statusPage(status). The original exception is still the one reported.
+     */
+    @Test
+    void anHttpExceptionThrownByAnExceptionHandlerAnswersItsStatus() {
+        App app = new App()
+                .get("/decks/{id}", req -> {
+                    throw new IllegalStateException("Deck 7 is locked");
+                })
+                .exception(IllegalStateException.class, (req, e) -> {
+                    throw new HttpException(HttpStatus.CONFLICT, e.getMessage());
+                })
+                .statusPage(HttpStatus.CONFLICT,
+                        req -> WebResponse.text("conflict: " + req.errorMessage()));
+
+        WebTest.test(app, client -> {
+            HttpResponse<String> response = client.get("/decks/7");
+
+            assertThat(response.statusCode()).isEqualTo(409);
+            assertThat(response.body()).isEqualTo("conflict: Deck 7 is locked");
+        });
+    }
+
+    /** Anything else an exception handler throws is a failure of its own, and answers 500. */
+    @Test
+    void anythingElseAnExceptionHandlerThrowsAnswers500() {
+        App app = new App()
+                .get("/decks/{id}", req -> {
+                    throw new IllegalStateException("Deck 7 is locked");
+                })
+                .exception(IllegalStateException.class, (req, e) -> {
+                    throw new UnsupportedOperationException("handler bug");
+                });
+
+        WebTest.test(app, client -> {
+            HttpResponse<String> response = client.get("/decks/7");
+
+            assertThat(response.statusCode()).isEqualTo(500);
+        });
+    }
+
     /** A handler that names HttpException, or a subtype of it, asked for them and gets them. */
     @Test
     void aHandlerRegisteredForHttpExceptionOrASubtypeStillCatchesIt() {

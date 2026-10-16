@@ -24,3 +24,12 @@ dependencies {
     testImplementation 'org.assertj:assertj-core:3.27.7'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
+
+// CallStackDepthTest checks the stack trace the manual's introduction shows
+// against the lines a handler stands on, so an edit to either page reruns it.
+tasks.named('test') {
+    inputs.files(rootProject.files(
+            'manual/modules/ROOT/pages/index.adoc',
+            'manual-ko/modules/ROOT/pages/index.adoc')).withPathSensitivity(PathSensitivity.RELATIVE)
+    systemProperty 'spidersilk.rootDir', rootDir.path
+}

@@ -118,6 +118,8 @@ The JDK and the framework also throw `IllegalArgumentException` for a programmin
 An `HttpException` is a status the handler chose, not a failure.
 It answers with its status and message and goes to `statusPage(status, ...)` for its body, and a handler registered for a broader type such as `RuntimeException` never sees it.
 A handler registered for `HttpException` itself, or for a subtype of it, does.
+An exception handler may throw an `HttpException` too, and it answers with that status and goes to `statusPage(status, ...)`, as one a handler threw does.
+Anything else an exception handler throws answers 500.
 The framework rejects bad input with an `HttpException` of its own.
 A body that is not JSON, a body a reader rejects, and a parameter that does not parse each answer 400 that way, and a handler for `JsonException` or `IllegalArgumentException` never sees them.
 Any other exception that no handler covers answers 500 and is logged.

@@ -3,10 +3,15 @@ package net.benelog.spidersilk;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.junit.jupiter.api.Test;
 
@@ -24,6 +29,10 @@ import net.benelog.spidersilk.test.WebTest;
 class CallStackDepthTest {
 
     private static final AtomicReference<List<StackWalker.StackFrame>> CAPTURED = new AtomicReference<>();
+
+    /** A line of the stack trace the introduction shows, at one of the framework's frames. */
+    private static final Pattern DOCUMENTED_FRAME =
+            Pattern.compile("at net\\.benelog\\.spidersilk\\.(AppServlet\\.\\w+)\\(AppServlet\\.java:(\\d+)\\)");
 
     /** Answers the request, and records the stack it was answered on. */
     private static WebResponse capture() {
@@ -54,6 +63,32 @@ class CallStackDepthTest {
         assertThat(frameworkFrames()).containsExactly(
                 "net.benelog.spidersilk.AppServlet.dispatch",
                 "net.benelog.spidersilk.AppServlet.service");
+    }
+
+    /**
+     * The introduction of the manual, in English and in Korean, shows a stack trace
+     * taken inside a handler. Its line numbers are the ones a handler stands on now.
+     */
+    @Test
+    void theIntroductionShowsTheLinesAHandlerStandsOn() throws IOException {
+        App app = new App().get("/x", req -> capture());
+
+        WebTest.test(app, client -> client.get("/x"));
+
+        Map<String, Integer> actual = new LinkedHashMap<>();
+        CAPTURED.get().stream()
+                .filter(frame -> frame.getClassName().equals(AppServlet.class.getName()))
+                .forEach(frame -> actual.put("AppServlet." + frame.getMethodName(), frame.getLineNumber()));
+        Path root = Path.of(System.getProperty("spidersilk.rootDir"));
+        for (String page : List.of("manual/modules/ROOT/pages/index.adoc", "manual-ko/modules/ROOT/pages/index.adoc")) {
+            Map<String, Integer> documented = new LinkedHashMap<>();
+            Matcher matcher = DOCUMENTED_FRAME.matcher(Files.readString(root.resolve(page)));
+            while (matcher.find()) {
+                documented.put(matcher.group(1), Integer.parseInt(matcher.group(2)));
+            }
+
+            assertThat(documented).as(page).isEqualTo(actual);
+        }
     }
 
     /**

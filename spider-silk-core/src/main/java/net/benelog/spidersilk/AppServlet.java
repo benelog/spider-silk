@@ -627,7 +627,9 @@ public class AppServlet extends HttpServlet {
      * it answers with that status and goes to {@link App#statusPage} for its body, and
      * a handler registered for a broader type never sees it. Any other exception
      * goes to the most specific handler registered for it, or to a 500, and is
-     * kept on the request for the request logger to report either way.
+     * kept on the request for the request logger to report either way. An
+     * exception handler may throw an {@link HttpException} as well, and it answers
+     * with that status as one thrown by a handler does.
      */
     private WebResponse handleException(Throwable e, WebRequest request) {
         if (!(e instanceof HttpException)) {
@@ -641,6 +643,8 @@ public class AppServlet extends HttpServlet {
             try {
                 return renderTemplate(required(handler.handle(request, (Exception) e),
                         "Exception handler", request.method(), request.path()));
+            } catch (HttpException chosen) {
+                return fail(request, chosen.status(), chosen.getMessage());
             } catch (Throwable handlerFailure) {
                 return internalError(handlerFailure, request);
             }
