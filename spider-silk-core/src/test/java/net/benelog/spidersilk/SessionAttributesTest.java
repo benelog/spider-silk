@@ -7,7 +7,10 @@ import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.Enumeration;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -15,8 +18,16 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.function.Supplier;
 
+import jakarta.servlet.DispatcherType;
+import jakarta.servlet.ServletContext;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
+import jakarta.servlet.http.HttpSession;
+
+import org.jspecify.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
+import net.benelog.spidersilk.server.JettyServer;
 import net.benelog.spidersilk.test.TestRequest;
 import net.benelog.spidersilk.test.WebTest;
 
@@ -245,8 +256,8 @@ class SessionAttributesTest {
      * <p>The window between taking the flash and removing it is a few
      * instructions wide, so one round of the race finds an unsynchronized
      * promotion only now and then. The round is therefore repeated: the answer
-     * is exact every time when the promotion holds the session's monitor, and
-     * over this many attempts it is not when it does not.
+     * is exact every time when the promotion takes each entry with its own
+     * {@code remove}, and over this many attempts it is not when it does not.
      */
     @Test
     void aFlashedMessageReachesOnlyOneOfTwoSimultaneousRequests() {
@@ -267,6 +278,126 @@ class SessionAttributesTest {
                 assertThat(answers).containsExactlyInAnyOrder("saved", "null");
             }
         });
+    }
+
+    /**
+     * Flash still reaches one request only when the container answers a new
+     * HttpSession object on every request, as Undertow does. A lock taken on
+     * the session object then excludes nothing, and the promotion handed one
+     * message to several requests.
+     */
+    @Test
+    void aFlashedMessageReachesOneRequestWhenEachRequestHasItsOwnSessionObject() {
+        App app = new App()
+                .post("/save", req -> {
+                    req.flash("message", "saved");
+                    return WebResponse.noContent();
+                })
+                .get("/home", req -> WebResponse.text(String.valueOf(req.flashed("message"))))
+                .server((a, port) -> new JettyServer(a).port(port).customizeContext(context ->
+                        context.addFilter((request, response, chain) -> chain.doFilter(
+                                new SessionObjectPerRequest((HttpServletRequest) request), response),
+                                "/*", EnumSet.of(DispatcherType.REQUEST))));
+
+        WebTest.test(app, client -> {
+            for (int round = 0; round < 100; round++) {
+                client.post("/save");
+
+                List<String> answers = together(16, () -> client.get("/home").body());
+
+                assertThat(answers).as("round " + round).containsOnlyOnce("saved");
+            }
+        });
+    }
+
+    /** A request whose session is a new object, over the container's own, as Undertow answers it. */
+    private static final class SessionObjectPerRequest extends HttpServletRequestWrapper {
+
+        private @Nullable HttpSession session;
+
+        SessionObjectPerRequest(HttpServletRequest request) {
+            super(request);
+        }
+
+        @Override
+        public @Nullable HttpSession getSession(boolean create) {
+            HttpSession container = super.getSession(create);
+            if (container == null) {
+                return null;
+            }
+            if (session == null || !session.getId().equals(container.getId())) {
+                session = new ForwardingSession(container);
+            }
+            return session;
+        }
+
+        @Override
+        public HttpSession getSession() {
+            return Objects.requireNonNull(getSession(true));
+        }
+    }
+
+    private record ForwardingSession(HttpSession session) implements HttpSession {
+
+        @Override
+        public long getCreationTime() {
+            return session.getCreationTime();
+        }
+
+        @Override
+        public String getId() {
+            return session.getId();
+        }
+
+        @Override
+        public long getLastAccessedTime() {
+            return session.getLastAccessedTime();
+        }
+
+        @Override
+        public ServletContext getServletContext() {
+            return session.getServletContext();
+        }
+
+        @Override
+        public void setMaxInactiveInterval(int interval) {
+            session.setMaxInactiveInterval(interval);
+        }
+
+        @Override
+        public int getMaxInactiveInterval() {
+            return session.getMaxInactiveInterval();
+        }
+
+        @Override
+        public Object getAttribute(String name) {
+            return session.getAttribute(name);
+        }
+
+        @Override
+        public Enumeration<String> getAttributeNames() {
+            return session.getAttributeNames();
+        }
+
+        @Override
+        public void setAttribute(String name, Object value) {
+            session.setAttribute(name, value);
+        }
+
+        @Override
+        public void removeAttribute(String name) {
+            session.removeAttribute(name);
+        }
+
+        @Override
+        public void invalidate() {
+            session.invalidate();
+        }
+
+        @Override
+        public boolean isNew() {
+            return session.isNew();
+        }
     }
 
     /** Runs a call on that many threads, released together, and collects the answers. */

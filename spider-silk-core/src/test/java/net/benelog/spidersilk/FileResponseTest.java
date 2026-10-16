@@ -64,6 +64,42 @@ class FileResponseTest {
                 .isEqualTo("application/octet-stream"));
     }
 
+    /**
+     * The extensions a web front end commonly ships have their own types. Served
+     * as octet-stream, a module script would not run, WebAssembly would not
+     * stream, and a PDF or an .htm page would be downloaded instead of shown.
+     */
+    @Test
+    void theExtensionsAWebFrontEndShipsHaveTheirOwnTypes() {
+        assertThat(ContentTypes.byPath("app.mjs")).isEqualTo("text/javascript; charset=UTF-8");
+        assertThat(ContentTypes.byPath("app.wasm")).isEqualTo("application/wasm");
+        assertThat(ContentTypes.byPath("font.woff")).isEqualTo("font/woff");
+        assertThat(ContentTypes.byPath("page.htm")).isEqualTo("text/html; charset=UTF-8");
+        assertThat(ContentTypes.byPath("feed.xml")).isEqualTo("application/xml");
+        assertThat(ContentTypes.byPath("photo.webp")).isEqualTo("image/webp");
+        assertThat(ContentTypes.byPath("photo.avif")).isEqualTo("image/avif");
+        assertThat(ContentTypes.byPath("manual.pdf")).isEqualTo("application/pdf");
+        assertThat(ContentTypes.byPath("site.webmanifest")).isEqualTo("application/manifest+json");
+        assertThat(ContentTypes.byPath("app.js.map")).isEqualTo("application/json");
+        assertThat(ContentTypes.byPath("PHOTO.WEBP")).isEqualTo("image/webp");
+    }
+
+    /** XML is among the types gzip compresses, which a static file can now be served as. */
+    @Test
+    void anXmlStaticFileIsCompressed() throws Exception {
+        Files.writeString(dir.resolve("feed.xml"), "<feed>" + "<entry/>".repeat(500) + "</feed>");
+        App app = new App().gzip().staticFiles(StaticFiles.directory(dir));
+
+        WebTest.test(app, client -> {
+            var response = client.send(request -> request.uri(java.net.URI.create(client.url("/feed.xml")))
+                            .header("Accept-Encoding", "gzip"),
+                    java.net.http.HttpResponse.BodyHandlers.ofByteArray());
+
+            assertThat(response.headers().firstValue("Content-Type")).hasValue("application/xml");
+            assertThat(response.headers().firstValue("Content-Encoding")).hasValue("gzip");
+        });
+    }
+
     @Test
     void aFileWithNoExtensionIsOctetStreamToo() throws Exception {
         Path blob = Files.writeString(dir.resolve("LICENSE"), "whatever");

@@ -344,7 +344,7 @@ public final class StaticFiles {
      * request is not for this directory at all.
      */
     private @Nullable String relativePath(String path) {
-        if (path.contains("..") || !path.startsWith(hostedPath)) {
+        if (hasParentSegment(path) || !path.startsWith(hostedPath)) {
             return null;
         }
         String relative = path.substring(hostedPath.length());
@@ -352,6 +352,20 @@ public final class StaticFiles {
             return null;
         }
         return relative;
+    }
+
+    /**
+     * Whether a segment of the path is {@code ..}, split at a backslash as well
+     * as a slash since Windows reads either as a separator. A name that merely
+     * holds two dots, {@code a..b.txt}, is an ordinary file.
+     */
+    private static boolean hasParentSegment(String path) {
+        for (String segment : path.split("[/\\\\]", -1)) {
+            if (segment.equals("..")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

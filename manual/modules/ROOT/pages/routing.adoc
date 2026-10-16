@@ -60,6 +60,10 @@ A second binding would overwrite the first, so the handler would read the wrong 
 A group's prefix is part of the pattern, so a route `/items/\{id}` under the prefix `/tenants/\{id}` throws as well.
 Filter paths and `Cors.forPath` are checked the same way.
 
+A variable needs a name.
+`{}` and `{*}` throw `IllegalArgumentException` at registration, because they would otherwise match one segment under the name `""` or `*`.
+A pattern that should match the rest of the path ends in `*` or in a named tail such as `\{path*}`.
+
 == Groups
 
 Routes that share a prefix register through `path`.

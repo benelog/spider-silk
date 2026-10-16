@@ -60,6 +60,10 @@ Direction direction = req.pathParamEnum("direction", Direction.class);
 그룹의 접두사는 패턴의 일부이므로, 접두사 `/tenants/\{id}` 아래의 라우트 ``/items/\{id}``도 예외를 던진다.
 필터 경로와 ``Cors.forPath``도 같은 방식으로 검사한다.
 
+변수에는 이름이 있어야 한다.
+``{}``와 ``{*}``는 등록 시점에 ``IllegalArgumentException``을 던지는데, 그대로 두면 ``""``나 ``*``라는 이름으로 세그먼트 하나에 매칭되기 때문이다.
+경로의 나머지에 매칭해야 하는 패턴은 ``*``나 `\{path*}` 같은 이름 붙은 꼬리 변수로 끝난다.
+
 == 그룹
 
 접두사를 공유하는 라우트는 ``path``를 통해 등록한다.

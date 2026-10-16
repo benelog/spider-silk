@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.StringWriter;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.BrokenBarrierException;
@@ -14,8 +17,10 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Stream;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import net.benelog.spidersilk.test.WebTest;
 
@@ -35,6 +40,45 @@ class TemplatesTest {
             assertThat(response.headers().firstValue("Content-Type").orElseThrow())
                     .isEqualTo("text/html;charset=utf-8");
         });
+    }
+
+    /**
+     * The directory jte compiles into is gone once the JVM exits. Each renderer
+     * created one and left it, so every run left a {@code jte-classes*}
+     * directory behind. The render runs in a JVM of its own, with a temp
+     * directory of its own, so the test can watch that JVM exit.
+     */
+    @Test
+    void theCompilationDirectoryIsDeletedWhenTheJvmExits(@TempDir Path tmp) throws Exception {
+        Process process = new ProcessBuilder(
+                Path.of(System.getProperty("java.home"), "bin", "java").toString(),
+                "-Djava.io.tmpdir=" + tmp,
+                "-cp", System.getProperty("java.class.path"),
+                RenderOnce.class.getName())
+                .redirectErrorStream(true)
+                .start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertThat(process.waitFor(60, TimeUnit.SECONDS)).as(output).isTrue();
+
+        assertThat(output).contains("<p>Hello, Silk!</p>").contains("jte-classes directories: 1");
+        try (Stream<Path> left = Files.list(tmp)) {
+            assertThat(left.map(path -> path.getFileName().toString()))
+                    .noneMatch(name -> name.startsWith("jte-classes"));
+        }
+    }
+
+    /** Renders one template and reports the compilation directories it sees before exiting. */
+    static final class RenderOnce {
+
+        public static void main(String[] args) throws Exception {
+            StringWriter out = new StringWriter();
+            new JteTemplates(JteTemplates.DEFAULT_ROOT).render("greeting", Model.of("name", "Silk"), out);
+            System.out.println(out);
+            try (Stream<Path> created = Files.list(Path.of(System.getProperty("java.io.tmpdir")))) {
+                System.out.println("jte-classes directories: "
+                        + created.filter(path -> path.getFileName().toString().startsWith("jte-classes")).count());
+            }
+        }
     }
 
     @Test

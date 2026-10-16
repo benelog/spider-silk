@@ -1,11 +1,13 @@
 package net.benelog.spidersilk.server;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.Socket;
 import java.net.URI;
@@ -384,6 +386,20 @@ class JettyServerTest {
             assertThat(response).as(path).startsWith("HTTP/1.1 400");
             assertThat(response).as(path).contains("Query string is not valid URL encoding");
         }
+    }
+
+    /**
+     * A character outside the BMP sent as raw UTF-8 in the query string reads
+     * as itself. Decoding one char at a time split its surrogate pair, and each
+     * half became a '?'.
+     */
+    @Test
+    void aRawSupplementaryCharacterInTheQueryStringReadsAsItself() {
+        start(new App().get("/q", req -> WebResponse.text(req.queryParam("q") + "|" + req.param("q"))));
+
+        assertThat(raw("GET /q?q=😀+x HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"))
+                .startsWith("HTTP/1.1 200")
+                .endsWith("😀 x|😀 x");
     }
 
     /** Decoding the query string first leaves a form body to the container, as before. */
@@ -776,6 +792,111 @@ class JettyServerTest {
         } finally {
             third.stop();
         }
+    }
+
+    /**
+     * A start that fails late stops the thread pool the caller passed in but
+     * leaves it able to start again, so a retry can hand the same pool over.
+     * Destroying it, as the cleanup did, left a pool that refused to start.
+     */
+    @Test
+    void aFailedStartLeavesTheCallersThreadPoolUsable() throws Exception {
+        JettyServer first = new JettyServer(new App()).port(0);
+        first.start();
+        QueuedThreadPool pool = new QueuedThreadPool();
+        JettyServer second = new JettyServer(new App()).port(first.port()).threadPool(pool);
+        assertThatThrownBy(second::start).isInstanceOf(IllegalStateException.class);
+        first.stop();
+
+        JettyServer retry = new JettyServer(new App().get("/", req -> WebResponse.text("retry")))
+                .port(0)
+                .threadPool(pool);
+        retry.start();
+        try {
+            assertThat(getFrom(retry.port(), "/").body()).isEqualTo("retry");
+        } finally {
+            retry.stop();
+        }
+    }
+
+    /**
+     * A request that outlasts the stop timeout is dropped, and the stop returns
+     * rather than throwing, as on Tomcat and Undertow, so cleanup written after
+     * {@code app.stop()} still runs.
+     */
+    @Test
+    void aRequestThatOutlastsTheStopTimeoutDoesNotFailTheStop() throws Exception {
+        CountDownLatch handlerEntered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        app = new App()
+                .get("/slow", req -> {
+                    handlerEntered.countDown();
+                    release.await(5, TimeUnit.SECONDS);
+                    return WebResponse.text("late");
+                })
+                .server((a, port) -> new JettyServer(a).port(port).stopTimeout(Duration.ofMillis(200)))
+                .start(0);
+        CompletableFuture<HttpResponse<String>> dropped = client.sendAsync(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/slow")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(handlerEntered.await(2, TimeUnit.SECONDS)).as("the handler never started").isTrue();
+
+        try {
+            App stopping = app;
+            app = null;
+            assertThatCode(stopping::stop).doesNotThrowAnyException();
+        } finally {
+            release.countDown();
+        }
+        dropped.handle((response, failure) -> null).get(5, TimeUnit.SECONDS);
+    }
+
+    /**
+     * An upload still arriving when the stop begins is given the stop timeout
+     * to finish. The drain used to shorten every connection's idle timeout to
+     * a tenth of a second, which cut off a body that paused for longer.
+     */
+    @Test
+    void aSlowUploadInFlightIsGivenTheStopTimeoutToFinish() throws Exception {
+        CountDownLatch handlerEntered = new CountDownLatch(1);
+        app = new App().post("/upload", req -> {
+            handlerEntered.countDown();
+            return WebResponse.text("read " + req.body().length());
+        }).start(0);
+
+        try (Socket socket = new Socket("localhost", app.port())) {
+            OutputStream out = socket.getOutputStream();
+            out.write(("POST /upload HTTP/1.1\r\nHost: localhost\r\nContent-Type: text/plain\r\n"
+                    + "Content-Length: 10\r\n\r\nhello").getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+            assertThat(handlerEntered.await(2, TimeUnit.SECONDS)).as("the handler never started").isTrue();
+
+            App stopping = app;
+            app = null;
+            CompletableFuture<Void> stopped = CompletableFuture.runAsync(stopping::stop);
+            Thread.sleep(500); // five times the idle connections' timeout
+            out.write("world".getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+
+            String response = new String(socket.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            assertThat(response).startsWith("HTTP/1.1 200").endsWith("read 10");
+            stopped.get(5, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * A session expires after thirty minutes with no request, as on Tomcat and
+     * Undertow. Jetty's own default outside a webapp is never, and its default
+     * cache does not evict, so every session stayed on the heap.
+     */
+    @Test
+    void aSessionExpiresAfterThirtyMinutesOfInactivity() throws Exception {
+        start(new App().get("/session", req -> {
+            req.session().set("k", "v");
+            return WebResponse.text(String.valueOf(req.raw().getSession().getMaxInactiveInterval()));
+        }));
+
+        assertThat(get("/session").body()).isEqualTo("1800");
     }
 
     private static List<String> threadNamesStartingWith(String prefix) {

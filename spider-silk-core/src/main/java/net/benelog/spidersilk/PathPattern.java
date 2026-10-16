@@ -49,6 +49,7 @@ final class PathPattern {
                         "\"" + parsed[i] + "\" is only allowed as the last segment: " + pattern);
             }
         }
+        rejectNamelessVariables(pattern, parsed);
         rejectDuplicateNames(pattern, parsed);
         String last = parsed.length == 0 ? null : parsed[parsed.length - 1];
         this.tailName = last == null ? null : tailVariableName(last);
@@ -69,6 +70,21 @@ final class PathPattern {
                 throw new IllegalArgumentException(("A path pattern has no whitespace: \"%s\"."
                         + " With a description, the path comes first: get(path, description, handler).")
                         .formatted(pattern));
+            }
+        }
+    }
+
+    /**
+     * A variable has a name. "{}" and "{*}" would otherwise be taken as
+     * single-segment variables named "" and "*", so "/files/{*}" would match
+     * "/files/a" and answer 404 for "/files/a/b", where "*" or "{path*}" was meant.
+     */
+    private static void rejectNamelessVariables(String pattern, String[] parsed) {
+        for (String segment : parsed) {
+            if (segment.equals("{}") || segment.equals("{*}")) {
+                throw new IllegalArgumentException(("A path variable needs a name: \"%s\" has %s."
+                        + " Name it, such as {id}, or end the pattern with * or {path*} to match the rest.")
+                        .formatted(pattern, segment));
             }
         }
     }

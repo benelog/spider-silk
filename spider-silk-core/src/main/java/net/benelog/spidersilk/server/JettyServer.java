@@ -4,16 +4,25 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 import jakarta.servlet.MultipartConfigElement;
 
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.io.EndPoint;
+import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.HttpConfiguration;
 import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.util.Callback;
 import org.eclipse.jetty.util.thread.ThreadPool;
 import org.jspecify.annotations.Nullable;
 
@@ -63,6 +72,14 @@ public final class JettyServer implements WebServer {
 
     /** How long a connection with nothing on it survives a graceful stop. */
     private static final Duration SHUTDOWN_IDLE_TIMEOUT = Duration.ofMillis(100);
+
+    /**
+     * How long a session lives with no request, the thirty minutes Tomcat and
+     * Undertow default to. Jetty's own default outside a webapp is never.
+     */
+    static final int SESSION_MAX_INACTIVE_SECONDS = 1800;
+
+    private static final System.Logger LOG = System.getLogger(JettyServer.class.getName());
 
     private int port = DEFAULT_PORT;
     private @Nullable String host;
@@ -205,9 +222,10 @@ public final class JettyServer implements WebServer {
         }
         Server candidate = threadPool != null ? new Server(threadPool) : new Server();
         try {
-            connector = createConnector(candidate);
-            candidate.addConnector(connector);
-            candidate.setHandler(createContext());
+            DrainingConnector draining = createConnector(candidate);
+            connector = draining;
+            candidate.addConnector(draining);
+            candidate.setHandler(draining.tracking(createContext()));
             candidate.setStopTimeout(stopTimeout.toMillis());
             candidate.setStopAtShutdown(shutdownHook);
             serverCustomizers.forEach(customizer -> customizer.accept(candidate));
@@ -217,7 +235,7 @@ public final class JettyServer implements WebServer {
             connector = null;
             IllegalStateException failure =
                     new IllegalStateException("Failed to start Jetty on port " + port, e);
-            stopQuietly(candidate, failure);
+            stopQuietly(candidate, threadPool, failure);
             throw failure;
         }
     }
@@ -226,18 +244,29 @@ public final class JettyServer implements WebServer {
      * Unwinds a start that threw part-way. Jetty may already have bound the
      * connector and started pool threads, so a candidate left as it is would
      * hold the port against a retry and keep its non-daemon threads running.
-     * The cleanup is best-effort: whatever it fails at is reported on the
-     * start failure rather than replacing it.
+     * A thread pool the caller passed in is stopped with the server, as on any
+     * stop, but not destroyed: a destroyed pool cannot start again, and the
+     * caller may well retry with it. The cleanup is best-effort: whatever it
+     * fails at is reported on the start failure rather than replacing it.
      */
-    private static void stopQuietly(Server candidate, IllegalStateException failure) {
+    private static void stopQuietly(
+            Server candidate, @Nullable ThreadPool callersPool, IllegalStateException failure) {
         try {
             candidate.stop();
+            if (callersPool != null) {
+                candidate.removeBean(callersPool);
+            }
             candidate.destroy();
         } catch (Exception cleanupFailure) {
             failure.addSuppressed(cleanupFailure);
         }
     }
 
+    /**
+     * Stops the server. A request that outlasts the stop timeout is dropped
+     * and logged, and the stop returns as it does on Tomcat and Undertow, so
+     * cleanup written after {@code app.stop()} still runs.
+     */
     @Override
     public void stop() {
         if (server == null) {
@@ -245,6 +274,12 @@ public final class JettyServer implements WebServer {
         }
         try {
             server.stop();
+        } catch (TimeoutException e) {
+            if (e.getSuppressed().length > 0) {
+                throw new IllegalStateException("Failed to stop Jetty", e);
+            }
+            LOG.log(System.Logger.Level.WARNING, "Requests in flight outlasted the stop timeout of "
+                    + stopTimeout.toMillis() + "ms and were dropped");
         } catch (Exception e) {
             throw new IllegalStateException("Failed to stop Jetty", e);
         } finally {
@@ -273,20 +308,16 @@ public final class JettyServer implements WebServer {
         return port;
     }
 
-    private ServerConnector createConnector(Server server) {
+    private DrainingConnector createConnector(Server server) {
         HttpConfiguration httpConfiguration = new HttpConfiguration();
         // Jetty reads a form body on POST and PUT; Tomcat and Undertow are set
         // to the same three methods, so a PATCH form reads alike on each.
         httpConfiguration.addFormEncodedMethod("PATCH");
         httpConfigurationCustomizers.forEach(customizer -> customizer.accept(httpConfiguration));
 
-        ServerConnector connector =
-                new ServerConnector(server, new HttpConnectionFactory(httpConfiguration));
+        DrainingConnector connector =
+                new DrainingConnector(server, new HttpConnectionFactory(httpConfiguration));
         connector.setPort(port);
-        // Without this, a graceful stop waits out the whole stop timeout for
-        // keep-alive connections that are sitting idle, and then reports a
-        // timeout. The drain is for requests in flight, not for open sockets.
-        connector.setShutdownIdleTimeout(SHUTDOWN_IDLE_TIMEOUT.toMillis());
         if (host != null) {
             connector.setHost(host);
         }
@@ -301,6 +332,9 @@ public final class JettyServer implements WebServer {
             // Jetty's default outside a webapp's webdefault.xml leaves the
             // session cookie readable by a script; Tomcat marks it HttpOnly.
             context.getSessionHandler().setHttpOnly(true);
+            // Jetty's default is -1, never, and its default cache does not
+            // evict, so a session would stay on the heap until the JVM exits.
+            context.getSessionHandler().setMaxInactiveInterval(SESSION_MAX_INACTIVE_SECONDS);
         }
 
         ServletHolder holder = new ServletHolder(new AppServlet(app));
@@ -321,5 +355,76 @@ public final class JettyServer implements WebServer {
     private static MultipartConfigElement defaultMultipartConfig() {
         return new MultipartConfigElement(
                 System.getProperty("java.io.tmpdir"), -1L, -1L, 1024 * 1024);
+    }
+
+    /**
+     * A connector whose graceful stop closes idle connections at once and
+     * leaves busy ones their full idle timeout.
+     *
+     * <p>Without the first half, a graceful stop waits out the whole stop
+     * timeout for keep-alive connections that are sitting idle, and then
+     * reports a timeout. Jetty's own {@code shutdownIdleTimeout} does that,
+     * but it shortens the idle timeout of every connection, so a slow upload
+     * or download in flight would be cut off within a fraction of a second
+     * rather than given the stop timeout to finish. The drain is for requests
+     * in flight, not for open sockets, so the short timeout goes only to
+     * connections with no request in the handler.
+     */
+    private static final class DrainingConnector extends ServerConnector {
+
+        private final Set<EndPoint> busy = ConcurrentHashMap.newKeySet();
+        private volatile boolean draining;
+
+        DrainingConnector(Server server, HttpConnectionFactory factory) {
+            super(server, factory);
+            // Jetty's own shortening would reach the busy connections too; shutdown() does it for the idle ones.
+            setShutdownIdleTimeout(-1);
+        }
+
+        @Override
+        public CompletableFuture<Void> shutdown() {
+            draining = true;
+            CompletableFuture<Void> done = super.shutdown();
+            for (EndPoint endPoint : getConnectedEndPoints()) {
+                if (!busy.contains(endPoint)) {
+                    endPoint.setIdleTimeout(SHUTDOWN_IDLE_TIMEOUT.toMillis());
+                }
+            }
+            return done;
+        }
+
+        @Override
+        protected void doStart() throws Exception {
+            draining = false;
+            super.doStart();
+        }
+
+        /**
+         * Wraps the handler so that a connection counts as busy from the
+         * moment its request reaches the handler until its response has been
+         * written in full. HTTP/1.1 runs one request at a time on a
+         * connection, so a set of connections is enough. A response that
+         * completes during the drain leaves an idle connection, which then
+         * gets the short timeout the idle ones got when the drain began.
+         * Jetty calls a completion listener before the connection moves on to
+         * its next request, so the mark never comes off that request.
+         */
+        Handler tracking(Handler handler) {
+            return new Handler.Wrapper(handler) {
+                @Override
+                public boolean handle(Request request, Response response, Callback callback)
+                        throws Exception {
+                    EndPoint endPoint = request.getConnectionMetaData().getConnection().getEndPoint();
+                    busy.add(endPoint);
+                    Request.addCompletionListener(request, failure -> {
+                        busy.remove(endPoint);
+                        if (draining) {
+                            endPoint.setIdleTimeout(SHUTDOWN_IDLE_TIMEOUT.toMillis());
+                        }
+                    });
+                    return super.handle(request, response, callback);
+                }
+            };
+        }
     }
 }

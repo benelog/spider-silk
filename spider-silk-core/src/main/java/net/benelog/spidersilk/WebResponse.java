@@ -542,9 +542,11 @@ public final class WebResponse {
                 if (safe == null) {
                     safe = new StringBuilder(location.length() + 16).append(location, 0, i);
                 }
-                // A lone surrogate has no UTF-8 form, so it goes out as U+FFFD.
-                String character = Character.isSurrogate((char) codePoint)
-                        ? "\uFFFD" : location.substring(i, next);
+                // A lone surrogate has no UTF-8 form, so it goes out as U+FFFD. The
+                // test is on the whole code point: cast to a char, a supplementary
+                // one such as U+1D800 keeps only its low 16 bits and looks like one.
+                boolean loneSurrogate = codePoint >= Character.MIN_SURROGATE && codePoint <= Character.MAX_SURROGATE;
+                String character = loneSurrogate ? "\uFFFD" : location.substring(i, next);
                 for (byte b : character.getBytes(StandardCharsets.UTF_8)) {
                     safe.append('%').append(HEX[(b >> 4) & 0xF]).append(HEX[b & 0xF]);
                 }

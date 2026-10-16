@@ -597,27 +597,27 @@ public class AppServlet extends HttpServlet {
      * Moves flash left in the session by the request before the redirect into
      * this request.
      *
-     * <p>Taking it and removing it happen under the session's own monitor, the
-     * lock {@link WebRequest#flash} takes to create the map. Two requests in
-     * one session can be served at once — a form posted in one tab while
-     * another is loading, or a browser prefetching a link — and reading the
-     * attribute before removing it would otherwise hand the same message to
-     * both of them, which is the one thing flash promises not to do.
+     * <p>Two requests in one session can be served at once — a form posted in
+     * one tab while another is loading, or a browser prefetching a link — and
+     * handing the same message to both of them is the one thing flash promises
+     * not to do. {@link WebRequest#takeFlash} takes each entry out of the map
+     * with its own {@code remove}, which gives it to exactly one request.
+     *
+     * <p>No lock on the session object is taken here. A container need not
+     * answer one HttpSession object per session id, and Undertow answers a new
+     * one on every request, so two requests would each hold a monitor of their
+     * own and exclude nothing. The write side, {@link WebRequest#flash}, locks
+     * by session id for the same reason.
      */
     private void promoteFlash(HttpServletRequest req) {
         HttpSession session = req.getSession(false);
         if (session == null) {
             return;
         }
-        Object flash;
-        synchronized (session) {
-            flash = session.getAttribute(WebRequest.FLASH_ATTRIBUTE);
-            if (flash == null) {
-                return;
-            }
-            session.removeAttribute(WebRequest.FLASH_ATTRIBUTE);
+        Map<String, String> flash = WebRequest.takeFlash(session);
+        if (flash != null) {
+            req.setAttribute(WebRequest.FLASH_ATTRIBUTE, flash);
         }
-        req.setAttribute(WebRequest.FLASH_ATTRIBUTE, flash);
     }
 
     /**

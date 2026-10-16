@@ -13,13 +13,14 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.time.DateTimeException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ConcurrentHashMap;
@@ -937,7 +938,15 @@ public final class WebRequest {
                 bytes.write(high << 4 | low);
                 i += 2;
             } else {
-                bytes.writeBytes(String.valueOf(c).getBytes(StandardCharsets.UTF_8));
+                // The whole run up to the next escape is encoded at once, so a
+                // surrogate pair, a character outside the BMP that a container
+                // passed through unescaped, stays one character rather than two '?'.
+                int end = i + 1;
+                while (end < value.length() && value.charAt(end) != '%' && value.charAt(end) != '+') {
+                    end++;
+                }
+                bytes.writeBytes(value.substring(i, end).getBytes(StandardCharsets.UTF_8));
+                i = end - 1;
             }
         }
         return StandardCharsets.UTF_8.newDecoder()
@@ -1650,43 +1659,69 @@ public final class WebRequest {
      * session.
      *
      * <p>Two requests in one session can be on two container threads at once —
-     * a form posted in one tab while another is still loading. Finding the map
-     * and creating it are therefore done under the session's own monitor, which
-     * {@code AppServlet} takes for the other half of the pair, and the map is
-     * concurrent so that two writers do not corrupt it once they both hold it.
+     * a form posted in one tab while another is still loading. Finding the map,
+     * creating it, and writing to it are therefore one critical section, and the
+     * map is concurrent so that {@link #takeFlash} can empty it without the lock.
+     * The lock is chosen by session id rather than taken on the session object:
+     * a container need not answer one HttpSession object per id, and Undertow
+     * answers a new one on every request.
      */
     public void flash(String key, @Nullable String value) {
-        if (value == null) {
-            Map<String, String> pending = pendingFlash(false);
-            if (pending != null) {
-                pending.remove(key);
-            }
+        // Withdrawing never creates a session.
+        HttpSession session = req.getSession(value != null);
+        if (session == null) {
             return;
         }
-        Objects.requireNonNull(pendingFlash(true)).put(key, value);
+        synchronized (flashLock(session)) {
+            @SuppressWarnings("unchecked")
+            Map<String, String> pending = (Map<String, String>) session.getAttribute(FLASH_ATTRIBUTE);
+            if (value == null) {
+                if (pending != null) {
+                    pending.remove(key);
+                }
+                return;
+            }
+            if (pending == null) {
+                pending = new ConcurrentHashMap<>();
+                session.setAttribute(FLASH_ATTRIBUTE, pending);
+            }
+            pending.put(key, value);
+        }
+    }
+
+    /** Locks striped by session id, so every request on one session takes the same one. */
+    private static final Object[] FLASH_LOCKS = new Object[64];
+
+    static {
+        Arrays.setAll(FLASH_LOCKS, i -> new Object());
+    }
+
+    private static Object flashLock(HttpSession session) {
+        return FLASH_LOCKS[session.getId().hashCode() & (FLASH_LOCKS.length - 1)];
     }
 
     /**
-     * The map of flash waiting in the session for the next request. With
-     * {@code create} false, null when there is no session or nothing waiting,
-     * so that withdrawing a flash never starts a session.
+     * Takes the flash waiting in the session for the request now starting, or
+     * null when nothing waits.
+     *
+     * <p>Each entry is taken out with its own {@code remove}, which hands it to
+     * exactly one caller, so two requests on one session promoting at once
+     * split what waits between them rather than both receiving it. The map
+     * itself stays in the session: a request flashing into it at the same time
+     * then never writes into a map that no request will read.
      */
-    private @Nullable Map<String, String> pendingFlash(boolean create) {
-        HttpSession session = req.getSession(create);
-        if (session == null) {
+    static @Nullable Map<String, String> takeFlash(HttpSession session) {
+        if (!(session.getAttribute(FLASH_ATTRIBUTE) instanceof Map<?, ?> pending) || pending.isEmpty()) {
             return null;
         }
-        // The container answers one HttpSession object per session id, so this
-        // is the lock the promoting side takes too.
-        synchronized (session) {
-            @SuppressWarnings("unchecked")
-            Map<String, String> existing = (Map<String, String>) session.getAttribute(FLASH_ATTRIBUTE);
-            if (existing == null && create) {
-                existing = new ConcurrentHashMap<>();
-                session.setAttribute(FLASH_ATTRIBUTE, existing);
+        Map<String, String> taken = new HashMap<>();
+        for (Object key : List.copyOf(pending.keySet())) {
+            Object value = pending.remove(key);
+            if (value != null) {
+                taken.put(key.toString(), value.toString());
             }
-            return existing;
         }
+        return taken.isEmpty() ? null : taken;
     }
 
     /** A flash value left by the previous request, or null. */

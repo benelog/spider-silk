@@ -202,6 +202,19 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   `RequestCompletion.writeFailure()` still reports the original failure, and the logged status stays 200.
 - `spider-silk-core`: a static file served off the classpath is opened only when its body is written, so a response filter that replaces the response or throws no longer leaves the file open.
   A file served out of a jar no longer holds a descriptor on the jar per request, and a directory entry inside a jar answers 404.
+- `spider-silk-core`: `JettyServer` expires a session after thirty minutes with no request, as Tomcat and Undertow do.
+  Jetty's default was never, and its session cache does not evict, so every session stayed on the heap until the JVM exited.
+- `spider-silk-core`: a flash message reaches exactly one request when several requests on one session arrive at once, on every server.
+  The promotion locked the `HttpSession` object, and Undertow answers a new one on every request; each entry is now taken out with its own `remove`, and the write side locks by session id.
+- `spider-silk-core`: static files and `WebResponse.file` answer `.mjs`, `.wasm`, `.woff`, `.htm`, `.xml`, `.webp`, `.avif`, `.pdf`, `.webmanifest`, and `.map` with their own content types rather than `application/octet-stream`.
+- `spider-silk-core`: a redirect to a supplementary character whose low 16 bits fall in the surrogate range, such as U+1D800, percent-encodes the character rather than U+FFFD.
+- `spider-silk-core`: a character outside the BMP sent unescaped in the query string reads as itself rather than as `??`.
+- `spider-silk-core`: a static file whose name holds two dots, such as `a..b.txt`, is served; only a `..` segment is refused.
+- `spider-silk-core`: the path patterns `{}` and `{*}` throw `IllegalArgumentException` at registration, where they became single-segment variables named `""` and `*`.
+- `spider-silk-core`: the `jte-classes` directory each `JteTemplates` compiles into is deleted when the JVM exits.
+- `spider-silk-core`: `JettyServer.stop()` returns when a request outlasts the stop timeout, as Tomcat and Undertow do, and logs a warning rather than throwing `IllegalStateException`.
+- `spider-silk-core`: a graceful stop on Jetty gives a slow upload or download in flight the stop timeout to finish; only idle connections are closed at once.
+- `spider-silk-core`: a Jetty start that fails part-way stops the thread pool passed to `threadPool(...)` without destroying it, so the same pool can start the server again.
 
 ## [1.1.0] - 2026-09-17
 

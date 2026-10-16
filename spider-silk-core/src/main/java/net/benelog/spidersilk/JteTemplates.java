@@ -4,7 +4,12 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.io.Writer;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Comparator;
 import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 import gg.jte.CodeResolver;
 import gg.jte.ContentType;
@@ -37,10 +42,13 @@ public final class JteTemplates implements TemplateRenderer {
         this(new ResourceCodeResolver(classpathRoot));
     }
 
+    /**
+     * Compiles the templates the resolver finds into a temporary directory of
+     * this instance's own, deleted when the JVM exits.
+     */
     public JteTemplates(CodeResolver codeResolver) {
         try {
-            this.engine = TemplateEngine.create(codeResolver,
-                    Files.createTempDirectory("jte-classes"), ContentType.Html);
+            this.engine = TemplateEngine.create(codeResolver, ClassDirectories.create(), ContentType.Html);
         } catch (IOException e) {
             throw new UncheckedIOException("Cannot create the jte compilation directory", e);
         }
@@ -72,5 +80,52 @@ public final class JteTemplates implements TemplateRenderer {
     @Override
     public void render(String template, Model model, Writer out) {
         engine.render(template + suffix, model.asMap(), new WriterOutput(out));
+    }
+
+    /**
+     * The directories jte compiles templates into, deleted by one shutdown hook
+     * for the whole JVM.
+     *
+     * <p>Each instance keeps a directory of its own: two renderers over two
+     * roots can hold templates of one name, whose classes would overwrite each
+     * other in a shared one. The directory cannot go any earlier than the JVM,
+     * because the engine loads classes from it for as long as it renders, and
+     * nothing tells a renderer that its last render is over. Left alone, every
+     * run left a {@code jte-classes*} directory behind in the temp directory.
+     */
+    private static final class ClassDirectories {
+
+        private static final Set<Path> CREATED = ConcurrentHashMap.newKeySet();
+
+        static {
+            Runtime.getRuntime().addShutdownHook(new Thread(ClassDirectories::deleteAll, "jte-classes-cleanup"));
+        }
+
+        private ClassDirectories() {
+        }
+
+        static Path create() throws IOException {
+            Path directory = Files.createTempDirectory("jte-classes");
+            CREATED.add(directory);
+            return directory;
+        }
+
+        private static void deleteAll() {
+            for (Path directory : CREATED) {
+                try (Stream<Path> tree = Files.walk(directory)) {
+                    tree.sorted(Comparator.reverseOrder()).forEach(ClassDirectories::deleteQuietly);
+                } catch (IOException | UncheckedIOException e) {
+                    // Best effort at exit: what cannot be walked stays, as all of it used to.
+                }
+            }
+        }
+
+        private static void deleteQuietly(Path path) {
+            try {
+                Files.deleteIfExists(path);
+            } catch (IOException e) {
+                // Best effort at exit: a file that cannot be deleted stays, and so does its directory.
+            }
+        }
     }
 }

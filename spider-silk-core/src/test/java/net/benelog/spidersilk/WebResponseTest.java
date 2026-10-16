@@ -215,6 +215,9 @@ class WebResponseTest {
                 .isEqualTo("/a%20b%0D%0ASet-Cookie:%20x");
         assertThat(WebResponse.redirect("/\uD83D\uDE00").header("Location")).isEqualTo("/%F0%9F%98%80");
         assertThat(WebResponse.redirect("/\uD800").header("Location")).isEqualTo("/%EF%BF%BD");
+        // U+1D800, whose low 16 bits fall in the surrogate range, is a character and not a lone surrogate.
+        assertThat(WebResponse.redirect("/" + Character.toString(0x1D800)).header("Location"))
+                .isEqualTo("/%F0%9D%A0%80");
     }
 
     @Test

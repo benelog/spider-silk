@@ -1,5 +1,6 @@
 package net.benelog.spidersilk;
 
+import java.util.List;
 import java.util.Map;
 
 import org.junit.jupiter.api.Test;
@@ -74,6 +75,21 @@ class PathPatternTest {
         assertThatThrownBy(() -> new PathPattern("/files/{path*}/edit"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("{path*}");
+    }
+
+    /**
+     * A variable needs a name. "{*}" and "{}" became single-segment variables
+     * named "*" and "", so "/star/{*}" took "/star/a" and answered 404 for "/star/a/b".
+     */
+    @Test
+    void rejectsAVariableWithNoName() {
+        for (String pattern : List.of("/star/{*}", "/star/{}", "/{}/edit", "/{*}/edit")) {
+            assertThatThrownBy(() -> new PathPattern(pattern))
+                    .as(pattern)
+                    .isInstanceOf(IllegalArgumentException.class)
+                    .hasMessageContaining(pattern)
+                    .hasMessageContaining("needs a name");
+        }
     }
 
     /** A second {id} would overwrite the first, so the pattern never compiles. */

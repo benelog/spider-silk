@@ -456,6 +456,19 @@ class StaticFilesTest {
         });
     }
 
+    /** Only a {@code ..} segment is a traversal: a name that holds two dots is an ordinary file. */
+    @Test
+    void aNameWithTwoDotsInItIsServed(@TempDir Path root) throws IOException {
+        Files.writeString(root.resolve("a..b.txt"), "two dots\n");
+        Files.writeString(root.resolve("..hidden"), "leading dots\n");
+        App app = new App().staticFiles(StaticFiles.directory(root));
+
+        WebTest.test(app, client -> {
+            assertThat(client.get("/a..b.txt").body()).isEqualTo("two dots\n");
+            assertThat(client.get("/..hidden").body()).isEqualTo("leading dots\n");
+        });
+    }
+
     /** A volume that is not mounted yet is a 404, not a failure to start. */
     @Test
     void aDirectoryThatDoesNotExistStillRoutes(@TempDir Path parent) {
