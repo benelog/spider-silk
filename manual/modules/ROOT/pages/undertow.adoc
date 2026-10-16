@@ -56,12 +56,27 @@ There are two customizers rather than three, because Undertow has only two objec
 Graceful shutdown is the one place Undertow is the easiest of the three.
 `GracefulShutdownHandler` counts the requests it has let through, so `stopTimeout(...)` is a wait for that count to reach zero rather than a thread pool being drained.
 Because the drain counts requests, `executor(...)` does not interfere with it the way it does on Tomcat: swapping in the virtual-thread executor leaves the drain fully working.
+Once the drain is over, `stop()` gives Undertow's worker 100 milliseconds and then interrupts what still runs on it.
+Undertow on its own waits for the worker with no limit, so a handler blocked on something other than I/O would hold the stop for as long as it ran.
+
+A read waits at most 30 seconds for the client's next bytes, and a write waits at most 30 seconds for the client to take them.
+The 30 seconds are Jetty's connector idle timeout.
+Undertow sets neither timeout on its own, so a client that stalled mid-body would hold a worker thread for good.
+`customizeBuilder(builder -> builder.setSocketOption(Options.READ_TIMEOUT, 60_000))` replaces the read timeout, and `Options.WRITE_TIMEOUT` replaces the write timeout.
+
+A request body is limited by core's `bodyLimits(...)` and the multipart configuration, as on every server.
+The module lifts Undertow's own limit, which refused every body over 2MB before the app ran.
+A form body is the exception and is held to 2MB, Tomcat's `maxPostSize`.
+Undertow parses a form into parameters with no limit of its own, so a larger form is answered 413 before the app runs.
 
 Undertow's worker threads do not hold the JVM up on their own, so `start()` parks a non-daemon thread that `stop()` releases.
 The Tomcat module needs the same non-daemon thread, and `join()` waits on it.
 
 There is no `sessions(boolean)`: an Undertow deployment always gets a session manager.
 A method that silently did nothing would be worse than no method.
+The session cookie is HttpOnly, and it is Secure when the request that creates the session is secure, as on Jetty and Tomcat.
+A session is found by its cookie only, as on Jetty.
+A `;jsessionid=` in the URL is ignored, so a link that carries one cannot fix the session of whoever follows it.
 Static files are still served by core's own `StaticFiles`, classpath root or directory alike, so Undertow's resource manager is left empty on purpose.
 
 A response body that fails after the response is committed closes the connection.

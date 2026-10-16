@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
@@ -19,24 +20,30 @@ import jakarta.servlet.MultipartConfigElement;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.ServletRequest;
 import jakarta.servlet.ServletResponse;
+import jakarta.servlet.SessionTrackingMode;
 
 import io.undertow.Handlers;
 import io.undertow.Undertow;
+import io.undertow.UndertowOptions;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
 import io.undertow.server.handlers.Cookie;
 import io.undertow.server.handlers.GracefulShutdownHandler;
 import io.undertow.server.handlers.resource.ResourceManager;
+import io.undertow.server.session.SessionConfig;
 import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
+import io.undertow.servlet.api.SessionConfigWrapper;
 import io.undertow.servlet.api.LoggingExceptionHandler;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.api.ServletSessionConfig;
 import io.undertow.servlet.util.ImmediateInstanceFactory;
+import io.undertow.util.Headers;
 
 import org.jspecify.annotations.Nullable;
 import org.xnio.IoUtils;
+import org.xnio.Options;
 
 import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.AppServlet;
@@ -73,6 +80,32 @@ public final class UndertowServer implements WebServer {
     private static final String SERVLET_NAME = "spider-silk";
     private static final String DEPLOYMENT_NAME = "spider-silk";
     private static final String DEFAULT_HOST = "0.0.0.0";
+
+    /**
+     * How long a read waits for the client's next bytes, and a write for the
+     * client to take them, before Undertow closes the connection: 30 seconds,
+     * Jetty's connector idle timeout. Undertow sets neither, so a client that
+     * stalled mid-body, or stopped reading the response, held a worker thread
+     * for good. Its {@code IDLE_TIMEOUT} would not have helped: a servlet's
+     * blocking read never wakes for it.
+     */
+    private static final int IO_TIMEOUT_MILLIS = 30_000;
+
+    /**
+     * The most of a form body Undertow parses into parameters: 2MB, Tomcat's
+     * {@code maxPostSize}. Its form parser has no limit of its own, and the
+     * entity size limit that used to stand in for one is lifted for every
+     * other body, so without this a form of any size was held in memory.
+     */
+    private static final long MAX_FORM_BYTES = 2L * 1024 * 1024;
+    private static final String FORM_TYPE = "application/x-www-form-urlencoded";
+
+    /**
+     * How long {@link #stop()} waits for Undertow's worker once the drain is
+     * over before cutting it off. Undertow waits with no limit, so a handler
+     * blocked on something other than I/O held the stop for as long as it ran.
+     */
+    private static final int WORKER_SHUTDOWN_MILLIS = 100;
 
     private final App app;
     private final List<Consumer<DeploymentInfo>> deploymentCustomizers = new ArrayList<>();
@@ -156,7 +189,8 @@ public final class UndertowServer implements WebServer {
     /**
      * How long {@link #stop()} waits for requests in flight before dropping
      * them. Five seconds by default. Idle keep-alive connections do not hold
-     * this up — Undertow counts requests, not connections.
+     * this up — Undertow counts requests, not connections. A handler still
+     * running on Undertow's worker once the timeout is up is interrupted.
      * {@link Duration#ZERO} stops immediately.
      */
     public UndertowServer stopTimeout(Duration stopTimeout) {
@@ -205,10 +239,11 @@ public final class UndertowServer implements WebServer {
         if (server != null) {
             throw new IllegalStateException("Undertow is already running on port " + port());
         }
-        DeploymentManager manager = Servlets.newContainer().addDeployment(createDeployment());
+        AppServlet servlet = new AppServlet(app);
+        DeploymentManager manager = Servlets.newContainer().addDeployment(createDeployment(servlet));
         // Everything from the deployment on runs under one guard. Starting the
         // deployment initializes AppServlet, which closes the App's registration
-        // and registers its SSE hook, and only undeploying opens them again: a
+        // and registers its SSE hook, and only destroying it opens them again: a
         // failure left outside the guard kept the App closed for good.
         Undertow candidate = null;
         try {
@@ -218,7 +253,15 @@ public final class UndertowServer implements WebServer {
 
             Undertow.Builder builder = Undertow.builder()
                     .addHttpListener(port, host != null ? host : DEFAULT_HOST)
-                    .setHandler(checkingRequestTarget(keepingSameSite(graceful)));
+                    // Undertow's own default refuses a body over 2MB before the
+                    // servlet runs. Body limits are core's BodyLimits and the
+                    // multipart configuration, the same on every server.
+                    .setServerOption(UndertowOptions.MAX_ENTITY_SIZE, -1L)
+                    .setServerOption(UndertowOptions.MULTIPART_MAX_ENTITY_SIZE, -1L)
+                    .setSocketOption(Options.READ_TIMEOUT, IO_TIMEOUT_MILLIS)
+                    .setSocketOption(Options.WRITE_TIMEOUT, IO_TIMEOUT_MILLIS)
+                    .setServerOption(UndertowOptions.SHUTDOWN_TIMEOUT, WORKER_SHUTDOWN_MILLIS)
+                    .setHandler(checkingRequestTarget(cappingFormBodies(keepingSameSite(graceful))));
             builderCustomizers.forEach(customizer -> customizer.accept(builder));
 
             candidate = builder.build();
@@ -230,6 +273,10 @@ public final class UndertowServer implements WebServer {
                 stopQuietly(candidate, failure);
             }
             undeployQuietly(manager);
+            // Undertow destroys the servlets only of a deployment that finished
+            // starting, so a start that failed part-way left AppServlet, and the
+            // App's registration with it, closed. Destroying it twice is safe.
+            destroyQuietly(servlet, failure);
             graceful = null;
             throw failure;
         }
@@ -259,13 +306,21 @@ public final class UndertowServer implements WebServer {
         awaitThread = null;
         removeShutdownHook();
 
-        drain(runningGraceful);
-        running.stop();
-        undeployQuietly(runningDeployment);
-        if (runningStopped != null) {
-            runningStopped.countDown();
+        // Undertow's stop throws when the thread is interrupted, and whatever
+        // happens the servlet is still undeployed and join() still released.
+        try {
+            drain(runningGraceful);
+            running.stop();
+        } finally {
+            try {
+                undeployQuietly(runningDeployment);
+            } finally {
+                if (runningStopped != null) {
+                    runningStopped.countDown();
+                }
+                joinQuietly(runningAwait);
+            }
         }
-        joinQuietly(runningAwait);
     }
 
     @Override
@@ -295,10 +350,10 @@ public final class UndertowServer implements WebServer {
         return port;
     }
 
-    private DeploymentInfo createDeployment() {
+    private DeploymentInfo createDeployment(AppServlet appServlet) {
         ServletInfo servlet = Servlets
                 .servlet(SERVLET_NAME, AppServlet.class,
-                        new ImmediateInstanceFactory<>(new AppServlet(app)))
+                        new ImmediateInstanceFactory<>(appServlet))
                 .addMapping("/*")
                 // Initialized when the deployment starts rather than on the first
                 // request, which is when AppServlet takes the routes and closes
@@ -317,8 +372,13 @@ public final class UndertowServer implements WebServer {
                 .setResourceManager(ResourceManager.EMPTY_RESOURCE_MANAGER)
                 .setExceptionHandler(UndertowServer::abortStartedResponse)
                 // Undertow leaves the session cookie readable by a script, where
-                // Tomcat marks it HttpOnly.
-                .setServletSessionConfig(new ServletSessionConfig().setHttpOnly(true))
+                // Tomcat marks it HttpOnly. It also takes a session ID from a
+                // ";jsessionid=" in the URL, which Jetty does not: a link that
+                // carries one fixes the session of whoever follows it.
+                .setServletSessionConfig(new ServletSessionConfig()
+                        .setHttpOnly(true)
+                        .setSessionTrackingModes(Set.of(SessionTrackingMode.COOKIE)))
+                .setSessionConfigWrapper(securingSessionCookie())
                 .addServlet(servlet);
         if (executor != null) {
             info.setExecutor(executor);
@@ -416,6 +476,11 @@ public final class UndertowServer implements WebServer {
      *       but leaves {@code %2F} as it is, so {@code /v/a%2Fb} reached a path
      *       variable as {@code a%2Fb}, the same value {@code /v/a%252Fb} decodes
      *       to: two requests read as one.</li>
+     *   <li>An encoded backslash answers 400. Undertow left {@code %5C}
+     *       undecoded, as it does {@code %2F}, so {@code a%5Cb} and
+     *       {@code a%255Cb} reached a path variable as the same value.</li>
+     *   <li>An encoded NUL answers 400. Undertow decoded {@code %00} into the
+     *       path variable.</li>
      *   <li>An escape whose bytes are not UTF-8 answers 400. Undertow decoded
      *       {@code a%FF} as {@code a\uFFFD}, a value the client never sent, and
      *       the same one {@code a%EF%BF%BD} decodes to.</li>
@@ -429,10 +494,25 @@ public final class UndertowServer implements WebServer {
                 return;
             }
             String uri = exchange.getRequestURI();
-            if (uri.contains("%2F") || uri.contains("%2f") || !escapesAreUtf8(uri)) {
+            if (hasRefusedEscape(uri) || !escapesAreUtf8(uri)) {
                 exchange.setStatusCode(400);
                 exchange.endExchange();
                 return;
+            }
+            next.handleRequest(exchange);
+        };
+    }
+
+    /**
+     * Holds a form body to {@link #MAX_FORM_BYTES}. A larger one is refused
+     * with a 413 before the servlet runs, as Tomcat refuses one over its
+     * {@code maxPostSize}.
+     */
+    private static HttpHandler cappingFormBodies(HttpHandler next) {
+        return exchange -> {
+            String type = exchange.getRequestHeaders().getFirst(Headers.CONTENT_TYPE);
+            if (type != null && type.regionMatches(true, 0, FORM_TYPE, 0, FORM_TYPE.length())) {
+                exchange.setMaxEntitySize(MAX_FORM_BYTES);
             }
             next.handleRequest(exchange);
         };
@@ -458,6 +538,62 @@ public final class UndertowServer implements WebServer {
                 }
             });
             next.handleRequest(exchange);
+        };
+    }
+
+    /** Whether the request URI escapes a slash, a backslash, or a NUL. */
+    private static boolean hasRefusedEscape(String uri) {
+        for (int i = uri.indexOf('%'); i >= 0 && i + 2 < uri.length(); i = uri.indexOf('%', i + 1)) {
+            char high = uri.charAt(i + 1);
+            char low = Character.toUpperCase(uri.charAt(i + 2));
+            if ((high == '2' && low == 'F') || (high == '5' && low == 'C') || (high == '0' && low == '0')) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Marks the session cookie {@code Secure} when the request that creates the
+     * session is secure, as Jetty and Tomcat do. Undertow sends the cookie as
+     * its configuration says, and the configuration cannot say "over HTTPS"
+     * without also withholding the cookie from plain HTTP.
+     */
+    private static SessionConfigWrapper securingSessionCookie() {
+        return (sessionConfig, deployment) -> new SessionConfig() {
+            @Override
+            public void setSessionId(HttpServerExchange exchange, String sessionId) {
+                sessionConfig.setSessionId(exchange, sessionId);
+                if (!exchange.isSecure()) {
+                    return;
+                }
+                String name = deployment.getServletContext().getSessionCookieConfig().getName();
+                for (Cookie cookie : exchange.responseCookies()) {
+                    if (cookie.getName().equals(name) && sessionId.equals(cookie.getValue())) {
+                        cookie.setSecure(true);
+                    }
+                }
+            }
+
+            @Override
+            public void clearSession(HttpServerExchange exchange, String sessionId) {
+                sessionConfig.clearSession(exchange, sessionId);
+            }
+
+            @Override
+            public @Nullable String findSessionId(HttpServerExchange exchange) {
+                return sessionConfig.findSessionId(exchange);
+            }
+
+            @Override
+            public SessionCookieSource sessionCookieSource(HttpServerExchange exchange) {
+                return sessionConfig.sessionCookieSource(exchange);
+            }
+
+            @Override
+            public String rewriteUrl(String originalUrl, String sessionId) {
+                return sessionConfig.rewriteUrl(originalUrl, sessionId);
+            }
         };
     }
 
@@ -506,6 +642,14 @@ public final class UndertowServer implements WebServer {
     private static void stopQuietly(Undertow candidate, IllegalStateException failure) {
         try {
             candidate.stop();
+        } catch (RuntimeException cleanupFailure) {
+            failure.addSuppressed(cleanupFailure);
+        }
+    }
+
+    private static void destroyQuietly(AppServlet servlet, IllegalStateException failure) {
+        try {
+            servlet.destroy();
         } catch (RuntimeException cleanupFailure) {
             failure.addSuppressed(cleanupFailure);
         }

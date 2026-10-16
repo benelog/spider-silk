@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -30,9 +31,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.GZIPInputStream;
 
 import jakarta.servlet.MultipartConfigElement;
+import jakarta.servlet.http.HttpServlet;
 
 import io.undertow.Undertow;
+import io.undertow.server.handlers.ProxyPeerAddressHandler;
+import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.DeploymentInfo;
+import io.undertow.servlet.util.ImmediateInstanceFactory;
+import org.xnio.Options;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -693,7 +699,7 @@ class UndertowServerTest {
                     .isEqualTo(400);
         }
 
-        // Undertow refuses a body this large itself, before the app runs.
+        // A form body is held to 2MB, Tomcat's maxPostSize, and Undertow refuses a larger one before the app runs.
         assertThat(form("/param", "a=" + "x".repeat(3_000_000)).statusCode())
                 .as("a form body over the container's limit")
                 .isEqualTo(413);
@@ -1302,5 +1308,222 @@ class UndertowServerTest {
         } finally {
             release.countDown();
         }
+    }
+
+    /**
+     * A body over 2MB reaches the handler, through bodyStream() and through
+     * body() under raised body limits, and so does an upload over 2MB.
+     * Undertow's own default refused all three with a bare 413.
+     */
+    @Test
+    void aBodyOverTwoMegabytesReachesTheHandler() throws Exception {
+        startOnUndertow(new App()
+                .bodyLimits(BodyLimits.defaults().maxBytes(8 * 1024 * 1024))
+                .post("/stream", req -> WebResponse.text(
+                        req.bodyStream().transferTo(OutputStream.nullOutputStream()) + ""))
+                .post("/body", req -> WebResponse.text(req.body().length() + ""))
+                .post("/up", req -> WebResponse.text(req.file("file").size() + "")));
+        String body = "a".repeat(3 * 1024 * 1024);
+
+        for (boolean chunked : List.of(false, true)) {
+            assertThat(postBody("/stream", body, chunked).body()).as("chunked " + chunked).isEqualTo("3145728");
+            assertThat(postBody("/body", body, chunked).body()).as("chunked " + chunked).isEqualTo("3145728");
+        }
+        HttpResponse<String> upload = client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/up"))
+                .header("Content-Type", "multipart/form-data; boundary=X")
+                .POST(HttpRequest.BodyPublishers.ofString("--X\r\nContent-Disposition: form-data; name=\"file\"; filename=\"a.txt\""
+                        + "\r\nContent-Type: text/plain\r\n\r\n" + body + "\r\n--X--\r\n")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(upload.body()).isEqualTo("3145728");
+    }
+
+    /**
+     * A handler blocked on something other than I/O holds the stop no longer
+     * than the stop timeout. Undertow waited for its worker with no limit, so
+     * the stop lasted as long as the handler did.
+     */
+    @Test
+    void aHandlerBlockedOnOtherWorkDelaysTheStopNoLongerThanTheStopTimeout() throws Exception {
+        CountDownLatch handlerEntered = new CountDownLatch(1);
+        this.app = new App()
+                .server((a, port) -> new UndertowServer(a).port(port).stopTimeout(Duration.ofSeconds(1)))
+                .get("/slow", req -> {
+                    handlerEntered.countDown();
+                    Thread.sleep(15_000);
+                    return WebResponse.text("finished");
+                })
+                .start(0);
+        var _ = client.sendAsync(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/slow")).build(),
+                HttpResponse.BodyHandlers.discarding());
+        assertThat(handlerEntered.await(2, TimeUnit.SECONDS)).as("the handler never started").isTrue();
+
+        long startedAt = System.nanoTime();
+        app.stop();
+        app = null;
+        long millis = (System.nanoTime() - startedAt) / 1_000_000;
+
+        assertThat(millis).as("the stop should end with its one-second timeout").isLessThan(4_000);
+    }
+
+    /**
+     * A client that sends the headers and then stalls mid-body does not hold a
+     * worker for good: the read timeout closes the connection and the read
+     * fails. The default is 30 seconds, and a builder customizer replaces it.
+     */
+    @Test
+    void aClientThatStallsMidBodyIsCutOffByTheReadTimeout() throws Exception {
+        CountDownLatch readFailed = new CountDownLatch(1);
+        this.app = new App()
+                .server((a, port) -> new UndertowServer(a).port(port)
+                        .customizeBuilder(builder -> builder.setSocketOption(Options.READ_TIMEOUT, 500)))
+                .post("/echo", req -> {
+                    try {
+                        return WebResponse.text(req.body());
+                    } catch (RuntimeException e) {
+                        // Undertow's servlet stream fails the read with an IOException, or, when
+                        // the connection closes under it, a NullPointerException of its own.
+                        readFailed.countDown();
+                        throw e;
+                    }
+                })
+                .start(0);
+
+        try (Socket socket = new Socket("localhost", app.port())) {
+            socket.getOutputStream().write(("POST /echo HTTP/1.1\r\nHost: localhost\r\n"
+                    + "Content-Length: 100\r\n\r\nhello").getBytes(StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+
+            assertThat(readFailed.await(5, TimeUnit.SECONDS)).as("the stalled read should fail").isTrue();
+        }
+    }
+
+    /**
+     * A client that stops reading the response does not hold a worker for
+     * good either: the write timeout closes the connection and the stream ends.
+     * An SSE stream that keeps sending to a client that reads is not cut off.
+     */
+    @Test
+    void aClientThatStopsReadingIsCutOffByTheWriteTimeout() throws Exception {
+        CountDownLatch streamEnded = new CountDownLatch(1);
+        String event = "x".repeat(64 * 1024);
+        this.app = new App()
+                .server((a, port) -> new UndertowServer(a).port(port)
+                        .customizeBuilder(builder -> builder
+                                .setSocketOption(Options.READ_TIMEOUT, 500)
+                                .setSocketOption(Options.WRITE_TIMEOUT, 500)))
+                .get("/flood", req -> WebResponse.sse(stream -> {
+                    try {
+                        while (stream.isOpen()) {
+                            stream.send(event);
+                        }
+                    } finally {
+                        streamEnded.countDown();
+                    }
+                }))
+                .get("/ticks", req -> WebResponse.sse(stream -> {
+                    for (int i = 0; i < 8; i++) {
+                        stream.send("tick " + i);
+                        Thread.sleep(200);
+                    }
+                }))
+                .start(0);
+
+        assertThat(get("/ticks").body()).as("a stream longer than both timeouts").contains("tick 7");
+        try (Socket socket = new Socket()) {
+            socket.setReceiveBufferSize(4096);
+            socket.connect(new InetSocketAddress("localhost", app.port()));
+            socket.getOutputStream().write("GET /flood HTTP/1.1\r\nHost: localhost\r\n\r\n"
+                    .getBytes(StandardCharsets.UTF_8));
+            socket.getOutputStream().flush();
+
+            assertThat(streamEnded.await(5, TimeUnit.SECONDS)).as("the blocked write should fail").isTrue();
+        }
+    }
+
+    /**
+     * A start that fails while the deployment starts, after AppServlet was
+     * initialized, opens the App's registration again. Undertow destroys the
+     * servlets only of a deployment that finished starting.
+     */
+    @Test
+    void aStartThatFailsWhileTheDeploymentStartsOpensRegistrationAgain() {
+        App app = new App();
+        UndertowServer failing = new UndertowServer(app).port(0)
+                .customizeDeployment(info -> info.addServlet(Servlets
+                        .servlet("broken", HttpServlet.class, new ImmediateInstanceFactory<>(new HttpServlet() {
+                            @Override
+                            public void init() {
+                                throw new IllegalStateException("broken servlet");
+                            }
+                        }))
+                        .addMapping("/broken")
+                        .setLoadOnStartup(5)));
+
+        assertThatThrownBy(failing::start)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Failed to start Undertow");
+        assertThatCode(() -> app.get("/", req -> WebResponse.text("registered")))
+                .as("the failed start destroyed AppServlet, so registration is open again")
+                .doesNotThrowAnyException();
+    }
+
+    /**
+     * The session cookie is Secure when the request that made the session is
+     * secure, here by a proxy's X-Forwarded-Proto, and not over plain HTTP.
+     */
+    @Test
+    void theSessionCookieIsSecureOverHttps() throws Exception {
+        this.app = new App()
+                .server((a, port) -> new UndertowServer(a).port(port)
+                        .customizeDeployment(info -> info.addInitialHandlerChainWrapper(ProxyPeerAddressHandler::new)))
+                .get("/session", req -> {
+                    req.session().set("k", "v");
+                    return WebResponse.text("set");
+                })
+                .start(0);
+
+        HttpResponse<String> secure = client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/session"))
+                .header("X-Forwarded-Proto", "https").build(), HttpResponse.BodyHandlers.ofString());
+        assertThat(secure.headers().allValues("Set-Cookie"))
+                .anySatisfy(cookie -> assertThat(cookie).startsWith("JSESSIONID=").containsIgnoringCase("; Secure"));
+        assertThat(get("/session").headers().allValues("Set-Cookie"))
+                .anySatisfy(cookie -> assertThat(cookie).startsWith("JSESSIONID=").doesNotContainIgnoringCase("Secure"));
+    }
+
+    /** A session is found by its cookie only, as on Jetty: a ";jsessionid=" in the URL does not reach it. */
+    @Test
+    void aSessionIdInTheUrlIsIgnored() throws Exception {
+        startOnUndertow(new App()
+                .get("/set", req -> {
+                    req.session().set("k", "v");
+                    return WebResponse.text("set");
+                })
+                .get("/read", req -> WebResponse.text(String.valueOf(req.session().<String>get("k")))));
+
+        String cookie = get("/set").headers().allValues("Set-Cookie").stream()
+                .filter(value -> value.startsWith("JSESSIONID="))
+                .findFirst().orElseThrow();
+        String id = cookie.substring("JSESSIONID=".length(), cookie.indexOf(';'));
+
+        assertThat(client.send(HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/read"))
+                .header("Cookie", "JSESSIONID=" + id).build(), HttpResponse.BodyHandlers.ofString()).body())
+                .isEqualTo("v");
+        assertThat(get("/read;jsessionid=" + id).body()).isEqualTo("null");
+    }
+
+    /**
+     * An encoded NUL or backslash in the path is a 400, as on Jetty and Tomcat.
+     * Undertow decoded %00 into the path variable, and left %5C undecoded, so
+     * that a%5Cb and a%255Cb read as one value.
+     */
+    @Test
+    void anEncodedNulOrBackslashInThePathIsA400() throws Exception {
+        startOnUndertow(new App().get("/tail/{v}", req -> WebResponse.text(req.pathParam("v"))));
+
+        for (String path : List.of("/tail/a%00b", "/tail/a%5Cb", "/tail/a%5cb")) {
+            assertThat(rawGet(path)).as(path).startsWith("HTTP/1.1 400");
+        }
+        assertThat(get("/tail/a%255Cb").body()).isEqualTo("a%5Cb");
+        assertThat(get("/tail/a%2500b").body()).isEqualTo("a%00b");
     }
 }

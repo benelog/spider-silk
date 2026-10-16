@@ -119,6 +119,8 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `spider-silk-core`: with named origins, `Cors` adds `Vary: Origin` to every answer on a covered path, whether the request carried an allowed `Origin`, another one, or none.
 - `spider-silk-undertow`: `UndertowServer` installs a servlet exception handler that closes the connection when a failure arrives after the response has started.
   Replacing it through `customizeDeployment(...)` gives up that behavior.
+- `spider-silk-undertow`: a read waits at most 30 seconds for the client, and a write at most 30 seconds for the client to take it, as on Jetty; `customizeBuilder(...)` can change both.
+  Undertow had no timeout, so a client that stalled mid-body or stopped reading held a worker thread for good.
 
 ### Removed
 
@@ -215,6 +217,15 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `spider-silk-core`: `JettyServer.stop()` returns when a request outlasts the stop timeout, as Tomcat and Undertow do, and logs a warning rather than throwing `IllegalStateException`.
 - `spider-silk-core`: a graceful stop on Jetty gives a slow upload or download in flight the stop timeout to finish; only idle connections are closed at once.
 - `spider-silk-core`: a Jetty start that fails part-way stops the thread pool passed to `threadPool(...)` without destroying it, so the same pool can start the server again.
+- `spider-silk-undertow`: a request body over 2MB reaches the app, as on Jetty and Tomcat, limited by `bodyLimits(...)` and the multipart configuration.
+  Undertow refused it with a bare 413 before the app ran; a form body is still held to 2MB, Tomcat's `maxPostSize`.
+- `spider-silk-undertow`: `stop()` ends within its `stopTimeout` when a handler is blocked on something other than I/O, as on Jetty and Tomcat.
+  Undertow waited for the handler to finish, and an interrupted stop skipped undeploying the servlet.
+- `spider-silk-undertow`: a start that fails after the servlet was initialized opens the App's registration again, as on Jetty and Tomcat.
+- `spider-silk-undertow`: the session cookie is `Secure` when the request is secure, and a session is found by its cookie only, as on Jetty.
+  Undertow left `Secure` off over HTTPS and accepted a `;jsessionid=` in the URL.
+- `spider-silk-undertow`: an encoded NUL (`%00`) or backslash (`%5C`) in the path answers 400, as on Jetty and Tomcat.
+  Undertow decoded `%00` into the path variable and left `%5C` undecoded, so `a%5Cb` and `a%255Cb` read as one value.
 
 ## [1.1.0] - 2026-09-17
 
