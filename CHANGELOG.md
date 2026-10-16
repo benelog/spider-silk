@@ -257,6 +257,11 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `spider-silk-jackson`: the mapper's `JsonWriteFeature`s reach the generator, so `WRITE_NUMBERS_AS_STRINGS` writes every number as a string, as Jackson does.
 - `spider-silk-jackson`: binary written with the MIME or PEM base64 variant breaks its lines with a line feed inside the string, as Jackson writes it, where a literal backslash and `n` broke decoding.
 - `spider-silk-jackson`: a creator that throws `NullPointerException`, such as a record's `requireNonNull` meeting a property the body left out, answers 400 instead of 500.
+- `spider-silk-jetty-websocket`: depends on Jetty 12.1.13, the release core uses, where it pinned 12.1.14 and mixed two Jetty releases on one classpath.
+- `spider-silk-jetty-websocket`: `WebSocketHandler` callbacks are never called concurrently for one connection, as documented; the `onError` and `onClose` an idle timeout raises on another Jetty thread wait for a running `onText` or `onBinary` to return.
+- `spider-silk-openapi`: a `*` inside a segment, such as `/files/*.txt`, is exported as the literal the router matches, where it was refused as a wildcard, and braces inside a literal segment are percent-encoded, so `/files/{name}.json` no longer exports an undeclared parameter.
+- `spider-silk-opentelemetry-agent`: `http.route` includes the servlet context path, `/shop/decks/{deckId}` under `/shop`, as the semantic conventions require.
+- `spider-silk-test`: a form body whose escape will not decode in its charset, such as `%FF` under UTF-8, answers 400 from `TestRequest`, as Jetty does, where it decoded to U+FFFD.
 
 ## [1.1.0] - 2026-09-17
 

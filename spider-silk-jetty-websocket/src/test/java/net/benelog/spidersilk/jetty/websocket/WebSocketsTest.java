@@ -195,6 +195,49 @@ class WebSocketsTest {
         });
     }
 
+    /**
+     * An idle timeout fires on Jetty's scheduler thread, not the one running
+     * {@code onText}; the error and the close it raises wait for {@code onText}
+     * to return instead of overlapping it.
+     */
+    @Test
+    void anIdleTimeoutDuringASlowMessageWaitsForItToReturn() {
+        CountDownLatch closed = new CountDownLatch(1);
+        List<String> events = new CopyOnWriteArrayList<>();
+        WebSockets sockets = new WebSockets()
+                .idleTimeout(Duration.ofMillis(200))
+                .at("/slow", (request, response) -> new WebSocketHandler() {
+                    @Override
+                    public void onText(Session session, String message) {
+                        events.add("text start");
+                        try {
+                            Thread.sleep(1000);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                        }
+                        events.add("text end");
+                    }
+
+                    @Override
+                    public void onError(Session session, Throwable cause) {
+                        events.add("error");
+                    }
+
+                    @Override
+                    public void onClose(Session session, int status, String reason) {
+                        events.add("close");
+                        closed.countDown();
+                    }
+                });
+
+        run(sockets, server -> {
+            connect(server, "/slow", new Collector()).sendText("slow", true).join();
+
+            assertThat(awaitLatch(closed)).isTrue();
+            assertThat(events).containsExactly("text start", "text end", "error", "close");
+        });
+    }
+
     /** Stopping the server closes what is still open, without waiting out the drain. */
     @Test
     void stoppingTheServerClosesAnOpenSocket() {

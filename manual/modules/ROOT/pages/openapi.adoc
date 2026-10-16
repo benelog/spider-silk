@@ -52,7 +52,7 @@ List<Route> documented = app.routes().stream()
 That selection stays the application's, which is the reason `routes()` hands back a list in the first place.
 This module has no way to tell an HTML page from an endpoint, and a default built on a guess would always be wrong for some application.
 
-A route whose pattern contains a bare `*` throws `IllegalArgumentException`.
+A route whose pattern has a bare `*` segment throws `IllegalArgumentException`.
 That wildcard has no OpenAPI path template and no name to put in one.
 Dropping the route quietly would publish a document claiming the application answers less than it does.
 The export refuses it instead, and leaving such a route out is a filter you write, visibly, next to the one above.
@@ -60,7 +60,13 @@ The export refuses it instead, and leaving such a route out is a filter you writ
 A xref:routing.adoc[named tail] is written out rather than refused.
 `/files/\{path*}` becomes the path `/files/\{path}`, and its parameter carries the description `The rest of the path, slashes included.`
 OpenAPI has no wildcard in a path template, so the star stays behind as core's syntax and only the variable crosses over.
-Dropping the star is the only translation this module does.
+
+A segment is a variable only when the whole segment is one, as it is to the router.
+`/files/*.txt` is a literal path to the router, and the export writes it as it is.
+`/files/\{name}.json` is a literal too, so its braces are percent-encoded into `/files/%7Bname%7D.json`.
+Written as it is, the path would read as a template with a variable that no parameter declares.
+Dropping the star of a named tail and encoding the braces of a literal are the only translations this module does.
+A variable whose name is empty or holds a brace, such as `\{a}\{b}`, throws `IllegalArgumentException`, since a template has no way to name it.
 
 Two routes that OpenAPI would read as one path throw `IllegalArgumentException` too, naming both.
 OpenAPI tells templated paths apart by their segments alone, so `/decks/\{deckId}` and `/decks/\{id}` are one path, which a document may list only once.

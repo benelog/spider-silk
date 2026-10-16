@@ -88,7 +88,7 @@ Undertow's drain counts requests rather than threads, so it survives the virtual
 
 ## Choosing a server
 
-Everything core provides works the same on all three, and `WebTest` starts no server at all, so switching is one line at the factory.
+Everything core provides works the same on all three, and `WebTest` starts whichever server the app names through `app.start(0)`, so switching is one line at the factory and the tests run on the new server unchanged.
 
 - **Jetty (default)**: costs nothing to keep — no disk, its own lifecycle, slf4j directly.
 - **Tomcat**: for surroundings that already assume it (ops knowledge, JMX dashboards, Spring Boot migrations, enterprise CVE tracking).

@@ -41,6 +41,17 @@ class RouteInstrumentationTest {
         }
     }
 
+    /** http.route includes the application root, which a route is registered relative to. */
+    @Test
+    void putsTheContextPathInFrontOfTheRoute() throws Exception {
+        try (Traced traced = Traced.start("-Dtest.contextPath=/shop")) {
+            assertThat(traced.get("/shop/decks/7")).isEqualTo(200);
+
+            traced.awaitSpan("GET /shop/decks/{deckId}");
+            assertThat(traced.output()).contains("http.route=/shop/decks/{deckId}");
+        }
+    }
+
     @Test
     void leavesARequestNoRouteMatchedAtTheServletMapping() throws Exception {
         try (Traced traced = Traced.start()) {

@@ -11,6 +11,9 @@ import org.eclipse.jetty.websocket.api.Session;
  * <p>A {@link WebSocketFactory} builds one of these per connection, so an
  * implementation may hold per-connection state in fields without synchronising:
  * the callbacks below are never called concurrently for the same connection.
+ * That includes the {@link #onError} and {@link #onClose} an idle timeout or a
+ * failed write raises on another of Jetty's threads: they wait for a running
+ * {@link #onText} or {@link #onBinary} to return.
  *
  * <pre>{@code
  * final class EchoSocket implements WebSocketHandler {

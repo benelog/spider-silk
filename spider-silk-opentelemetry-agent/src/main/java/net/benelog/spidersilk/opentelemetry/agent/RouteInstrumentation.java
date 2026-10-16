@@ -9,6 +9,7 @@ import io.opentelemetry.instrumentation.api.semconv.http.HttpServerRouteSource;
 import io.opentelemetry.javaagent.extension.instrumentation.TypeInstrumentation;
 import io.opentelemetry.javaagent.extension.instrumentation.TypeTransformer;
 import net.benelog.spidersilk.Route;
+import net.benelog.spidersilk.WebRequest;
 import net.bytebuddy.asm.Advice;
 import net.bytebuddy.description.type.TypeDescription;
 import net.bytebuddy.matcher.ElementMatcher;
@@ -23,8 +24,11 @@ import net.bytebuddy.matcher.ElementMatcher;
  *
  * <p>Its argument is the route as registered, with group prefixes resolved, such as
  * {@code /decks/{deckId}}, which is already the path-template syntax of {@code http.route}. The
- * advice hands it to {@link HttpServerRoute#update} with the controller as its source, which
- * outranks the servlet mapping, and the agent renames the server span {@code GET /decks/{deckId}}.
+ * route is relative to the context path, and {@code http.route} includes the application root, so
+ * the advice puts the servlet context path in front: under {@code /shop} the route reads
+ * {@code /shop/decks/{deckId}}, as the agent's own servlet mapping does. It hands that to
+ * {@link HttpServerRoute#update} with the controller as its source, which outranks the servlet
+ * mapping, and the agent renames the server span {@code GET /decks/{deckId}}.
  * A request no route matched, such as a static file, a 404, or a 405, never reaches the method and
  * keeps {@code /*}.
  */
@@ -52,8 +56,11 @@ public final class RouteInstrumentation implements TypeInstrumentation {
         }
 
         @Advice.OnMethodExit(suppress = Throwable.class)
-        public static void onExit(@Advice.Argument(0) Route route) {
-            HttpServerRoute.update(Context.current(), HttpServerRouteSource.CONTROLLER, route.path());
+        public static void onExit(@Advice.This WebRequest request, @Advice.Argument(0) Route route) {
+            // The router reads "decks" as "/decks", and so does the context path's join.
+            String path = route.path().startsWith("/") ? route.path() : "/" + route.path();
+            HttpServerRoute.update(Context.current(), HttpServerRouteSource.CONTROLLER,
+                    request.raw().getContextPath() + path);
         }
     }
 }

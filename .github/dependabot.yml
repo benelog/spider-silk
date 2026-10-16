@@ -31,6 +31,12 @@ updates:
         patterns:
           - "org.junit*:*"
           - "org.assertj:*"
+      # Core's servlet container and the WebSocket module's server are one
+      # Jetty release; a bump that moves only one of them mixes two on a
+      # classpath.
+      jetty:
+        patterns:
+          - "org.eclipse.jetty*"
 
   # The published parent POM, whose plugin versions are the Maven half of the
   # packaging conventions.

@@ -521,6 +521,28 @@ class TestRequestTest {
         assertThatExceptionOfType(HttpException.class).isThrownBy(() -> bad.formParam("a"))
                 .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
 
+        // Well-formed escapes of bytes that are not UTF-8: Jetty answers 400,
+        // where URLDecoder would have handed the handler U+FFFD.
+        WebRequest notUtf8 = TestRequest.post("/x")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body("a=%FF")
+                .build();
+        assertThatExceptionOfType(HttpException.class).isThrownBy(() -> notUtf8.formParam("a"))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        WebRequest truncated = TestRequest.post("/x")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body("a=%E")
+                .build();
+        assertThatExceptionOfType(HttpException.class).isThrownBy(() -> truncated.formParam("a"))
+                .satisfies(e -> assertThat(e.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+
+        WebRequest mixed = TestRequest.post("/x")
+                .header("Content-Type", "application/x-www-form-urlencoded")
+                .body("%ED%95%9C%20a=x+%ED%95%9C+y")
+                .build();
+        assertThat(mixed.formParam("한 a")).isEqualTo("x 한 y");
+
         WebRequest readFirst = TestRequest.post("/x")
                 .header("Content-Type", "application/x-www-form-urlencoded")
                 .body("a=1")

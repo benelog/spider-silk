@@ -105,6 +105,45 @@ class OpenApiTest {
                 .hasMessageContaining("GET /api/*");
     }
 
+    /** The router reads a star inside a segment as a literal, and so does a template. */
+    @Test
+    void writesAStarInsideASegmentAsTheLiteralItIs() {
+        App app = new App().get("/files/*.txt", req -> WebResponse.text("text"));
+
+        JsonObject paths = OpenApi.document("Files", "1.0.0", app.routes()).asObject()
+                .getObject("paths");
+
+        assertThat(paths.has("/files/*.txt")).isTrue();
+        assertThat(paths.getObject("/files/*.txt").getObject("get").has("parameters")).isFalse();
+    }
+
+    /**
+     * "{name}.json" is a literal to the router, which matches only a request
+     * for it spelled out; written as it is, a template would read a variable
+     * no parameter declares, and the document would be invalid.
+     */
+    @Test
+    void percentEncodesTheBracesOfALiteralSegment() {
+        App app = new App().get("/files/{name}.json", req -> WebResponse.text("json"));
+
+        JsonObject paths = OpenApi.document("Files", "1.0.0", app.routes()).asObject()
+                .getObject("paths");
+
+        assertThat(paths.has("/files/{name}.json")).isFalse();
+        assertThat(paths.getObject("/files/%7Bname%7D.json").getObject("get").has("parameters"))
+                .isFalse();
+    }
+
+    /** A variable a template cannot name is refused rather than written as something else. */
+    @Test
+    void refusesAVariableATemplateCannotName() {
+        List<Route> braced = List.of(new Route("GET", "/files/{a}{b}"));
+
+        assertThatThrownBy(() -> OpenApi.document("Files", "1.0.0", braced))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("GET /files/{a}{b}");
+    }
+
     /**
      * The router tells a single segment from a tail, and the template does not:
      * one of the two operations would replace the other without a word.

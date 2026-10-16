@@ -6,6 +6,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
+import org.jspecify.annotations.Nullable;
+
 import net.benelog.spidersilk.Route;
 import net.benelog.silkjson.Json;
 import net.benelog.silkjson.JsonArray;
@@ -23,8 +25,9 @@ import net.benelog.silkjson.JsonValue;
  * <p>A reader over the route list, and nothing more. Core hands the list out as
  * plain data and needs no change to allow this: {@code PathPattern}'s
  * {@code {deckId}} is OpenAPI's path template verbatim, so there is almost
- * nothing to translate and nothing at all to reflect over. The one translation
- * is the star of a named tail, which a template has no room for.
+ * nothing to translate and nothing at all to reflect over. The translations
+ * are the star of a named tail, which a template has no room for, and a brace
+ * inside a literal segment, which a template would read as a variable.
  * The module exists because that reading
  * is worth writing once rather than in every application, not because a spec
  * format belongs in the web tier — which is why it is a module of its own, the
@@ -72,10 +75,16 @@ public final class OpenApi {
      * description saying it is the rest of the path. OpenAPI has no wildcard
      * path template, so the star is core's syntax and not a template's, and the
      * variable is the one thing there is to say about the route.
-     * A route whose pattern contains a bare {@code *} throws:
+     * A route whose pattern has a bare {@code *} segment throws:
      * that wildcard has no OpenAPI equivalent and no name to give it, and
      * dropping it quietly would publish a document that claims the application
      * answers less than it does.
+     *
+     * <p>A segment is a variable only when the whole of it is one, as it is to
+     * the router. {@code /files/*.txt} is a literal path and comes out as one,
+     * and {@code /files/{name}.json} is a literal too, so its braces come out
+     * percent-encoded, {@code /files/%7Bname%7D.json}, rather than as a
+     * template variable no parameter declares.
      *
      * <p>Two routes whose templates OpenAPI would read as one path throw as
      * well, naming both. OpenAPI identifies a templated path by its hierarchy
@@ -84,8 +93,8 @@ public final class OpenApi {
      * {@code /files/{name*}}, which the router tells apart, have one template
      * between them, under which one operation would quietly replace the other.
      *
-     * @throws IllegalArgumentException if a route's path contains a bare
-     *         wildcard, or two routes come out as one OpenAPI path under
+     * @throws IllegalArgumentException if a route's path has a bare wildcard
+     *         segment or a variable a template cannot name, or two routes come out as one OpenAPI path under
      *         different variable names or router shapes
      */
     public static JsonValue document(String title, String version, List<Route> routes) {
@@ -95,13 +104,8 @@ public final class OpenApi {
         Map<String, Route> firstByIdentity = new HashMap<>();
         for (Route route : Objects.requireNonNull(routes, "routes")) {
             String pattern = normalized(route.path());
+            rejectUntemplatable(route, pattern);
             String path = template(pattern);
-            if (path.contains("*")) {
-                throw new IllegalArgumentException(
-                        "A wildcard route has no OpenAPI path template: " + route.method() + " "
-                                + route.path() + ". Name the tail as {name*}, or leave the route out of"
-                                + " the list passed here.");
-            }
             Route first = firstByIdentity.putIfAbsent(unnamed(path), route);
             if (first != null) {
                 String firstPattern = normalized(first.path());
@@ -139,14 +143,67 @@ public final class OpenApi {
     }
 
     /**
-     * The OpenAPI path template of a route's pattern, which differs from the
-     * pattern only in a named tail: {@code /files/{path*}} is written
-     * {@code /files/{path}} here, since a template has no star to carry.
+     * Refuses what the router matches but a template cannot say: a bare
+     * {@code *} segment, a wildcard with no name, and a variable whose name is
+     * empty or holds a brace, which a template would read as no variable or as
+     * two. A {@code *} inside a segment, {@code /files/*.txt}, is a literal to
+     * the router and to a template alike, and passes.
+     */
+    private static void rejectUntemplatable(Route route, String pattern) {
+        for (String segment : pattern.split("/", -1)) {
+            if (segment.equals("*")) {
+                throw new IllegalArgumentException(
+                        "A wildcard route has no OpenAPI path template: " + route.method() + " "
+                                + route.path() + ". Name the tail as {name*}, or leave the route out of"
+                                + " the list passed here.");
+            }
+            String name = variableName(segment);
+            if (name != null && (name.isEmpty() || name.contains("{") || name.contains("}"))) {
+                throw new IllegalArgumentException(
+                        "A path variable has no OpenAPI name: " + route.method() + " " + route.path()
+                                + ". A template's variable is a name with no braces in it; rename it,"
+                                + " or leave the route out of the list passed here.");
+            }
+        }
+    }
+
+    /**
+     * The OpenAPI path template of a route's pattern, segment by segment. A
+     * variable is written as it is, and a named tail loses its star:
+     * {@code /files/{path*}} is written {@code /files/{path}}, since a template
+     * has no star to carry. A literal segment has its braces percent-encoded,
+     * because the router reads {@code {name}.json} as a literal, matching only
+     * a request for {@code /files/%7Bname%7D.json}, where a template would read
+     * a variable.
      */
     private static String template(String pattern) {
-        return isTail(lastSegment(pattern))
-                ? pattern.substring(0, pattern.length() - 2) + "}"
-                : pattern;
+        String[] segments = pattern.substring(1).split("/", -1);
+        StringBuilder template = new StringBuilder();
+        for (int i = 0; i < segments.length; i++) {
+            String segment = segments[i];
+            template.append('/');
+            if (i == segments.length - 1 && isTail(segment)) {
+                template.append(segment, 0, segment.length() - 2).append('}');
+            } else if (isVariable(segment)) {
+                template.append(segment);
+            } else {
+                template.append(segment.replace("{", "%7B").replace("}", "%7D"));
+            }
+        }
+        return template.toString();
+    }
+
+    /** The name a {@code {name}} or {@code {name*}} segment binds, or null for a literal. */
+    private static @Nullable String variableName(String segment) {
+        if (isTail(segment)) {
+            return segment.substring(1, segment.length() - 2);
+        }
+        return isVariable(segment) ? segment.substring(1, segment.length() - 1) : null;
+    }
+
+    /** A whole-segment "{name}", the router's test for a variable; "{name}.json" is a literal. */
+    private static boolean isVariable(String segment) {
+        return segment.length() >= 2 && segment.startsWith("{") && segment.endsWith("}");
     }
 
     /**
@@ -156,10 +213,6 @@ public final class OpenApi {
      */
     private static String unnamed(String path) {
         return path.replaceAll("\\{[^/}]*}", "{}");
-    }
-
-    private static String lastSegment(String pattern) {
-        return pattern.substring(pattern.lastIndexOf('/') + 1);
     }
 
     /** A "{path*}" segment: a variable that matches the rest of the path. */
@@ -188,7 +241,7 @@ public final class OpenApi {
             if (isTail(segment)) {
                 parameters.add(parameter(segment.substring(1, segment.length() - 2))
                         .put("description", TAIL_DESCRIPTION));
-            } else if (segment.length() >= 2 && segment.startsWith("{") && segment.endsWith("}")) {
+            } else if (isVariable(segment)) {
                 parameters.add(parameter(segment.substring(1, segment.length() - 1)));
             }
         }

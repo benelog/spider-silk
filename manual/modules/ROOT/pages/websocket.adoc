@@ -45,6 +45,7 @@ image::websocket-wiring.svg[JettyServer.start builds the Server, the ServletCont
 
 `WebSocketHandler` is one connection, from the upgrade to the close.
 The factory builds one per connection, so an implementation may keep per-connection state in fields: the callbacks are never called concurrently for the same connection.
+That holds for the end of a connection too: an idle timeout or a failed write raises `onError` and `onClose` on another Jetty thread, and they wait for a running `onText` or `onBinary` to return.
 
 [source,java]
 ----
@@ -139,7 +140,7 @@ An upgrade leaves servlet dispatch for good, so none of the framework follows it
 * `beforeRequest`, `beforeRoute`, `afterRoute`, and `responseFilter` filters do not run,
 * `statusPage(status, ...)` does not cover it,
 * the request logger never sees the connection, the upgrade included, because the upgrade handler answers ahead of `AppServlet` and the servlet never runs,
-* `WebTest` cannot reach it at all, since it never starts a server.
+* `WebTest` cannot reach it, since its client speaks plain HTTP and has no way to open a socket.
 
 That list is the whole reason WebSocket is not in core: core would be publishing an API its own features silently do not cover.
 The module's tests show the same limit from the other side.

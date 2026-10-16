@@ -29,7 +29,8 @@ The application's code does not change.
 == What it reports
 
 The route reported is the one xref:route-introspection.adoc#matched-route[`req.route()`] reports, as registered and with group prefixes resolved.
-That form is already the path-template syntax of `http.route`, so the module passes it on unchanged.
+That form is already the path-template syntax of `http.route`, so the module passes it on with only the context path put in front.
+`http.route` includes the application root, so under the context path `/shop` the route `/decks/\{deckId}` reports `/shop/decks/\{deckId}`.
 The route is reported once the router has matched it, before any filter or handler of the route runs.
 It goes in with the controller as its source, which outranks the servlet mapping, as a Spring Web MVC handler's pattern does.
 

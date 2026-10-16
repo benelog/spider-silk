@@ -22,6 +22,9 @@ dependencies {
     compileOnly "io.opentelemetry.javaagent:opentelemetry-javaagent-extension-api:${otelAgentVersion}-alpha"
     compileOnly "io.opentelemetry.instrumentation:opentelemetry-instrumentation-api:${otelAgentVersion}"
     compileOnly project(':spider-silk-core')
+    // The advice reads the context path off WebRequest.raw(); the servlet API,
+    // like core, is the container's to supply.
+    compileOnly 'jakarta.servlet:jakarta.servlet-api:6.1.0'
 
     otelAgent "io.opentelemetry.javaagent:opentelemetry-javaagent:${otelAgentVersion}"
 

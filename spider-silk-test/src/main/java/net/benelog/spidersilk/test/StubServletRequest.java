@@ -2,10 +2,13 @@ package net.benelog.spidersilk.test;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.URLDecoder;
+import java.nio.ByteBuffer;
+import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
+import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.security.Principal;
 import java.time.ZonedDateTime;
@@ -340,12 +343,73 @@ final class StubServletRequest implements HttpServletRequest {
                 continue;
             }
             int equals = pair.indexOf('=');
-            String name = URLDecoder.decode(equals < 0 ? pair : pair.substring(0, equals), charset);
-            String value = equals < 0 ? "" : URLDecoder.decode(pair.substring(equals + 1), charset);
+            String name = decodeFormField(equals < 0 ? pair : pair.substring(0, equals), charset);
+            String value = equals < 0 ? "" : decodeFormField(pair.substring(equals + 1), charset);
             fields.computeIfAbsent(name, key -> new ArrayList<>()).add(value);
         }
         fields.replaceAll((name, values) -> List.copyOf(values));
         return fields;
+    }
+
+    /**
+     * One name or value of a form body, decoded in the body's charset. Bytes
+     * the charset refuses, such as {@code %FF} under UTF-8, throw rather than
+     * turn into U+FFFD, which {@link java.net.URLDecoder} does without a word:
+     * Jetty answers such a body with 400, and a test that saw U+FFFD would
+     * hide that.
+     *
+     * @throws IllegalArgumentException for a {@code %} not followed by two hex
+     *         digits, or for bytes that are not in the charset
+     */
+    private static String decodeFormField(String field, Charset charset) {
+        if (field.indexOf('%') < 0 && field.indexOf('+') < 0) {
+            return field;
+        }
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream(field.length());
+        int literalStart = 0;
+        for (int i = 0; i < field.length(); i++) {
+            char c = field.charAt(i);
+            if (c != '%' && c != '+') {
+                continue;
+            }
+            bytes.writeBytes(field.substring(literalStart, i).getBytes(charset));
+            if (c == '+') {
+                bytes.write(' ');
+            } else {
+                int high = i + 2 < field.length() ? hexDigit(field.charAt(i + 1)) : -1;
+                int low = high < 0 ? -1 : hexDigit(field.charAt(i + 2));
+                if (low < 0) {
+                    throw new IllegalArgumentException("Not a percent-escape at " + i + ": " + field);
+                }
+                bytes.write(high << 4 | low);
+                i += 2;
+            }
+            literalStart = i + 1;
+        }
+        bytes.writeBytes(field.substring(literalStart).getBytes(charset));
+        try {
+            return charset.newDecoder()
+                    .onMalformedInput(CodingErrorAction.REPORT)
+                    .onUnmappableCharacter(CodingErrorAction.REPORT)
+                    .decode(ByteBuffer.wrap(bytes.toByteArray()))
+                    .toString();
+        } catch (CharacterCodingException e) {
+            throw new IllegalArgumentException("Not " + charset.name() + ": " + field, e);
+        }
+    }
+
+    /** An ASCII hex digit's value, or -1: {@link Character#digit} takes full-width digits too. */
+    private static int hexDigit(char c) {
+        if (c >= '0' && c <= '9') {
+            return c - '0';
+        }
+        if (c >= 'a' && c <= 'f') {
+            return c - 'a' + 10;
+        }
+        if (c >= 'A' && c <= 'F') {
+            return c - 'A' + 10;
+        }
+        return -1;
     }
 
     @Override
