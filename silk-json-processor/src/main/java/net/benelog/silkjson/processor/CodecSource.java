@@ -93,7 +93,12 @@ final class CodecSource {
                 if (property.dateLocale != null) {
                     source.append(", java.util.Locale.forLanguageTag(").append(literal(property.dateLocale)).append(")");
                 }
-                source.append(");\n");
+                source.append(")");
+                if (holds(property.type, "java.time.Instant")) {
+                    // an Instant has no zone of its own to be formatted in
+                    source.append(".withZone(java.time.ZoneOffset.UTC)");
+                }
+                source.append(";\n");
             }
             if (property.adapter != null) {
                 String adapter = property.adapter.getQualifiedName().toString();
@@ -113,14 +118,14 @@ final class CodecSource {
 
     private void writeMethod(StringBuilder out) {
         out.append("    @Override\n");
-        out.append("    public void write(").append(type.targetName()).append(" value, ").append(JSON).append("JsonOutput out) {\n");
-        out.append("        out.object();\n");
+        out.append("    public void write(").append(type.targetName()).append(" $value, ").append(JSON).append("JsonOutput $out) {\n");
+        out.append("        $out.object();\n");
         for (Property property : type.properties) {
             if (property.writable()) {
                 writeProperty(out, property);
             }
         }
-        out.append("        out.end();\n");
+        out.append("        $out.end();\n");
         out.append("    }\n\n");
     }
 
@@ -144,18 +149,18 @@ final class CodecSource {
             out.append("            try {\n");
             out.append("                ").append(adapted).append(" = A_").append(property.name).append(".adaptToJson(")
                     .append(local).append(");\n");
-            out.append("            } catch (java.lang.Exception e) {\n");
-            out.append("                throw new java.lang.IllegalArgumentException(e.getMessage(), e);\n");
+            out.append("            } catch (java.lang.Exception $e) {\n");
+            out.append("                throw new java.lang.IllegalArgumentException($e.getMessage(), $e);\n");
             out.append("            }\n");
             out.append("            if (").append(adapted).append(" != null) {\n");
-            out.append("                out.name(").append(key).append(");\n");
+            out.append("                $out.name(").append(key).append(");\n");
             out.append("                ").append(writeValue(property.adapted, adapted, null, 4)).append("\n");
             if (property.nillable) {
-                out.append("            } else {\n                out.putNull(").append(key).append(");\n");
+                out.append("            } else {\n                $out.putNull(").append(key).append(");\n");
             }
             out.append("            }\n");
             if (property.nillable) {
-                out.append("        } else {\n            out.putNull(").append(key).append(");\n");
+                out.append("        } else {\n            $out.putNull(").append(key).append(");\n");
             }
             out.append("        }\n");
             return;
@@ -173,10 +178,10 @@ final class CodecSource {
             String accessor = TypeNames.is(type, "java.util.OptionalInt") ? "getAsInt"
                     : TypeNames.is(type, "java.util.OptionalLong") ? "getAsLong" : "getAsDouble";
             out.append("        if (").append(present).append(") {\n");
-            out.append("            out.name(").append(key).append(");\n");
-            out.append("            out.value(").append(local).append(".").append(accessor).append("());\n");
+            out.append("            $out.name(").append(key).append(");\n");
+            out.append("            $out.value(").append(local).append(".").append(accessor).append("());\n");
             if (property.nillable) {
-                out.append("        } else {\n            out.putNull(").append(key).append(");\n");
+                out.append("        } else {\n            $out.putNull(").append(key).append(");\n");
             }
             out.append("        }\n");
             return;
@@ -184,9 +189,24 @@ final class CodecSource {
         out.append("        if (").append(present).append(") {\n");
         out.append("            ").append(writeMember(key, written, expr, property, 3)).append("\n");
         if (property.nillable) {
-            out.append("        } else {\n            out.putNull(").append(key).append(");\n");
+            out.append("        } else {\n            $out.putNull(").append(key).append(");\n");
         }
         out.append("        }\n");
+    }
+
+    /** Whether the type is that class, or holds it as a type argument at any depth. */
+    private static boolean holds(TypeMirror type, String qualifiedName) {
+        if (TypeNames.is(type, qualifiedName)) {
+            return true;
+        }
+        if (type.getKind() == TypeKind.DECLARED) {
+            for (TypeMirror argument : ((DeclaredType) type).getTypeArguments()) {
+                if (holds(argument, qualifiedName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static boolean isEnum(TypeMirror type) {
@@ -228,19 +248,19 @@ final class CodecSource {
             default -> false;
         };
         if (fused) {
-            return "out.put(" + key + ", " + expr + ");";
+            return "$out.put(" + key + ", " + expr + ");";
         }
         if (isEnum(type)) {
-            return "out.put(" + key + ", V_" + enumTables((DeclaredType) type) + "[" + expr + ".ordinal()]);";
+            return "$out.put(" + key + ", V_" + enumTables((DeclaredType) type) + "[" + expr + ".ordinal()]);";
         }
-        return "out.name(" + key + ");\n" + pad(indent) + writeValue(type, expr, property, indent);
+        return "$out.name(" + key + ");\n" + pad(indent) + writeValue(type, expr, property, indent);
     }
 
     /** A statement writing a value, known not to be null, of the type as the next value. */
     private String writeValue(TypeMirror type, String expr, @Nullable Property property, int indent) {
         return switch (type.getKind()) {
-            case BOOLEAN, BYTE, SHORT, INT, LONG, FLOAT, DOUBLE -> "out.value(" + expr + ");";
-            case CHAR -> "out.value(java.lang.String.valueOf(" + expr + "));";
+            case BOOLEAN, BYTE, SHORT, INT, LONG, FLOAT, DOUBLE -> "$out.value(" + expr + ");";
+            case CHAR -> "$out.value(java.lang.String.valueOf(" + expr + "));";
             case DECLARED -> writeDeclared((DeclaredType) type, expr, property, indent);
             default -> throw unsupported(type, property);
         };
@@ -253,10 +273,10 @@ final class CodecSource {
                     "java.lang.Byte", "java.lang.Double", "java.lang.Float", "java.math.BigDecimal", "java.math.BigInteger",
                     "net.benelog.silkjson.JsonValue", "net.benelog.silkjson.JsonObject",
                     "net.benelog.silkjson.JsonArray" -> {
-                return "out.value(" + expr + ");";
+                return "$out.value(" + expr + ");";
             }
             case "java.lang.Character", "java.util.UUID", "java.net.URI", "java.time.ZoneId", "java.time.ZoneOffset" -> {
-                return "out.value(" + expr + ".toString());";
+                return "$out.value(" + expr + ".toString());";
             }
             default -> {
                 // falls through to the cases below
@@ -264,42 +284,60 @@ final class CodecSource {
         }
         if (TIME_PARSED.contains(name) || TIME_PLAIN.contains(name)) {
             if (property != null && property.dateFormat != null && TIME_PARSED.contains(name)) {
-                return "out.value(F_" + property.name + ".format(" + expr + "));";
+                return "$out.value(F_" + property.name + ".format(" + expr + "));";
             }
-            return "out.value(" + expr + ".toString());";
+            return "$out.value(" + expr + ".toString());";
         }
         Element element = type.asElement();
         if (element.getKind() == ElementKind.ENUM) {
-            return "out.value(V_" + enumTables(type) + "[" + expr + ".ordinal()]);";
+            return "$out.value(V_" + enumTables(type) + "[" + expr + ".ordinal()]);";
         }
         if (name.equals("java.util.Optional")) {
             TypeMirror inner = TypeNames.argument(type, 0);
-            return "if (" + expr + ".isPresent()) {\n" + pad(indent + 1) + writeValue(inner, expr + ".get()", null, indent + 1)
-                    + "\n" + pad(indent) + "} else {\n" + pad(indent + 1) + "out.nullValue();\n" + pad(indent) + "}";
+            return "if (" + expr + ".isPresent()) {\n" + pad(indent + 1) + writeValue(inner, expr + ".get()", property, indent + 1)
+                    + "\n" + pad(indent) + "} else {\n" + pad(indent + 1) + "$out.nullValue();\n" + pad(indent) + "}";
+        }
+        String primitive = optionalAccessor(name);
+        if (primitive != null) {
+            return "if (" + expr + ".isPresent()) {\n" + pad(indent + 1) + "$out.value(" + expr + "." + primitive + "());\n"
+                    + pad(indent) + "} else {\n" + pad(indent + 1) + "$out.nullValue();\n" + pad(indent) + "}";
         }
         if (LISTS.contains(name) || SETS.contains(name)) {
-            return writeCollection(type, expr);
+            return writeCollection(type, expr, property);
         }
         if (name.equals("java.util.Map")) {
             return writeMap(type, expr, property);
         }
         if (Annotations.has(element, Annotations.JSON_BOUND)) {
-            return boundCodec((TypeElement) element) + ".write(" + expr + ", out);";
+            return boundCodec((TypeElement) element) + ".write(" + expr + ", $out);";
         }
         throw unsupported(type, property);
     }
 
-    private String writeCollection(DeclaredType type, String expr) {
+    /** The getter of a primitive optional, OptionalInt's getAsInt and the like, or null for another type. */
+    private static @Nullable String optionalAccessor(String qualifiedName) {
+        return switch (qualifiedName) {
+            case "java.util.OptionalInt" -> "getAsInt";
+            case "java.util.OptionalLong" -> "getAsLong";
+            case "java.util.OptionalDouble" -> "getAsDouble";
+            default -> null;
+        };
+    }
+
+    private String writeCollection(DeclaredType type, String expr, @Nullable Property property) {
         TypeMirror elementType = TypeNames.argument(type, 0);
+        // The element's statement first: for a nested collection it appends
+        // a helper of its own, which must not land inside this one.
+        String written = writeValue(elementType, "$element", property, 4);
         String helper = "write_" + ++helperCount;
         helpers.append("    private static void ").append(helper).append("(").append(TypeNames.of(type))
-                .append(" values, ").append(JSON).append("JsonOutput out) {\n");
-        helpers.append("        out.array();\n");
-        helpers.append("        for (").append(nullableName(elementType)).append("element : values) {\n");
-        helpers.append("            if (element == null) {\n                out.nullValue();\n            } else {\n");
-        helpers.append("                ").append(writeValue(elementType, "element", null, 4)).append("\n");
-        helpers.append("            }\n        }\n        out.end();\n    }\n\n");
-        return helper + "(" + expr + ", out);";
+                .append(" $values, ").append(JSON).append("JsonOutput $out) {\n");
+        helpers.append("        $out.array();\n");
+        helpers.append("        for (").append(nullableName(elementType)).append("$element : $values) {\n");
+        helpers.append("            if ($element == null) {\n                $out.nullValue();\n            } else {\n");
+        helpers.append("                ").append(written).append("\n");
+        helpers.append("            }\n        }\n        $out.end();\n    }\n\n");
+        return helper + "(" + expr + ", $out);";
     }
 
     private String writeMap(DeclaredType type, String expr, @Nullable Property property) {
@@ -309,26 +347,27 @@ final class CodecSource {
                     "A map bound to a JSON object has String keys, not " + TypeNames.of(keyType));
         }
         TypeMirror valueType = TypeNames.argument(type, 1);
+        String written = writeValue(valueType, "$element", property, 4);
         String helper = "write_" + ++helperCount;
         helpers.append("    private static void ").append(helper).append("(").append(TypeNames.of(type))
-                .append(" values, ").append(JSON).append("JsonOutput out) {\n");
-        helpers.append("        out.object();\n");
+                .append(" $values, ").append(JSON).append("JsonOutput $out) {\n");
+        helpers.append("        $out.object();\n");
         helpers.append("        for (java.util.Map.Entry<java.lang.String, ").append(TypeNames.of(valueType))
-                .append("> entry : values.entrySet()) {\n");
-        helpers.append("            out.name(entry.getKey());\n");
-        helpers.append("            ").append(nullableName(valueType)).append("element = entry.getValue();\n");
-        helpers.append("            if (element == null) {\n                out.nullValue();\n            } else {\n");
-        helpers.append("                ").append(writeValue(valueType, "element", null, 4)).append("\n");
-        helpers.append("            }\n        }\n        out.end();\n    }\n\n");
-        return helper + "(" + expr + ", out);";
+                .append("> $entry : $values.entrySet()) {\n");
+        helpers.append("            $out.name($entry.getKey());\n");
+        helpers.append("            ").append(nullableName(valueType)).append("$element = $entry.getValue();\n");
+        helpers.append("            if ($element == null) {\n                $out.nullValue();\n            } else {\n");
+        helpers.append("                ").append(written).append("\n");
+        helpers.append("            }\n        }\n        $out.end();\n    }\n\n");
+        return helper + "(" + expr + ", $out);";
     }
 
     // ---- read ----
 
     private void readMethod(StringBuilder out) {
         out.append("    @Override\n");
-        out.append("    public ").append(type.targetName()).append(" read(").append(JSON).append("JsonInput in) {\n");
-        out.append("        in.object();\n");
+        out.append("    public ").append(type.targetName()).append(" read(").append(JSON).append("JsonInput $in) {\n");
+        out.append("        $in.object();\n");
         List<Property> readable = type.properties.stream().filter(Property::readable).toList();
         for (Property property : readable) {
             out.append("        ").append(local(property)).append(";\n");
@@ -337,28 +376,28 @@ final class CodecSource {
             }
         }
         if (readable.isEmpty()) {
-            out.append("        while (in.nextKey()) {\n            in.skipValue();\n        }\n");
+            out.append("        while ($in.nextKey()) {\n            $in.skipValue();\n        }\n");
         } else {
             if (readable.size() <= CHAIN_MAX) {
                 // A document written from this declaration has its keys in
                 // this order, so they are tried in place one after another
                 // first, each read with no switch to go through; the first key
                 // out of that order leaves the chain for the loop below.
-                out.append("        int key;\n");
+                out.append("        int $key;\n");
                 out.append("        chain: {\n");
                 for (Property property : readable) {
-                    out.append("            if (!in.nextKeyIs(K_").append(property.name).append(")) {\n");
-                    out.append("                key = keyIndex(in);\n");
+                    out.append("            if (!$in.nextKeyIs(K_").append(property.name).append(")) {\n");
+                    out.append("                $key = keyIndex($in);\n");
                     out.append("                break chain;\n");
                     out.append("            }\n");
                     StringBuilder body = new StringBuilder();
                     readProperty(body, property);
                     out.append(body.toString().indent(-4));
                 }
-                out.append("            key = keyIndex(in);\n");
+                out.append("            $key = keyIndex($in);\n");
                 out.append("        }\n");
             } else {
-                out.append("        int key = in.nextKeyIs(K_").append(readable.get(0).name).append(") ? 0 : keyIndex(in);\n");
+                out.append("        int $key = $in.nextKeyIs(K_").append(readable.get(0).name).append(") ? 0 : keyIndex($in);\n");
             }
             // With no chain, a case reads one property and tries the key
             // declared after it in place, which a document written from this
@@ -368,24 +407,24 @@ final class CodecSource {
             // straight to keyIndex, rather than first failing to be the next
             // one declared.
             boolean predicts = readable.size() > CHAIN_MAX;
-            out.append("        while (key != -1) {\n");
-            out.append("            switch (key) {\n");
+            out.append("        while ($key != -1) {\n");
+            out.append("            switch ($key) {\n");
             for (int i = 0; i < readable.size(); i++) {
                 out.append("                case ").append(i).append(" -> {\n");
                 StringBuilder body = new StringBuilder();
                 readProperty(body, readable.get(i));
                 out.append(body.toString().indent(4));
                 if (predicts && i + 1 < readable.size()) {
-                    out.append("                    key = in.nextKeyIs(K_").append(readable.get(i + 1).name).append(") ? ")
-                            .append(i + 1).append(" : keyIndex(in);\n");
+                    out.append("                    $key = $in.nextKeyIs(K_").append(readable.get(i + 1).name).append(") ? ")
+                            .append(i + 1).append(" : keyIndex($in);\n");
                 } else {
-                    out.append("                    key = keyIndex(in);\n");
+                    out.append("                    $key = keyIndex($in);\n");
                 }
                 out.append("                }\n");
             }
             out.append("                default -> {\n");
-            out.append("                    in.skipValue();\n");
-            out.append("                    key = keyIndex(in);\n");
+            out.append("                    $in.skipValue();\n");
+            out.append("                    $key = keyIndex($in);\n");
             out.append("                }\n");
             out.append("            }\n");
             out.append("        }\n");
@@ -416,17 +455,17 @@ final class CodecSource {
         if (set.isEmpty()) {
             out.append("        return ").append(created).append(";\n");
         } else {
-            out.append("        ").append(type.targetName()).append(" result = ").append(created).append(";\n");
+            out.append("        ").append(type.targetName()).append(" $result = ").append(created).append(";\n");
             for (Property property : set) {
                 out.append("        if (s_").append(property.name).append(") {\n");
                 if (property.setter != null) {
-                    out.append("            result.").append(property.setter).append("(p_").append(property.name).append(");\n");
+                    out.append("            $result.").append(property.setter).append("(p_").append(property.name).append(");\n");
                 } else {
-                    out.append("            result.").append(property.name).append(" = p_").append(property.name).append(";\n");
+                    out.append("            $result.").append(property.name).append(" = p_").append(property.name).append(";\n");
                 }
                 out.append("        }\n");
             }
-            out.append("        return result;\n");
+            out.append("        return $result;\n");
         }
         out.append("    }\n\n");
     }
@@ -440,14 +479,14 @@ final class CodecSource {
      * scanned and compared with each key.
      */
     private void keyIndexMethod(List<Property> readable) {
-        helpers.append("    private static int keyIndex(").append(JSON).append("JsonInput in) {\n");
+        helpers.append("    private static int keyIndex(").append(JSON).append("JsonInput $in) {\n");
         Map<Integer, List<Integer>> heads = readable.size() <= SWITCH_MAX ? heads(readable) : Map.of();
         if (!heads.isEmpty()) {
-            helpers.append("        switch (in.keyHead()) {\n");
+            helpers.append("        switch ($in.keyHead()) {\n");
             for (Map.Entry<Integer, List<Integer>> head : heads.entrySet()) {
                 helpers.append("            case ").append(String.format("0x%08x", head.getKey())).append(" -> {\n");
                 for (int i : head.getValue()) {
-                    helpers.append("                if (in.nextKeyIs(K_").append(readable.get(i).name).append(")) {\n");
+                    helpers.append("                if ($in.nextKeyIs(K_").append(readable.get(i).name).append(")) {\n");
                     helpers.append("                    return ").append(i).append(";\n                }\n");
                 }
                 helpers.append("            }\n");
@@ -455,9 +494,9 @@ final class CodecSource {
             helpers.append("            default -> {\n                // the end of the object, or a key none of these start with\n            }\n");
             helpers.append("        }\n");
         }
-        helpers.append("        if (!in.nextKey()) {\n            return -1;\n        }\n");
+        helpers.append("        if (!$in.nextKey()) {\n            return -1;\n        }\n");
         for (int i = 0; i < readable.size(); i++) {
-            helpers.append("        if (in.keyIs(K_").append(readable.get(i).name).append(")) {\n");
+            helpers.append("        if ($in.keyIs(K_").append(readable.get(i).name).append(")) {\n");
             helpers.append("            return ").append(i).append(";\n        }\n");
         }
         helpers.append("        return -2;\n    }\n\n");
@@ -551,7 +590,7 @@ final class CodecSource {
         if (property.adapter != null && property.adapted != null) {
             String read = readValue(property.adapted, null);
             if (property.nullable) {
-                out.append("                if (in.readNull()) {\n                    ").append(local).append(" = null;\n");
+                out.append("                if ($in.readNull()) {\n                    ").append(local).append(" = null;\n");
                 out.append("                } else {\n");
                 out.append(adaptFrom(property, read, 5));
                 out.append("                }\n");
@@ -562,16 +601,16 @@ final class CodecSource {
             out.append("                ").append(local).append(" = ").append(readValue(type, property)).append(";\n");
         } else if (TypeNames.is(type, "java.util.Optional")) {
             TypeMirror inner = TypeNames.argument(type, 0);
-            out.append("                ").append(local).append(" = in.readNull() ? java.util.Optional.empty() : java.util.Optional.of(")
+            out.append("                ").append(local).append(" = $in.readNull() ? java.util.Optional.empty() : java.util.Optional.of(")
                     .append(readValue(inner, property)).append(");\n");
         } else if (TypeNames.is(type, "java.util.OptionalInt")) {
-            out.append("                ").append(local).append(" = in.readNull() ? java.util.OptionalInt.empty() : java.util.OptionalInt.of(in.readInt());\n");
+            out.append("                ").append(local).append(" = $in.readNull() ? java.util.OptionalInt.empty() : java.util.OptionalInt.of($in.readInt());\n");
         } else if (TypeNames.is(type, "java.util.OptionalLong")) {
-            out.append("                ").append(local).append(" = in.readNull() ? java.util.OptionalLong.empty() : java.util.OptionalLong.of(in.readLong());\n");
+            out.append("                ").append(local).append(" = $in.readNull() ? java.util.OptionalLong.empty() : java.util.OptionalLong.of($in.readLong());\n");
         } else if (TypeNames.is(type, "java.util.OptionalDouble")) {
-            out.append("                ").append(local).append(" = in.readNull() ? java.util.OptionalDouble.empty() : java.util.OptionalDouble.of(in.readDouble());\n");
+            out.append("                ").append(local).append(" = $in.readNull() ? java.util.OptionalDouble.empty() : java.util.OptionalDouble.of($in.readDouble());\n");
         } else if (property.nullable) {
-            out.append("                ").append(local).append(" = in.readNull() ? null : ").append(readValue(type, property)).append(";\n");
+            out.append("                ").append(local).append(" = $in.readNull() ? null : ").append(readValue(type, property)).append(";\n");
         } else {
             out.append("                ").append(local).append(" = ").append(readValue(type, property)).append(";\n");
         }
@@ -584,30 +623,30 @@ final class CodecSource {
         String p = pad(indent);
         return p + "try {\n"
                 + p + "    p_" + property.name + " = A_" + property.name + ".adaptFromJson(" + read + ");\n"
-                + p + "} catch (java.lang.Exception e) {\n"
-                + p + "    throw new java.lang.IllegalArgumentException(e.getMessage(), e);\n"
+                + p + "} catch (java.lang.Exception $e) {\n"
+                + p + "    throw new java.lang.IllegalArgumentException($e.getMessage(), $e);\n"
                 + p + "}\n";
     }
 
     /** An expression reading a value of the type, which rejects a JSON null itself. */
     private String readValue(TypeMirror type, @Nullable Property property) {
         return switch (type.getKind()) {
-            case BOOLEAN -> "in.readBoolean()";
-            case INT -> "in.readInt()";
-            case LONG -> "in.readLong()";
-            case DOUBLE -> "in.readDouble()";
+            case BOOLEAN -> "$in.readBoolean()";
+            case INT -> "$in.readInt()";
+            case LONG -> "$in.readLong()";
+            case DOUBLE -> "$in.readDouble()";
             case SHORT -> {
                 readShort = true;
-                yield "readShort(in)";
+                yield "readShort($in)";
             }
             case BYTE -> {
                 readByte = true;
-                yield "readByte(in)";
+                yield "readByte($in)";
             }
-            case FLOAT -> "in.readFloat()";
+            case FLOAT -> "$in.readFloat()";
             case CHAR -> {
                 readChar = true;
-                yield "readChar(in)";
+                yield "readChar($in)";
             }
             case DECLARED -> readDeclared((DeclaredType) type, property);
             default -> throw unsupported(type, property);
@@ -618,61 +657,61 @@ final class CodecSource {
         String name = TypeNames.qualifiedName(type);
         switch (name) {
             case "java.lang.String" -> {
-                return "in.readString()";
+                return "$in.readString()";
             }
             case "java.lang.Boolean" -> {
-                return "in.readBoolean()";
+                return "$in.readBoolean()";
             }
             case "java.lang.Integer" -> {
-                return "in.readInt()";
+                return "$in.readInt()";
             }
             case "java.lang.Long" -> {
-                return "in.readLong()";
+                return "$in.readLong()";
             }
             case "java.lang.Double" -> {
-                return "in.readDouble()";
+                return "$in.readDouble()";
             }
             case "java.lang.Short" -> {
                 readShort = true;
-                return "readShort(in)";
+                return "readShort($in)";
             }
             case "java.lang.Byte" -> {
                 readByte = true;
-                return "readByte(in)";
+                return "readByte($in)";
             }
             case "java.lang.Float" -> {
-                return "in.readFloat()";
+                return "$in.readFloat()";
             }
             case "java.lang.Character" -> {
                 readChar = true;
-                return "readChar(in)";
+                return "readChar($in)";
             }
             case "java.math.BigDecimal" -> {
-                return "new java.math.BigDecimal(in.readNumber())";
+                return "new java.math.BigDecimal($in.readNumber())";
             }
             case "java.math.BigInteger" -> {
-                return "new java.math.BigInteger(in.readNumber())";
+                return "new java.math.BigInteger($in.readNumber())";
             }
             case "java.util.UUID" -> {
-                return "java.util.UUID.fromString(in.readString())";
+                return "java.util.UUID.fromString($in.readString())";
             }
             case "java.net.URI" -> {
-                return "java.net.URI.create(in.readString())";
+                return "java.net.URI.create($in.readString())";
             }
             case "java.time.ZoneId" -> {
-                return "java.time.ZoneId.of(in.readString())";
+                return "java.time.ZoneId.of($in.readString())";
             }
             case "java.time.ZoneOffset" -> {
-                return "java.time.ZoneOffset.of(in.readString())";
+                return "java.time.ZoneOffset.of($in.readString())";
             }
             case "net.benelog.silkjson.JsonValue" -> {
-                return "in.readValue()";
+                return "$in.readValue()";
             }
             case "net.benelog.silkjson.JsonObject" -> {
-                return "in.readValue().asObject()";
+                return "$in.readValue().asObject()";
             }
             case "net.benelog.silkjson.JsonArray" -> {
-                return "in.readValue().asArray()";
+                return "$in.readValue().asArray()";
             }
             default -> {
                 // falls through to the cases below
@@ -680,55 +719,66 @@ final class CodecSource {
         }
         if (TIME_PARSED.contains(name)) {
             if (property != null && property.dateFormat != null) {
-                return name + ".parse(in.readString(), F_" + property.name + ")";
+                // Instant has no parse taking a formatter; the formatter's own parse makes one.
+                return name.equals("java.time.Instant")
+                        ? "F_" + property.name + ".parse($in.readString(), java.time.Instant::from)"
+                        : name + ".parse($in.readString(), F_" + property.name + ")";
             }
-            return name + ".parse(in.readString())";
+            return name + ".parse($in.readString())";
         }
         if (TIME_PLAIN.contains(name)) {
-            return name + ".parse(in.readString())";
+            return name + ".parse($in.readString())";
         }
         Element element = type.asElement();
         if (element.getKind() == ElementKind.ENUM) {
             String tables = enumTables(type);
-            return "C_" + tables + "[in.readOneOf(V_" + tables + ")]";
+            return "C_" + tables + "[$in.readOneOf(V_" + tables + ")]";
         }
         if (name.equals("java.util.Optional")) {
             TypeMirror inner = TypeNames.argument(type, 0);
-            return "(in.readNull() ? java.util.Optional.<" + TypeNames.of(inner) + ">empty() : java.util.Optional.of("
-                    + readValue(inner, null) + "))";
+            return "($in.readNull() ? java.util.Optional.<" + TypeNames.of(inner) + ">empty() : java.util.Optional.of("
+                    + readValue(inner, property) + "))";
+        }
+        if (optionalAccessor(name) != null) {
+            String read = switch (name) {
+                case "java.util.OptionalInt" -> "$in.readInt()";
+                case "java.util.OptionalLong" -> "$in.readLong()";
+                default -> "$in.readDouble()";
+            };
+            return "($in.readNull() ? " + name + ".empty() : " + name + ".of(" + read + "))";
         }
         if (LISTS.contains(name) || SETS.contains(name)) {
-            return readCollection(type, SETS.contains(name));
+            return readCollection(type, SETS.contains(name), property);
         }
         if (name.equals("java.util.Map")) {
             return readMap(type, property);
         }
         if (Annotations.has(element, Annotations.JSON_BOUND)) {
-            return boundCodec((TypeElement) element) + ".read(in)";
+            return boundCodec((TypeElement) element) + ".read($in)";
         }
         throw unsupported(type, property);
     }
 
-    private String readCollection(DeclaredType type, boolean set) {
+    private String readCollection(DeclaredType type, boolean set, @Nullable Property property) {
         TypeMirror elementType = TypeNames.argument(type, 0);
         String helper = "read_" + ++helperCount;
         String declared = TypeNames.of(type);
         String implementation = set ? "java.util.LinkedHashSet<>" : "java.util.ArrayList<>";
         String wrap = set ? "java.util.Collections.unmodifiableSet" : "java.util.Collections.unmodifiableList";
         String element = Annotations.isNullable(List.of(), elementType)
-                ? "in.readNull() ? null : " + readValue(elementType, null)
-                : readValue(elementType, null);
+                ? "$in.readNull() ? null : " + readValue(elementType, property)
+                : readValue(elementType, property);
         helpers.append("    private static ").append(declared).append(" ").append(helper).append("(")
-                .append(JSON).append("JsonInput in) {\n");
-        helpers.append("        in.array();\n");
+                .append(JSON).append("JsonInput $in) {\n");
+        helpers.append("        $in.array();\n");
         helpers.append("        ").append(set ? "java.util.Set<" : "java.util.List<").append(TypeNames.of(elementType))
-                .append("> values = new ").append(implementation).append("();\n");
-        helpers.append("        while (in.nextElement()) {\n");
-        helpers.append("            values.add(").append(element).append(");\n");
+                .append("> $values = new ").append(implementation).append("();\n");
+        helpers.append("        while ($in.nextElement()) {\n");
+        helpers.append("            $values.add(").append(element).append(");\n");
         helpers.append("        }\n");
-        helpers.append("        return ").append(wrap).append("(values);\n");
+        helpers.append("        return ").append(wrap).append("($values);\n");
         helpers.append("    }\n\n");
-        return helper + "(in)";
+        return helper + "($in)";
     }
 
     private String readMap(DeclaredType type, @Nullable Property property) {
@@ -740,19 +790,19 @@ final class CodecSource {
         TypeMirror valueType = TypeNames.argument(type, 1);
         String helper = "read_" + ++helperCount;
         String element = Annotations.isNullable(List.of(), valueType)
-                ? "in.readNull() ? null : " + readValue(valueType, null)
-                : readValue(valueType, null);
+                ? "$in.readNull() ? null : " + readValue(valueType, property)
+                : readValue(valueType, property);
         helpers.append("    private static ").append(TypeNames.of(type)).append(" ").append(helper).append("(")
-                .append(JSON).append("JsonInput in) {\n");
-        helpers.append("        in.object();\n");
+                .append(JSON).append("JsonInput $in) {\n");
+        helpers.append("        $in.object();\n");
         helpers.append("        java.util.Map<java.lang.String, ").append(TypeNames.of(valueType))
-                .append("> values = new java.util.LinkedHashMap<>();\n");
-        helpers.append("        while (in.nextKey()) {\n");
-        helpers.append("            values.put(in.key(), ").append(element).append(");\n");
+                .append("> $values = new java.util.LinkedHashMap<>();\n");
+        helpers.append("        while ($in.nextKey()) {\n");
+        helpers.append("            $values.put($in.key(), ").append(element).append(");\n");
         helpers.append("        }\n");
-        helpers.append("        return java.util.Collections.unmodifiableMap(values);\n");
+        helpers.append("        return java.util.Collections.unmodifiableMap($values);\n");
         helpers.append("    }\n\n");
-        return helper + "(in)";
+        return helper + "($in)";
     }
 
     // ---- the pieces ----
@@ -810,25 +860,25 @@ final class CodecSource {
     String supportMethods() {
         StringBuilder sb = new StringBuilder();
         if (readShort) {
-            sb.append("    private static short readShort(").append(JSON).append("JsonInput in) {\n")
-                    .append("        long value = in.readLong();\n")
-                    .append("        if (value < java.lang.Short.MIN_VALUE || value > java.lang.Short.MAX_VALUE) {\n")
-                    .append("            throw in.error(\"Not a 16-bit integer: \" + value);\n        }\n")
-                    .append("        return (short) value;\n    }\n\n");
+            sb.append("    private static short readShort(").append(JSON).append("JsonInput $in) {\n")
+                    .append("        long $value = $in.readLong();\n")
+                    .append("        if ($value < java.lang.Short.MIN_VALUE || $value > java.lang.Short.MAX_VALUE) {\n")
+                    .append("            throw $in.error(\"Not a 16-bit integer: \" + $value);\n        }\n")
+                    .append("        return (short) $value;\n    }\n\n");
         }
         if (readByte) {
-            sb.append("    private static byte readByte(").append(JSON).append("JsonInput in) {\n")
-                    .append("        long value = in.readLong();\n")
-                    .append("        if (value < java.lang.Byte.MIN_VALUE || value > java.lang.Byte.MAX_VALUE) {\n")
-                    .append("            throw in.error(\"Not an 8-bit integer: \" + value);\n        }\n")
-                    .append("        return (byte) value;\n    }\n\n");
+            sb.append("    private static byte readByte(").append(JSON).append("JsonInput $in) {\n")
+                    .append("        long $value = $in.readLong();\n")
+                    .append("        if ($value < java.lang.Byte.MIN_VALUE || $value > java.lang.Byte.MAX_VALUE) {\n")
+                    .append("            throw $in.error(\"Not an 8-bit integer: \" + $value);\n        }\n")
+                    .append("        return (byte) $value;\n    }\n\n");
         }
         if (readChar) {
-            sb.append("    private static char readChar(").append(JSON).append("JsonInput in) {\n")
-                    .append("        java.lang.String value = in.readString();\n")
-                    .append("        if (value.length() != 1) {\n")
-                    .append("            throw in.error(\"Not a single character\");\n        }\n")
-                    .append("        return value.charAt(0);\n    }\n\n");
+            sb.append("    private static char readChar(").append(JSON).append("JsonInput $in) {\n")
+                    .append("        java.lang.String $value = $in.readString();\n")
+                    .append("        if ($value.length() != 1) {\n")
+                    .append("            throw $in.error(\"Not a single character\");\n        }\n")
+                    .append("        return $value.charAt(0);\n    }\n\n");
         }
         return sb.toString();
     }

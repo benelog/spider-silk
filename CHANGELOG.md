@@ -125,6 +125,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   `toBytes()`, `length()`, and `writeTo(stream)` throw for an output with nothing written, so a `JsonWriter` that writes nothing answers 500 rather than an empty `application/json` body.
 - `spider-silk-undertow`: a read waits at most 30 seconds for the client, and a write at most 30 seconds for the client to take it, as on Jetty; `customizeBuilder(...)` can change both.
   Undertow had no timeout, so a client that stalled mid-body or stopped reading held a worker thread for good.
+- `silk-json-processor`: the generated parameters and locals start with `$`, so a codec in a package whose first segment is `in`, `out`, `value`, `key`, `result`, `values`, `element`, or `entry` compiles.
 
 ### Removed
 
@@ -238,6 +239,18 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `silk-json`: a long integer or an out-of-range number that `JsonInput` refuses is quoted by its first 32 characters, as a fraction already was, where a 100,000-digit integer put every digit in the message and in core's 400 body.
 - `silk-json`: `JsonInput.of(String)`, and so `Json.parse(String)` and `reader.fromJson(text)`, refuse a surrogate without its pair with `JsonException`, as byte input refuses malformed UTF-8, where it read as `?`.
 - `silk-json`: a `JsonKey` whose name holds a lone surrogate matches only the key written with its escape, where it also matched the key `a?`.
+- `silk-json-processor`: a collection nested in a collection or a map, such as `List<List<Integer>>` or `Map<String, List<String>>`, generates a codec that compiles.
+- `silk-json-processor`: a class binds the public getters, setters, and fields it inherits, the superclass's properties first, where they were silently left out.
+- `silk-json-processor`: `@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`, `@JsonbTypeDeserializer`, `@JsonbTypeAdapter`, and `@JsonbTypeInfo` on a type or a package are a compile error, where they were ignored.
+  A package's `@JsonbDateFormat` and `@JsonbNillable` apply to its types.
+- `silk-json-processor`: a `@JsonbCreator` parameter is matched to its property by its `@JsonbProperty` name, and by its Java name only without one.
+- `silk-json-processor`: `@Nullable` on a record component or a creator parameter makes the member optional when the accessor carries none.
+- `silk-json-processor`: `@JsonbDateFormat` on an `Instant` generates a codec that compiles, and writes the instant in UTC.
+- `silk-json-processor`: `@JsonbDateFormat` applies to collection elements, map values, and an `Optional`'s value, and `OptionalInt`, `OptionalLong`, and `OptionalDouble` are accepted as elements and values.
+- `silk-json-processor`: a mixin on a record names the components as written, so `isAdmin()` and `getaway()` are no longer read as `admin` and `away`, and a `Boolean isActive()` is a getter.
+- `silk-json-processor`: a non-static inner class, a private nested type, a private constructor or `@JsonbCreator`, and a getter and setter of different types are a compile error on the type, where the generated code failed to compile.
+- `silk-json-processor`: a wildcard, a raw type, or a type variable is a compile error instead of a processor crash, and a type not yet resolved defers the codec to a later round.
+- `silk-json-processor`: two types whose codecs would share a name, such as `Outer.Inner` and `OuterInner`, are a compile error naming both.
 
 ## [1.1.0] - 2026-09-17
 

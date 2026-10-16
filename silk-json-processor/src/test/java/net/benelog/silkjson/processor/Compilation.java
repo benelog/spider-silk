@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
+import javax.annotation.processing.Processor;
 import javax.tools.Diagnostic;
 import javax.tools.DiagnosticCollector;
 import javax.tools.FileObject;
@@ -80,6 +81,11 @@ final class Compilation {
     }
 
     static Result compile(Map<String, String> sources, String... options) {
+        return compile(sources, List.of(), options);
+    }
+
+    /** The compilation with more processors running beside this one, after it. */
+    static Result compile(Map<String, String> sources, List<Processor> others, String... options) {
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
         StandardJavaFileManager standard = compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8);
@@ -134,7 +140,10 @@ final class Compilation {
         arguments.addAll(List.of(options));
         StringWriter log = new StringWriter();
         JavaCompiler.CompilationTask task = compiler.getTask(log, manager, diagnostics, arguments, null, units);
-        task.setProcessors(List.of(new JsonProcessor()));
+        List<Processor> processors = new ArrayList<>();
+        processors.add(new JsonProcessor());
+        processors.addAll(others);
+        task.setProcessors(processors);
         boolean success = task.call();
         return new Result(success, diagnostics.getDiagnostics(), generated, classes);
     }

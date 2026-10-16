@@ -3,6 +3,8 @@
 
 `silk-json-processor` generates a `JsonCodec` for every type annotated `@JsonBound`, at compile time, from the type's own declaration.
 The codec is a constant beside the type, `<Type>Json.CODEC`, and a handler names it the way it names a hand-written writer.
+A nested type's codec name starts with the names of the types it is nested in, so `Outer.Inner` generates `OuterInnerJson`.
+Two types whose codecs would share a name, such as `Outer.Inner` and a top-level `OuterInner` in one package, are a compile error.
 Nothing is reflected over, nothing registers itself, and a native image needs no entry for the type.
 
 [source,java]
@@ -41,6 +43,11 @@ dependencies {
 The xref:gradle-plugin.adoc#json[Gradle plugin] adds both with `spiderSilk { json() }`, and the xref:maven-parent.adoc#json[Maven parent] puts the processor on the compiler's path for every child.
 Neither jar is needed at run time: the annotations are read when the codec is generated and never again.
 
+An application on the module path adds `requires static java.compiler;` and `requires static org.jspecify;` to its `module-info.java`.
+The generated code carries `@Generated` from `java.compiler` and `@Nullable` from jspecify, and neither is needed at run time.
+The processor claims no annotation, so javac's `processing` lint warns that nothing claimed `@JsonBound`.
+A build that compiles with `-Werror` turns that lint off with `-Xlint:all,-processing`.
+
 == The annotations
 
 The vocabulary is Jakarta JSON Binding's, so a type annotated for another JSON-B implementation keeps its annotations.
@@ -59,7 +66,7 @@ Without it, the name is the component's, the field's, or the property's.
 A record component so marked is handed null by the codec, so it cannot be a primitive.
 
 | `@JsonbNillable`
-| Writes a null value as `null`, on the type or on one property.
+| Writes a null value as `null`, on the package, on the type, or on one property.
 Without it a null property is left out of the document.
 
 | `@JsonbPropertyOrder({...})`
@@ -67,23 +74,32 @@ Without it a null property is left out of the document.
 
 | `@JsonbCreator`
 | Marks the constructor or static factory method a class is created through, with each parameter a property.
+A parameter is matched to its property by its `@JsonbProperty` name, and by its Java name without one.
+The creator is not private, since the codec calls it.
 
 | `@JsonbDateFormat("pattern", locale = "...")`
-| Formats and parses a `java.time` value with that pattern instead of its ISO-8601 text.
+| Formats and parses a `java.time` value with that pattern instead of its ISO-8601 text, on the package, on the type, or on one property.
+The pattern applies to the elements of a collection, the values of a map, and the value of an `Optional` too.
+An `Instant` is formatted in UTC.
 
 | `@JsonbTypeAdapter(MyAdapter.class)`
 | Converts the property through a `JsonbAdapter<Original, Adapted>`, created with `new`.
 The adapter needs a public no-argument constructor, which the processor checks.
 |===
 
-`@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`, `@JsonbTypeDeserializer`, and `@JsonbTypeInfo` are not supported, and each is a compile error that says so.
+`@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`, `@JsonbTypeDeserializer`, and `@JsonbTypeInfo` are not supported, and each is a compile error that says so, on a property, a type, or a package.
+`@JsonbTypeAdapter` on a type or a package is a compile error too, since the codec adapts one property at a time.
 The default order is declaration order, where JSON-B's own default is lexicographical.
 
 == What a type looks like
 
 A record is bound through its components and its canonical constructor.
 A class is bound through its public getters, setters, and public fields, and is created through its `@JsonbCreator` or its public no-argument constructor.
+The members a class inherits are bound too, the superclass's properties first, and a member the class overrides is read with the class's annotations.
+A getter whose name starts with `is` returns `boolean` or `Boolean`.
+A getter and a setter of one property take the same type, and a mismatch is a compile error.
 A property set through a setter or a field keeps the class's own default when the document leaves it out.
+The codec names the type and calls its constructor, so a nested class is static, and neither the type, a type it is nested in, nor the constructor the codec calls is private.
 
 The property types the codec knows are the primitives and their boxes, `String`, `BigDecimal`, `BigInteger`, `UUID`, `URI`, an enum as its name, written and read through its constants' names encoded once, a `java.time` type as its ISO-8601 text, `Optional`, `OptionalInt`, `OptionalLong`, `OptionalDouble`, `List`, `Set`, `Collection`, `Iterable`, `Map<String, V>`, the `JsonValue` tree, and any other type annotated `@JsonBound`.
 A collection's elements and a map's values are those same types, nested as deep as needed.
@@ -93,6 +109,7 @@ Any other type is a compile error naming the property, with two ways out: annota
 
 On the way in, a record component or a creator parameter is required unless its type says the value may be absent.
 A type annotated `@Nullable`, whichever library the annotation comes from, reads a missing or null member as null.
+The annotation counts on the record component, the creator parameter, the field, or the accessor.
 An `Optional` reads one as empty.
 Any other component missing from the document, or present as `null`, is a `JsonException` that `req.bodyJson(codec)` answers with 400, the same contract as `pathParamLong`.
 A member the type does not have is skipped.
@@ -104,6 +121,8 @@ This is stricter than JSON-B's own default, which leaves a missing property at i
 
 A type that cannot carry the annotations, a domain record or a type from another library, is bound through a mixin: a type annotated `@JsonBound(Other.class)`, whose members of the same names carry the annotations for `Other`'s properties.
 The codec is generated beside the mixin, in its package, as `OtherJson`.
+For a record, a mixin's method names the component of the same name, so `isAdmin()` is the component `isAdmin`.
+For a class, a mixin's method names the property its JavaBeans name gives.
 
 [source,java]
 ----

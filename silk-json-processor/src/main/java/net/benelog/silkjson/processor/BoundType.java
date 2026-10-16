@@ -13,10 +13,14 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
+import javax.lang.model.element.NestingKind;
+import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.RecordComponentElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.ExecutableType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
@@ -80,6 +84,9 @@ final class BoundType {
         TypeElement target = annotated;
         TypeElement mixin = null;
         Object value = Annotations.value(bound, "value");
+        if (value instanceof DeclaredType declared && declared.getKind() == TypeKind.ERROR) {
+            throw new Deferred(declared.toString());
+        }
         if (value instanceof DeclaredType declared && !TypeNames.is(declared, "java.lang.Void")) {
             target = (TypeElement) declared.asElement();
             mixin = annotated;
@@ -95,19 +102,106 @@ final class BoundType {
             throw new Invalid(annotated, "A generic type cannot be bound: " + target.getQualifiedName());
         }
         String packageName = TypeNames.packageOf(annotated);
-        if (!target.getModifiers().contains(Modifier.PUBLIC) && !packageName.equals(TypeNames.packageOf(target))) {
-            throw new Invalid(annotated, target.getQualifiedName() + " is not public, so a codec in " + packageName + " cannot reach it");
-        }
-        for (String unsupported : List.of(Annotations.JSONB_VISIBILITY, Annotations.JSONB_TYPE_INFO)) {
-            if (Annotations.has(target, unsupported) || (mixin != null && Annotations.has(mixin, unsupported))) {
-                throw new Invalid(annotated, "@" + simpleName(unsupported) + " is not supported by the generated codec");
+        requireReachable(annotated, target, packageName);
+        for (Element carrier : carriers(target, mixin, env)) {
+            for (String unsupported : TYPE_UNSUPPORTED) {
+                if (Annotations.has(carrier, unsupported)) {
+                    String where = carrier instanceof PackageElement pkg ? "package " + pkg.getQualifiedName()
+                            : ((TypeElement) carrier).getQualifiedName().toString();
+                    throw new Invalid(annotated, "@" + simpleName(unsupported) + " is not supported by the generated codec,"
+                            + " here on " + where);
+                }
             }
         }
 
         Extraction extraction = new Extraction(env, target, mixin, explicitNames);
         extraction.run();
-        return new BoundType(target, mixin, packageName, extraction.ordered(), extraction.creation,
+        List<Property> ordered = extraction.ordered();
+        for (Property property : ordered) {
+            requireBindable(property.type, property.element);
+            TypeMirror adapted = property.adapted;
+            if (adapted != null) {
+                requireBindable(adapted, property.element);
+            }
+        }
+        return new BoundType(target, mixin, packageName, ordered, extraction.creation,
                 extraction.creatorParameters, extraction.factoryName);
+    }
+
+    /** The annotations no type or package may carry: none of them has a meaning the generated codec gives it. */
+    private static final List<String> TYPE_UNSUPPORTED = List.of(Annotations.JSONB_VISIBILITY, Annotations.JSONB_TYPE_INFO,
+            Annotations.JSONB_NUMBER_FORMAT, Annotations.JSONB_TYPE_SERIALIZER, Annotations.JSONB_TYPE_DESERIALIZER,
+            Annotations.JSONB_TYPE_ADAPTER);
+
+    /** The elements whose type-level annotations apply to the target: the mixin and its package first, then the target and its package. */
+    static List<Element> carriers(TypeElement target, @Nullable TypeElement mixin, ProcessingEnvironment env) {
+        List<Element> carriers = new ArrayList<>();
+        if (mixin != null) {
+            carriers.add(mixin);
+            carriers.add(env.getElementUtils().getPackageOf(mixin));
+        }
+        carriers.add(target);
+        PackageElement targetPackage = env.getElementUtils().getPackageOf(target);
+        if (!carriers.contains(targetPackage)) {
+            carriers.add(targetPackage);
+        }
+        return carriers;
+    }
+
+    /**
+     * The checks that the generated code can name the target and create it:
+     * a nested class is static, and neither the target nor any type it is
+     * nested in is private, or other than public when the codec sits in
+     * another package.
+     */
+    private static void requireReachable(TypeElement annotated, TypeElement target, String packageName) {
+        if (target.getNestingKind() == NestingKind.MEMBER && target.getKind() == ElementKind.CLASS
+                && !target.getModifiers().contains(Modifier.STATIC)) {
+            throw new Invalid(annotated, target.getQualifiedName() + " is an inner class, which needs an instance of "
+                    + String.valueOf(target.getEnclosingElement()) + " to be created: declare it static");
+        }
+        if (target.getNestingKind() == NestingKind.LOCAL || target.getNestingKind() == NestingKind.ANONYMOUS) {
+            throw new Invalid(annotated, "A local class cannot be bound, since a codec cannot name it");
+        }
+        boolean samePackage = packageName.equals(TypeNames.packageOf(target));
+        for (Element element = target; element instanceof TypeElement type; element = element.getEnclosingElement()) {
+            if (type.getModifiers().contains(Modifier.PRIVATE)) {
+                throw new Invalid(annotated, type.getQualifiedName() + " is private, so a codec cannot reach "
+                        + target.getQualifiedName());
+            }
+            if (!samePackage && !type.getModifiers().contains(Modifier.PUBLIC)) {
+                throw new Invalid(annotated, type.getQualifiedName() + " is not public, so a codec in " + packageName
+                        + " cannot reach " + target.getQualifiedName());
+            }
+        }
+    }
+
+    /**
+     * The check that a property's type is one the generated source can spell:
+     * no wildcard, raw type, or type variable. A type javac has not resolved
+     * defers the whole codec to a later round.
+     */
+    static void requireBindable(TypeMirror type, Element at) {
+        switch (type.getKind()) {
+            case BOOLEAN, BYTE, SHORT, INT, LONG, CHAR, FLOAT, DOUBLE -> {
+                // spelled as they are
+            }
+            case ERROR -> throw new Deferred(type.toString());
+            case ARRAY -> requireBindable(((ArrayType) type).getComponentType(), at);
+            case DECLARED -> {
+                DeclaredType declared = (DeclaredType) type;
+                TypeElement element = (TypeElement) declared.asElement();
+                if (declared.getTypeArguments().isEmpty() && !element.getTypeParameters().isEmpty()) {
+                    throw new Invalid(at, "The raw type " + element.getQualifiedName() + " cannot be bound: give its type arguments");
+                }
+                for (TypeMirror argument : declared.getTypeArguments()) {
+                    requireBindable(argument, at);
+                }
+            }
+            case WILDCARD -> throw new Invalid(at, "The wildcard " + type + " cannot be bound: name the type itself");
+            case TYPEVAR -> throw new Invalid(at, "The type variable " + type + " cannot be bound: name the type itself");
+            default -> throw new Invalid(at, "The type " + type + " cannot be bound");
+        }
     }
 
     private static String kindName(ElementKind kind) {
@@ -144,11 +238,19 @@ final class BoundType {
         }
 
         void run() {
-            typeNillable = nillable(target) || (mixin != null && nillable(mixin));
-            typeDateFormat = Annotations.find(target, Annotations.JSONB_DATE_FORMAT);
-            if (mixin != null && Annotations.find(mixin, Annotations.JSONB_DATE_FORMAT) != null) {
-                typeDateFormat = Annotations.find(mixin, Annotations.JSONB_DATE_FORMAT);
+            // The type's say comes before its package's, and a mixin's before the target's.
+            List<Element> defaults = new ArrayList<>();
+            if (mixin != null) {
+                defaults.add(mixin);
             }
+            defaults.add(target);
+            if (mixin != null) {
+                defaults.add(env.getElementUtils().getPackageOf(mixin));
+            }
+            defaults.add(env.getElementUtils().getPackageOf(target));
+            AnnotationMirror nillable = first(defaults, Annotations.JSONB_NILLABLE);
+            typeNillable = nillable != null && !Boolean.FALSE.equals(Annotations.value(nillable, "value"));
+            typeDateFormat = first(defaults, Annotations.JSONB_DATE_FORMAT);
             if (target.getKind() == ElementKind.RECORD) {
                 record();
             } else {
@@ -167,11 +269,6 @@ final class BoundType {
             }
         }
 
-        private static boolean nillable(Element element) {
-            AnnotationMirror mirror = Annotations.find(element, Annotations.JSONB_NILLABLE);
-            return mirror != null && !Boolean.FALSE.equals(Annotations.value(mirror, "value"));
-        }
-
         // ---- the members ----
 
         private void record() {
@@ -183,7 +280,7 @@ final class BoundType {
                 String name = component.getSimpleName().toString();
                 ExecutableElement accessor = component.getAccessor();
                 Property property = new Property(name, accessor.getReturnType(), component);
-                property.getter = "value." + name + "()";
+                property.getter = "$value." + name + "()";
                 properties.put(name, property);
                 List<Element> declared = new ArrayList<>();
                 declared.add(component);
@@ -196,50 +293,138 @@ final class BoundType {
             }
         }
 
-        /** One walk over the members in declaration order: a property's place is where its name first appears, a private field included. */
+        /**
+         * One walk over the members of the class and of each superclass up to
+         * {@code Object}, the topmost first and each in declaration order: a
+         * property's place is where its name first appears, a private field
+         * included. A subclass's member overrides or hides its superclass's,
+         * and its annotations are read first.
+         */
         private void beanClass() {
-            for (Element member : target.getEnclosedElements()) {
-                if (member.getModifiers().contains(Modifier.STATIC)) {
-                    continue;
+            List<TypeElement> chain = new ArrayList<>();
+            for (TypeElement type = target; type != null; type = superclass(type)) {
+                chain.add(0, type);
+            }
+            DeclaredType owner = (DeclaredType) target.asType();
+            Map<String, VariableElement> fields = new LinkedHashMap<>();
+            Map<String, ExecutableElement> getters = new LinkedHashMap<>();
+            Map<String, List<ExecutableElement>> setters = new LinkedHashMap<>();
+            for (TypeElement declaring : chain) {
+                Map<String, List<Element>> own = new LinkedHashMap<>();
+                for (Element member : declaring.getEnclosedElements()) {
+                    if (member.getModifiers().contains(Modifier.STATIC)) {
+                        continue;
+                    }
+                    if (member instanceof VariableElement field && member.getKind() == ElementKind.FIELD) {
+                        if (field.getModifiers().contains(Modifier.TRANSIENT)) {
+                            continue;
+                        }
+                        String name = field.getSimpleName().toString();
+                        own.computeIfAbsent(name, n -> new ArrayList<>()).add(field);
+                        if (field.getModifiers().contains(Modifier.PUBLIC)) {
+                            fields.put(name, field);
+                        } else {
+                            fields.remove(name); // a field the subclass hides with one the codec cannot reach
+                        }
+                    } else if (member instanceof ExecutableElement method && member.getKind() == ElementKind.METHOD
+                            && method.getModifiers().contains(Modifier.PUBLIC)) {
+                        String methodName = method.getSimpleName().toString();
+                        String name = propertyName(methodName, method);
+                        if (name == null) {
+                            continue;
+                        }
+                        own.computeIfAbsent(name, n -> new ArrayList<>()).add(method);
+                        if (method.getParameters().isEmpty() && method.getReturnType().getKind() != TypeKind.VOID
+                                && !methodName.startsWith("set")) {
+                            getters.put(name, method);
+                        } else if (method.getParameters().size() == 1 && methodName.startsWith("set")) {
+                            List<ExecutableElement> named = setters.computeIfAbsent(name, n -> new ArrayList<>());
+                            TypeMirror parameter = types.erasure(method.getParameters().get(0).asType());
+                            named.removeIf(other -> types.isSameType(types.erasure(other.getParameters().get(0).asType()), parameter));
+                            named.add(method);
+                        }
+                    }
                 }
-                if (member instanceof VariableElement field && member.getKind() == ElementKind.FIELD) {
-                    if (field.getModifiers().contains(Modifier.TRANSIENT)) {
-                        continue;
-                    }
-                    String name = field.getSimpleName().toString();
-                    declarations.computeIfAbsent(name, n -> new ArrayList<>()).add(field);
-                    if (field.getModifiers().contains(Modifier.PUBLIC)) {
-                        Property property = new Property(name, field.asType(), field);
-                        property.getter = "value." + name;
-                        property.field = !field.getModifiers().contains(Modifier.FINAL);
-                        properties.put(name, property);
-                    }
-                } else if (member instanceof ExecutableElement method && member.getKind() == ElementKind.METHOD
-                        && method.getModifiers().contains(Modifier.PUBLIC)) {
-                    String methodName = method.getSimpleName().toString();
-                    String name = propertyName(methodName, method);
-                    if (name == null) {
-                        continue;
-                    }
-                    declarations.computeIfAbsent(name, n -> new ArrayList<>()).add(method);
-                    if (method.getParameters().isEmpty() && method.getReturnType().getKind() != TypeKind.VOID
-                            && !methodName.startsWith("set")) {
-                        Property property = properties.get(name);
-                        if (property == null) {
-                            property = new Property(name, method.getReturnType(), method);
-                            properties.put(name, property);
-                        }
-                        property.getter = "value." + methodName + "()";
-                    } else if (method.getParameters().size() == 1 && methodName.startsWith("set")) {
-                        Property property = properties.get(name);
-                        if (property == null) {
-                            property = new Property(name, method.getParameters().get(0).asType(), method);
-                            properties.put(name, property);
-                        }
-                        property.setter = methodName;
-                    }
+                for (Map.Entry<String, List<Element>> entry : own.entrySet()) {
+                    List<Element> declared = declarations.computeIfAbsent(entry.getKey(), n -> new ArrayList<>());
+                    declared.addAll(0, entry.getValue());
                 }
             }
+            for (String name : declarations.keySet()) {
+                beanProperty(name, owner, fields.get(name), getters.get(name), setters.getOrDefault(name, List.of()));
+            }
+        }
+
+        private @Nullable TypeElement superclass(TypeElement type) {
+            TypeMirror superclass = type.getSuperclass();
+            if (superclass.getKind() == TypeKind.ERROR) {
+                throw new Deferred(superclass.toString());
+            }
+            if (superclass.getKind() != TypeKind.DECLARED) {
+                return null;
+            }
+            TypeElement element = (TypeElement) ((DeclaredType) superclass).asElement();
+            return element.getQualifiedName().contentEquals("java.lang.Object") ? null : element;
+        }
+
+        /**
+         * The property of a field, a getter, and setters of one name, typed as
+         * members of the target, so a superclass's type variables read as the
+         * target binds them. The getter's type wins, and a field or a setter of
+         * another type is a compile error rather than generated code that does
+         * not compile.
+         */
+        private void beanProperty(String name, DeclaredType owner, @Nullable VariableElement field,
+                @Nullable ExecutableElement getter, List<ExecutableElement> setters) {
+            TypeMirror fieldType = field != null ? types.asMemberOf(owner, field) : null;
+            TypeMirror getterType = getter != null ? ((ExecutableType) types.asMemberOf(owner, getter)).getReturnType() : null;
+            TypeMirror type = getterType != null ? getterType : fieldType;
+            ExecutableElement setter = null;
+            for (ExecutableElement candidate : setters) {
+                TypeMirror parameter = ((ExecutableType) types.asMemberOf(owner, candidate)).getParameterTypes().get(0);
+                if (type == null && setters.size() > 1) {
+                    throw new Invalid(candidate, "The property " + name + " has more than one setter and no getter to choose by");
+                }
+                if (type == null || types.isSameType(type, parameter)) {
+                    setter = candidate;
+                    type = parameter;
+                }
+            }
+            if (setter == null && !setters.isEmpty() && type != null) {
+                ExecutableElement first = setters.get(0);
+                throw new Invalid(first, "The setter " + first.getSimpleName() + " takes a "
+                        + first.getParameters().get(0).asType() + " where the property " + name + " is a " + type);
+            }
+            if (type == null) {
+                return; // a private field alone, which is no property
+            }
+            boolean assignable = field != null && !field.getModifiers().contains(Modifier.FINAL);
+            if (field != null && fieldType != null && getterType != null && !types.isSameType(fieldType, getterType)
+                    && setter == null && assignable) {
+                throw new Invalid(field, "The field " + name + " is a " + fieldType + " where its getter returns a " + getterType);
+            }
+            @Nullable Element element = getter != null ? getter : field != null ? field : setter;
+            for (Element declared : declarations.getOrDefault(name, List.of())) {
+                if (declared.equals(field) || declared.equals(getter) || declared.equals(setter)) {
+                    element = declared; // the first of them in declaration order, the subclass's first
+                    break;
+                }
+            }
+            if (element == null) {
+                return;
+            }
+            Property property = new Property(name, type, element);
+            if (getter != null) {
+                property.getter = "$value." + getter.getSimpleName() + "()";
+            } else if (field != null) {
+                property.getter = "$value." + name;
+            }
+            if (setter != null) {
+                property.setter = setter.getSimpleName().toString();
+            } else if (assignable && fieldType != null && types.isSameType(fieldType, type)) {
+                property.field = true;
+            }
+            properties.put(name, property);
         }
 
         /** The property a getter or a setter is for, by JavaBeans convention, or null for a method that is neither. */
@@ -247,8 +432,10 @@ final class BoundType {
             if (methodName.startsWith("get") && methodName.length() > 3 && method.getParameters().isEmpty()) {
                 return decapitalize(methodName.substring(3));
             }
+            // JavaBeans names a boolean's getter is...; a Boolean's is taken too, as Yasson takes it.
             if (methodName.startsWith("is") && methodName.length() > 2 && method.getParameters().isEmpty()
-                    && method.getReturnType().getKind() == TypeKind.BOOLEAN) {
+                    && (method.getReturnType().getKind() == TypeKind.BOOLEAN
+                            || TypeNames.is(method.getReturnType(), "java.lang.Boolean"))) {
                 return decapitalize(methodName.substring(2));
             }
             if (methodName.startsWith("set") && methodName.length() > 3 && method.getParameters().size() == 1) {
@@ -288,6 +475,9 @@ final class BoundType {
             if (found != null) {
                 throw new Invalid(another, "More than one @JsonbCreator in " + target.getQualifiedName());
             }
+            if (another.getModifiers().contains(Modifier.PRIVATE)) {
+                throw new Invalid(another, "A @JsonbCreator cannot be private, since the generated codec calls it");
+            }
             if (!another.getModifiers().contains(Modifier.PUBLIC) && !samePackage()) {
                 throw new Invalid(another, "A @JsonbCreator the generated codec can reach is public");
             }
@@ -304,11 +494,22 @@ final class BoundType {
             List<Property> parameters = new ArrayList<>();
             int index = 0;
             for (VariableElement parameter : creator.getParameters()) {
-                String name = parameter.getSimpleName().toString();
                 AnnotationMirror named = Annotations.find(parameter, Annotations.JSONB_PROPERTY);
                 String jsonName = named != null ? Annotations.string(named, "value") : null;
-                Property property = properties.get(name);
-                if (property == null) {
+                if (jsonName != null && jsonName.isEmpty()) {
+                    jsonName = null;
+                }
+                // A parameter names its property by its @JsonbProperty, as JSON-B
+                // matches them, and by its Java name only without one.
+                String name = parameter.getSimpleName().toString();
+                Property property = jsonName != null ? byDeclaredJsonName(jsonName) : properties.get(name);
+                if (property != null) {
+                    name = property.name;
+                } else {
+                    if (properties.containsKey(name)) {
+                        throw new Invalid(parameter, "The creator parameter " + name + " is named \"" + jsonName
+                                + "\" in JSON, where the property " + name + " is named \"" + declaredJsonName(name) + "\"");
+                    }
                     property = new Property(name, parameter.asType(), parameter);
                     properties.put(name, property);
                 }
@@ -326,6 +527,24 @@ final class BoundType {
             creatorParameters = parameters;
         }
 
+        /** The property whose own declarations, or the mixin's, name it so in JSON, or whose Java name it is when none do. */
+        private @Nullable Property byDeclaredJsonName(String jsonName) {
+            for (Property property : properties.values()) {
+                if (declaredJsonName(property.name).equals(jsonName)) {
+                    return property;
+                }
+            }
+            return null;
+        }
+
+        private String declaredJsonName(String name) {
+            List<Element> declared = new ArrayList<>(mixinMembers(name));
+            declared.addAll(declarations.getOrDefault(name, List.of()));
+            AnnotationMirror named = first(declared, Annotations.JSONB_PROPERTY);
+            String jsonName = named != null ? Annotations.string(named, "value") : null;
+            return jsonName != null && !jsonName.isEmpty() ? jsonName : name;
+        }
+
         private void canonical() {
             creation = Creation.CONSTRUCTOR;
             List<Property> parameters = new ArrayList<>();
@@ -341,7 +560,7 @@ final class BoundType {
             creatorParameters = parameters;
             for (ExecutableElement constructor : ElementFilter.constructorsIn(target.getEnclosedElements())) {
                 if (constructor.getParameters().size() == parameters.size() && !constructor.getModifiers().contains(Modifier.PUBLIC)
-                        && !samePackage() && isCanonical(constructor)) {
+                        && (!samePackage() || constructor.getModifiers().contains(Modifier.PRIVATE)) && isCanonical(constructor)) {
                     throw new Invalid(target, "The canonical constructor of " + target.getQualifiedName()
                             + " is not public, so a codec in another package cannot call it");
                 }
@@ -361,9 +580,16 @@ final class BoundType {
         private void requireNoArgConstructor() {
             creation = Creation.SETTERS;
             for (ExecutableElement constructor : ElementFilter.constructorsIn(target.getEnclosedElements())) {
-                if (constructor.getParameters().isEmpty()
-                        && (constructor.getModifiers().contains(Modifier.PUBLIC) || samePackage())) {
+                if (!constructor.getParameters().isEmpty()) {
+                    continue;
+                }
+                if (constructor.getModifiers().contains(Modifier.PUBLIC)
+                        || (samePackage() && !constructor.getModifiers().contains(Modifier.PRIVATE))) {
                     return;
+                }
+                if (constructor.getModifiers().contains(Modifier.PRIVATE)) {
+                    throw new Invalid(target, "The no-argument constructor of " + target.getQualifiedName()
+                            + " is private, so the generated codec cannot call it: mark a constructor @JsonbCreator, or open it");
                 }
             }
             throw new Invalid(target, target.getQualifiedName() + " has no @JsonbCreator and no public no-argument"
@@ -435,7 +661,12 @@ final class BoundType {
             }
             for (Element member : mixin.getEnclosedElements()) {
                 String memberName = member.getSimpleName().toString();
-                String propertyName = member instanceof ExecutableElement method
+                if (!(member instanceof ExecutableElement) && !(member instanceof VariableElement)) {
+                    continue;
+                }
+                // A record's accessors are named as its components, so a mixin's
+                // isAdmin() is the component isAdmin, not a JavaBeans admin.
+                String propertyName = member instanceof ExecutableElement method && target.getKind() != ElementKind.RECORD
                         ? propertyNameOrSelf(memberName, method) : memberName;
                 if (propertyName.equals(name)) {
                     members.add(member);

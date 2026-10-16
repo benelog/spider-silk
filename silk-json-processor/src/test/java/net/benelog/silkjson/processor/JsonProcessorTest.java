@@ -64,9 +64,9 @@ class JsonProcessorTest {
         String source = result.generated("example.DeckJson");
         assertThat(source).contains("public final class DeckJson implements net.benelog.silkjson.JsonCodec<example.Deck>")
                 .contains("JsonKey.of(\"deck_name\")")
-                .contains("if (!in.nextKeyIs(K_note)) {")
-                .doesNotContain("? 2 : keyIndex(in);")
-                .contains("if (in.keyIs(K_name)) {")
+                .contains("if (!$in.nextKeyIs(K_note)) {")
+                .doesNotContain("? 2 : keyIndex($in);")
+                .contains("if ($in.keyIs(K_name)) {")
                 .contains("return new example.Deck(p_id, p_name, p_note, p_active);")
                 .doesNotContain("reflect");
     }
@@ -106,8 +106,8 @@ class JsonProcessorTest {
                 .contains("case 0x6469222c -> {") // ,"id
                 .contains("case 0x22646922 -> {") // "id"
                 // ,"de: two keys share the head, and are tried in declaration order
-                .contains("case 0x6564222c -> {\n                if (in.nextKeyIs(K_desc)) {\n                    return 1;\n"
-                        + "                }\n                if (in.nextKeyIs(K_description)) {\n                    return 2;");
+                .contains("case 0x6564222c -> {\n                if ($in.nextKeyIs(K_desc)) {\n                    return 1;\n"
+                        + "                }\n                if ($in.nextKeyIs(K_description)) {\n                    return 2;");
     }
 
     /** A type too wide for the chain reads in its loop, which tries the key declared next in place first. */
@@ -129,7 +129,7 @@ class JsonProcessorTest {
         assertThat(wide.toJson(wide.fromJson(json))).isEqualTo(json);
         assertThat(wide.toJson(wide.fromJson(reversed.append("}").toString()))).isEqualTo(json);
         assertThat(result.generated("example.WideJson")).doesNotContain("break chain;")
-                .contains("key = in.nextKeyIs(K_p1) ? 1 : keyIndex(in);");
+                .contains("$key = $in.nextKeyIs(K_p1) ? 1 : keyIndex($in);");
     }
 
     @Test
@@ -181,9 +181,9 @@ class JsonProcessorTest {
         assertThat(result.generated("example.CardJson"))
                 .containsOnlyOnce("private static final example.Level[] C_Level = example.Level.values();")
                 .contains("JsonKey.names(C_Level);")
-                .contains("out.put(K_level, V_Level[p_level.ordinal()]);")
-                .contains("out.value(V_Level[element.ordinal()]);")
-                .contains("C_Level[in.readOneOf(V_Level)]")
+                .contains("$out.put(K_level, V_Level[p_level.ordinal()]);")
+                .contains("$out.value(V_Level[$element.ordinal()]);")
+                .contains("C_Level[$in.readOneOf(V_Level)]")
                 .doesNotContain("Level.valueOf").doesNotContain(".name()");
         assertThatThrownBy(() -> card.fromJson(document.replace("\"2026-10-09\"", "\"yesterday\"")))
                 .isInstanceOf(java.time.DateTimeException.class);
@@ -418,6 +418,287 @@ class JsonProcessorTest {
         assertThat(pair.toJson(pair.fromJson("{\"left\":{\"v\":\"l\"}}"))).isEqualTo("{\"left\":{\"v\":\"l\"}}");
         assertThat(pair.toJson(pair.fromJson("{\"left\":{\"v\":\"l\"},\"right\":{\"v\":\"r\"}}")))
                 .isEqualTo("{\"left\":{\"v\":\"l\"},\"right\":{\"v\":\"r\"}}");
-        assertThat(result.generated("example.OuterPairJson")).contains("example.OuterInnerJson.CODEC.write(p_left, out);");
+        assertThat(result.generated("example.OuterPairJson")).contains("example.OuterInnerJson.CODEC.write(p_left, $out);");
+    }
+
+    /** A collection inside a collection gets a helper of its own, after the outer one rather than inside it. */
+    @Test
+    void collectionsNestInCollectionsAndMaps() throws Exception {
+        Compilation.Result result = compile(Map.of("example.Grid", "package example;" + IMPORTS + """
+                @JsonBound
+                public record Grid(List<List<Integer>> rows, Map<String, List<String>> byKey, List<Map<String, Set<Long>>> deep) {
+                }
+                """));
+        JsonCodec<Object> grid = codec(result, "example.GridJson");
+
+        String document = "{\"rows\":[[1,2],[],[3]],\"byKey\":{\"a\":[\"x\",\"y\"]},\"deep\":[{\"k\":[7]}]}";
+        assertThat(grid.toJson(grid.fromJson(document))).isEqualTo(document);
+    }
+
+    /** A class's properties include those it inherits, the superclass's first, with a subclass's override read first. */
+    @Test
+    void aClassBindsTheGettersAndSettersItInherits() throws Exception {
+        Compilation.Result result = compile(Map.of(
+                "example.base.Entity", "package example.base;" + IMPORTS + """
+                        public class Entity<T> {
+                            private long id;
+                            private @Nullable T payload;
+                            public long getId() { return id; }
+                            public void setId(long id) { this.id = id; }
+                            public @Nullable T getPayload() { return payload; }
+                            public void setPayload(@Nullable T payload) { this.payload = payload; }
+                            public String getKind() { return "entity"; }
+                        }
+                        """,
+                "example.Child", "package example;" + IMPORTS + """
+                        @JsonBound
+                        public class Child extends example.base.Entity<String> {
+                            private @Nullable String label;
+                            public @Nullable String getLabel() { return label; }
+                            public void setLabel(@Nullable String label) { this.label = label; }
+                            @Override @JsonbProperty("type") public String getKind() { return "child"; }
+                        }
+                        """));
+        JsonCodec<Object> child = codec(result, "example.ChildJson");
+
+        Object read = child.fromJson("{\"id\":7,\"payload\":\"p\",\"label\":\"y\"}");
+        assertThat(child.toJson(read)).isEqualTo("{\"id\":7,\"payload\":\"p\",\"type\":\"child\",\"label\":\"y\"}");
+    }
+
+    /** The generated names never shadow a package whose first segment is a common word. */
+    @Test
+    void aPackageNamedLikeAGeneratedLocalStillCompiles() throws Exception {
+        for (String pkg : new String[] {"in.co.acme", "out.x", "value.x", "key.x", "result.x", "values.x", "element.x", "entry.x"}) {
+            Compilation.Result result = compile(Map.of(
+                    pkg + ".Tag", "package " + pkg + ";" + IMPORTS + "@JsonBound public record Tag(String label) { }",
+                    pkg + ".Pair", "package " + pkg + ";" + IMPORTS + """
+                            @JsonBound
+                            public record Pair(Tag left, List<Tag> tags, Map<String, Tag> byName) {
+                            }
+                            """,
+                    pkg + ".Holder", "package " + pkg + ";" + IMPORTS + """
+                            @JsonBound
+                            public class Holder {
+                                private @Nullable Tag tag;
+                                public @Nullable Tag getTag() { return tag; }
+                                public void setTag(@Nullable Tag tag) { this.tag = tag; }
+                            }
+                            """));
+            JsonCodec<Object> pair = codec(result, pkg + ".PairJson");
+            String document = "{\"left\":{\"label\":\"l\"},\"tags\":[{\"label\":\"t\"}],\"byName\":{\"n\":{\"label\":\"b\"}}}";
+            assertThat(pair.toJson(pair.fromJson(document))).as(pkg).isEqualTo(document);
+            JsonCodec<Object> holder = codec(result, pkg + ".HolderJson");
+            assertThat(holder.toJson(holder.fromJson("{\"tag\":{\"label\":\"h\"}}"))).as(pkg).isEqualTo("{\"tag\":{\"label\":\"h\"}}");
+        }
+    }
+
+    /** What is unsupported on a property is unsupported on a type and a package too; a package's date format and nillable apply. */
+    @Test
+    void typeAndPackageAnnotationsAreReadOrRefused() throws Exception {
+        assertError("package example;" + IMPORTS + "@JsonBound @JsonbNumberFormat(\"#0.00\") public record Price(double amount) { }",
+                "@JsonbNumberFormat is not supported by the generated codec, here on example.Price");
+        assertError("package example;" + IMPORTS + """
+                @JsonBound @JsonbTypeAdapter(Wrapped.Adapter.class)
+                public record Wrapped(String v) {
+                    public static class Adapter implements JsonbAdapter<Wrapped, String> {
+                        public String adaptToJson(Wrapped w) { return w.v(); }
+                        public Wrapped adaptFromJson(String s) { return new Wrapped(s); }
+                    }
+                }
+                """, "@JsonbTypeAdapter is not supported");
+        Compilation.Result visibility = Compilation.compile(Map.of(
+                "example.package-info", "@jakarta.json.bind.annotation.JsonbVisibility(jakarta.json.bind.config.PropertyVisibilityStrategy.class)"
+                        + " package example;",
+                "example.Seen", "package example;" + IMPORTS + "@JsonBound public record Seen(String a) { }"));
+        assertThat(visibility.errors()).anySatisfy(e -> assertThat(e).contains("@JsonbVisibility is not supported by the generated codec,"
+                + " here on package example"));
+
+        Compilation.Result defaults = compile(Map.of(
+                "example.package-info", "@jakarta.json.bind.annotation.JsonbDateFormat(\"dd.MM.yyyy\")"
+                        + " @jakarta.json.bind.annotation.JsonbNillable package example;",
+                "example.Due", "package example;" + IMPORTS + "@JsonBound public record Due(LocalDate on, @Nullable String note) { }"));
+        JsonCodec<Object> due = codec(defaults, "example.DueJson");
+        assertThat(due.toJson(due.fromJson("{\"on\":\"09.10.2026\"}"))).isEqualTo("{\"on\":\"09.10.2026\",\"note\":null}");
+    }
+
+    /** A creator parameter is matched to its property by its @JsonbProperty name, whatever its Java name. */
+    @Test
+    void aCreatorParameterIsNamedByItsJsonbProperty() throws Exception {
+        Compilation.Result result = compile(Map.of("example.Item", "package example;" + IMPORTS + """
+                @JsonBound
+                public class Item {
+                    private final String name;
+                    private final int count;
+                    @JsonbCreator
+                    public Item(@JsonbProperty("name") String n, @JsonbProperty("qty") int c) { this.name = n; this.count = c; }
+                    public String getName() { return name; }
+                    @JsonbProperty("qty") public int getCount() { return count; }
+                }
+                """));
+        JsonCodec<Object> item = codec(result, "example.ItemJson");
+
+        assertThat(item.toJson(item.fromJson("{\"name\":\"x\",\"qty\":3}"))).isEqualTo("{\"name\":\"x\",\"qty\":3}");
+        assertThatThrownBy(() -> item.fromJson("{\"qty\":3}")).hasMessage("Missing key in JSON object: name");
+    }
+
+    /** A record component or a creator parameter that says @Nullable reads a missing member as null, whatever its accessor says. */
+    @Test
+    void nullableOnAComponentOrACreatorParameterIsRead() throws Exception {
+        Compilation.Result result = compile(Map.of(
+                "example.Note", "package example;" + IMPORTS + """
+                        @JsonBound
+                        public record Note(String title, @Nullable String body) {
+                            @Override public String body() { return body == null ? "" : body; }
+                        }
+                        """,
+                "example.Memo", "package example;" + IMPORTS + """
+                        @JsonBound
+                        public class Memo {
+                            private final @Nullable String text;
+                            @JsonbCreator public Memo(@Nullable String text) { this.text = text; }
+                            public String getText() { return text == null ? "" : text; }
+                        }
+                        """));
+        assertThat(codec(result, "example.NoteJson").fromJson("{\"title\":\"t\"}").toString()).isEqualTo("Note[title=t, body=null]");
+        JsonCodec<Object> memo = codec(result, "example.MemoJson");
+        assertThat(memo.toJson(memo.fromJson("{}"))).isEqualTo("{\"text\":\"\"}");
+    }
+
+    /** An Instant with a date format is parsed through the formatter and written in UTC, and a format reaches into collections. */
+    @Test
+    void aDateFormatAppliesToInstantsAndToElements() throws Exception {
+        Compilation.Result result = compile(Map.of("example.Log", "package example;" + IMPORTS + """
+                @JsonBound
+                public record Log(@JsonbDateFormat("yyyy-MM-dd HH:mm") Instant at,
+                        @JsonbDateFormat("dd/MM/yyyy") List<LocalDate> days,
+                        @JsonbDateFormat("dd/MM/yyyy") Map<String, LocalDate> byName,
+                        @JsonbDateFormat("dd/MM/yyyy") Optional<LocalDate> maybe) {
+                }
+                """));
+        JsonCodec<Object> log = codec(result, "example.LogJson");
+
+        String document = "{\"at\":\"2026-10-09 12:30\",\"days\":[\"09/10/2026\"],\"byName\":{\"x\":\"10/10/2026\"},\"maybe\":\"11/10/2026\"}";
+        Object read = log.fromJson(document);
+        assertThat(read.toString()).contains("at=2026-10-09T12:30:00Z").contains("days=[2026-10-09]").contains("byName={x=2026-10-10}");
+        assertThat(log.toJson(read)).isEqualTo(document);
+    }
+
+    /** A mixin on a record names the record's accessors as they are, and Boolean isActive() is a getter. */
+    @Test
+    void aRecordMixinTakesAccessorNamesAsTheyAreAndBooleanIsAGetter() throws Exception {
+        Compilation.Result result = compile(Map.of(
+                "example.User", "package example; public record User(boolean isAdmin, String getaway) { }",
+                "example.UserWire", "package example;" + IMPORTS + """
+                        @JsonBound(User.class)
+                        interface UserWire {
+                            @JsonbProperty("admin_flag") boolean isAdmin();
+                            @JsonbProperty("escape") String getaway();
+                        }
+                        """,
+                "example.Flag", "package example;" + IMPORTS + """
+                        @JsonBound
+                        public class Flag {
+                            private @Nullable Boolean active;
+                            public @Nullable Boolean isActive() { return active; }
+                            public void setActive(@Nullable Boolean active) { this.active = active; }
+                        }
+                        """));
+        JsonCodec<Object> user = codec(result, "example.UserJson");
+        assertThat(user.toJson(user.fromJson("{\"admin_flag\":true,\"escape\":\"x\"}"))).isEqualTo("{\"admin_flag\":true,\"escape\":\"x\"}");
+        JsonCodec<Object> flag = codec(result, "example.FlagJson");
+        assertThat(flag.toJson(flag.fromJson("{\"active\":true}"))).isEqualTo("{\"active\":true}");
+    }
+
+    /** A primitive optional is an element like any other type. */
+    @Test
+    void primitiveOptionalsAreElements() throws Exception {
+        Compilation.Result result = compile(Map.of("example.Scores", "package example;" + IMPORTS + """
+                @JsonBound
+                public record Scores(List<OptionalInt> ints, Map<String, OptionalLong> longs, List<OptionalDouble> doubles) {
+                }
+                """));
+        JsonCodec<Object> scores = codec(result, "example.ScoresJson");
+
+        String document = "{\"ints\":[1,null],\"longs\":{\"a\":2,\"b\":null},\"doubles\":[0.5]}";
+        assertThat(scores.toJson(scores.fromJson(document))).isEqualTo(document);
+    }
+
+    /** What the generated code could not compile is a compile error on the bound type instead, and a crash is a diagnostic. */
+    @Test
+    void whatTheCodecCouldNotReachIsACompileErrorOnTheType() {
+        assertError("package example;" + IMPORTS + "public class Outer { @JsonBound public class Inner { } }", "is an inner class");
+        assertError("package example;" + IMPORTS + "public class Outer { @JsonBound private record Hidden(String a) { } }",
+                "example.Outer.Hidden is private");
+        assertError("package example;" + IMPORTS + """
+                @JsonBound public class Closed {
+                    private Closed() { }
+                    public String getA() { return ""; }
+                    public void setA(String a) { }
+                }
+                """, "is private, so the generated codec cannot call it");
+        assertError("package example;" + IMPORTS + """
+                @JsonBound public class Made {
+                    private final String a;
+                    @JsonbCreator private Made(String a) { this.a = a; }
+                    public String getA() { return a; }
+                }
+                """, "A @JsonbCreator cannot be private");
+        assertError("package example;" + IMPORTS + """
+                @JsonBound public class Mixed {
+                    public String getA() { return ""; }
+                    public void setA(int a) { }
+                }
+                """, "The setter setA takes a int where the property a is a java.lang.String");
+        assertError("package example;" + IMPORTS + "@JsonBound public record Wild(List<? extends Number> numbers) { }",
+                "The wildcard ? extends java.lang.Number cannot be bound");
+        assertError("package example;" + IMPORTS + "@SuppressWarnings(\"rawtypes\") @JsonBound public record Raw(List items) { }",
+                "The raw type java.util.List cannot be bound");
+        assertError("package example;" + IMPORTS + "@JsonBound public record Lost(Missing thing) { }", "was never resolved");
+    }
+
+    /** A type another processor generates in a later round defers the codec that refers to it until it exists. */
+    @Test
+    void aTypeGeneratedInALaterRoundDefersTheCodec() throws Exception {
+        javax.annotation.processing.Processor generator = new javax.annotation.processing.AbstractProcessor() {
+            private boolean done;
+
+            @Override
+            public java.util.Set<String> getSupportedAnnotationTypes() {
+                return java.util.Set.of("*");
+            }
+
+            @Override
+            public javax.lang.model.SourceVersion getSupportedSourceVersion() {
+                return javax.lang.model.SourceVersion.latestSupported();
+            }
+
+            @Override
+            public boolean process(java.util.Set<? extends javax.lang.model.element.TypeElement> annotations,
+                    javax.annotation.processing.RoundEnvironment round) {
+                if (!done) {
+                    done = true;
+                    try (java.io.Writer writer = processingEnv.getFiler().createSourceFile("example.Later").openWriter()) {
+                        writer.write("package example; @net.benelog.silkjson.JsonBound public record Later(String v) { }");
+                    } catch (java.io.IOException e) {
+                        throw new java.io.UncheckedIOException(e);
+                    }
+                }
+                return false;
+            }
+        };
+        Compilation.Result result = Compilation.compile(Map.of("example.Early", "package example;" + IMPORTS
+                + "@JsonBound public record Early(Later later, List<Later> all) { }"), java.util.List.of(generator));
+        assertThat(result.errors()).isEmpty();
+        JsonCodec<Object> early = codec(result, "example.EarlyJson");
+        assertThat(early.toJson(early.fromJson("{\"later\":{\"v\":\"a\"},\"all\":[]}"))).isEqualTo("{\"later\":{\"v\":\"a\"},\"all\":[]}");
+    }
+
+    /** Two types whose codecs would share a name are a compile error naming both, not a failure to write the file. */
+    @Test
+    void twoTypesWithOneCodecNameAreACompileError() {
+        Compilation.Result result = Compilation.compile(Map.of(
+                "example.Outer", "package example;" + IMPORTS + "public class Outer { @JsonBound public record Inner(String a) { } }",
+                "example.OuterInner", "package example;" + IMPORTS + "@JsonBound public record OuterInner(String b) { }"));
+        assertThat(result.errors()).anySatisfy(e -> assertThat(e).contains("would be example.OuterInnerJson, the name the codec of"));
     }
 }

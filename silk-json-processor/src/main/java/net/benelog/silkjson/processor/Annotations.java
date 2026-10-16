@@ -8,6 +8,7 @@ import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import org.jspecify.annotations.Nullable;
@@ -83,17 +84,30 @@ final class Annotations {
     /**
      * Whether the element or its type says the value may be null: any
      * annotation named {@code Nullable}, whichever library it comes from,
-     * on the declaration or on the type.
+     * on a declaration, on the type each declaration gives the value (a
+     * record component's, a field's, a getter's return, a setter's or a
+     * creator's parameter), or on the property's type.
      */
     static boolean isNullable(List<? extends Element> declarations, TypeMirror type) {
         for (Element declaration : declarations) {
-            for (AnnotationMirror mirror : declaration.getAnnotationMirrors()) {
-                if (isNullableName(mirror)) {
-                    return true;
-                }
+            if (hasNullable(declaration.getAnnotationMirrors()) || hasNullable(valueType(declaration).getAnnotationMirrors())) {
+                return true;
             }
         }
-        for (AnnotationMirror mirror : type.getAnnotationMirrors()) {
+        return hasNullable(type.getAnnotationMirrors());
+    }
+
+    /** The type a declaration gives the property's value: a setter's parameter, a getter's return, or the element's own type. */
+    private static TypeMirror valueType(Element declaration) {
+        if (declaration instanceof ExecutableElement method) {
+            return method.getReturnType().getKind() == TypeKind.VOID && method.getParameters().size() == 1
+                    ? method.getParameters().get(0).asType() : method.getReturnType();
+        }
+        return declaration.asType();
+    }
+
+    private static boolean hasNullable(List<? extends AnnotationMirror> mirrors) {
+        for (AnnotationMirror mirror : mirrors) {
             if (isNullableName(mirror)) {
                 return true;
             }

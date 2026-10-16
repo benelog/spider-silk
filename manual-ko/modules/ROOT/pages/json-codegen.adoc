@@ -3,6 +3,8 @@
 
 ``silk-json-processor``는 ``@JsonBound``가 붙은 모든 타입의 ``JsonCodec``을 컴파일 시점에 그 타입 자신의 선언으로부터 생성한다.
 코덱은 타입 곁의 상수 ``<Type>Json.CODEC``이며, 핸들러는 손으로 작성한 라이터를 지명하듯 그것을 지명한다.
+중첩 타입의 코덱 이름은 그 타입을 감싼 타입들의 이름으로 시작하므로, ``Outer.Inner``는 ``OuterInnerJson``을 생성한다.
+한 패키지의 ``Outer.Inner``와 최상위 ``OuterInner``처럼 코덱 이름이 겹치는 두 타입은 컴파일 에러다.
 리플렉션으로 들여다보는 것도, 스스로 등록하는 것도 없으며, 네이티브 이미지에는 그 타입에 대한 항목이 필요 없다.
 
 [source,java]
@@ -41,6 +43,11 @@ dependencies {
 xref:gradle-plugin.adoc#json[Gradle 플러그인]은 ``spiderSilk { json() }``으로 둘 다 더하고, xref:maven-parent.adoc#json[Maven 부모 POM]은 모든 자식의 컴파일러 경로에 프로세서를 올린다.
 어느 jar도 런타임에는 필요 없다: 애너테이션은 코덱을 생성할 때 읽히고 다시는 읽히지 않는다.
 
+모듈 경로 위의 애플리케이션은 ``module-info.java``에 ``requires static java.compiler;``와 ``requires static org.jspecify;``를 더한다.
+생성된 코드는 ``java.compiler``의 ``@Generated``와 jspecify의 ``@Nullable``을 지니며, 둘 다 런타임에는 필요 없다.
+프로세서는 어떤 애너테이션도 차지하지 않으므로, javac의 ``processing`` 린트는 ``@JsonBound``를 아무도 차지하지 않았다고 경고한다.
+``-Werror``로 컴파일하는 빌드는 ``-Xlint:all,-processing``으로 그 린트를 끈다.
+
 == 애너테이션
 
 어휘는 Jakarta JSON Binding의 것이므로, 다른 JSON-B 구현을 위해 애너테이션을 붙인 타입은 그 애너테이션을 그대로 쓴다.
@@ -59,7 +66,7 @@ xref:gradle-plugin.adoc#json[Gradle 플러그인]은 ``spiderSilk { json() }``�
 이렇게 표시된 레코드 컴포넌트에는 코덱이 null을 건네므로, 원시 타입일 수 없다.
 
 | `@JsonbNillable`
-| 타입 전체나 프로퍼티 하나에서 null 값을 ``null``로 쓴다.
+| 패키지나 타입 전체, 또는 프로퍼티 하나에서 null 값을 ``null``로 쓴다.
 없으면 null인 프로퍼티는 문서에서 빠진다.
 
 | `@JsonbPropertyOrder({...})`
@@ -67,23 +74,32 @@ xref:gradle-plugin.adoc#json[Gradle 플러그인]은 ``spiderSilk { json() }``�
 
 | `@JsonbCreator`
 | 클래스를 만드는 생성자나 정적 팩토리 메서드를 표시하며, 각 파라미터가 프로퍼티다.
+파라미터는 ``@JsonbProperty`` 이름으로, 그것이 없으면 Java 이름으로 프로퍼티와 짝지어진다.
+코덱이 생성자나 메서드를 부르므로, 그것은 private이 아니다.
 
 | `@JsonbDateFormat("pattern", locale = "...")`
-| ``java.time`` 값을 ISO-8601 텍스트 대신 그 패턴으로 포맷하고 파싱한다.
+| 패키지나 타입 전체, 또는 프로퍼티 하나에서 ``java.time`` 값을 ISO-8601 텍스트 대신 그 패턴으로 포맷하고 파싱한다.
+패턴은 컬렉션의 원소, 맵의 값, ``Optional``의 값에도 적용된다.
+``Instant``는 UTC로 포맷된다.
 
 | `@JsonbTypeAdapter(MyAdapter.class)`
 | ``new``로 만든 ``JsonbAdapter<Original, Adapted>``를 통해 프로퍼티를 변환한다.
 어댑터에는 공개 무인자 생성자가 필요하며, 프로세서가 이를 검사한다.
 |===
 
-`@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`, `@JsonbTypeDeserializer`, ``@JsonbTypeInfo``는 지원하지 않으며, 각각 그렇게 말하는 컴파일 에러가 된다.
+`@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`, `@JsonbTypeDeserializer`, ``@JsonbTypeInfo``는 지원하지 않으며, 프로퍼티에서든 타입에서든 패키지에서든 각각 그렇게 말하는 컴파일 에러가 된다.
+코덱은 프로퍼티를 하나씩 변환하므로, 타입이나 패키지에 붙은 ``@JsonbTypeAdapter``도 컴파일 에러다.
 기본 순서는 선언 순서이며, JSON-B 자체의 기본값은 사전순이다.
 
 == 타입의 모양
 
 레코드는 컴포넌트와 정규 생성자를 통해 바인딩된다.
 클래스는 공개 getter, setter, 공개 필드를 통해 바인딩되고, ``@JsonbCreator``나 공개 무인자 생성자를 통해 만들어진다.
+클래스가 상속한 멤버도 바인딩되며, 상위 클래스의 프로퍼티가 먼저 오고, 클래스가 오버라이드한 멤버는 클래스의 애너테이션으로 읽힌다.
+이름이 ``is``로 시작하는 getter는 ``boolean``이나 ``Boolean``을 반환한다.
+한 프로퍼티의 getter와 setter는 같은 타입을 다루며, 어긋나면 컴파일 에러다.
 setter나 필드를 통해 설정되는 프로퍼티는 문서에 없으면 클래스 자신의 기본값을 유지한다.
+코덱은 타입을 지명하고 그 생성자를 부르므로, 중첩 클래스는 static이며, 타입도, 그것을 감싼 타입도, 코덱이 부르는 생성자도 private이 아니다.
 
 코덱이 아는 프로퍼티 타입은 원시 타입과 그 박싱 타입, `String`, `BigDecimal`, `BigInteger`, `UUID`, `URI`, 한 번만 인코딩한 상수 이름으로 쓰고 읽는 enum, ISO-8601 텍스트로 쓰이는 ``java.time`` 타입, `Optional`, `OptionalInt`, `OptionalLong`, `OptionalDouble`, `List`, `Set`, `Collection`, `Iterable`, `Map<String, V>`, ``JsonValue`` 트리, 그리고 ``@JsonBound``가 붙은 다른 모든 타입이다.
 컬렉션의 원소와 맵의 값도 같은 타입들이며, 필요한 만큼 깊이 중첩된다.
@@ -93,6 +109,7 @@ setter나 필드를 통해 설정되는 프로퍼티는 문서에 없으면 클�
 
 들어오는 길에 레코드 컴포넌트나 생성자 파라미터는 그 타입이 값이 없을 수 있다고 말하지 않는 한 필수다.
 어느 라이브러리의 것이든 ``@Nullable``이 붙은 타입은 없거나 null인 멤버를 null로 읽는다.
+이 애너테이션은 레코드 컴포넌트, 생성자 파라미터, 필드, 접근자 어디에 붙어도 효력이 있다.
 ``Optional``은 그런 멤버를 비어 있는 것으로 읽는다.
 그 밖의 컴포넌트가 문서에 없거나 ``null``로 있으면 ``JsonException``이며, ``req.bodyJson(codec)``는 이에 400으로 답하는데, 이는 ``pathParamLong``과 같은 계약이다.
 타입에 없는 멤버는 건너뛴다.
@@ -104,6 +121,8 @@ setter나 필드를 통해 설정되는 프로퍼티는 문서에 없으면 클�
 
 도메인 레코드나 다른 라이브러리의 타입처럼 애너테이션을 지닐 수 없는 타입은 믹스인을 통해 바인딩한다: ``@JsonBound(Other.class)``가 붙은 타입으로, 같은 이름의 멤버들이 ``Other``의 프로퍼티를 위한 애너테이션을 지닌다.
 코덱은 믹스인 곁의 그 패키지에 ``OtherJson``으로 생성된다.
+레코드에서 믹스인의 메서드는 같은 이름의 컴포넌트를 가리키므로, ``isAdmin()``은 컴포넌트 ``isAdmin``이다.
+클래스에서 믹스인의 메서드는 그 JavaBeans 이름이 가리키는 프로퍼티를 가리킨다.
 
 [source,java]
 ----
