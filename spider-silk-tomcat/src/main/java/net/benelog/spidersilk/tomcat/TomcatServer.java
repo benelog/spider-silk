@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
@@ -19,9 +20,12 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import jakarta.servlet.MultipartConfigElement;
+import jakarta.servlet.SessionTrackingMode;
 
+import org.apache.catalina.Container;
 import org.apache.catalina.Context;
 import org.apache.catalina.LifecycleException;
+import org.apache.catalina.LifecycleState;
 import org.apache.catalina.Wrapper;
 import org.apache.catalina.connector.Connector;
 import org.apache.catalina.core.StandardContext;
@@ -262,6 +266,7 @@ public final class TomcatServer implements WebServer {
             tomcatCustomizers.forEach(customizer -> customizer.accept(candidate));
 
             candidate.start();
+            requireContextsStarted(candidate);
             tomcat = candidate;
             connector = newConnector;
         } catch (LifecycleException | RuntimeException e) {
@@ -348,8 +353,30 @@ public final class TomcatServer implements WebServer {
             wrapper.setMultipartConfigElement(multipart);
         }
         context.addServletMappingDecoded("/*", SERVLET_NAME);
+        // The session id travels in the cookie alone, as on Jetty: Tomcat's default
+        // also takes it from a ;jsessionid= in the URL, which invites session fixation.
+        // The tracking modes can only be set while the context starts, hence an initializer.
+        context.addServletContainerInitializer(
+                (classes, servletContext) -> servletContext.setSessionTrackingModes(
+                        EnumSet.of(SessionTrackingMode.COOKIE)),
+                null);
 
         contextCustomizers.forEach(customizer -> customizer.accept(context));
+    }
+
+    /**
+     * Fails the start when a context did not come up. A filter, listener, or
+     * initializer that throws leaves its {@code StandardContext} FAILED without
+     * an exception, and the host does not look at its children's state, so
+     * {@code Tomcat.start()} returns normally and every request answers 404.
+     */
+    private static void requireContextsStarted(Tomcat candidate) {
+        for (Container child : candidate.getHost().findChildren()) {
+            if (child.getState() != LifecycleState.STARTED) {
+                throw new IllegalStateException(
+                        "The context " + child.getName() + " failed to start: " + child.getState());
+            }
+        }
     }
 
     private void applyHost(Connector connector) {

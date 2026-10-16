@@ -35,6 +35,8 @@ import jakarta.servlet.MultipartConfigElement;
 
 import org.apache.catalina.Context;
 import org.apache.catalina.startup.Tomcat;
+import org.apache.tomcat.util.descriptor.web.FilterDef;
+import org.apache.tomcat.util.descriptor.web.FilterMap;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -1282,5 +1284,71 @@ class TomcatServerTest {
         } finally {
             release.countDown();
         }
+    }
+
+    /**
+     * A filter that throws from {@code init} fails the start, as on Jetty.
+     * Tomcat left the context FAILED and started anyway, answering 404 to everything.
+     */
+    @Test
+    void aFilterThatFailsToInitializeFailsTheStart() throws Exception {
+        App refused = new App().get("/", req -> WebResponse.text("ok"));
+        TomcatServer failing = new TomcatServer(refused).port(0).customizeContext(context -> {
+            FilterDef def = new FilterDef();
+            def.setFilterName("failing");
+            def.setFilter(new jakarta.servlet.Filter() {
+                @Override
+                public void init(jakarta.servlet.FilterConfig config) throws jakarta.servlet.ServletException {
+                    throw new jakarta.servlet.ServletException("filter init failed");
+                }
+
+                @Override
+                public void doFilter(jakarta.servlet.ServletRequest request, jakarta.servlet.ServletResponse response,
+                        jakarta.servlet.FilterChain chain) throws IOException, jakarta.servlet.ServletException {
+                    chain.doFilter(request, response);
+                }
+            });
+            context.addFilterDef(def);
+            FilterMap map = new FilterMap();
+            map.setFilterName("failing");
+            map.addURLPattern("/*");
+            context.addFilterMap(map);
+        });
+
+        assertThatThrownBy(failing::start)
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Failed to start Tomcat on port");
+        assertThat(failing.tomcat()).as("a start that failed leaves no Tomcat behind").isNull();
+        assertThatCode(() -> refused.get("/late", req -> WebResponse.text("late")))
+                .as("a start that failed never served, so registration stays open")
+                .doesNotThrowAnyException();
+
+        server = new TomcatServer(refused).port(0);
+        server.start();
+        assertThat(getFrom(server.port(), "/late").body()).isEqualTo("late");
+    }
+
+    /** The session id travels in the cookie alone, as on Jetty: a {@code ;jsessionid=} in the URL is not a session. */
+    @Test
+    void aSessionIdInTheUrlIsNotTaken() throws Exception {
+        startOnTomcat(new App()
+                .get("/set", req -> {
+                    req.session().set("user", "alice");
+                    return WebResponse.text("set");
+                })
+                .get("/who", req -> {
+                    String user = req.session().get("user");
+                    return WebResponse.text(user == null ? "nobody" : user);
+                }));
+
+        String cookie = get("/set").headers().firstValue("Set-Cookie").orElseThrow();
+        String id = cookie.substring("JSESSIONID=".length(), cookie.indexOf(';'));
+        HttpResponse<String> byCookie = client.send(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/who"))
+                        .header("Cookie", "JSESSIONID=" + id).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(byCookie.body()).as("the cookie carries the session").isEqualTo("alice");
+
+        assertThat(rawGet("/who;jsessionid=" + id)).endsWith("\r\nnobody");
     }
 }

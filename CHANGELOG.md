@@ -226,6 +226,9 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   Undertow left `Secure` off over HTTPS and accepted a `;jsessionid=` in the URL.
 - `spider-silk-undertow`: an encoded NUL (`%00`) or backslash (`%5C`) in the path answers 400, as on Jetty and Tomcat.
   Undertow decoded `%00` into the path variable and left `%5C` undecoded, so `a%5Cb` and `a%255Cb` read as one value.
+- `spider-silk-tomcat`: `start()` fails, and registration stays open, when the context does not start, as on Jetty.
+  A filter, listener, or initializer that threw left the context FAILED while Tomcat started anyway and answered 404 to every request.
+- `spider-silk-tomcat`: the session id is taken from the cookie alone, as on Jetty, where a `;jsessionid=` in the URL was also taken.
 
 ## [1.1.0] - 2026-09-17
 
