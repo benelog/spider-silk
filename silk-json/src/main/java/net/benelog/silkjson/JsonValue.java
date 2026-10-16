@@ -9,6 +9,12 @@ import java.nio.charset.StandardCharsets;
  * {@link JsonException} when it is another, so a {@link JsonReader} that reads
  * the wrong shape fails rather than answering a half-built object, and in
  * Spider Silk is a 400.
+ *
+ * <p>Two values are equal when they hold the same JSON: an object the same
+ * members in any order, an array the same elements in order, and a number the
+ * same number however it is written, so {@code 1}, {@code 1.0}, and
+ * {@code 1e0} are equal, and a built {@code 0.1} equals a parsed one.
+ * {@code toString()} answers {@link #toJson()}.
  */
 public sealed interface JsonValue permits JsonObject, JsonArray, JsonPrimitive {
 

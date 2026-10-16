@@ -25,6 +25,7 @@ final class LittleEndian {
     private static final long QUOTES = 0x2222222222222222L;
     private static final long BACKSLASHES = 0x5C5C5C5C5C5C5C5CL;
     private static final long SPACES = 0x2020202020202020L;
+    private static final long QUESTION_MARKS = 0x3F3F3F3F3F3F3F3FL;
 
     private LittleEndian() {
     }
@@ -85,6 +86,26 @@ final class LittleEndian {
     /** How many bytes of the word come before the first one {@link #special(long)} flags. */
     static int plainBytes(long special) {
         return Long.numberOfTrailingZeros(special) >>> 3;
+    }
+
+    /**
+     * Whether any of the bytes is a question mark, eight bytes to a word: the
+     * character the JDK's UTF-8 encoder puts for a surrogate it cannot encode.
+     * A false flag in a word is raised only above a byte that matches.
+     */
+    static boolean hasQuestionMark(byte[] bytes) {
+        int i = 0;
+        long found = 0;
+        for (int words = bytes.length - 7; i < words; i += 8) {
+            long marks = getLong(bytes, i) ^ QUESTION_MARKS;
+            found |= (marks - ONES) & ~marks;
+        }
+        for (; i < bytes.length; i++) {
+            if (bytes[i] == '?') {
+                return true;
+            }
+        }
+        return (found & HIGH_BITS) != 0;
     }
 
     /** The bytes eight to a word, the last word filled out with zeros. */

@@ -132,14 +132,12 @@ public final class JsonOutput {
     private static final int FIRST = 2; // nothing has been written into it yet
     private static final int NAMED = 4; // a member name was written, and its value is still to come
     private static final int TOP = 8; // no container is open, and a value goes out as a document of its own
+    private static final int DONE = 16; // the document's one value is written, and only newline() lets another follow
 
     private byte[] buf;
     private int pos;
 
     private final @Nullable OutputStream stream;
-
-    /** Whether {@link #buf} came out of {@link #KEPT} and goes back there. */
-    private final boolean kept;
 
     /** The characters of the string being written, copied out of it in one call. */
     private char[] chars = new char[32];
@@ -172,10 +170,9 @@ public final class JsonOutput {
     /** Whether the buffer went back to the thread, through {@link #toBytes()} or {@link #release()}; nothing is written after that. */
     private boolean released;
 
-    private JsonOutput(byte[] buf, @Nullable OutputStream stream, boolean kept) {
+    private JsonOutput(byte[] buf, @Nullable OutputStream stream) {
         this.buf = buf;
         this.stream = stream;
-        this.kept = kept;
     }
 
     /**
@@ -191,7 +188,7 @@ public final class JsonOutput {
                 KEPT.set(null);
             }
         }
-        return buffer != null ? new JsonOutput(buffer, null, true) : new JsonOutput(new byte[256], null, false);
+        return buffer != null ? new JsonOutput(buffer, null) : new JsonOutput(new byte[256], null);
     }
 
     /**
@@ -202,7 +199,7 @@ public final class JsonOutput {
      */
     public static JsonOutput to(OutputStream stream) {
         Objects.requireNonNull(stream, "stream");
-        return new JsonOutput(new byte[STREAM_BUFFER], stream, false);
+        return new JsonOutput(new byte[STREAM_BUFFER], stream);
     }
 
     // ---- structure ----
@@ -243,7 +240,7 @@ public final class JsonOutput {
     /** Closes the innermost open object or array. */
     public JsonOutput end() {
         int closed = state;
-        if (closed == TOP) {
+        if (closed >= TOP) {
             throw new IllegalStateException("No object or array is open");
         }
         if ((closed & NAMED) != 0) {
@@ -280,11 +277,13 @@ public final class JsonOutput {
 
     /** Throws {@link JsonException} for NaN and for an infinity, which JSON has no syntax for. */
     public JsonOutput put(String key, double value) {
+        Json.finite(value);
         return name(key).value(value);
     }
 
     /** Throws {@link JsonException} for NaN and for an infinity, which JSON has no syntax for. */
     public JsonOutput put(String key, float value) {
+        Json.finite(value);
         return name(key).value(value);
     }
 
@@ -411,11 +410,12 @@ public final class JsonOutput {
      * A double as {@link Double#toString(double)} writes it, the shortest
      * decimal that reads back as the same double, written as bytes with no
      * string in between. Throws {@link JsonException} for NaN and for an
-     * infinity, which JSON has no syntax for.
+     * infinity, which JSON has no syntax for, before a comma is written.
      */
     public JsonOutput value(double value) {
+        Json.finite(value);
         beforeValue();
-        doubleValue(Json.finite(value));
+        doubleValue(value);
         return this;
     }
 
@@ -423,11 +423,11 @@ public final class JsonOutput {
      * A float as {@link Float#toString(float)} writes it: {@code 0.1f} goes
      * out as {@code 0.1}, where the double it widens to would be
      * {@code 0.10000000149011612}. Throws {@link JsonException} for NaN and for
-     * an infinity.
+     * an infinity, before a comma is written.
      */
     public JsonOutput value(float value) {
-        beforeValue();
         Json.finite(value);
+        beforeValue();
         ensure(Schubfach.MAX_LENGTH);
         pos = Schubfach.write(value, buf, pos);
         return this;
@@ -490,14 +490,16 @@ public final class JsonOutput {
     /**
      * A line break after a top-level value: the framing of NDJSON, where a
      * document holds a value per line. It is not JSON whitespace inside a value.
+     * Without it an output holds one top-level value, and a second throws.
      */
     public JsonOutput newline() {
-        if (state != TOP) {
+        if (state < TOP) {
             throw new IllegalStateException("A newline goes between top-level values, not inside one");
         }
         if (released) {
             throw finished();
         }
+        state = TOP;
         ensure(1);
         buf[pos++] = '\n';
         return this;
@@ -572,9 +574,13 @@ public final class JsonOutput {
      * <p>Nothing is written after it, and {@link #length()} and
      * {@link #writeTo(OutputStream)} throw: the next output on this thread
      * writes into the same array.
+     *
+     * <p>An output writing to a {@link #to(OutputStream) stream} holds a buffer
+     * of its own, never the thread's, so this does nothing for it: what it
+     * holds is still sent by the next {@link #flush()}.
      */
     public void release() {
-        if (released) {
+        if (released || stream != null) {
             return;
         }
         released = true;
@@ -582,20 +588,28 @@ public final class JsonOutput {
         // A writer that kept writing into a container it had left open would
         // write into the next document; it writes into an array of its own.
         buf = NO_BYTES;
-        if (stream == null && (kept || held.length <= KEPT_MAX)) {
-            if (!Thread.currentThread().isVirtual() && held.length <= KEPT_MAX) {
-                KEPT.set(held);
-            }
+        if (!Thread.currentThread().isVirtual() && held.length <= KEPT_MAX) {
+            KEPT.set(held);
         }
     }
 
-    /** What the methods reading a whole document ask first: an output held in memory, with every container closed. */
+    /**
+     * What the methods reading a whole document ask first: an output held in
+     * memory, with a value written and every container closed. A document
+     * framed by {@link #newline()} ends in TOP with the lines before it.
+     */
     private void requireDocument() {
         if (stream != null) {
             throw new IllegalStateException("This output writes to a stream: flush() sends what it holds");
         }
-        if (state != TOP) {
-            throw new IllegalStateException("An object or array is still open");
+        int current = state;
+        if (current != DONE) {
+            if (current != TOP) {
+                throw new IllegalStateException("An object or array is still open");
+            }
+            if (pos == 0 && result == null) {
+                throw new IllegalStateException("No value was written");
+            }
         }
     }
 
@@ -676,6 +690,12 @@ public final class JsonOutput {
             if (released) {
                 throw finished();
             }
+            // Before the value, so that a container opened now keeps DONE as
+            // its parent and leaves it behind when it closes.
+            state = DONE;
+        } else if (current == DONE) {
+            throw released ? finished() : new IllegalStateException(
+                    "A document holds one top-level value: newline() separates the values of NDJSON");
         } else {
             throw new IllegalStateException("A value inside an object follows a member name");
         }

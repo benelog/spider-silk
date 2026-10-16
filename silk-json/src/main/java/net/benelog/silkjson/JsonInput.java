@@ -140,9 +140,29 @@ public final class JsonInput {
         return new JsonInput(utf8);
     }
 
-    /** An input over a document's text, encoded as UTF-8 first. */
+    /**
+     * An input over a document's text, encoded as UTF-8 first. A surrogate
+     * without its pair has no UTF-8, and is a {@link JsonException} here, as a
+     * malformed sequence is in bytes, rather than the {@code ?} the encoder
+     * puts for it.
+     */
     public static JsonInput of(String text) {
-        return new JsonInput(text.getBytes(StandardCharsets.UTF_8));
+        byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
+        // The encoder writes a question mark for a lone surrogate, so a document without one needs no other look.
+        if (LittleEndian.hasQuestionMark(utf8)) {
+            refuseLoneSurrogate(text);
+        }
+        return new JsonInput(utf8);
+    }
+
+    private static void refuseLoneSurrogate(String text) {
+        for (int i = 0; i < text.length(); ) {
+            int c = text.codePointAt(i);
+            if (c >= 0xD800 && c <= 0xDFFF) {
+                throw new JsonException("Unpaired surrogate U+%04X at character %d, which has no UTF-8".formatted(c, i));
+            }
+            i += Character.charCount(c);
+        }
     }
 
     // ---- containers ----
@@ -679,7 +699,7 @@ public final class JsonInput {
             try {
                 return Long.parseLong(text);
             } catch (NumberFormatException e) {
-                throw error("Not a JSON integer: " + text);
+                throw error("Not a JSON integer: " + shortened(text));
             }
         }
         String text = ascii(start, end);
@@ -1502,7 +1522,7 @@ public final class JsonInput {
     }
 
     private JsonException outOfRange(String text) {
-        return error("Number out of range: " + text);
+        return error("Number out of range: " + shortened(text));
     }
 
     private double toDouble(String text) {

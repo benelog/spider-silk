@@ -119,6 +119,10 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `spider-silk-core`: with named origins, `Cors` adds `Vary: Origin` to every answer on a covered path, whether the request carried an allowed `Origin`, another one, or none.
 - `spider-silk-undertow`: `UndertowServer` installs a servlet exception handler that closes the connection when a failure arrives after the response has started.
   Replacing it through `customizeDeployment(...)` gives up that behavior.
+- `silk-json`: `JsonObject`, `JsonArray`, and `JsonPrimitive` are equal when they hold the same JSON, an object's members in any order and a number however it is written (`1`, `1.0`, and `1e0` are one number), with a `hashCode` to match, and `toString()` answers `toJson()`.
+  All three compared and printed by identity.
+- `silk-json`: a `JsonOutput` holds one top-level value, and a second one throws `IllegalStateException` unless `newline()` separates them as NDJSON, where `value(12).value(34)` wrote `1234`.
+  `toBytes()`, `length()`, and `writeTo(stream)` throw for an output with nothing written, so a `JsonWriter` that writes nothing answers 500 rather than an empty `application/json` body.
 - `spider-silk-undertow`: a read waits at most 30 seconds for the client, and a write at most 30 seconds for the client to take it, as on Jetty; `customizeBuilder(...)` can change both.
   Undertow had no timeout, so a client that stalled mid-body or stopped reading held a worker thread for good.
 
@@ -229,6 +233,11 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `spider-silk-tomcat`: `start()` fails, and registration stays open, when the context does not start, as on Jetty.
   A filter, listener, or initializer that threw left the context FAILED while Tomcat started anyway and answered 404 to every request.
 - `spider-silk-tomcat`: the session id is taken from the cookie alone, as on Jetty, where a `;jsessionid=` in the URL was also taken.
+- `silk-json`: `JsonOutput.value(double)`, `value(float)`, and `put(String, double|float)` refuse NaN and an infinity before the comma or the key goes out, so an output that carries on after the exception is still JSON.
+- `silk-json`: `release()` does nothing on an output writing to a stream, whose buffer is its own, where the next `flush()` threw `IndexOutOfBoundsException`.
+- `silk-json`: a long integer or an out-of-range number that `JsonInput` refuses is quoted by its first 32 characters, as a fraction already was, where a 100,000-digit integer put every digit in the message and in core's 400 body.
+- `silk-json`: `JsonInput.of(String)`, and so `Json.parse(String)` and `reader.fromJson(text)`, refuse a surrogate without its pair with `JsonException`, as byte input refuses malformed UTF-8, where it read as `?`.
+- `silk-json`: a `JsonKey` whose name holds a lone surrogate matches only the key written with its escape, where it also matched the key `a?`.
 
 ## [1.1.0] - 2026-09-17
 

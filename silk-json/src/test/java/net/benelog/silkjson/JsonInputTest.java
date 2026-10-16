@@ -525,7 +525,7 @@ class JsonInputTest {
                 assertThat(Json.parse(text).asDouble()).as(text).isEqualTo(expectedDouble);
             } else {
                 assertThatThrownBy(() -> JsonInput.of(text).readDouble()).as(text)
-                        .hasMessageContaining("Number out of range: " + text);
+                        .hasMessageContaining("Number out of range: " + shortened(text));
             }
             float expectedFloat = Float.parseFloat(text);
             if (Float.isFinite(expectedFloat)) {
@@ -533,9 +533,14 @@ class JsonInputTest {
                         .isEqualTo(Float.floatToRawIntBits(expectedFloat));
             } else {
                 assertThatThrownBy(() -> JsonInput.of(text).readFloat()).as(text)
-                        .hasMessageContaining("Number out of range: " + text);
+                        .hasMessageContaining("Number out of range: " + shortened(text));
             }
         }
+    }
+
+    /** A token as a rejection quotes it: its first 32 characters and an ellipsis, when it is longer. */
+    private static String shortened(String text) {
+        return text.length() <= 32 ? text : text.substring(0, 32) + "...";
     }
 
     /** A number read where it stands: a word of input after it, or none, and the input moved past it either way. */
@@ -710,5 +715,63 @@ class JsonInputTest {
 
         assertThatThrownBy(() -> reader.fromJson("  \"x\"")).isInstanceOf(JsonException.class)
                 .hasMessage("Near character 5: Not a deck name: x");
+    }
+
+    /** A rejected number is quoted by its head, since the message may go back to the client in a 400. */
+    @Test
+    void aRejectedLongNumberIsQuotedShortened() {
+        JsonReader<Long> asLong = JsonInput::readLong;
+        String integer = "9".repeat(100_000);
+        String huge = "1" + "0".repeat(400);
+
+        assertThatThrownBy(() -> asLong.fromJson(integer))
+                .hasMessageContaining("Not a JSON integer: " + "9".repeat(32) + "...")
+                .satisfies(e -> assertThat(e.getMessage()).hasSizeLessThan(100));
+        assertThatThrownBy(() -> JsonInput.of(huge).readDouble())
+                .hasMessageContaining("Number out of range: " + "1" + "0".repeat(31) + "...");
+        assertThatThrownBy(() -> JsonInput.of(huge).readFloat())
+                .satisfies(e -> assertThat(e.getMessage()).hasSizeLessThan(100));
+        assertThatThrownBy(() -> Json.parse(huge))
+                .satisfies(e -> assertThat(e.getMessage()).hasSizeLessThan(100));
+    }
+
+    /** A surrogate without its pair has no UTF-8: text holding one is refused, as a malformed sequence in bytes is. */
+    @Test
+    void aLoneSurrogateInTextIsRefused() {
+        assertThatThrownBy(() -> JsonInput.of("[\"a\uD800\"]"))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("Unpaired surrogate U+D800 at character 3");
+        assertThatThrownBy(() -> Json.parse("{\"k\":\"x\uDE00?\"}"))
+                .isInstanceOf(JsonException.class)
+                .hasMessageContaining("U+DE00");
+        assertThatThrownBy(() -> Json.parse("\"" + "a".repeat(20) + "\uD83D\""))
+                .isInstanceOf(JsonException.class);
+
+        assertThat(Json.parse("\"why?\"").asString()).isEqualTo("why?");
+        assertThat(Json.parse("\"\uD83D\uDE00?\"").asString()).isEqualTo("\uD83D\uDE00?");
+        // an escape is JSON's way to write one
+        assertThat(Json.parse("\"\\ud800\"").asString()).isEqualTo("\uD800");
+    }
+
+    /** A key whose name holds a lone surrogate matches the key written with its escape, never one holding a question mark. */
+    @Test
+    void aKeyWithALoneSurrogateMatchesOnlyItsEscape() {
+        JsonKey key = JsonKey.of("a\uD800");
+
+        JsonInput question = JsonInput.of("{\"a?\":1}");
+        question.object();
+        question.nextKey();
+        assertThat(question.keyIs(key)).isFalse();
+
+        JsonInput escaped = JsonInput.of("{\"a\\ud800\":1}");
+        escaped.object();
+        escaped.nextKey();
+        assertThat(escaped.keyIs(key)).isTrue();
+
+        byte[] written = JsonOutput.inMemory().object().put(key, 1L).end().toBytes();
+        JsonInput generated = JsonInput.of(written);
+        generated.object();
+        assertThat(generated.nextKeyIs(key)).isTrue();
+        assertThat(generated.readLong()).isEqualTo(1L);
     }
 }

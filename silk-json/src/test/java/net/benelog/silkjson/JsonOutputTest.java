@@ -553,4 +553,59 @@ class JsonOutputTest {
         assertThat(plain.name()).isEqualTo("plain");
         assertThat(korean.toString()).isEqualTo("이름");
     }
+
+    /** NaN and an infinity are refused before the comma or the key goes out, so an output that carries on stays JSON. */
+    @Test
+    void aNonFiniteNumberIsRefusedBeforeTheCommaOrTheKey() {
+        JsonKey x = JsonKey.of("x");
+        JsonOutput array = JsonOutput.inMemory().array().value(1L);
+        JsonOutput object = JsonOutput.inMemory().object();
+
+        assertThatThrownBy(() -> array.value(Double.NaN)).isInstanceOf(JsonException.class);
+        assertThatThrownBy(() -> array.value(Float.POSITIVE_INFINITY)).isInstanceOf(JsonException.class);
+        assertThatThrownBy(() -> object.put("x", Double.NaN)).isInstanceOf(JsonException.class);
+        assertThatThrownBy(() -> object.put("x", Float.NEGATIVE_INFINITY)).isInstanceOf(JsonException.class);
+        assertThatThrownBy(() -> object.put(x, Double.POSITIVE_INFINITY)).isInstanceOf(JsonException.class);
+        assertThatThrownBy(() -> object.put(x, Float.NaN)).isInstanceOf(JsonException.class);
+
+        assertThat(array.nullValue().end().toJson()).isEqualTo("[1,null]");
+        assertThat(object.put("y", 1L).end().toJson()).isEqualTo("{\"y\":1}");
+    }
+
+    /** A document is one value: a second is refused unless newline() frames them as NDJSON, and none is refused too. */
+    @Test
+    void aDocumentHoldsOneTopLevelValue() {
+        assertThatThrownBy(() -> JsonOutput.inMemory().value(12L).value(34L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("one top-level value");
+        assertThatThrownBy(() -> JsonOutput.inMemory().object().end().array())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("one top-level value");
+        assertThatThrownBy(() -> JsonOutput.inMemory().array().end().end())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No object or array is open");
+        assertThatThrownBy(() -> JsonOutput.inMemory().value(1L).name("x"))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("A member name goes inside an object");
+        assertThatThrownBy(() -> JsonOutput.inMemory().toBytes())
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("No value was written");
+
+        JsonOutput lines = JsonOutput.inMemory();
+        lines.value(1L).newline().object().put("n", 2L).end().newline();
+        assertThat(lines.toJson()).isEqualTo("1\n{\"n\":2}\n");
+        assertThat(JsonOutput.inMemory().value(1L).newline().value(2L).toJson()).isEqualTo("1\n2");
+    }
+
+    /** A stream output holds no buffer of the thread's, so release() leaves it as it was and flush() still sends it. */
+    @Test
+    void releaseLeavesAStreamOutputAsItWas() {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        JsonOutput out = JsonOutput.to(bytes).array().value("a");
+
+        out.release();
+        out.value("b").end().flush();
+
+        assertThat(bytes.toString(StandardCharsets.UTF_8)).isEqualTo("[\"a\",\"b\"]");
+    }
 }

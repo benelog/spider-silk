@@ -97,6 +97,39 @@ public final class JsonArray implements JsonValue, Iterable<JsonValue> {
         return List.of(elements);
     }
 
+    /** The same elements in the same order, each compared as {@link JsonPrimitive#equals} and the containers' own equals compare them. */
+    @Override
+    public boolean equals(@Nullable Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof JsonArray array) || array.size != size) {
+            return false;
+        }
+        for (int i = 0; i < size; i++) {
+            if (!JsonPrimitive.same(values[i], array.values[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** A hash of the elements in order, as {@link List#hashCode()} combines them. */
+    @Override
+    public int hashCode() {
+        int hash = 1;
+        for (int i = 0; i < size; i++) {
+            hash = 31 * hash + JsonPrimitive.hash(values[i]);
+        }
+        return hash;
+    }
+
+    /** The array as JSON text: {@link #toJson()}. */
+    @Override
+    public String toString() {
+        return toJson();
+    }
+
     /** Elements in order, read-only: remove throws rather than reaching the array. */
     @Override
     public Iterator<JsonValue> iterator() {

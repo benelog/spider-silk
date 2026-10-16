@@ -95,6 +95,82 @@ final class JsonDecimal extends Number {
         return new BigDecimal(negative ? unscaled.negate() : unscaled, (int) scale).longValueExact();
     }
 
+    /**
+     * Whether two numbers a tree holds, a Long, a Double, or a parsed decimal,
+     * are the same number as written: {@code 1}, {@code 1.0}, and {@code 1e0}
+     * are one number, and a double is the decimal {@link Double#toString}
+     * writes for it, so a built {@code 0.1} is a parsed {@code 0.1}.
+     *
+     * <p>Two numbers that are one decimal round to one double, so numbers
+     * whose doubles differ are told apart with no other work, and the rest
+     * are compared by their significant digits and exponent, worked out in
+     * one pass over the text with no {@link BigDecimal}, whose cost grows
+     * with the square of the digits.
+     */
+    static boolean same(Number a, Number b) {
+        if (a instanceof Long x && b instanceof Long y) {
+            return x.longValue() == y.longValue();
+        }
+        if (a.doubleValue() != b.doubleValue()) {
+            return false;
+        }
+        if (a instanceof Double && b instanceof Double) {
+            return true;
+        }
+        return Canonical.of(text(a)).equals(Canonical.of(text(b)));
+    }
+
+    /** A hash that agrees with {@link #same}: the double the number rounds to, either zero hashed as one. */
+    static int hash(Number number) {
+        double value = number.doubleValue();
+        return value == 0 ? 0 : Double.hashCode(value);
+    }
+
+    private static String text(Number number) {
+        return number instanceof Double d ? Double.toString(d) : number.toString();
+    }
+
+    /** A number as its sign, its significant digits with no zero at either end, and the power of ten they are scaled by; zero is one form whatever its sign. */
+    private record Canonical(boolean negative, String digits, BigInteger exponent) {
+
+        private static final Canonical ZERO = new Canonical(false, "", BigInteger.ZERO);
+
+        /** From a number's text in JSON's grammar, or as {@link Long#toString} or {@link Double#toString} writes it. */
+        static Canonical of(String text) {
+            int exponentAt = Math.max(text.indexOf('e'), text.indexOf('E'));
+            int mantissaEnd = exponentAt < 0 ? text.length() : exponentAt;
+            boolean negative = text.startsWith("-");
+            StringBuilder digits = new StringBuilder(mantissaEnd);
+            long fractionDigits = 0;
+            boolean fraction = false;
+            for (int i = negative ? 1 : 0; i < mantissaEnd; i++) {
+                char c = text.charAt(i);
+                if (c == '.') {
+                    fraction = true;
+                } else {
+                    if (c != '0' || digits.length() > 0) {
+                        digits.append(c);
+                    }
+                    if (fraction) {
+                        fractionDigits++;
+                    }
+                }
+            }
+            int end = digits.length();
+            while (end > 0 && digits.charAt(end - 1) == '0') {
+                end--;
+            }
+            if (end == 0) {
+                return ZERO;
+            }
+            long trailingZeros = (long) digits.length() - end;
+            BigInteger exponent = exponentAt < 0 ? BigInteger.ZERO
+                    : new BigInteger(text.substring(exponentAt + 1));
+            exponent = exponent.add(BigInteger.valueOf(trailingZeros - fractionDigits));
+            return new Canonical(negative, digits.substring(0, end), exponent);
+        }
+    }
+
     private static ArithmeticException notAnInteger(String text) {
         return new ArithmeticException("Not an integer: " + text);
     }

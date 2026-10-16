@@ -23,7 +23,12 @@ public final class JsonKey {
 
     private final String name;
 
-    /** The name's own UTF-8, with no quote and no escape: what a parsed key is compared with. */
+    /**
+     * The name's own UTF-8, with no quote and no escape: what a parsed key is
+     * compared with. A surrogate without its pair has no UTF-8, and is held as
+     * the three bytes its code unit would take, which no input holds
+     * unescaped: a parsed key matches such a name only by its escape.
+     */
     final byte[] utf8;
 
     /** {@link #utf8} eight bytes to a word, compared a word at a time, and the mask of the last word's bytes. */
@@ -63,7 +68,7 @@ public final class JsonKey {
 
     private JsonKey(String name) {
         this.name = name;
-        this.utf8 = name.getBytes(StandardCharsets.UTF_8);
+        this.utf8 = utf8(name);
         long[] words = LittleEndian.words(utf8);
         this.utf8Words = words.length > 0 ? words : new long[1];
         this.lastMask = mask(utf8.length, utf8Words.length - 1);
@@ -90,6 +95,46 @@ public final class JsonKey {
         this.valueMask1 = mask(firstLength - 1, 1);
         this.escaped = firstLength != utf8.length + 3;
         this.ascii = name.chars().allMatch(c -> c < 0x80);
+    }
+
+    /**
+     * The name as UTF-8, with a lone surrogate as the three bytes of its code
+     * unit, where {@link String#getBytes} would put a {@code ?} that a key
+     * written {@code "a?"} would match.
+     */
+    private static byte[] utf8(String name) {
+        byte[] bytes = name.getBytes(StandardCharsets.UTF_8);
+        if (!hasLoneSurrogate(name)) {
+            return bytes;
+        }
+        byte[] out = new byte[name.length() * 3];
+        int n = 0;
+        for (int i = 0; i < name.length(); ) {
+            int c = name.codePointAt(i);
+            int units = Character.charCount(c);
+            if (c >= 0xD800 && c <= 0xDFFF) {
+                out[n++] = (byte) (0xE0 | (c >> 12));
+                out[n++] = (byte) (0x80 | ((c >> 6) & 0x3F));
+                out[n++] = (byte) (0x80 | (c & 0x3F));
+            } else {
+                byte[] encoded = name.substring(i, i + units).getBytes(StandardCharsets.UTF_8);
+                System.arraycopy(encoded, 0, out, n, encoded.length);
+                n += encoded.length;
+            }
+            i += units;
+        }
+        return Arrays.copyOf(out, n);
+    }
+
+    private static boolean hasLoneSurrogate(String name) {
+        for (int i = 0; i < name.length(); ) {
+            int c = name.codePointAt(i);
+            if (c >= 0xD800 && c <= 0xDFFF) {
+                return true;
+            }
+            i += Character.charCount(c);
+        }
+        return false;
     }
 
     /** The mask of the bytes that word holds of so many bytes laid eight to a word: all eight, the low ones of the last, or none past it. */

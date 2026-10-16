@@ -704,4 +704,69 @@ class JsonTest {
         assertThat(Json.array().add("after").toJson()).isEqualTo("[\"after\"]");
         assertThat(Json.array().add(large).add(large).toJsonBytes()).hasSize(400_007);
     }
+
+    /** Trees are equal when they hold the same JSON, and their toString() is that JSON. */
+    @Test
+    void treesAreEqualWhenTheyHoldTheSameJson() {
+        JsonValue parsed = Json.parse("{\"a\":1,\"b\":[1.0,\"x\",true,null,{}],\"c\":0.1}");
+        JsonObject built = Json.object()
+                .put("c", 0.1)
+                .put("b", Json.array().add(1).add("x").add(true).add((String) null).add(Json.object()))
+                .put("a", 1e0);
+
+        assertThat(built).isEqualTo(parsed).hasSameHashCodeAs(parsed);
+        assertThat(parsed.toString()).isEqualTo(parsed.toJson());
+        assertThat(built.toString()).isEqualTo(built.toJson());
+        assertThat(Json.parse("[1,2]")).isNotEqualTo(Json.parse("[2,1]"));
+        assertThat(Json.parse("{\"a\":1}")).isNotEqualTo(Json.parse("{\"a\":1,\"b\":2}"));
+        assertThat(Json.parse("{\"a\":1,\"b\":2}")).isNotEqualTo(Json.parse("{\"a\":1,\"c\":2}"));
+        assertThat(Json.parse("\"1\"")).isNotEqualTo(Json.parse("1"));
+        assertThat(Json.parse("null")).isEqualTo(Json.parse("null")).isNotEqualTo(Json.parse("false"));
+    }
+
+    /** A number equals the same number however it is written, and only that: two decimals that round to one double are two numbers. */
+    @ParameterizedTest
+    @CsvSource({
+            "1, 1.0, true",
+            "1, 1e0, true",
+            "100, 1E+2, true",
+            "-0, 0.0, true",
+            "0.1, 1e-1, true",
+            "9223372036854775807, 9223372036854775807.0, true",
+            "123456789012345678901234567890, 1.2345678901234567890123456789e29, true",
+            "1e-99999999999, 10e-100000000000, true",
+            "1, 2, false",
+            "0.1, 0.10000000000000001, false",
+            "9007199254740993, 9007199254740992, false",
+            "9007199254740993, 9007199254740992.0, false",
+            "1e-99999999999, 0, false",
+            "1e-400, 1e-401, false",
+    })
+    void numbersAreEqualAsTheNumbersTheyWrite(String a, String b, boolean equal) {
+        JsonValue x = Json.parse(a);
+        JsonValue y = Json.parse(b);
+
+        assertThat(x.equals(y)).as("%s = %s", a, b).isEqualTo(equal);
+        assertThat(y.equals(x)).as("%s = %s", b, a).isEqualTo(equal);
+        if (equal) {
+            assertThat(x.hashCode()).as("%s and %s hash alike", a, b).isEqualTo(y.hashCode());
+        }
+    }
+
+    /** A number a builder put in equals the number parsed from what it writes. */
+    @Test
+    void aBuiltNumberEqualsTheParsedOne() {
+        for (double d : new double[] {0.1, 1.5, -0.0, 1e17, 1.0E-7, Math.PI, 0x1p60, Double.MAX_VALUE, Double.MIN_VALUE}) {
+            JsonArray built = Json.array().add(d);
+            JsonValue parsed = Json.parse(built.toJson());
+            assertThat(built).as("%s", d).isEqualTo(parsed).hasSameHashCodeAs(parsed);
+        }
+        for (long n : new long[] {0, 7, -1, Long.MAX_VALUE, Long.MIN_VALUE}) {
+            JsonArray built = Json.array().add(n);
+            JsonValue parsed = Json.parse(built.toJson());
+            assertThat(built).as("%s", n).isEqualTo(parsed).hasSameHashCodeAs(parsed);
+        }
+        assertThat(Json.array().add(9007199254740993L)).isNotEqualTo(Json.array().add(9007199254740992.0));
+        assertThat(Json.array().add(2L)).isEqualTo(Json.array().add(2.0)).hasSameHashCodeAs(Json.array().add(2.0));
+    }
 }

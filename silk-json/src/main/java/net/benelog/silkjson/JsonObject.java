@@ -210,6 +210,45 @@ public final class JsonObject implements JsonValue, Iterable<Map.Entry<String, J
         return (value == null || value.isNull()) ? null : value.asArray();
     }
 
+    /**
+     * The same keys with the same values, in any order: JSON gives a member's
+     * place no meaning, and {@link Map#equals} ignores it as well. A value is
+     * compared as {@link JsonPrimitive#equals} and the containers' own equals
+     * compare it.
+     */
+    @Override
+    public boolean equals(@Nullable Object other) {
+        if (this == other) {
+            return true;
+        }
+        if (!(other instanceof JsonObject object) || object.size != size) {
+            return false;
+        }
+        for (int i = 0; i < size; i++) {
+            int at = object.indexOf(keys[i]);
+            if (at < 0 || !JsonPrimitive.same(values[i], object.values[at])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** A hash of the members that ignores their order, as {@link Map#hashCode()} combines entries. */
+    @Override
+    public int hashCode() {
+        int hash = 0;
+        for (int i = 0; i < size; i++) {
+            hash += keys[i].hashCode() ^ JsonPrimitive.hash(values[i]);
+        }
+        return hash;
+    }
+
+    /** The object as JSON text: {@link #toJson()}. */
+    @Override
+    public String toString() {
+        return toJson();
+    }
+
     /** Members in document order, read-only: setValue throws rather than reaching the object. */
     @Override
     public Iterator<Map.Entry<String, JsonValue>> iterator() {
