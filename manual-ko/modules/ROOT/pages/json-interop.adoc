@@ -84,7 +84,7 @@ app.post("/api/decks", req -> {
 Jackson이 만든 텍스트를 다시 파싱하는 일은 없다.
 
 리더는 본문의 바이트를 Jackson으로 파싱한다.
-Jackson이 거부하는 입력은 손으로 작성한 리더가 거부할 때처럼 400으로 답한다: 잘못된 문법, 타입이 틀린 값, 뒤따르는 내용, ``IllegalArgumentException``을 던지는 생성자가 그렇다.
+Jackson이 거부하는 입력은 손으로 작성한 리더가 거부할 때처럼 400으로 답한다: 잘못된 문법, 타입이 틀린 값, 뒤따르는 내용, ``IllegalArgumentException``을 던지거나 본문에 빠진 속성 때문에 ``NullPointerException``을 던지는 생성자가 그렇다.
 JSON null인 본문도 400으로 답하므로, 핸들러는 값 대신 null을 받는 일이 없다.
 Jackson이 만들 수 없는 매핑은 클라이언트가 아니라 프로그램의 실수이며, 500으로 답한다.
 

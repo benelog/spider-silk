@@ -22,7 +22,9 @@ import tools.jackson.core.TokenStreamContext;
 import tools.jackson.core.TreeNode;
 import tools.jackson.core.Version;
 import tools.jackson.core.exc.StreamWriteException;
+import tools.jackson.core.io.NumberOutput;
 import tools.jackson.core.json.DupDetector;
+import tools.jackson.core.json.JsonWriteFeature;
 import tools.jackson.core.util.JacksonFeatureSet;
 import tools.jackson.core.util.SimpleStreamWriteContext;
 
@@ -39,24 +41,38 @@ import net.benelog.silkjson.JsonOutput;
  * <p>Raw output is the one thing the output has no method for, since it would
  * write text nobody checked. A raw value, which {@code @JsonRawValue} writes,
  * is parsed and written as the value it is; a raw fragment is refused.
+ *
+ * <p>The features Jackson's own JSON generator reads are read here too, with
+ * two that ask for text JSON has no syntax for refused instead: NaN and an
+ * infinity with {@link JsonWriteFeature#WRITE_NAN_AS_STRINGS} disabled, and a
+ * raw fragment. {@link JsonWriteFeature#ESCAPE_NON_ASCII} has no effect: the
+ * output writes every string as UTF-8, which reads back as the same string.
  */
 final class OutputGenerator extends JsonGenerator {
 
     private static final JacksonFeatureSet<StreamWriteCapability> CAPABILITIES =
             JacksonFeatureSet.fromDefaults(StreamWriteCapability.values());
 
+    /** The largest scale, either way, of a decimal written plain: Jackson's own limit, which keeps {@code 1E+999999999} from becoming a gigabyte of zeros. */
+    private static final int MAX_PLAIN_SCALE = 9999;
+
     private final JsonOutput out;
     private final ObjectWriteContext objectContext;
     private final StreamWriteConstraints constraints;
     private int features;
+    private final int formatFeatures;
+    private final boolean numbersAsStrings;
     private SimpleStreamWriteContext context;
     private boolean closed;
 
-    OutputGenerator(JsonOutput out, ObjectWriteContext objectContext, StreamWriteConstraints constraints, int features) {
+    OutputGenerator(JsonOutput out, ObjectWriteContext objectContext, StreamWriteConstraints constraints,
+            int features, int formatFeatures) {
         this.out = out;
         this.objectContext = objectContext;
         this.constraints = constraints;
         this.features = features;
+        this.formatFeatures = formatFeatures;
+        this.numbersAsStrings = JsonWriteFeature.WRITE_NUMBERS_AS_STRINGS.enabledIn(formatFeatures);
         DupDetector dups = StreamWriteFeature.STRICT_DUPLICATE_DETECTION.enabledIn(features)
                 ? DupDetector.rootDetector(this)
                 : null;
@@ -323,7 +339,7 @@ final class OutputGenerator extends JsonGenerator {
 
     @Override
     public JsonGenerator writeBinary(Base64Variant variant, byte[] data, int offset, int length) {
-        return writeString(variant.encode(Arrays.copyOfRange(data, offset, offset + length)));
+        return writeString(base64(variant, Arrays.copyOfRange(data, offset, offset + length)));
     }
 
     @Override
@@ -338,8 +354,18 @@ final class OutputGenerator extends JsonGenerator {
             throw new StreamWriteException(this,
                     "Too few bytes available: missing " + (length - bytes.length) + " bytes (out of " + length + ")");
         }
-        writeString(variant.encode(bytes));
+        writeString(base64(variant, bytes));
         return bytes.length;
+    }
+
+    /**
+     * The base64 text of the bytes, with the line feed a MIME or PEM variant
+     * breaks its lines with, as Jackson's generator writes it. The variant's
+     * own {@code encode} writes the two characters of a JSON escape instead,
+     * which the output would escape a second time.
+     */
+    private static String base64(Base64Variant variant, byte[] bytes) {
+        return variant.encode(bytes, false, "\n");
     }
 
     // ---- numbers and literals ----
@@ -356,6 +382,9 @@ final class OutputGenerator extends JsonGenerator {
 
     @Override
     public JsonGenerator writeNumber(long value) {
+        if (numbersAsStrings) {
+            return writeString(Long.toString(value));
+        }
         beforeValue();
         out.value(value);
         return this;
@@ -366,13 +395,20 @@ final class OutputGenerator extends JsonGenerator {
         if (value == null) {
             return writeNull();
         }
+        if (numbersAsStrings) {
+            return writeString(value.toString());
+        }
         beforeValue();
         out.value(value);
         return this;
     }
 
+    /** NaN and an infinity go out as the strings Jackson writes them as, {@code "NaN"} and {@code "Infinity"}. */
     @Override
     public JsonGenerator writeNumber(double value) {
+        if (numbersAsStrings || (!Double.isFinite(value) && nanAsString(value))) {
+            return writeString(NumberOutput.toString(value, isEnabled(StreamWriteFeature.USE_FAST_DOUBLE_WRITER)));
+        }
         beforeValue();
         out.value(value);
         return this;
@@ -380,9 +416,21 @@ final class OutputGenerator extends JsonGenerator {
 
     @Override
     public JsonGenerator writeNumber(float value) {
+        if (numbersAsStrings || (!Float.isFinite(value) && nanAsString(value))) {
+            return writeString(NumberOutput.toString(value, isEnabled(StreamWriteFeature.USE_FAST_DOUBLE_WRITER)));
+        }
         beforeValue();
         out.value(value);
         return this;
+    }
+
+    /** Whether a value that is not finite goes out as a string; Jackson writes it bare otherwise, which is not JSON, and is refused here. */
+    private boolean nanAsString(double value) {
+        if (!JsonWriteFeature.WRITE_NAN_AS_STRINGS.enabledIn(formatFeatures)) {
+            throw new StreamWriteException(this, "Not a JSON number: " + value
+                    + " (enable JsonWriteFeature.WRITE_NAN_AS_STRINGS to write it as a string)");
+        }
+        return true;
     }
 
     @Override
@@ -390,13 +438,49 @@ final class OutputGenerator extends JsonGenerator {
         if (value == null) {
             return writeNull();
         }
-        beforeValue();
-        if (StreamWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN.enabledIn(features)) {
-            out.value(new BigDecimal(value.toPlainString()));
-        } else {
+        if (!StreamWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN.enabledIn(features)) {
+            if (numbersAsStrings) {
+                return writeString(value.toString());
+            }
+            beforeValue();
             out.value(value);
+            return this;
         }
+        int scale = value.scale();
+        if (scale < -MAX_PLAIN_SCALE || scale > MAX_PLAIN_SCALE) {
+            throw new StreamWriteException(this, String.format(
+                    "Attempt to write plain `java.math.BigDecimal` (see JsonGenerator.Feature.WRITE_BIGDECIMAL_AS_PLAIN)"
+                            + " with illegal scale (%d): needs to be between [-%d, %d]",
+                    scale, MAX_PLAIN_SCALE, MAX_PLAIN_SCALE));
+        }
+        String plain = value.toPlainString();
+        if (numbersAsStrings) {
+            return writeString(plain);
+        }
+        beforeValue();
+        out.value(new PlainDecimal(value, plain));
         return this;
+    }
+
+    /**
+     * A decimal whose text is its plain form. The output writes a decimal as
+     * its {@code toString}, which would put {@code 1E-7} back, and parsing the
+     * plain text instead would refuse a number past the range of a double.
+     */
+    @SuppressWarnings("serial")
+    private static final class PlainDecimal extends BigDecimal {
+
+        private final String plain;
+
+        PlainDecimal(BigDecimal value, String plain) {
+            super(value.unscaledValue(), value.scale());
+            this.plain = plain;
+        }
+
+        @Override
+        public String toString() {
+            return plain;
+        }
     }
 
     /** A number already written as text, read as a decimal so that text which is no number is refused. */
@@ -410,6 +494,9 @@ final class OutputGenerator extends JsonGenerator {
             value = new BigDecimal(encodedValue);
         } catch (NumberFormatException e) {
             throw new StreamWriteException(this, "Not a JSON number: " + encodedValue, e);
+        }
+        if (numbersAsStrings) {
+            return writeString(encodedValue);
         }
         beforeValue();
         out.value(value);

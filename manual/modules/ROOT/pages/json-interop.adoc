@@ -84,7 +84,7 @@ The document is therefore serialized once, straight into the buffer the response
 No text Jackson produced is parsed again.
 
 The reader parses the body's bytes with Jackson.
-Input that Jackson rejects answers 400, as a hand-written reader's rejection does: bad syntax, a value of the wrong type, trailing content, and a creator that throws `IllegalArgumentException`.
+Input that Jackson rejects answers 400, as a hand-written reader's rejection does: bad syntax, a value of the wrong type, trailing content, and a creator that throws `IllegalArgumentException`, or `NullPointerException` for a property the body left out.
 A body that is JSON null answers 400 as well, so a handler never receives null in place of a value.
 A mapping that Jackson cannot build is the program's mistake, not the client's, and answers 500.
 

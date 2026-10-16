@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,10 @@ import com.fasterxml.jackson.annotation.JsonRawValue;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 
+import tools.jackson.core.Base64Variants;
 import tools.jackson.core.StreamWriteFeature;
+import tools.jackson.core.exc.StreamWriteException;
+import tools.jackson.core.json.JsonWriteFeature;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -44,6 +48,12 @@ class JacksonCodecsTest {
             if (name.isBlank()) {
                 throw new IllegalArgumentException("A deck needs a name");
             }
+        }
+    }
+
+    record Named(String name) {
+        Named {
+            Objects.requireNonNull(name, "name");
         }
     }
 
@@ -108,6 +118,82 @@ class JacksonCodecsTest {
         String written = JACKSON.writer(Everything.class).toJson(value);
 
         assertThat(written).isEqualTo(mapper.writeValueAsString(value));
+    }
+
+    @Test
+    void numbersAsStringsAreWrittenAsJacksonWritesThem() {
+        ObjectMapper mapper = JsonMapper.builder().enable(JsonWriteFeature.WRITE_NUMBERS_AS_STRINGS).build();
+        Everything value = new Everything("text", 42, Long.MIN_VALUE, 0.1, 0.1f, new BigDecimal("1E+3"),
+                new BigInteger("123456789012345678901234567890"), true, null, List.of(), Map.of("one", 1),
+                Optional.empty(), new byte[0], LocalDate.of(2026, 10, 13), Level.EASY, new Deck(7, "Verbs"),
+                new int[] {1, 2, 3});
+
+        String written = new JacksonCodecs(mapper).writer(Everything.class).toJson(value);
+
+        assertThat(written).isEqualTo(mapper.writeValueAsString(value));
+        assertThat(written).contains("\"count\":\"42\"", "\"price\":\"1E+3\"");
+    }
+
+    @Test
+    void nanAndInfinityAreWrittenAsTheStringsJacksonWrites() {
+        record Ratios(double nan, double up, double down, float floatNan) {
+        }
+        Ratios value = new Ratios(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, Float.NaN);
+
+        String written = JACKSON.writer(Ratios.class).toJson(value);
+
+        assertThat(written).isEqualTo(JsonMapper.builder().build().writeValueAsString(value));
+        assertThat(written).isEqualTo("{\"nan\":\"NaN\",\"up\":\"Infinity\",\"down\":\"-Infinity\",\"floatNan\":\"NaN\"}");
+    }
+
+    /** With the feature off Jackson writes a bare NaN, which is not JSON; the output refuses it. */
+    @Test
+    void nanIsRefusedWhenItIsNotToBeAString() {
+        JacksonCodecs bare = new JacksonCodecs(JsonMapper.builder().disable(JsonWriteFeature.WRITE_NAN_AS_STRINGS).build());
+        record Ratio(double value) {
+        }
+
+        assertThatThrownBy(() -> bare.writer(Ratio.class).toJson(new Ratio(Double.NaN)))
+                .isInstanceOf(StreamWriteException.class)
+                .hasMessageContaining("WRITE_NAN_AS_STRINGS");
+    }
+
+    @Test
+    void aPlainDecimalIsWrittenPlainWithinJacksonsScaleLimit() {
+        ObjectMapper mapper = JsonMapper.builder().enable(StreamWriteFeature.WRITE_BIGDECIMAL_AS_PLAIN).build();
+        JsonWriter<BigDecimal> plain = new JacksonCodecs(mapper).writer(BigDecimal.class);
+
+        for (String text : List.of("0.0000001", "-1.5E-12", "1E+3", "0.10", "1E+9999", "1E-9999")) {
+            BigDecimal value = new BigDecimal(text);
+            assertThat(plain.toJson(value)).isEqualTo(mapper.writeValueAsString(value));
+        }
+        assertThat(plain.toJson(new BigDecimal("0.0000001"))).isEqualTo("0.0000001");
+        for (String text : List.of("1E+10000", "1E-10000", "1e999999999")) {
+            BigDecimal value = new BigDecimal(text);
+            assertThatThrownBy(() -> mapper.writeValueAsString(value)).isInstanceOf(StreamWriteException.class);
+            assertThatThrownBy(() -> plain.toJson(value))
+                    .isInstanceOf(StreamWriteException.class)
+                    .hasMessageContaining("illegal scale");
+        }
+    }
+
+    /** A MIME or PEM variant breaks its lines with a line feed inside the string, which decodes back to the bytes. */
+    @Test
+    void base64WithLineBreaksIsWrittenAsJacksonWritesIt() {
+        byte[] bytes = new byte[200];
+        for (int i = 0; i < bytes.length; i++) {
+            bytes[i] = (byte) i;
+        }
+        for (var variant : List.of(Base64Variants.MIME, Base64Variants.PEM)) {
+            ObjectMapper mapper = JsonMapper.builder().defaultBase64Variant(variant).build();
+            JsonCodec<byte[]> codec = new JacksonCodecs(mapper).codec(byte[].class);
+
+            String written = codec.toJson(bytes);
+
+            assertThat(written).isEqualTo(mapper.writeValueAsString(bytes));
+            assertThat(written).contains("\\n").doesNotContain("\\\\n");
+            assertThat(codec.fromJson(written)).isEqualTo(bytes);
+        }
     }
 
     @Test
@@ -178,6 +264,22 @@ class JacksonCodecsTest {
             HttpResponse<String> blank = client.postJson("/decks", "{\"name\":\" \"}");
             assertThat(blank.statusCode()).isEqualTo(400);
             assertThat(blank.body()).contains("A deck needs a name");
+        });
+    }
+
+    /** A creator's NullPointerException, such as a record's requireNonNull, is the body leaving a property out. */
+    @Test
+    void aPropertyTheCreatorNeedsLeftOutIsA400() {
+        JsonReader<Named> named = JACKSON.reader(Named.class);
+        App app = new App()
+                .post("/named", req -> WebResponse.text(req.bodyJson(named).name()))
+                .post("/decks", req -> WebResponse.text(req.bodyJson(NEW_DECK).name()));
+
+        WebTest.test(app, client -> {
+            assertThat(client.postJson("/named", "{\"name\":\"a\"}").body()).isEqualTo("a");
+            assertThat(client.postJson("/named", "{}").statusCode()).isEqualTo(400);
+            assertThat(client.postJson("/named", "{\"name\":null}").statusCode()).isEqualTo(400);
+            assertThat(client.postJson("/decks", "{}").statusCode()).isEqualTo(400);
         });
     }
 

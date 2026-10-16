@@ -251,6 +251,12 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `silk-json-processor`: a non-static inner class, a private nested type, a private constructor or `@JsonbCreator`, and a getter and setter of different types are a compile error on the type, where the generated code failed to compile.
 - `silk-json-processor`: a wildcard, a raw type, or a type variable is a compile error instead of a processor crash, and a type not yet resolved defers the codec to a later round.
 - `silk-json-processor`: two types whose codecs would share a name, such as `Outer.Inner` and `OuterInner`, are a compile error naming both.
+- `spider-silk-jackson`: with `WRITE_BIGDECIMAL_AS_PLAIN` on, a `BigDecimal` whose scale lies outside ±9999 is refused with `StreamWriteException`, as Jackson's own generator refuses it, so `1e999999999` no longer builds a gigabyte of zeros.
+  A small decimal such as `0.0000001` goes out in plain form, where it went out as `1E-7`.
+- `spider-silk-jackson`: NaN and infinity go out as the strings `"NaN"`, `"Infinity"`, and `"-Infinity"`, as Jackson writes them under its default `WRITE_NAN_AS_STRINGS`, where they threw.
+- `spider-silk-jackson`: the mapper's `JsonWriteFeature`s reach the generator, so `WRITE_NUMBERS_AS_STRINGS` writes every number as a string, as Jackson does.
+- `spider-silk-jackson`: binary written with the MIME or PEM base64 variant breaks its lines with a line feed inside the string, as Jackson writes it, where a literal backslash and `n` broke decoding.
+- `spider-silk-jackson`: a creator that throws `NullPointerException`, such as a record's `requireNonNull` meeting a property the body left out, answers 400 instead of 500.
 
 ## [1.1.0] - 2026-09-17
 

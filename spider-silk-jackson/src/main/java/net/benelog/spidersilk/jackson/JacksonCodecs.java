@@ -24,6 +24,7 @@ import tools.jackson.databind.DatabindException;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.ObjectWriter;
+import tools.jackson.databind.SerializationConfig;
 import tools.jackson.databind.exc.MismatchedInputException;
 import tools.jackson.databind.exc.ValueInstantiationException;
 import tools.jackson.databind.json.JsonMapper;
@@ -58,7 +59,8 @@ import net.benelog.silkjson.JsonWriter;
  *
  * <p>A reader parses the body's bytes with Jackson. Input Jackson rejects —
  * bad syntax, a value of the wrong type, a creator that throws
- * {@link IllegalArgumentException} — becomes a {@link JsonException}, which
+ * {@link IllegalArgumentException}, or {@link NullPointerException} for a
+ * property the body left out — becomes a {@link JsonException}, which
  * {@code req.bodyJson(reader)} answers with 400, as it does a hand-written
  * reader's. A mapping Jackson cannot build is the program's mistake rather
  * than the client's, and stays a 500. A body that is JSON null is refused as
@@ -133,8 +135,9 @@ public final class JacksonCodecs {
     }
 
     private void write(ObjectWriter writer, Object value, JsonOutput out) {
-        int features = writer.getConfig().getStreamWriteFeatures();
-        writer.writeValue(new OutputGenerator(out, writeContext, constraints, features), value);
+        SerializationConfig config = writer.getConfig();
+        writer.writeValue(new OutputGenerator(out, writeContext, constraints,
+                config.getStreamWriteFeatures(), config.getFormatWriteFeatures()), value);
     }
 
     /** One type bound both ways, with the serializer and deserializer Jackson looked up for it. */
@@ -197,6 +200,10 @@ public final class JacksonCodecs {
      * {@link JsonException}, or the {@link IllegalArgumentException} a creator
      * threw for a rule of its own, and both answer 400; anything else, a
      * mapping Jackson cannot build above all, is rethrown as it was.
+     *
+     * <p>A creator's {@link NullPointerException} is the input's fault too:
+     * a record's {@code requireNonNull} meets the null Jackson passes for a
+     * property the body left out.
      */
     private static RuntimeException rejected(JacksonException e) {
         if (e instanceof ValueInstantiationException
@@ -204,7 +211,8 @@ public final class JacksonCodecs {
             return (RuntimeException) e.getCause();
         }
         if (e instanceof StreamReadException || e instanceof StreamConstraintsException
-                || e instanceof MismatchedInputException) {
+                || e instanceof MismatchedInputException
+                || (e instanceof ValueInstantiationException && e.getCause() instanceof NullPointerException)) {
             JsonException rejected = new JsonException(describe(e));
             rejected.initCause(e);
             return rejected;
