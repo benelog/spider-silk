@@ -46,6 +46,8 @@ xref:gradle-plugin.adoc#json[Gradle 플러그인]은 ``spiderSilk { json() }``�
 모듈 경로 위의 애플리케이션은 ``module-info.java``에 ``requires static java.compiler;``와 ``requires static org.jspecify;``를 더한다.
 생성된 코드는 ``java.compiler``의 ``@Generated``와 jspecify의 ``@Nullable``을 지니며, 둘 다 런타임에는 필요 없다.
 프로세서는 어떤 애너테이션도 차지하지 않으므로, javac의 ``processing`` 린트는 ``@JsonBound``를 아무도 차지하지 않았다고 경고한다.
+``@JsonBound``를 차지하면, ``*``를 지원하는 프로세서가 ``@JsonBound``만 있는 라운드에서 실행되지 않게 된다.
+차지한다고 린트가 조용해지지도 않는다: 프로세서가 하나라도 실행되면, 린트는 각 코덱에 붙은 ``@Generated``나 JUnit의 ``@Test``처럼 어떤 프로세서도 차지하지 않은 선언 애너테이션마다 경고한다.
 ``-Werror``로 컴파일하는 빌드는 ``-Xlint:all,-processing``으로 그 린트를 끈다.
 
 == 애너테이션

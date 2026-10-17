@@ -60,6 +60,8 @@ public final class JsonProcessor extends AbstractProcessor {
 
     // The processor claims nothing: a claimed @JsonBound would keep a processor
     // that supports "*" from running in a round where it is the only annotation.
+    // Nor would claiming it quiet javac's processing lint, which warns about
+    // every unclaimed declaration annotation, the codec's @Generated among them.
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment round) {
         Elements elements = processingEnv.getElementUtils();

@@ -46,6 +46,8 @@ Neither jar is needed at run time: the annotations are read when the codec is ge
 An application on the module path adds `requires static java.compiler;` and `requires static org.jspecify;` to its `module-info.java`.
 The generated code carries `@Generated` from `java.compiler` and `@Nullable` from jspecify, and neither is needed at run time.
 The processor claims no annotation, so javac's `processing` lint warns that nothing claimed `@JsonBound`.
+A claimed `@JsonBound` would keep a processor that supports `*` from running in a round where it is the only annotation.
+Claiming it would not quiet the lint either: whenever a processor runs, the lint warns about every declaration annotation that no processor claims, such as the `@Generated` on each codec or JUnit's `@Test`.
 A build that compiles with `-Werror` turns that lint off with `-Xlint:all,-processing`.
 
 == The annotations
