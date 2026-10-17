@@ -6,7 +6,7 @@ dependencies {
     api project(':spider-silk-core')
 
     // The same Jetty release as core's jetty-ee10-servlet, or the two mix on
-    // one classpath. Dependabot raises them together (the jetty group).
+    // one classpath. scripts/DependencyUpdates.java moves both to the latest release.
     api 'org.eclipse.jetty.websocket:jetty-websocket-jetty-server:12.1.14'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'

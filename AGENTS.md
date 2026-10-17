@@ -71,7 +71,10 @@
 npm install && npm run docs   # builds the Antora site into build/site
 claude plugin eval . --tag task      # agent-skill task evals, with and without the plugin
 claude plugin eval . --tag trigger --ablation none   # whether the skill description triggers
+java scripts/DependencyUpdates.java  # outdated dependencies; --apply moves them (the dependency-update skill)
 ```
+
+- Dependencies move when someone runs the dependency-update skill (`.claude/skills/dependency-update/SKILL.md`), not through Dependabot pull requests.
 
 - The agent-skill evals live in `evals/` at the plugin root, in the `claude plugin eval` case format: `evals/tasks/` checks what the skill makes Claude write, and `evals/trigger/` checks when its description loads it.
   Runs write to `evals/results/`, which is git-ignored.
