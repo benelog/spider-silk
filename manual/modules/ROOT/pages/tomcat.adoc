@@ -60,12 +60,12 @@ Everything core provides works unchanged: routing, filters, status pages, JSON, 
 == What is Tomcat's own
 
 Graceful shutdown is hand-rolled here, because Tomcat has no `stopTimeout` of its own.
-`stop()` pauses the connector and then shuts the request pool down within the timeout, which is what Spring Boot does for the same reason.
-A `ThreadPoolExecutor` passed to `executor(...)` belongs to the application, so `stop()` waits within the timeout until none of its threads runs a task, and leaves it running for a restart or for the other work on it.
-The drain therefore depends on which executor the connector runs.
-`stopTimeout(...)` only has something to wait on while the connector runs a `ThreadPoolExecutor`, which is the default but not necessarily what `executor(...)` hands it.
-With the virtual-thread executor, the drain does nothing.
-Undertow has no such catch, since its drain counts requests rather than threads.
+A valve on the engine counts the requests in flight, and once `stop()` begins it answers every new request 503 with `Connection: close`.
+`stop()` then waits within the timeout for the count to reach zero, which is how Undertow's `GracefulShutdownHandler` drains.
+The drain counts requests rather than threads, so it works on any executor, the virtual-thread one included.
+An executor passed to `executor(...)` belongs to the application, and `stop()` leaves it running for a restart or for the other work on it.
+The connector is not paused for the drain.
+A paused connector closes a keep-alive connection that sends a new request without answering it, and a client retries such a request only when it is idempotent.
 
 The shutdown hook is hand-rolled too.
 Jetty's `setStopAtShutdown` deregisters itself.

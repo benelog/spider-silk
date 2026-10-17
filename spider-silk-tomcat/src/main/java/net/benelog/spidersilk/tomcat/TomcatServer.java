@@ -13,13 +13,13 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 import jakarta.servlet.MultipartConfigElement;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.SessionTrackingMode;
 
 import org.apache.catalina.Container;
@@ -28,8 +28,11 @@ import org.apache.catalina.LifecycleException;
 import org.apache.catalina.LifecycleState;
 import org.apache.catalina.Wrapper;
 import org.apache.catalina.connector.Connector;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.connector.Response;
 import org.apache.catalina.core.StandardContext;
 import org.apache.catalina.startup.Tomcat;
+import org.apache.catalina.valves.ValveBase;
 import org.apache.coyote.AbstractProtocol;
 import org.apache.coyote.ProtocolHandler;
 import org.jspecify.annotations.Nullable;
@@ -49,18 +52,15 @@ import net.benelog.spidersilk.server.WebServer;
  * }</pre>
  *
  * <p>The surface mirrors {@code JettyServer} method for method, so a switch is
- * one line at the factory. Two differences are Tomcat's, not ours, and are left
- * visible rather than papered over:
+ * one line at the factory. One difference is Tomcat's, not ours, and is left
+ * visible rather than papered over: there is no {@code sessions(boolean)}.
+ * Tomcat's {@code StandardContext} installs a session manager on start and
+ * offers no way to leave it out.
  *
- * <ul>
- *   <li>There is no {@code sessions(boolean)}. Tomcat's {@code StandardContext}
- *       installs a session manager on start and offers no way to leave it out.</li>
- *   <li>Graceful shutdown is hand-rolled here — pause the connector, then let
- *       the request threads finish — because Tomcat has no {@code stopTimeout}
- *       of its own. It therefore only applies while the connector runs on a
- *       {@link ThreadPoolExecutor}, which is the default but not what
- *       {@link #executor(Executor)} necessarily hands it.</li>
- * </ul>
+ * <p>Graceful shutdown is hand-rolled here, because Tomcat has no
+ * {@code stopTimeout} of its own: a valve answers new requests 503 and counts
+ * the ones in flight, and the stop waits for that count to reach zero, as
+ * Undertow's {@code GracefulShutdownHandler} does.
  *
  * <p>Anything not covered by a method here is reachable through the three
  * customizers, which run against the real Tomcat objects just before startup.
@@ -97,6 +97,7 @@ public final class TomcatServer implements WebServer {
 
     private @Nullable Tomcat tomcat;
     private @Nullable Connector connector;
+    private @Nullable DrainingValve draining;
     private @Nullable Thread awaitThread;
     private @Nullable Thread hook;
     private @Nullable Path temporaryBaseDir;
@@ -155,10 +156,9 @@ public final class TomcatServer implements WebServer {
      *
      * <p>A recipe rather than a method of ours, for the same reason as on Jetty:
      * it is one line of the JDK's own API, and it only pays off when the
-     * handlers block. Note that an executor which is not a
-     * {@link ThreadPoolExecutor} — the virtual-thread one included — leaves
-     * {@link #stopTimeout(Duration)} with nothing to wait on, so the drain
-     * becomes a no-op.
+     * handlers block. The drain counts requests rather than threads, so
+     * {@link #stopTimeout(Duration)} applies on any executor. An executor
+     * passed here belongs to the application, and the stop leaves it running.
      */
     public TomcatServer executor(Executor executor) {
         this.executor = Objects.requireNonNull(executor, "executor");
@@ -262,6 +262,8 @@ public final class TomcatServer implements WebServer {
             newConnector.setParseBodyMethods("POST,PUT,PATCH");
             connectorCustomizers.forEach(customizer -> customizer.accept(newConnector));
 
+            DrainingValve valve = new DrainingValve();
+            candidate.getEngine().getPipeline().addValve(valve);
             createContext(candidate, base);
             tomcatCustomizers.forEach(customizer -> customizer.accept(candidate));
 
@@ -269,6 +271,7 @@ public final class TomcatServer implements WebServer {
             requireContextsStarted(candidate);
             tomcat = candidate;
             connector = newConnector;
+            draining = valve;
         } catch (LifecycleException | RuntimeException e) {
             IllegalStateException failure =
                     new IllegalStateException("Failed to start Tomcat on port " + port, e);
@@ -288,14 +291,15 @@ public final class TomcatServer implements WebServer {
             return;
         }
         Tomcat running = tomcat;
-        Connector runningConnector = connector;
+        DrainingValve runningValve = draining;
         Thread runningAwait = awaitThread;
         tomcat = null;
         connector = null;
+        draining = null;
         awaitThread = null;
         removeShutdownHook();
         try {
-            drain(runningConnector);
+            drain(runningValve);
             running.stop();
             running.destroy();
             joinQuietly(runningAwait);
@@ -416,72 +420,33 @@ public final class TomcatServer implements WebServer {
     }
 
     /**
-     * Graceful shutdown by hand: Tomcat has no {@code stopTimeout}. Pausing the
-     * connector stops it taking new connections while the requests already
-     * running keep their threads, and shutting the pool down then waits for
-     * exactly those to finish. Idle keep-alive connections hold no thread, so
-     * they do not delay this.
+     * Graceful shutdown by hand: Tomcat has no {@code stopTimeout}. The valve
+     * answers every new request 503 from here on, and the stop waits until the
+     * requests it had already let through have finished, or until the stop
+     * timeout. Idle keep-alive connections hold no request, so they do not
+     * delay this.
      *
-     * <p>Tomcat's own pool is {@code org.apache.tomcat.util.threads.ThreadPoolExecutor},
-     * a copy of the JDK's that does not extend it, so both are named here.
-     * Checking for the JDK's alone skipped the drain on the default executor,
-     * and the stop fell through to Tomcat's two-second {@code unloadDelay}
-     * before the request threads were interrupted.
-     *
-     * <p>Only the pool Tomcat made is shut down. One passed to
-     * {@link #executor(Executor)} belongs to the application, and is waited
-     * out without being stopped.
+     * <p>Pausing the connector instead, as this did, dropped a request that
+     * arrived on a keep-alive connection during the drain: Tomcat's processor
+     * does not read a request while its protocol is paused, and closes the
+     * connection without a response. A client retries such a request only
+     * when it is idempotent, so a POST was lost. Counting requests rather
+     * than waiting out a thread pool also makes the drain work on any
+     * executor, the virtual-thread one included.
      */
-    private void drain(@Nullable Connector connector) {
-        if (connector == null || stopTimeout.isZero() || stopTimeout.isNegative()) {
+    private void drain(@Nullable DrainingValve valve) {
+        if (valve == null || stopTimeout.isZero() || stopTimeout.isNegative()) {
             return;
         }
-        connector.pause();
-        ExecutorService pool = threadPool(connector.getProtocolHandler().getExecutor());
-        if (pool == null) {
-            return;
-        }
+        valve.drain();
+        long deadline = System.nanoTime() + stopTimeout.toNanos();
         try {
-            if (executor == null) {
-                pool.shutdown();
-                pool.awaitTermination(stopTimeout.toMillis(), TimeUnit.MILLISECONDS);
-            } else {
-                awaitIdle(pool);
+            while (valve.inFlight() > 0 && System.nanoTime() < deadline) {
+                Thread.sleep(10);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-    }
-
-    /**
-     * Waits until no thread of a pool the application passed in is running a
-     * task, or until the stop timeout. The pool is the caller's: shutting it
-     * down would refuse every request after a restart, and every other task
-     * the application runs on it, so it is watched rather than stopped.
-     */
-    private void awaitIdle(ExecutorService pool) throws InterruptedException {
-        long deadline = System.nanoTime() + stopTimeout.toNanos();
-        while (activeCount(pool) > 0 && System.nanoTime() < deadline) {
-            Thread.sleep(10);
-        }
-    }
-
-    private static int activeCount(ExecutorService pool) {
-        return pool instanceof ThreadPoolExecutor jdk
-                ? jdk.getActiveCount()
-                : ((org.apache.tomcat.util.threads.ThreadPoolExecutor) pool).getActiveCount();
-    }
-
-    /**
-     * The executor as a pool whose threads the drain can wait out: Tomcat's own
-     * or the JDK's thread pool. Null for anything else, such as the
-     * virtual-thread executor, which has no threads of its own to wait for.
-     */
-    private static @Nullable ExecutorService threadPool(@Nullable Executor executor) {
-        return executor instanceof ThreadPoolExecutor
-                || executor instanceof org.apache.tomcat.util.threads.ThreadPoolExecutor
-                ? (ExecutorService) executor
-                : null;
     }
 
     /**
@@ -561,5 +526,46 @@ public final class TomcatServer implements WebServer {
     private static MultipartConfigElement defaultMultipartConfig() {
         return new MultipartConfigElement(
                 System.getProperty("java.io.tmpdir"), -1L, -1L, 1024 * 1024);
+    }
+
+    /**
+     * Counts the requests in flight, and once {@link #drain()} has run answers
+     * every new one 503 with {@code Connection: close}, the answer Undertow's
+     * {@code GracefulShutdownHandler} gives. A request counts itself before it
+     * looks at the flag, so a request the drain does not refuse is one the
+     * drain sees in the count. The valve sits on the engine, so a request for
+     * a path no context is mounted at is counted too.
+     */
+    private static final class DrainingValve extends ValveBase {
+
+        private final AtomicInteger inFlight = new AtomicInteger();
+        private volatile boolean draining;
+
+        DrainingValve() {
+            super(true);
+        }
+
+        void drain() {
+            draining = true;
+        }
+
+        int inFlight() {
+            return inFlight.get();
+        }
+
+        @Override
+        public void invoke(Request request, Response response) throws IOException, ServletException {
+            inFlight.incrementAndGet();
+            try {
+                if (draining) {
+                    response.setStatus(503);
+                    response.setHeader("Connection", "close");
+                    return;
+                }
+                getNext().invoke(request, response);
+            } finally {
+                inFlight.decrementAndGet();
+            }
+        }
     }
 }

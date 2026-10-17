@@ -68,7 +68,7 @@ new TomcatServer(app)
         .start();
 ```
 
-Tomcat's own quirks: no `sessions(false)` (always on); the graceful drain waits on the default `ThreadPoolExecutor`, so `executor(...)` makes `stopTimeout` a no-op; logging is JULI, so route it with `jul-to-slf4j`.
+Tomcat's own quirks: no `sessions(false)` (always on); the graceful drain is a valve that counts requests and answers new ones 503, so it works on any `executor(...)`; logging is JULI, so route it with `jul-to-slf4j`.
 
 ## Undertow
 

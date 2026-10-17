@@ -793,6 +793,54 @@ class UndertowServerTest {
         assertThat(response.body()).isEqualTo("finished");
     }
 
+    /**
+     * During the drain, a new request on a keep-alive connection answers 503,
+     * as on Tomcat.
+     */
+    @Test
+    void aNewRequestDuringTheDrainAnswers503() throws Exception {
+        CountDownLatch handlerEntered = new CountDownLatch(1);
+        startOnUndertow(new App()
+                .get("/", req -> WebResponse.text("ok"))
+                .get("/slow", req -> {
+                    handlerEntered.countDown();
+                    Thread.sleep(1_500);
+                    return WebResponse.text("finished");
+                }));
+        try (Socket keepAlive = new Socket("localhost", app.port())) {
+            InputStream in = keepAlive.getInputStream();
+            keepAlive.getOutputStream().write("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+            assertThat(readHead(in)).startsWith("HTTP/1.1 200");
+            assertThat(in.readNBytes(2)).isEqualTo("ok".getBytes(StandardCharsets.US_ASCII));
+
+            CompletableFuture<HttpResponse<String>> inFlight = client.sendAsync(
+                    HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/slow")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(handlerEntered.await(2, TimeUnit.SECONDS)).as("the handler never started").isTrue();
+            CompletableFuture<Void> stopping = CompletableFuture.runAsync(app::stop);
+            Thread.sleep(300);
+
+            keepAlive.getOutputStream().write("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+            assertThat(readHead(in)).startsWith("HTTP/1.1 503");
+
+            stopping.get(5, TimeUnit.SECONDS);
+            app = null;
+            assertThat(inFlight.get(5, TimeUnit.SECONDS).body()).isEqualTo("finished");
+        }
+    }
+
+    private static String readHead(InputStream in) throws IOException {
+        StringBuilder head = new StringBuilder();
+        while (!head.toString().endsWith("\r\n\r\n")) {
+            int b = in.read();
+            if (b < 0) {
+                break;
+            }
+            head.append((char) b);
+        }
+        return head.toString();
+    }
+
     /** An idle keep-alive connection must not hold the stop timeout hostage. */
     @Test
     void anIdleConnectionDoesNotDelayTheStop() throws Exception {

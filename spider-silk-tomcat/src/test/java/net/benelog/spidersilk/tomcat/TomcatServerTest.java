@@ -787,6 +787,58 @@ class TomcatServerTest {
         assertThat(response.body()).isEqualTo("finished");
     }
 
+    /**
+     * During the drain, a new request on a keep-alive connection answers 503
+     * and closes the connection, as on Undertow. Tomcat's paused connector
+     * closed the connection without a response, which a client retries only
+     * for an idempotent request.
+     */
+    @Test
+    void aNewRequestDuringTheDrainAnswers503() throws Exception {
+        CountDownLatch handlerEntered = new CountDownLatch(1);
+        startOnTomcat(new App()
+                .get("/", req -> WebResponse.text("ok"))
+                .get("/slow", req -> {
+                    handlerEntered.countDown();
+                    Thread.sleep(1_500);
+                    return WebResponse.text("finished");
+                }));
+        try (Socket keepAlive = new Socket("localhost", app.port())) {
+            InputStream in = keepAlive.getInputStream();
+            keepAlive.getOutputStream().write("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+            assertThat(readHead(in)).startsWith("HTTP/1.1 200");
+            assertThat(in.readNBytes(2)).isEqualTo("ok".getBytes(StandardCharsets.US_ASCII));
+
+            CompletableFuture<HttpResponse<String>> inFlight = client.sendAsync(
+                    HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/slow")).build(),
+                    HttpResponse.BodyHandlers.ofString());
+            assertThat(handlerEntered.await(2, TimeUnit.SECONDS)).as("the handler never started").isTrue();
+            CompletableFuture<Void> stopping = CompletableFuture.runAsync(app::stop);
+            Thread.sleep(300);
+
+            keepAlive.getOutputStream().write("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n".getBytes(StandardCharsets.US_ASCII));
+            String head = readHead(in);
+            assertThat(head).startsWith("HTTP/1.1 503");
+            assertThat(head.toLowerCase(Locale.ROOT)).contains("connection: close");
+
+            stopping.get(5, TimeUnit.SECONDS);
+            app = null;
+            assertThat(inFlight.get(5, TimeUnit.SECONDS).body()).isEqualTo("finished");
+        }
+    }
+
+    private static String readHead(InputStream in) throws IOException {
+        StringBuilder head = new StringBuilder();
+        while (!head.toString().endsWith("\r\n\r\n")) {
+            int b = in.read();
+            if (b < 0) {
+                break;
+            }
+            head.append((char) b);
+        }
+        return head.toString();
+    }
+
     /** An idle keep-alive connection must not hold the stop timeout hostage. */
     @Test
     void anIdleConnectionDoesNotDelayTheStop() throws Exception {
@@ -909,6 +961,35 @@ class TomcatServerTest {
                 .start(0);
 
         assertThat(get("/").body()).isEqualTo("virtual");
+    }
+
+    /**
+     * The drain counts requests, not pool threads, so the stop waits for a
+     * request on a virtual thread too. Waiting out a thread pool left the
+     * virtual-thread executor with nothing to wait on, and dropped the request.
+     */
+    @Test
+    void stopWaitsForARequestOnAVirtualThread() throws Exception {
+        CountDownLatch handlerEntered = new CountDownLatch(1);
+        this.app = new App()
+                .get("/slow", req -> {
+                    handlerEntered.countDown();
+                    Thread.sleep(2_500);
+                    return WebResponse.text("finished");
+                })
+                .server((a, port) -> new TomcatServer(a)
+                        .port(port)
+                        .executor(Executors.newVirtualThreadPerTaskExecutor()))
+                .start(0);
+
+        CompletableFuture<HttpResponse<String>> inFlight = client.sendAsync(
+                HttpRequest.newBuilder(URI.create("http://localhost:" + app.port() + "/slow")).build(),
+                HttpResponse.BodyHandlers.ofString());
+        assertThat(handlerEntered.await(2, TimeUnit.SECONDS)).as("the handler never started").isTrue();
+        app.stop();
+        app = null;
+
+        assertThat(inFlight.get(5, TimeUnit.SECONDS).body()).isEqualTo("finished");
     }
 
     @Test
