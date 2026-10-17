@@ -319,12 +319,13 @@ public class AppServlet extends HttpServlet {
      * Whether the path as the client sent it has an empty segment inside it, or
      * a {@code .} or {@code ..} segment, literal or percent-encoded. Each
      * container normalises such a path its own way before the servlet sees it:
-     * Jetty refuses {@code //} and {@code %2e} and resolves a literal
-     * {@code ..}, Tomcat collapses and resolves all of them, and Undertow hands
-     * them on as they came, so {@code /a//b} bound a variable to {@code ""} and
-     * {@code /files/../secret} a tail to {@code ../secret}. The raw URI is what
-     * every container reports alike, and refusing these paths there makes the
-     * answer a 400 on each. A trailing slash is an empty last segment, and stays.
+     * Jetty resolves a literal {@code ..} and, left to its defaults, refuses
+     * {@code //} and {@code %2e} with its own 400, Tomcat collapses and
+     * resolves all of them, and Undertow hands them on as they came, so
+     * {@code /a//b} bound a variable to {@code ""} and {@code /files/../secret}
+     * a tail to {@code ../secret}. The raw URI is what every container reports
+     * alike, and refusing these paths there makes the answer the app's 400 on
+     * each. A trailing slash is an empty last segment, and stays.
      */
     private static boolean hasEmptyOrDotSegment(String requestUri) {
         String path = requestUri;

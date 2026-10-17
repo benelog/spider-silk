@@ -138,8 +138,9 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   Jetty answered 500 from each of them and from `contentType()`, which now answers the header as sent, and Undertow answered its own error page for `charset=`.
 - `spider-silk-core`: a form body is read on POST, PUT, and PATCH on every server, where Tomcat read it on POST alone and Jetty on POST and PUT.
   On any other method, and on a request with no form body, `param` and `params` answer from the query string alone, so Tomcat no longer answers `?=a` with a 400 blaming a form body.
-- `spider-silk-core`: a request path with an empty, `.`, or `..` segment, literal or percent-encoded, answers 400 on every server before routing.
-  Undertow bound `/a//b` to an empty variable and `/files/../secret` to a tail of `../secret`.
+- `spider-silk-core`: a request path with an empty, `.`, or `..` segment, literal or percent-encoded, answers the app's 400 on every server before routing, and `statusPage(HttpStatus.BAD_REQUEST, ...)` renders it.
+  Undertow bound `/a//b` to an empty variable and `/files/../secret` to a tail of `../secret`, and Jetty answered `/a//b` and `%2e%2e` with its own 400 page, which the status page never saw.
+- `spider-silk-core`: an encoded percent in a path, `/one/100%25`, decodes to `100%` on Jetty, as on Tomcat and Undertow, where Jetty refused it with its own 400.
 - `spider-silk-core`: `host()` keeps the brackets of an IPv6 literal on Undertow, `[::1]:9` rather than `::1:9`.
 - `spider-silk-core`: a multipart part with no name is skipped by `file`, `fileOrNull`, and `files`, where Undertow answered 500.
 - `spider-silk-core`: `accepts` and `acceptedTypes` split the `Accept` header only outside quoted parameter values.

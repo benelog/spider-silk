@@ -14,6 +14,7 @@ import jakarta.servlet.MultipartConfigElement;
 
 import org.eclipse.jetty.ee10.servlet.ServletContextHandler;
 import org.eclipse.jetty.ee10.servlet.ServletHolder;
+import org.eclipse.jetty.http.UriCompliance;
 import org.eclipse.jetty.io.EndPoint;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.HttpConfiguration;
@@ -78,6 +79,20 @@ public final class JettyServer implements WebServer {
      * Undertow default to. Jetty's own default outside a webapp is never.
      */
     static final int SESSION_MAX_INACTIVE_SECONDS = 1800;
+
+    /**
+     * Jetty's default, plus the three ambiguities AppServlet answers itself.
+     * Jetty refused an empty segment ({@code /a//b}), a percent-encoded dot
+     * segment ({@code %2e%2e}), and an encoded percent ({@code 100%25}) with
+     * its own 400 before the servlet ran, so the app's {@code statusPage(400)}
+     * never saw the first two, and the third, which Tomcat and Undertow decode
+     * to {@code 100%}, was refused outright. An encoded slash, backslash, or
+     * NUL is still Jetty's 400, as it is Tomcat's.
+     */
+    static final UriCompliance URI_COMPLIANCE = UriCompliance.DEFAULT.with("SPIDER_SILK",
+            UriCompliance.Violation.AMBIGUOUS_EMPTY_SEGMENT,
+            UriCompliance.Violation.AMBIGUOUS_PATH_SEGMENT,
+            UriCompliance.Violation.AMBIGUOUS_PATH_ENCODING);
 
     private static final System.Logger LOG = System.getLogger(JettyServer.class.getName());
 
@@ -313,6 +328,7 @@ public final class JettyServer implements WebServer {
         // Jetty reads a form body on POST and PUT; Tomcat and Undertow are set
         // to the same three methods, so a PATCH form reads alike on each.
         httpConfiguration.addFormEncodedMethod("PATCH");
+        httpConfiguration.setUriCompliance(URI_COMPLIANCE);
         httpConfigurationCustomizers.forEach(customizer -> customizer.accept(httpConfiguration));
 
         DrainingConnector connector =
@@ -328,6 +344,9 @@ public final class JettyServer implements WebServer {
         ServletContextHandler context = new ServletContextHandler(
                 sessions ? ServletContextHandler.SESSIONS : 0);
         context.setContextPath(contextPath);
+        // The other half of URI_COMPLIANCE: the servlet layer refuses an
+        // ambiguous path again on its own, with the same 400 of Jetty's.
+        context.getServletHandler().setDecodeAmbiguousURIs(true);
         if (sessions) {
             // Jetty's default outside a webapp's webdefault.xml leaves the
             // session cookie readable by a script; Tomcat marks it HttpOnly.

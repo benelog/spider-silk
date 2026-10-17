@@ -47,6 +47,7 @@ import net.benelog.spidersilk.App;
 import net.benelog.spidersilk.BodyLimits;
 import net.benelog.spidersilk.Handler;
 import net.benelog.spidersilk.HttpException;
+import net.benelog.spidersilk.HttpStatus;
 import net.benelog.spidersilk.StaticFiles;
 import net.benelog.spidersilk.WebResponse;
 import net.benelog.silkjson.JsonReader;
@@ -1140,20 +1141,23 @@ class UndertowServerTest {
 
     /**
      * An empty, {@code .}, or {@code ..} segment in a request path, literal or
-     * percent-encoded, is a 400 on every server and never reaches a variable.
-     * Undertow bound {@code /a//b} to {@code ""} and {@code /files/../secret} to
-     * a tail of {@code ../secret}, and Tomcat collapsed and resolved them.
+     * percent-encoded, is the app's 400 on every server, through its status
+     * page, and never reaches a variable. Undertow bound {@code /a//b} to
+     * {@code ""} and {@code /files/../secret} to a tail of {@code ../secret},
+     * Tomcat collapsed and resolved them, and Jetty answered {@code //} and
+     * {@code %2e} with its own 400, which the status page never saw.
      */
     @Test
     void anEmptyOrDotSegmentInThePathIsA400() throws Exception {
         startOnUndertow(new App()
                 .get("/files/{path*}", req -> WebResponse.text("tail=[" + req.pathParam("path") + "]"))
                 .get("/a/{x}/b", req -> WebResponse.text("x=[" + req.pathParam("x") + "]"))
-                .get("/decks/{id}", req -> WebResponse.text("deck=[" + req.pathParam("id") + "]")));
+                .get("/decks/{id}", req -> WebResponse.text("deck=[" + req.pathParam("id") + "]"))
+                .statusPage(HttpStatus.BAD_REQUEST, req -> WebResponse.text("bad path")));
 
         for (String path : List.of("/files//etc/passwd", "/a//b", "/files/../secret", "/files/%2e%2e/secret",
-                "/a/./b", "/decks/.", "//decks/1", "/files/a/..")) {
-            assertThat(rawGet(path)).as(path).startsWith("HTTP/1.1 400");
+                "/files/.%2E/secret", "/a/./b", "/a/%2e/b", "/decks/.", "//decks/1", "/files/a/..")) {
+            assertThat(rawGet(path)).as(path).startsWith("HTTP/1.1 400").endsWith("bad path");
         }
         assertThat(rawGet("/decks/1/")).endsWith("deck=[1]");
         assertThat(rawGet("/files/a/b.txt")).endsWith("tail=[a/b.txt]");
