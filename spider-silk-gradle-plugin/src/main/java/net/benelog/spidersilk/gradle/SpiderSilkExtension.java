@@ -21,7 +21,7 @@ public class SpiderSilkExtension {
     static final String JTE_VERSION = "3.2.4";
 
     /** The jakarta.json.bind API whose annotations the generated codecs read. */
-    static final String JSONB_API_VERSION = "3.0.1";
+    static final String JSONB_API_VERSION = "3.0.4";
 
     /** The plugin's own version, which is the version of the framework jars it adds. */
     static final String VERSION = version();

@@ -36,7 +36,7 @@ app.post("/api/decks", req -> {
 ----
 dependencies {
     annotationProcessor '{silk-json-group}:silk-json-processor:{project-version}'
-    compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'
+    compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.4'
 }
 ----
 

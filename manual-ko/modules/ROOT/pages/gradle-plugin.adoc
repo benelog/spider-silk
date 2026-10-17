@@ -75,7 +75,7 @@ image::build-pipeline.svg[템플릿은 generateJte를 통해 Java 클래스가 �
 
 == 플러그인이 고정하는 것
 
-플러그인의 버전은 플러그인이 적용하는 도구의 버전을 고정한다: jte {jte-version}, Jib {jib-version}, GraalVM 빌드 도구 {graalvm-buildtools-version}, 그리고 ``json()`` 아래에서는 플러그인 자신의 버전인 프로세서와 ``jakarta.json.bind-api`` 3.0.1이다.
+플러그인의 버전은 플러그인이 적용하는 도구의 버전을 고정한다: jte {jte-version}, Jib {jib-version}, GraalVM 빌드 도구 {graalvm-buildtools-version}, 그리고 ``json()`` 아래에서는 플러그인 자신의 버전인 프로세서와 ``jakarta.json.bind-api`` 3.0.4이다.
 이 도구들의 버전 올림은 플러그인 릴리스로 이루어진다.
 플러그인이 설정하는 각 컨벤션은 순수한 Gradle 몇 줄이며, 위에 링크된 장들은 컨벤션을 직접 소유하려는 빌드를 위해 펼친 형태를 보여준다.
 Maven 빌드는 같은 컨벤션을 대신 부모 POM에서 상속받는다: xref:maven-parent.adoc[Maven 부모 POM]을 참고한다.

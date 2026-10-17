@@ -67,7 +67,7 @@ Add one only when the user wants what it names instead of, or beside, the core d
 | `spider-silk-jackson` | `JacksonCodecs`: Jackson 3 behind `JsonWriter`/`JsonReader`, the `ObjectMapper` handed to its constructor once | Brings `jackson-databind` 3.x; bound types need native-image reflection entries |
 | `spider-silk-openapi` | `OpenApi.document(...)`: an OpenAPI 3.1 document from `app.routes()` | Depends on core only |
 | `spider-silk-opentelemetry-agent` | Spans of the OpenTelemetry Java agent named after the matched route (`GET /decks/{deckId}`, not `GET /*`) | Not a dependency: the jar goes to `-Dotel.javaagent.extensions`, with no code in the app |
-| `silk-json-processor` (group `net.benelog.silkjson`) | Generated JSON codecs for types annotated `@JsonBound` (see content.md) | `annotationProcessor` scope, plus `compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.1'` for the annotations; `spiderSilk { json() }` adds both; nothing at run time |
+| `silk-json-processor` (group `net.benelog.silkjson`) | Generated JSON codecs for types annotated `@JsonBound` (see content.md) | `annotationProcessor` scope, plus `compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.4'` for the annotations; `spiderSilk { json() }` adds both; nothing at run time |
 
 The exclusions are optional; they only keep an unused server or engine off the classpath.
 

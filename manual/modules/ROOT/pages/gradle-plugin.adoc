@@ -75,7 +75,7 @@ Nothing reaches the runtime classpath.
 
 == What the plugin pins
 
-The plugin's version fixes the versions of what it applies: jte {jte-version}, Jib {jib-version}, the GraalVM build tools {graalvm-buildtools-version}, and, under `json()`, its own version of the processor with `jakarta.json.bind-api` 3.0.1.
+The plugin's version fixes the versions of what it applies: jte {jte-version}, Jib {jib-version}, the GraalVM build tools {graalvm-buildtools-version}, and, under `json()`, its own version of the processor with `jakarta.json.bind-api` 3.0.4.
 An upgrade of any of them arrives as a plugin release.
 Each convention the plugin sets is a handful of lines of plain Gradle, and the chapters linked above show the expanded form for a build that would rather own them directly.
 A Maven build inherits the same conventions from a parent POM instead: see xref:maven-parent.adoc[The Maven Parent].

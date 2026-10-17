@@ -6,7 +6,7 @@ plugins {
 // against. The extension API is published as alpha and may change between
 // agent releases, so a new agent is a new line here and a test run, not an
 // assumption.
-def otelAgentVersion = '2.31.1'
+def otelAgentVersion = '2.32.0'
 
 configurations {
     // The agent jar the test attaches to a forked JVM; never on a classpath.
