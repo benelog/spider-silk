@@ -258,6 +258,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   A small decimal such as `0.0000001` goes out in plain form, where it went out as `1E-7`.
 - `spider-silk-jackson`: NaN and infinity go out as the strings `"NaN"`, `"Infinity"`, and `"-Infinity"`, as Jackson writes them under its default `WRITE_NAN_AS_STRINGS`, where they threw.
 - `spider-silk-jackson`: the mapper's `JsonWriteFeature`s reach the generator, so `WRITE_NUMBERS_AS_STRINGS` writes every number as a string, as Jackson does.
+  `new JacksonCodecs(mapper)` refuses a mapper with `ESCAPE_NON_ASCII` on with `IllegalArgumentException`, where the feature was silently ignored, since the output writes every string as UTF-8.
 - `spider-silk-jackson`: binary written with the MIME or PEM base64 variant breaks its lines with a line feed inside the string, as Jackson writes it, where a literal backslash and `n` broke decoding.
 - `spider-silk-jackson`: a creator that throws `NullPointerException`, such as a record's `requireNonNull` meeting a property the body left out, answers 400 instead of 500.
 - `spider-silk-jetty-websocket`: depends on Jetty 12.1.13, the release core uses, where it pinned 12.1.14 and mixed two Jetty releases on one classpath.

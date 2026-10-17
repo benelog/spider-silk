@@ -96,6 +96,7 @@ An element reader inside `JsonReader.list` starts a Jackson parser for every ele
 
 A `JsonOutput` holds only checked JSON.
 A value marked `@JsonRawValue` is therefore parsed and written as the value it holds, and a raw fragment written through `writeRaw` is refused.
+A `JsonOutput` writes every string as UTF-8, so `new JacksonCodecs(mapper)` refuses a mapper with `JsonWriteFeature.ESCAPE_NON_ASCII` on, with `IllegalArgumentException`, rather than ignore the feature.
 
 Jackson binds by reflection, and this module is where an application chooses it.
 A xref:native-image.adoc[native image] then needs a reflection entry for every bound type.

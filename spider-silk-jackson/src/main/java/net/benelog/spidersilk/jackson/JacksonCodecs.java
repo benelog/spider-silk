@@ -17,6 +17,7 @@ import tools.jackson.core.TreeNode;
 import tools.jackson.core.exc.StreamConstraintsException;
 import tools.jackson.core.exc.StreamReadException;
 import tools.jackson.core.io.CharacterEscapes;
+import tools.jackson.core.json.JsonWriteFeature;
 import tools.jackson.core.tree.ArrayTreeNode;
 import tools.jackson.core.tree.ObjectTreeNode;
 import tools.jackson.core.type.TypeReference;
@@ -82,9 +83,20 @@ public final class JacksonCodecs {
         this(JsonMapper.builder().build());
     }
 
-    /** Binds with a mapper of your own, for its modules, naming strategy, or features. */
+    /**
+     * Binds with a mapper of your own, for its modules, naming strategy, or features.
+     *
+     * @throws IllegalArgumentException if the mapper has
+     *         {@link JsonWriteFeature#ESCAPE_NON_ASCII} on. The output writes
+     *         every string as UTF-8 and has no ASCII-only mode, so the feature
+     *         would be ignored without a word; it is refused here instead.
+     */
     public JacksonCodecs(ObjectMapper mapper) {
         this.mapper = Objects.requireNonNull(mapper, "mapper");
+        if (JsonWriteFeature.ESCAPE_NON_ASCII.enabledIn(mapper.serializationConfig().getFormatWriteFeatures())) {
+            throw new IllegalArgumentException("JsonWriteFeature.ESCAPE_NON_ASCII is not supported:"
+                    + " the output writes every string as UTF-8. Disable it on the mapper JacksonCodecs takes");
+        }
         this.anyType = mapper.writer();
         this.writeContext = new MapperWriteContext(mapper);
         this.constraints = mapper.tokenStreamFactory().streamWriteConstraints();

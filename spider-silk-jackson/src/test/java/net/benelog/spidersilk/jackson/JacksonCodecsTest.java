@@ -146,6 +146,16 @@ class JacksonCodecsTest {
         assertThat(written).isEqualTo("{\"nan\":\"NaN\",\"up\":\"Infinity\",\"down\":\"-Infinity\",\"floatNan\":\"NaN\"}");
     }
 
+    /** The output writes every string as UTF-8, so a mapper that asks for ASCII-only output is refused rather than ignored. */
+    @Test
+    void aMapperThatEscapesNonAsciiIsRefused() {
+        ObjectMapper mapper = JsonMapper.builder().enable(JsonWriteFeature.ESCAPE_NON_ASCII).build();
+
+        assertThatThrownBy(() -> new JacksonCodecs(mapper))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ESCAPE_NON_ASCII");
+    }
+
     /** With the feature off Jackson writes a bare NaN, which is not JSON; the output refuses it. */
     @Test
     void nanIsRefusedWhenItIsNotToBeAString() {

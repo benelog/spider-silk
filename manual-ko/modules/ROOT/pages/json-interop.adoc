@@ -96,6 +96,7 @@ Jackson이 만들 수 없는 매핑은 클라이언트가 아니라 프로그램
 
 ``JsonOutput``은 검사한 JSON만 담는다.
 그래서 ``@JsonRawValue``가 붙은 값은 파싱해 그 안의 값으로 쓰고, ``writeRaw``로 쓰는 원시 조각은 거부한다.
+``JsonOutput``은 모든 문자열을 UTF-8로 쓰므로, ``new JacksonCodecs(mapper)``는 ``JsonWriteFeature.ESCAPE_NON_ASCII``가 켜진 mapper를 그 기능을 무시하는 대신 ``IllegalArgumentException``으로 거부한다.
 
 Jackson은 리플렉션으로 바인딩하며, 이 모듈은 애플리케이션이 그것을 택하는 자리다.
 그러면 xref:native-image.adoc[네이티브 이미지]에는 바인딩되는 모든 타입에 리플렉션 항목이 필요하다.

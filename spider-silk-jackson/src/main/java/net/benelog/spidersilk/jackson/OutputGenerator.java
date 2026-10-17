@@ -45,8 +45,9 @@ import net.benelog.silkjson.JsonOutput;
  * <p>The features Jackson's own JSON generator reads are read here too, with
  * two that ask for text JSON has no syntax for refused instead: NaN and an
  * infinity with {@link JsonWriteFeature#WRITE_NAN_AS_STRINGS} disabled, and a
- * raw fragment. {@link JsonWriteFeature#ESCAPE_NON_ASCII} has no effect: the
- * output writes every string as UTF-8, which reads back as the same string.
+ * raw fragment. {@link JsonWriteFeature#ESCAPE_NON_ASCII} never reaches a
+ * generator: the output writes every string as UTF-8, so {@link JacksonCodecs}
+ * refuses a mapper that has it on.
  */
 final class OutputGenerator extends JsonGenerator {
 
