@@ -120,7 +120,11 @@ JSON-P는 객체를 클래스에 바인딩하지 않는다.
   double은 `Double.toString`대로 쓴다.
 - **`JsonpCodecs.object(fn)`**: 트리의 접근자는 JSON-P가 정한 예외를 표시된 하위 클래스로 던지고, 함수 안에서 난 그 예외는 그 메시지 그대로 `JsonException`이 된다.
   트리가 던지지 않은 NPE·CCE는 일반적인 메시지의 `JsonException`이 되어, 프로그램의 메시지가 클라이언트에 가지 않는다.
-- **남은 것**: 진짜 스트리밍 입력(4단계)과 Parsson 대비 성능 측정, 그리고 `Json.*`의 `ServiceLoader` 경로가 네이티브 이미지에서 동작하는지의 확인이다.
+- **네이티브 이미지**: 2026-10-23에 GraalVM CE 25.2.4로 확인했다.
+  `JsonProvider.provider()`와 `Json.*`의 `ServiceLoader` 경로, 생성자, `JsonpCodecs`가 설정 없이 동작하고, 출력은 JVM과 같다.
+  처음에는 `Charset.forName("UTF-32BE")`가 `Documents`의 정적 초기화에서 `UnsupportedCharsetException`을 던져 UTF-8 문서도 읽지 못했다.
+  UTF-32는 JDK의 확장 문자셋이라 `-H:+AddAllCharsets` 없이는 이미지에 들지 않으므로, 모듈이 직접 디코딩한다.
+- **남은 것**: 진짜 스트리밍 입력(4단계)과 Parsson 대비 성능 측정이다.
 
 ## core API에 JSON-P를 쓸 수 있는가
 

@@ -261,6 +261,20 @@ class SilkJsonProviderTest {
                 .isInstanceOf(JsonParsingException.class).hasMessageContaining("Unpaired surrogate U+D800");
     }
 
+    /** UTF-32 is decoded here rather than by the JDK, whose UTF-32 a native image leaves out, and a malformed one is refused. */
+    @Test
+    void utf32IsDecodedByHandAndHeldToItsForm() {
+        byte[] surrogate = {0, 0, 0, '[', 0, 0, (byte) 0xD8, 0, 0, 0, 0, ']'};
+        byte[] short4 = {0, 0, 0, '[', 0, 0, 0, ']', 0, 0};
+
+        assertThatThrownBy(() -> JSON.createReader(new ByteArrayInputStream(surrogate)).readArray())
+                .isInstanceOf(JsonParsingException.class).hasMessage("Not a UTF-32 character: 0x0000D800");
+        assertThatThrownBy(() -> JSON.createParser(new ByteArrayInputStream(short4)))
+                .isInstanceOf(JsonParsingException.class).hasMessageContaining("ends 2 bytes into one");
+        assertThat(JSON.createReader(new ByteArrayInputStream(new byte[] {(byte) 0xFF, (byte) 0xFE, 0, 0, '7', 0, 0, 0}))
+                .readValue()).isEqualTo(JSON.createValue(7));
+    }
+
     /** The generator writes through JsonOutput: strings escaped as silk-json escapes them, and doubles as Double.toString writes them. */
     @Test
     void aGeneratorWritesThroughJsonOutput() {

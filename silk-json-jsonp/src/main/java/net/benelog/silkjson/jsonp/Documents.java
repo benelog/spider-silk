@@ -19,9 +19,6 @@ import jakarta.json.stream.JsonParsingException;
  */
 final class Documents {
 
-    private static final Charset UTF_32BE = Charset.forName("UTF-32BE");
-    private static final Charset UTF_32LE = Charset.forName("UTF-32LE");
-
     private Documents() {
     }
 
@@ -74,10 +71,10 @@ final class Documents {
             int b2 = bytes[2] & 0xFF;
             int b3 = bytes[3] & 0xFF;
             if (b0 == 0 && b1 == 0 && b2 == 0xFE && b3 == 0xFF) {
-                return utf8(new String(bytes, 4, bytes.length - 4, UTF_32BE));
+                return utf8(utf32(bytes, 4, true));
             }
             if (b0 == 0xFF && b1 == 0xFE && b2 == 0 && b3 == 0) {
-                return utf8(new String(bytes, 4, bytes.length - 4, UTF_32LE));
+                return utf8(utf32(bytes, 4, false));
             }
             if (b0 == 0xFE && b1 == 0xFF) {
                 return utf8(new String(bytes, 2, bytes.length - 2, StandardCharsets.UTF_16BE));
@@ -86,19 +83,47 @@ final class Documents {
                 return utf8(new String(bytes, 2, bytes.length - 2, StandardCharsets.UTF_16LE));
             }
             if (b0 == 0 && b1 == 0 && b2 == 0) {
-                return utf8(new String(bytes, UTF_32BE));
+                return utf8(utf32(bytes, 0, true));
             }
             if (b0 == 0 && b2 == 0) {
                 return utf8(new String(bytes, StandardCharsets.UTF_16BE));
             }
             if (b1 == 0 && b2 == 0 && b3 == 0) {
-                return utf8(new String(bytes, UTF_32LE));
+                return utf8(utf32(bytes, 0, false));
             }
             if (b1 == 0 && b3 == 0) {
                 return utf8(new String(bytes, StandardCharsets.UTF_16LE));
             }
         }
         return withoutByteOrderMark(bytes);
+    }
+
+    /**
+     * UTF-32 decoded by hand. The JDK's UTF-32 is an extended charset, which
+     * a native image leaves out unless it is built with every charset, and a
+     * code point UTF-32 cannot hold is refused here rather than read as
+     * U+FFFD.
+     */
+    private static String utf32(byte[] bytes, int from, boolean bigEndian) {
+        int end = bytes.length - (bytes.length - from) % 4;
+        StringBuilder text = new StringBuilder((end - from) / 4);
+        for (int i = from; i < end; i += 4) {
+            int c = bigEndian
+                    ? (bytes[i] & 0xFF) << 24 | (bytes[i + 1] & 0xFF) << 16 | (bytes[i + 2] & 0xFF) << 8 | (bytes[i + 3] & 0xFF)
+                    : (bytes[i + 3] & 0xFF) << 24 | (bytes[i + 2] & 0xFF) << 16 | (bytes[i + 1] & 0xFF) << 8 | (bytes[i] & 0xFF);
+            if (c < 0 || c > Character.MAX_CODE_POINT || (c >= Character.MIN_SURROGATE && c <= Character.MAX_SURROGATE)) {
+                String decoded = text.toString();
+                throw new JsonParsingException("Not a UTF-32 character: 0x%08X".formatted(c),
+                        location(decoded, decoded.length()));
+            }
+            text.appendCodePoint(c);
+        }
+        String decoded = text.toString();
+        if (end < bytes.length) {
+            throw new JsonParsingException("A UTF-32 document takes four bytes a character, and this one ends "
+                    + (bytes.length - end) + " bytes into one", location(decoded, decoded.length()));
+        }
+        return decoded;
     }
 
     static byte[] decoded(byte[] bytes, Charset charset) {

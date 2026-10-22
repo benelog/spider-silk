@@ -217,4 +217,6 @@ It compares the API jar with the one the TCK was cut from, which is the API's co
 
 Nothing in the module is reflection.
 The one lookup is the `ServiceLoader` inside `jakarta.json.Json`, which a provider made with its constructor never reaches.
+A xref:native-image.adoc[native image] runs the module with no configuration, `jakarta.json.Json` included, since GraalVM registers the provider its services file names.
+UTF-32 is decoded by the module itself, since a native image carries no UTF-32 charset unless it is built with every charset.
 xref:reflection-scope.adoc[The Scope of "No Reflection"] places the module on core's side of the rule.
