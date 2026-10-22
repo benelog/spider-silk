@@ -124,6 +124,9 @@ Hello, silk
 | `spider-silk-jackson`
 | xref:json-interop.adoc#jackson[`JacksonCodecs`]: 핸들러가 받는 `JsonWriter`와 `JsonReader` 뒤의 Jackson 3
 
+| `silk-json-jsonp`
+| xref:jsonp.adoc[`SilkJsonProvider`]: silk-json 위의 Jakarta JSON Processing, 그리고 핸들러가 받는 ``JsonWriter``와 ``JsonReader`` 뒤의 JSON-P 트리인 `JsonpCodecs`
+
 | `spider-silk-openapi`
 | xref:openapi.adoc[`OpenApi`]: 라우트 목록을 담은 OpenAPI 3.1 문서
 
@@ -174,5 +177,5 @@ Hello, silk
 |===
 
 xref:gradle-plugin.adoc[Gradle 플러그인]은 같은 id인 ``{project-group}``으로 적용되고, xref:maven-parent.adoc[Maven 부모 POM]은 ``{project-group}:spider-silk-maven-parent``다.
-독립된 라이브러리인 xref:json.adoc#silk-json[silk-json]은 자신의 문자열인 `{silk-json-group}` 아래에서 같은 규칙을 따른다: 아티팩트 ``{silk-json-group}:silk-json``과 ``{silk-json-group}:silk-json-processor``, 패키지 루트 ``{silk-json-group}``, 그리고 프로세서의 ``{silk-json-group}.processor``다.
+독립된 라이브러리인 xref:json.adoc#silk-json[silk-json]은 자신의 문자열인 `{silk-json-group}` 아래에서 같은 규칙을 따른다: 아티팩트 ``{silk-json-group}:silk-json``, ``{silk-json-group}:silk-json-processor``, ``{silk-json-group}:silk-json-jsonp``, 패키지 루트 ``{silk-json-group}``, 그리고 나머지 둘의 ``{silk-json-group}.processor``와 ``{silk-json-group}.jsonp``다.
 https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[결정 32]가 그 근거를 제시한다.

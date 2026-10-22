@@ -1,0 +1,220 @@
+= Jakarta JSON Processing
+:navtitle: Jakarta JSON Processing
+
+`silk-json-jsonp` implements Jakarta JSON Processing (JSON-P) 2.1 on xref:json.adoc#silk-json[silk-json].
+Its parser reads with a `JsonInput`, its generator writes with a `JsonOutput`, and its tree is immutable and built with no reflection.
+It passes the JSON-P TCK, and its `JsonpCodecs` hands a JSON-P tree to whatever takes a silk-json `JsonWriter` or `JsonReader`.
+
+[#setup]
+== Setup
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation '{silk-json-group}:silk-json-jsonp:{project-version}'
+}
+----
+
+[source,xml,subs="attributes+"]
+----
+<dependency>
+  <groupId>{silk-json-group}</groupId>
+  <artifactId>silk-json-jsonp</artifactId>
+  <version>{project-version}</version>
+</dependency>
+----
+
+The module depends on silk-json and `jakarta.json-api` 2.1, and not on core.
+An application that is not a Spider Silk one takes it alone, as it takes silk-json.
+Its package is `{silk-json-group}.jsonp`.
+
+[#provider]
+== The provider
+
+`SilkJsonProvider` is the `JsonProvider`.
+You make it with its constructor, and keep it in a constant:
+
+[source,java]
+----
+static final JsonProvider JSON = new SilkJsonProvider();
+
+JsonObject deck = JSON.createObjectBuilder()
+        .add("name", "French")
+        .add("cards", JSON.createArrayBuilder().add("bonjour").add("merci"))
+        .build();
+JsonObject read = JSON.createReader(new StringReader(text)).readObject();
+----
+
+The module also names the class in `META-INF/services/jakarta.json.spi.JsonProvider`, so the static methods of `jakarta.json.Json` find it.
+Those methods look the provider up through a `ServiceLoader` on every call.
+A provider kept in a constant skips that lookup, and so does a factory made from one.
+With another provider on the class path as well, such as Parsson, `Json` takes whichever one the `ServiceLoader` finds first.
+The constructor names the one you mean.
+
+Every method is safe to call from many threads, and every `create` method makes a new object.
+
+[#reading]
+== Reading
+
+A parser or a reader reads the whole document into memory, and parses it as UTF-8.
+
+* A byte stream in UTF-8 goes to the parser as it was read.
+* A `Reader`, and a byte stream in UTF-16 or UTF-32, is decoded and encoded once more first.
+  A byte stream's encoding is told from its first four bytes, as RFC 4627 has it.
+  A UTF-8 byte order mark is passed over.
+* A parser reads its stream when it is made, so an I/O error is a `JsonException` from `createParser`.
+  A reader reads its stream in `read()`, and an I/O error is a `JsonException` from there.
+
+The syntax is RFC 8259's with no extension, as silk-json reads it.
+Objects and arrays nest at most 256 levels.
+A surrogate without its pair in the text of a `Reader` is refused.
+
+A document is one value.
+Text after it is a `JsonParsingException`, from the parser's `hasNext()` and from the reader's `read()`.
+`getLocation()` of the exception answers the line and the column from 1 and the offset from 0, counted in characters.
+
+A key that repeats in an object keeps its first place, and the value `JsonConfig.KEY_STRATEGY` says:
+
+[cols="1,3",options="header"]
+|===
+| `KeyStrategy` | The object keeps
+
+| `LAST`, the default
+| The last value
+
+| `FIRST`
+| The first value
+
+| `NONE`
+| Nothing: the repeated key is a `JsonParsingException` from a reader or a parser, and a `JsonException` from a builder
+|===
+
+A reader factory, a parser factory, and a builder factory take the property, as a `KeyStrategy` or its name.
+The parser's own events report every key, and its `getObject()` keeps them by the strategy.
+
+[#writing]
+== Writing
+
+The generator and the writer write through a `JsonOutput`, so a document goes out as silk-json writes one.
+
+* A string is UTF-8, escaped as silk-json escapes it.
+* A `double` is written as `Double.toString` writes it, `1.0E10`, which is also what Parsson writes.
+  JSON-P's javadoc names `BigDecimal.valueOf(value).toString()`, `1.0E+10`, and both texts read as the same double.
+* A `JsonNumber` is written as its `toString()`, which JSON-P makes the text of its `BigDecimal`.
+
+A call out of place, such as `write(value)` inside an object without a key, is a `JsonGenerationException` before anything is written.
+`close()` on an unfinished document is one too, and leaves the stream open.
+
+A generator factory and a writer factory take `JsonGenerator.PRETTY_PRINTING`, which is on for any value but `false`.
+The layout is Parsson's: a member or an element to a line, four spaces a level, and a space after each colon.
+
+[source,json]
+----
+{
+    "name": "French",
+    "cards": [
+        "bonjour",
+        "merci"
+    ]
+}
+----
+
+A `Writer`, and a byte stream in an encoding other than UTF-8, takes the bytes decoded into characters as they are sent.
+
+[#tree]
+== The tree
+
+An object is an immutable `Map` in the order its members were put or parsed, and an array is an immutable `List`.
+Every change throws `UnsupportedOperationException`.
+
+* An accessor throws what JSON-P names: `NullPointerException` for a missing key, `ClassCastException` for a value of another kind, and `IndexOutOfBoundsException` for an index past the array.
+  The message names the key or the index, and the kind found.
+* Two numbers are equal when their `BigDecimal` values are, as JSON-P has it, so `1` and `1.0` are two numbers.
+  A whole number a `long` holds is kept as a `long` until a decimal is asked for.
+* `getValue(pointer)` resolves with this module's pointer.
+  The interface's default looks a provider up for every call.
+
+`createObjectBuilder(map)` and `createArrayBuilder(collection)` take a Java value by its type, told apart with `instanceof`.
+Null, a JSON-P value or builder, a string, a boolean, a number, and a collection, a map, or an array of these are taken.
+An empty `Optional` leaves its entry out, and a present one stands for its value.
+Any other type is an `IllegalArgumentException`.
+
+[#pointer]
+== JSON Pointer, JSON Patch, and JSON Merge Patch
+
+These work on any provider's tree, and answer a new tree that shares every value off the changed path with the target.
+
+* A JSON Pointer is RFC 6901's.
+  An array index has no leading zero, and `-` names the place after the last element, which only `add` takes.
+  A tilde followed by anything but `0` or `1` stands for itself, which the RFC leaves to the application.
+* A JSON Patch is RFC 6902's.
+  `createDiff` compares two arrays through the longest run of elements they share in order.
+  Two arrays whose lengths multiply past four million are replaced whole.
+* A JSON Merge Patch is RFC 7396's.
+
+[#codecs]
+== In a Spider Silk application
+
+`JsonpCodecs` puts the JSON-P tree where core takes a `JsonWriter` or a `JsonReader`.
+A PATCH endpoint with a merge patch reads:
+
+[source,java]
+----
+static final JsonProvider JSON = new SilkJsonProvider();
+
+app.patch("/api/decks/{deckId}", req -> {
+    JsonObject deck = deckService.deckAsJson(req.pathParamLong("deckId"));
+    JsonObject patch = req.bodyJson(JsonpCodecs.OBJECT);
+    JsonValue patched = JSON.createMergePatch(patch).apply(deck);
+    return WebResponse.json(patched, JsonpCodecs.WRITER);
+});
+----
+
+[cols="2,3",options="header"]
+|===
+| Member | What it is
+
+| `WRITER`
+| A `JsonWriter<JsonValue>` that walks any provider's tree into the `JsonOutput`, straight into the buffer the response goes out from
+
+| `OBJECT`, `ARRAY`, `VALUE`
+| A `JsonReader` that builds the tree off the `JsonInput`, with no events in between
+
+| `object(fromObject)`
+| A `JsonReader<T>` of an object, built from a function of its `JsonObject`, the shape of silk-json's `JsonReader.object`
+|===
+
+A body these readers cannot read answers 400, as a hand-written reader's rejection does.
+A key that repeats keeps its last value.
+
+Inside the function of `object`, an accessor's `NullPointerException`, `ClassCastException`, and `IndexOutOfBoundsException`, and the `ArithmeticException` of an exact read such as `longValueExact()`, answer 400 as well.
+
+[source,java]
+----
+static final JsonReader<NewDeck> NEW_DECK = JsonpCodecs.object(object -> new NewDeck(
+        object.getString("name"),
+        object.getInt("limit", 20)));
+----
+
+The 400 carries the tree's own message, which names the key and never quotes the body.
+An exception the tree did not throw, such as the one from dereferencing the null of `getJsonObject` for a missing key, answers 400 with a general message, so nothing of the program goes back to the client.
+
+Core's own API stays silk-json's.
+`req.bodyJson()` answers silk-json's tree, and an application takes the JSON-P one endpoint by endpoint.
+
+[#tck]
+== Conformance
+
+The build runs the JSON-P TCK 2.1.1 against the provider as part of `check`, and all of its 178 tests pass.
+
+[source,bash]
+----
+./gradlew :silk-json-jsonp:tck
+----
+
+The TCK's signature test is left out.
+It compares the API jar with the one the TCK was cut from, which is the API's concern rather than a provider's.
+
+Nothing in the module is reflection.
+The one lookup is the `ServiceLoader` inside `jakarta.json.Json`, which a provider made with its constructor never reaches.
+xref:reflection-scope.adoc[The Scope of "No Reflection"] places the module on core's side of the rule.

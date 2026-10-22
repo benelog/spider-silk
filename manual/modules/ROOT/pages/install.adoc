@@ -124,6 +124,9 @@ Add one only when you want what it names instead of, or beside, the core default
 | `spider-silk-jackson`
 | xref:json-interop.adoc#jackson[`JacksonCodecs`]: Jackson 3 behind the `JsonWriter` and `JsonReader` handlers take
 
+| `silk-json-jsonp`
+| xref:jsonp.adoc[`SilkJsonProvider`]: Jakarta JSON Processing on silk-json, and `JsonpCodecs`, the JSON-P tree behind the `JsonWriter` and `JsonReader` handlers take
+
 | `spider-silk-openapi`
 | xref:openapi.adoc[`OpenApi`]: the route list as an OpenAPI 3.1 document
 
@@ -174,5 +177,5 @@ It is not published.
 |===
 
 The xref:gradle-plugin.adoc[Gradle plugin] is applied by that same id, `{project-group}`, and the xref:maven-parent.adoc[Maven parent] is `{project-group}:spider-silk-maven-parent`.
-xref:json.adoc#silk-json[silk-json], a library of its own, follows the same rule under a string of its own, `{silk-json-group}`: the artifacts `{silk-json-group}:silk-json` and `{silk-json-group}:silk-json-processor`, the package root `{silk-json-group}`, and `{silk-json-group}.processor` for the processor.
+xref:json.adoc#silk-json[silk-json], a library of its own, follows the same rule under a string of its own, `{silk-json-group}`: the artifacts `{silk-json-group}:silk-json`, `{silk-json-group}:silk-json-processor`, and `{silk-json-group}:silk-json-jsonp`, the package root `{silk-json-group}`, and `{silk-json-group}.processor` and `{silk-json-group}.jsonp` for the other two.
 https://github.com/benelog/spider-silk/blob/main/notes/decisions.md[Decision 32] gives the reasoning.

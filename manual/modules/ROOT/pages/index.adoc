@@ -124,7 +124,7 @@ In development, a `DirectoryCodeResolver` reading the source directory shows an 
 
 === An extensible module structure
 Spider Silk provides optional modules so that widely used technologies beyond the default stack can be used as well.
-Every module depends on `spider-silk-core`, and core depends on none of them but xref:json.adoc#silk-json[`silk-json`], the JSON library it is built on.
+Every module but silk-json's own depends on `spider-silk-core`, and core depends on none of them but xref:json.adoc#silk-json[`silk-json`], the JSON library it is built on.
 
 [cols="1,2,4,2",options="header"]
 |===
@@ -136,7 +136,7 @@ Every module depends on `spider-silk-core`, and core depends on none of them but
 The default web server is Jetty, and the default template engine is jte.
 | `gg.jte:jte`, embedded Jetty (`jetty-ee10-servlet`), `silk-json`
 
-.2+| JSON
+.3+| JSON
 | xref:json.adoc#silk-json[`silk-json`]
 | The JSON library core is built on: writers, readers, the tree, and `@JsonBound`.
 It is a library of its own, so an application on another framework can use it too.
@@ -146,6 +146,11 @@ It is a library of its own, so an application on another framework can use it to
 | Binds with Jackson through the `JsonWriter` and `JsonReader` that handlers take.
 The `ObjectMapper` is handed over once, to the constructor of `JacksonCodecs`.
 | core, `jackson-databind` 3.1.x
+
+| xref:jsonp.adoc[`silk-json-jsonp`]
+| Implements Jakarta JSON Processing 2.1 on silk-json, and passes its TCK.
+`JsonpCodecs` puts the JSON-P tree behind the `JsonWriter` and `JsonReader` that handlers take.
+| `silk-json`, `jakarta.json-api` 2.1.x
 
 .2+| Web server
 | xref:tomcat.adoc[`spider-silk-tomcat`]

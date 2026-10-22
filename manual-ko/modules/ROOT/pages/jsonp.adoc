@@ -1,0 +1,220 @@
+= Jakarta JSON Processing
+:navtitle: Jakarta JSON Processing
+
+``silk-json-jsonp``는 xref:json.adoc#silk-json[silk-json] 위에 Jakarta JSON Processing(JSON-P) 2.1을 구현한다.
+그 파서는 ``JsonInput``으로 읽고, 생성기는 ``JsonOutput``으로 쓰며, 트리는 불변이고 리플렉션 없이 만들어진다.
+이 모듈은 JSON-P TCK를 통과하며, 그 ``JsonpCodecs``는 silk-json의 ``JsonWriter``나 ``JsonReader``를 받는 곳이면 어디에나 JSON-P 트리를 건넨다.
+
+[#setup]
+== 설정
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation '{silk-json-group}:silk-json-jsonp:{project-version}'
+}
+----
+
+[source,xml,subs="attributes+"]
+----
+<dependency>
+  <groupId>{silk-json-group}</groupId>
+  <artifactId>silk-json-jsonp</artifactId>
+  <version>{project-version}</version>
+</dependency>
+----
+
+이 모듈은 silk-json과 `jakarta.json-api` 2.1에 의존하며, 코어에는 의존하지 않는다.
+Spider Silk 애플리케이션이 아닌 애플리케이션은 silk-json을 가져다 쓰듯 이 모듈만 가져다 쓴다.
+그 패키지는 ``{silk-json-group}.jsonp``다.
+
+[#provider]
+== 프로바이더
+
+``SilkJsonProvider``가 ``JsonProvider``다.
+생성자로 만들고, 상수에 둔다:
+
+[source,java]
+----
+static final JsonProvider JSON = new SilkJsonProvider();
+
+JsonObject deck = JSON.createObjectBuilder()
+        .add("name", "French")
+        .add("cards", JSON.createArrayBuilder().add("bonjour").add("merci"))
+        .build();
+JsonObject read = JSON.createReader(new StringReader(text)).readObject();
+----
+
+이 모듈은 ``META-INF/services/jakarta.json.spi.JsonProvider``에도 이 클래스를 적어 두므로, ``jakarta.json.Json``의 정적 메서드도 이것을 찾는다.
+그 메서드들은 호출할 때마다 ``ServiceLoader``로 프로바이더를 찾는다.
+상수에 둔 프로바이더는 그 탐색을 건너뛰며, 그것으로 만든 팩토리도 마찬가지다.
+Parsson 같은 다른 프로바이더도 클래스패스에 있으면, ``Json``은 ``ServiceLoader``가 먼저 찾는 쪽을 쓴다.
+생성자는 의도한 쪽을 지명한다.
+
+모든 메서드는 여러 스레드에서 불러도 안전하며, 모든 `create` 메서드는 새 객체를 만든다.
+
+[#reading]
+== 읽기
+
+파서와 리더는 문서 전체를 메모리로 읽어 들여 UTF-8로 파싱한다.
+
+* UTF-8 바이트 스트림은 읽은 그대로 파서에 간다.
+* ``Reader``와 UTF-16이나 UTF-32 바이트 스트림은 먼저 디코딩하고 한 번 더 인코딩한다.
+  바이트 스트림의 인코딩은 RFC 4627이 정한 대로 처음 네 바이트로 판별한다.
+  UTF-8 바이트 순서 표시는 건너뛴다.
+* 파서는 만들어질 때 스트림을 읽으므로, I/O 오류는 ``createParser``에서 나는 ``JsonException``이다.
+  리더는 ``read()``에서 스트림을 읽으며, I/O 오류는 거기서 나는 ``JsonException``이다.
+
+문법은 확장 없는 RFC 8259의 것이며, silk-json이 읽는 방식과 같다.
+객체와 배열은 최대 256단계까지 중첩된다.
+``Reader``의 텍스트에서 짝이 없는 서로게이트는 거부한다.
+
+문서는 값 하나다.
+그 뒤의 텍스트는 파서의 ``hasNext()``와 리더의 ``read()``에서 나는 ``JsonParsingException``이다.
+예외의 ``getLocation()``은 1부터 센 줄과 열, 0부터 센 오프셋을 문자 단위로 돌려준다.
+
+객체에서 되풀이된 키는 처음 자리를 지키며, 값은 ``JsonConfig.KEY_STRATEGY``가 말하는 쪽이다:
+
+[cols="1,3",options="header"]
+|===
+| `KeyStrategy` | 객체가 지키는 것
+
+| `LAST`, 기본값
+| 마지막 값
+
+| `FIRST`
+| 첫 값
+
+| `NONE`
+| 없음: 되풀이된 키는 리더나 파서에서는 ``JsonParsingException``이고, 빌더에서는 ``JsonException``이다
+|===
+
+리더 팩토리, 파서 팩토리, 빌더 팩토리가 이 속성을 ``KeyStrategy``나 그 이름으로 받는다.
+파서 자신의 이벤트는 모든 키를 알리고, 그 ``getObject()``는 전략에 따라 키를 지킨다.
+
+[#writing]
+== 쓰기
+
+생성기와 라이터는 ``JsonOutput``을 거쳐 쓰므로, 문서는 silk-json이 쓰는 대로 나간다.
+
+* 문자열은 UTF-8이며, silk-json이 이스케이프하는 대로 이스케이프된다.
+* ``double``은 ``Double.toString``이 쓰는 대로 ``1.0E10``으로 쓰이며, 이는 Parsson이 쓰는 것과도 같다.
+  JSON-P의 javadoc은 ``BigDecimal.valueOf(value).toString()``인 ``1.0E+10``을 지명하며, 두 텍스트는 같은 double로 읽힌다.
+* ``JsonNumber``는 그 ``toString()``으로 쓰이며, JSON-P는 이것을 그 ``BigDecimal``의 텍스트로 정한다.
+
+키 없이 객체 안에서 부른 ``write(value)``처럼 제자리가 아닌 호출은 아무것도 쓰기 전에 ``JsonGenerationException``이다.
+끝나지 않은 문서에 대한 ``close()``도 그러하며, 스트림은 열린 채로 둔다.
+
+생성기 팩토리와 라이터 팩토리는 ``JsonGenerator.PRETTY_PRINTING``을 받으며, 이것은 `false` 말고 어떤 값이든 켜진다.
+배치는 Parsson의 것이다: 멤버나 요소 하나에 한 줄, 한 단계에 공백 네 칸, 각 콜론 뒤에 공백 하나.
+
+[source,json]
+----
+{
+    "name": "French",
+    "cards": [
+        "bonjour",
+        "merci"
+    ]
+}
+----
+
+``Writer``와 UTF-8이 아닌 인코딩의 바이트 스트림은 바이트가 보내질 때 문자로 디코딩된 것을 받는다.
+
+[#tree]
+== 트리
+
+객체는 멤버를 넣거나 파싱한 순서의 불변 ``Map``이고, 배열은 불변 ``List``다.
+모든 변경은 ``UnsupportedOperationException``을 던진다.
+
+* 접근자는 JSON-P가 지명하는 것을 던진다: 없는 키에는 ``NullPointerException``, 다른 종류의 값에는 ``ClassCastException``, 배열을 벗어난 인덱스에는 ``IndexOutOfBoundsException``이다.
+  메시지는 키나 인덱스, 그리고 찾은 종류를 밝힌다.
+* 두 수는 JSON-P가 정한 대로 그 ``BigDecimal``이 같을 때 같으므로, ``1``과 ``1.0``은 서로 다른 수다.
+  ``long``에 담기는 정수는 십진수를 요구받을 때까지 ``long``으로 둔다.
+* ``getValue(pointer)``는 이 모듈의 포인터로 찾는다.
+  인터페이스의 기본 구현은 호출마다 프로바이더를 찾는다.
+
+``createObjectBuilder(map)``와 ``createArrayBuilder(collection)``는 자바 값을 그 타입으로 받으며, 타입은 ``instanceof``로 가린다.
+null, JSON-P 값이나 빌더, 문자열, 불리언, 수, 그리고 이것들의 컬렉션, 맵, 배열을 받는다.
+비어 있는 ``Optional``은 그 항목을 빼고, 값이 있는 것은 그 값을 나타낸다.
+다른 타입은 ``IllegalArgumentException``이다.
+
+[#pointer]
+== JSON Pointer, JSON Patch, JSON Merge Patch
+
+이것들은 어느 프로바이더의 트리에서든 동작하며, 바뀐 경로 밖의 모든 값을 대상과 공유하는 새 트리를 돌려준다.
+
+* JSON Pointer는 RFC 6901의 것이다.
+  배열 인덱스에는 앞자리 0이 없으며, ``-``는 마지막 요소 다음 자리를 가리키고 이것은 ``add``만 받는다.
+  ``0``이나 `1` 말고 다른 것이 뒤따르는 물결표는 그 자신을 나타내며, RFC는 이것을 애플리케이션에 맡긴다.
+* JSON Patch는 RFC 6902의 것이다.
+  ``createDiff``는 두 배열을 순서대로 공유하는 요소의 가장 긴 열로 비교한다.
+  길이를 곱한 값이 사백만을 넘는 두 배열은 통째로 바꾼다.
+* JSON Merge Patch는 RFC 7396의 것이다.
+
+[#codecs]
+== Spider Silk 애플리케이션에서
+
+``JsonpCodecs``는 코어가 ``JsonWriter``나 ``JsonReader``를 받는 자리에 JSON-P 트리를 둔다.
+머지 패치를 쓰는 PATCH 엔드포인트는 이렇다:
+
+[source,java]
+----
+static final JsonProvider JSON = new SilkJsonProvider();
+
+app.patch("/api/decks/{deckId}", req -> {
+    JsonObject deck = deckService.deckAsJson(req.pathParamLong("deckId"));
+    JsonObject patch = req.bodyJson(JsonpCodecs.OBJECT);
+    JsonValue patched = JSON.createMergePatch(patch).apply(deck);
+    return WebResponse.json(patched, JsonpCodecs.WRITER);
+});
+----
+
+[cols="2,3",options="header"]
+|===
+| 멤버 | 무엇인가
+
+| `WRITER`
+| 어느 프로바이더의 트리든 ``JsonOutput``으로, 곧 응답이 나가는 버퍼로 곧바로 써 넣는 `JsonWriter<JsonValue>`
+
+| `OBJECT`, `ARRAY`, `VALUE`
+| 사이에 이벤트 없이 ``JsonInput``에서 바로 트리를 만드는 `JsonReader`
+
+| `object(fromObject)`
+| 객체의 ``JsonObject``에 대한 함수로 만드는 객체의 ``JsonReader<T>``이며, silk-json의 ``JsonReader.object``와 같은 모양이다
+|===
+
+이 리더들이 읽지 못하는 본문은 손으로 작성한 리더가 거부할 때처럼 400으로 답한다.
+되풀이된 키는 마지막 값을 지킨다.
+
+``object``의 함수 안에서는 접근자의 ``NullPointerException``, ``ClassCastException``, ``IndexOutOfBoundsException``과, ``longValueExact()`` 같은 정확한 읽기의 ``ArithmeticException``도 400으로 답한다.
+
+[source,java]
+----
+static final JsonReader<NewDeck> NEW_DECK = JsonpCodecs.object(object -> new NewDeck(
+        object.getString("name"),
+        object.getInt("limit", 20)));
+----
+
+400은 트리 자신의 메시지를 담으며, 이 메시지는 키를 밝히고 본문을 인용하지 않는다.
+없는 키에 대해 ``getJsonObject``가 돌려준 null을 역참조할 때 나는 예외처럼 트리가 던지지 않은 예외는 일반적인 메시지의 400으로 답하므로, 프로그램에 관한 것은 아무것도 클라이언트에 돌아가지 않는다.
+
+코어 자신의 API는 silk-json의 것으로 남는다.
+``req.bodyJson()``은 silk-json의 트리를 돌려주며, 애플리케이션은 엔드포인트마다 JSON-P 트리를 택한다.
+
+[#tck]
+== 적합성
+
+빌드는 ``check``의 일부로 JSON-P TCK 2.1.1을 이 프로바이더에 돌리며, 그 178개 테스트가 모두 통과한다.
+
+[source,bash]
+----
+./gradlew :silk-json-jsonp:tck
+----
+
+TCK의 시그니처 테스트는 뺀다.
+이 테스트는 API jar를 TCK가 만들어진 기준 jar와 비교하며, 이는 프로바이더가 아니라 API의 일이다.
+
+이 모듈에는 리플렉션이 없다.
+유일한 탐색은 ``jakarta.json.Json`` 안의 ``ServiceLoader``이며, 생성자로 만든 프로바이더는 거기에 닿지 않는다.
+xref:reflection-scope.adoc["리플렉션 없음"의 범위]는 이 모듈을 규칙의 코어 쪽에 둔다.

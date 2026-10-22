@@ -215,4 +215,5 @@ dependencies {
 ----
 
 xref:json-codegen.adoc#setup[생성되는 JSON 코덱]은 그 프로세서인 ``silk-json-processor``를 같은 방식으로 더한다.
+xref:jsonp.adoc[Jakarta JSON Processing]은 silk-json 위의 JSON-P API인 ``silk-json-jsonp``를 같은 방식으로 더한다.
 이 라이브러리는 프레임워크와 함께, 프레임워크의 버전으로 릴리스되며, 독립된 라이브러리로 읽히도록 자신의 이름을 가진다.

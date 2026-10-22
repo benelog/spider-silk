@@ -124,7 +124,7 @@ jte는 모델 값을 리플렉션으로 읽지 않으므로 리플렉션 없음�
 
 === 확장성 있는 모듈 구조
 Spider Silk는 기본 기술 스택 외에도 많이 쓰이는 기술을 사용할 수 있도록 선택 모듈을 제공한다.
-모든 모듈은 ``spider-silk-core``에 의존하고, core는 그 위에 지어진 JSON 라이브러리인 xref:json.adoc#silk-json[`silk-json`] 말고는 어느 모듈에도 의존하지 않는다.
+silk-json 자신의 모듈을 뺀 모든 모듈은 ``spider-silk-core``에 의존하고, core는 그 위에 지어진 JSON 라이브러리인 xref:json.adoc#silk-json[`silk-json`] 말고는 어느 모듈에도 의존하지 않는다.
 
 [cols="1,2,4,2",options="header"]
 |===
@@ -136,7 +136,7 @@ Spider Silk는 기본 기술 스택 외에도 많이 쓰이는 기술을 사용�
 기본 웹 서버는 Jetty, 기본 템플릿 엔진은 jte다.
 | `gg.jte:jte`, 내장 Jetty (`jetty-ee10-servlet`), `silk-json`
 
-.2+| JSON
+.3+| JSON
 | xref:json.adoc#silk-json[`silk-json`]
 | core가 그 위에 지어진 JSON 라이브러리: 라이터, 리더, 트리, 그리고 ``@JsonBound``.
 독립된 라이브러리이므로 다른 프레임워크 위의 애플리케이션도 쓸 수 있다.
@@ -146,6 +146,11 @@ Spider Silk는 기본 기술 스택 외에도 많이 쓰이는 기술을 사용�
 | 핸들러가 받는 ``JsonWriter``와 ``JsonReader``를 통해 Jackson으로 바인딩한다.
 ``ObjectMapper``는 ``JacksonCodecs``의 생성자에 한 번 건넨다.
 | core, `jackson-databind` 3.1.x
+
+| xref:jsonp.adoc[`silk-json-jsonp`]
+| silk-json 위에 Jakarta JSON Processing 2.1을 구현하며, 그 TCK를 통과한다.
+``JsonpCodecs``는 핸들러가 받는 ``JsonWriter``와 ``JsonReader`` 뒤에 JSON-P 트리를 둔다.
+| `silk-json`, `jakarta.json-api` 2.1.x
 
 .2+| 웹 서버
 | xref:tomcat.adoc[`spider-silk-tomcat`]
