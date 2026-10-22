@@ -2,6 +2,7 @@ package benchmark.json;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -22,10 +23,12 @@ import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Warmup;
+import org.openjdk.jmh.infra.BenchmarkParams;
 
 /**
  * Jakarta JSON Processing on silk-json against Parsson, its reference
@@ -34,6 +37,14 @@ import org.openjdk.jmh.annotations.Warmup;
  * provider up, and each reads, walks as events, writes, generates, and builds
  * the same document. Both are on the class path together, which only
  * {@code jakarta.json.Json} would have to choose between, and no case calls it.
+ *
+ * <p>The {@code sized} cases read the same records in documents of 1 KB,
+ * 108 KB, 997 KB, just under the 1 MiB read whole by default, and 11 MB,
+ * each way silk-json-jsonp reads one: whole,
+ * by one {@code JsonInput}, and streamed, a value at a time. A document's
+ * size picks the way by default, whole up to 1 MiB and streamed past it, and
+ * a fork's system property puts every document on one of them instead, so
+ * the two are compared on the same documents.
  */
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
@@ -47,6 +58,10 @@ public class JsonpBench {
     static final JsonProvider PARSSON = new JsonProviderImpl();
 
     static final JsonCodec<List<Item>> ITEMS = JsonCodec.list(ItemJson.CODEC);
+
+    /** The fork arguments that read every document whole, and every document streamed. */
+    static final String WHOLE = "-Dnet.benelog.silkjson.jsonp.streamAbove=2147483647";
+    static final String STREAMED = "-Dnet.benelog.silkjson.jsonp.streamAbove=0";
     static final JsonCodec<List<Place>> PLACES = JsonCodec.list(PlaceJson.CODEC);
 
     byte[] listBytes;
@@ -131,6 +146,50 @@ public class JsonpBench {
         return seen;
     }
 
+    /**
+     * The records of {@link JsonBench}, as many as the case asks for, in one
+     * document. Its setup checks that the fork reads the document the way the
+     * case is named for, and that it reads the events and the tree Parsson
+     * reads.
+     */
+    @State(Scope.Thread)
+    public static class Sized {
+
+        @Param({"10", "1000", "9000", "100000"})
+        int records;
+
+        byte[] document;
+
+        @Setup
+        public void setup(BenchmarkParams params) {
+            prepare(params.getBenchmark());
+        }
+
+        /** Makes the document and checks it for the case of that name. */
+        void prepare(String benchmark) {
+            List<Item> items = new ArrayList<>(records);
+            for (int i = 1; i <= records; i++) {
+                items.add(new Item(i, "item-" + i, "The \"description\" of item " + i, i * 7 % 50, i % 3 != 0));
+            }
+            document = ITEMS.toJsonBytes(items);
+            String expected = benchmark.endsWith("_whole") ? "SilkJsonParser"
+                    : benchmark.endsWith("_streamed") ? "StreamingJsonParser"
+                    : null;
+            if (expected != null) {
+                try (JsonParser parser = SILK.createParser(new ByteArrayInputStream(document))) {
+                    if (!parser.getClass().getSimpleName().equals(expected)) {
+                        throw new IllegalStateException(benchmark + " reads with " + parser.getClass().getSimpleName()
+                                + ", not " + expected);
+                    }
+                }
+            }
+            if (events(SILK, document) != events(PARSSON, document)
+                    || !read(SILK, document).equals(read(PARSSON, document))) {
+                throw new IllegalStateException("The providers read the document of " + records + " records differently");
+            }
+        }
+    }
+
     // ---- reading the list of 100 records, 10 KB, as a tree ----
 
     @Benchmark
@@ -213,5 +272,41 @@ public class JsonpBench {
     @Benchmark
     public JsonArray build_parsson() {
         return build(PARSSON);
+    }
+
+    // ---- the same records in documents of four sizes, read whole and streamed ----
+
+    @Benchmark
+    @Fork(value = 2, jvmArgsAppend = WHOLE)
+    public long sizedEvents_whole(Sized sized) {
+        return events(SILK, sized.document);
+    }
+
+    @Benchmark
+    @Fork(value = 2, jvmArgsAppend = STREAMED)
+    public long sizedEvents_streamed(Sized sized) {
+        return events(SILK, sized.document);
+    }
+
+    @Benchmark
+    public long sizedEvents_parsson(Sized sized) {
+        return events(PARSSON, sized.document);
+    }
+
+    @Benchmark
+    @Fork(value = 2, jvmArgsAppend = WHOLE)
+    public JsonArray sizedRead_whole(Sized sized) {
+        return read(SILK, sized.document);
+    }
+
+    @Benchmark
+    @Fork(value = 2, jvmArgsAppend = STREAMED)
+    public JsonArray sizedRead_streamed(Sized sized) {
+        return read(SILK, sized.document);
+    }
+
+    @Benchmark
+    public JsonArray sizedRead_parsson(Sized sized) {
+        return read(PARSSON, sized.document);
     }
 }

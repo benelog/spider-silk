@@ -81,6 +81,11 @@ Each provider is made with its constructor, and reads the records and the places
 The `codecs` cases read and write the same tree through `JsonpCodecs`, the way a Spider Silk handler takes and answers with one.
 Its setup checks that both providers read the documents as equal trees and write the same text.
 
+The `sized` cases tell the two ways `silk-json-jsonp` reads a document apart: whole, by one `JsonInput`, and streamed, a value at a time.
+They read the same records in documents of 10, 1,000, 9,000, and 100,000 records, 1 KB, 108 KB, 997 KB, and 11 MB, as events and as a tree, each way and through Parsson.
+A document's size picks the way by default, whole up to 1 MiB and streamed past it, so the `_whole` and `_streamed` cases fork with `-Dnet.benelog.silkjson.jsonp.streamAbove` set to put every document on one way.
+Their setup checks that the fork reads the way the case is named for, and that it reads the events and the tree Parsson reads.
+
 ```bash
 taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench JsonpBench -jvmArgs "-Xms1g -Xmx1g" -prof gc
 ```
