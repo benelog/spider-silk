@@ -126,6 +126,17 @@ return WebResponse.json(deck, DECK); // serialized straight into the response bu
 - They work in `bodyNdjson`, `jsonArray`/`ndjson` sinks, and inside `JsonWriter.list`/`JsonReader.list` as well.
 - Do not pass the mapper to each call or wrap Jackson's output in `rawJson`: the module exists so a handler names a type and nothing else.
 
+For the JSON-P tree (`jakarta.json`: `JsonObject`, JSON Patch, JSON Merge Patch), add `silk-json-jsonp` and keep a `new SilkJsonProvider()` in a constant rather than calling `Json.*`, which looks the provider up on every call:
+
+```java
+static final JsonProvider JSON = new SilkJsonProvider();
+
+JsonObject patch = req.bodyJson(JsonpCodecs.OBJECT); // a body it cannot read is a 400
+return WebResponse.json(JSON.createMergePatch(patch).apply(deck), JsonpCodecs.WRITER);
+```
+
+- `JsonpCodecs.object(object -> new NewDeck(object.getString("name")))` reads a type off the tree, and a missing key or a wrong kind inside it is a 400.
+
 For Jackson 2 (`com.fasterxml.jackson`), Gson, or avaje-jsonb, wire it through the seam:
 
 ```java

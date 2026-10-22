@@ -6,6 +6,7 @@ core API의 `JsonValue`와 `JsonSink`는 JSON-P로 바꾸지 않고, JSON-P 트�
 Jackson은 `spider-silk-jackson` 모듈로 같은 자리에 붙었고, 쓰기는 `JsonOutput` 위의 `JsonGenerator` 구현으로 한다("Jackson을 같은 방식으로 붙일 수 있는가").
 근거는 `AGENTS.md`의 설계 원칙, 결정 76·77(`notes/decisions.md`), 2026-10-10 시점의 `silk-json`과 `silk-json-processor` 코드이다.
 다른 라이브러리가 두 스펙을 어떻게 지원하는지는 2026-10-13에 조사해 마지막 절에 적었다.
+JSON-P는 2026-10-23에 `silk-json-jsonp`로 구현했고, JSON-P TCK 2.1.1의 178개 테스트를 통과한다("구현 결과", 결정 80).
 
 ## 전제가 되는 원칙
 
@@ -100,6 +101,26 @@ JSON-P는 객체를 클래스에 바인딩하지 않는다.
    JSON-P 트리용 `JsonWriter`와 `JsonReader`도 이 모듈에 둔다(아래 "core API에 JSON-P를 쓸 수 있는가").
 3. JSON-P TCK를 돌려 실패 목록으로 범위를 정한다.
 4. 진짜 스트리밍 입력은 벤치마크로 hot path 영향을 확인한 뒤 따로 결정한다.
+
+### 구현 결과
+
+2026-10-23에 1~3단계를 마쳤다.
+
+- **이름**: 가칭 `silk-json-p` 대신 `silk-json-jsonp`이다.
+  빌드 규칙상 프로젝트 이름이 패키지가 되므로, `silk-json-p`의 패키지는 `net.benelog.silkjson.p`가 된다.
+  `JsonP`도 `JacksonCodecs`에 맞춰 `JsonpCodecs`로 했다.
+- **silk-json의 변경**: `JsonInput.peek()`와 `JsonInput.Kind`, 그리고 `JsonInput.position()`뿐이다.
+  위치는 바이트 인덱스이고, 파서가 물을 때 마지막으로 계산한 자리부터 이어 세어 줄과 열을 만든다.
+- **TCK**: 모듈의 `tck` 태스크가 `jakarta.json-tck-tests` 2.1.1을 `check`에서 돌린다.
+  시그니처 테스트를 뺀 23개 스위트 178개 테스트가 통과한다.
+  처음 실행의 실패는 넷이었다: 파서는 생성 시점에 스트림의 I/O 오류와 판별할 수 없는 인코딩을 `JsonException`으로 던져야 하고, `createValue(Number)`는 `Short`, `Float`, 임의의 `Number`도 받아야 하며, 포인터의 `~0`·`~1`이 아닌 물결표는 오류가 아니어야 했다.
+  리더는 반대로 `read()` 시점에 스트림을 읽어야 했다.
+- **스펙이 열어 둔 동작**은 Parsson을 따랐다.
+  pretty printing은 Parsson의 배치를 압축된 바이트 위의 필터로 만든다.
+  double은 `Double.toString`대로 쓴다.
+- **`JsonpCodecs.object(fn)`**: 트리의 접근자는 JSON-P가 정한 예외를 표시된 하위 클래스로 던지고, 함수 안에서 난 그 예외는 그 메시지 그대로 `JsonException`이 된다.
+  트리가 던지지 않은 NPE·CCE는 일반적인 메시지의 `JsonException`이 되어, 프로그램의 메시지가 클라이언트에 가지 않는다.
+- **남은 것**: 진짜 스트리밍 입력(4단계)과 Parsson 대비 성능 측정, 그리고 `Json.*`의 `ServiceLoader` 경로가 네이티브 이미지에서 동작하는지의 확인이다.
 
 ## core API에 JSON-P를 쓸 수 있는가
 

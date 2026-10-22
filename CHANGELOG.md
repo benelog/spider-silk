@@ -46,6 +46,12 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   The generated code calls the type's own accessors and constructor, with no reflection, no registry, and nothing for a native image.
   A component is required unless it is `@Nullable` or an `Optional`, and `-Asilkjson.names=explicit` makes a property without a `@JsonbProperty` name a compile error.
   An enum is written and read through its constants' names encoded once, as a property, in an `Optional`, as a collection element, or as a map value, and a name that is none of them is refused with `JsonException`.
+- `silk-json-jsonp`: a new module, Jakarta JSON Processing (JSON-P) 2.1 on silk-json, which passes the JSON-P TCK 2.1.1.
+  `SilkJsonProvider` is the `JsonProvider`: its parser reads with a `JsonInput`, its generator and writer write with a `JsonOutput`, and its tree is immutable and built with no reflection.
+  JSON Pointer, JSON Patch with `createDiff`, JSON Merge Patch, `JsonGenerator.PRETTY_PRINTING`, and `JsonConfig.KEY_STRATEGY` are implemented.
+  The module names the provider in its services file, so `jakarta.json.Json` finds it, and `new SilkJsonProvider()` skips that lookup.
+  `JsonpCodecs.WRITER`, `OBJECT`, `ARRAY`, `VALUE`, and `object(fromObject)` put the JSON-P tree where a `JsonWriter` or a `JsonReader` goes, and a body they cannot read is a 400.
+- `silk-json`: `JsonInput.peek()` answers the kind of the value that comes next, a `JsonInput.Kind`, with nothing read, and `JsonInput.position()` answers where the input stands as an index into the document's bytes.
 - `spider-silk-gradle-plugin`: `spiderSilk { json() }` puts the processor on the `annotationProcessor` path and `jakarta.json.bind-api` on the compile classpath.
 - `spider-silk-maven-parent`: the processor is on the compiler's processor path for every child.
 - `benchmark`: a `json-post` case, in which each request sends the 100 records of `json-list` as a body, and `json-bench`, a JMH microbenchmark of the serializer and the parser alone against Jackson and fastjson2.

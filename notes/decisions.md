@@ -93,8 +93,9 @@ What each thing *does* is the [manual](https://spider-silk.benelog.net).
 | 77 | `silk-json`, a JSON library tied to nothing, which core is built on | ✅ shipped |
 | 78 | `WebResponse.json` answers with a `Json` body, written into the thread's buffer and sent from there | ✅ shipped |
 | 79 | Java 25 is the floor | ✅ shipped |
+| 80 | `silk-json-jsonp`: JSON-P 2.1 on silk-json, a module apart from core | ✅ shipped |
 
-Eighty-one of the eighty-two shipped.
+Eighty-two of the eighty-three shipped.
 The exception, 15b, is a decision rather than a gap.
 "WebSocket / SSE" split into 15a–15c because SSE is HTTP and rides through `AppServlet`, while WebSocket is a protocol upgrade that does not.
 
@@ -1640,6 +1641,40 @@ Every module compiles with `release = 25`, the Jib base of the Gradle plugin and
 
 Rejected: a multi-release jar with a `META-INF/versions/22` copy of the string writer, which keeps 21 at the cost of two string paths to test and measure, for a path that measured slower.
 Rejected: 22, the first release with the foreign memory API final, whose updates ended in 2024.
+
+## 80 · JSON-P on silk-json
+
+### 80. `silk-json-jsonp` implements JSON-P 2.1 on silk-json, as a module apart from core
+
+`SilkJsonProvider` parses with `JsonInput`, writes with `JsonOutput`, and builds an immutable tree of its own, and the build runs the JSON-P TCK 2.1.1 against it in `check`.
+`JsonpCodecs` hands the JSON-P tree to core through `JsonWriter` and `JsonReader`, so core's API stays silk-json's (`notes/jakarta-json-support.md` has the review).
+
+- **A module of its own, under silk-json's name.**
+  - Implementing `jakarta.json` needs `jakarta.json-api`, and silk-json needs nothing but the JDK at run time (decision 77).
+  - It depends on silk-json and the API alone, so an application that is not a Spider Silk one takes it, as it takes silk-json.
+  - The name is `silk-json-jsonp` and the package `net.benelog.silkjson.jsonp`, from the build's rule that the project name is the package (decision 32).
+- **silk-json gained two methods, and nothing else changed.**
+  - `JsonInput.peek()` answers the kind of the next value from its first byte, which a pull parser needs before it reads.
+  - `JsonInput.position()` answers the byte index, from which the parser counts a line and a column only when asked.
+- **The document is read whole.**
+  - `JsonInput` reads a byte array, and refilling a buffer would touch the hot paths tuned a word at a time (decision 76).
+  - UTF-8 bytes go to the parser as read, and a `Reader` or UTF-16 or UTF-32 is encoded once more.
+  - A parser reads its stream when it is made, and a reader in `read()`, which is where the TCK expects each one's I/O error.
+- **The services file is the spec's entry point, not a lookup of this project's.**
+  - `jakarta.json.Json` calls `ServiceLoader` on every call, inside the API jar.
+  - The module only names the provider there, and `new SilkJsonProvider()` reaches nothing.
+  - Server discovery stays rejected: no code of core or silk-json reads a services file.
+- **Behaviour the spec leaves open follows Parsson.**
+  - Pretty printing is Parsson's layout, laid over the compact bytes by a filter, so `JsonOutput` stays compact.
+  - A double goes out as `Double.toString` writes it, as Parsson writes it, where the javadoc names `BigDecimal.valueOf(value).toString()`.
+  - A tilde outside an escape in a pointer stands for itself, which the TCK accepts and RFC 6901 leaves to the application.
+- **Inside `JsonpCodecs.object(fn)`, the tree's exceptions are a 400.**
+  - JSON-P answers a missing key with `NullPointerException` and a wrong kind with `ClassCastException`, which would be a 500 (decision 8).
+  - The tree throws them as marked subclasses, whose message names the key, and any other one answers 400 with a general message.
+
+Rejected: `silk-json-p`, whose package by the build's rule is `net.benelog.silkjson.p`.
+Rejected: the JSON-P tree in core's API, which changes every JSON signature of core and loses the 400 for a missing key (`notes/jakarta-json-support.md`).
+Rejected: a streaming parser now, before a benchmark shows what buffer refills cost `JsonInput`.
 
 ## Rejected — decisions, with the reason
 

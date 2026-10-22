@@ -1,0 +1,52 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Jakarta JSON Processing (JSON-P) on silk-json: a JsonProvider whose parser, generator, and tree run on JsonInput and JsonOutput.'
+
+dependencies {
+    api project(':silk-json')
+
+    // api, not implementation: every type the provider hands out is a
+    // jakarta.json one, so a consumer compiles against the API.
+    api 'jakarta.json:jakarta.json-api:2.1.3'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// The Jakarta JSON Processing TCK ships as a jar of JUnit tests that call
+// jakarta.json.Json, which finds this provider through its services file.
+// Resolved together with the module's own dependencies, so the TCK runs on
+// the API and the JUnit the module is built with rather than its own older ones.
+configurations {
+    tck {
+        extendsFrom configurations.implementation
+    }
+}
+
+dependencies {
+    tck 'jakarta.json:jakarta.json-tck-tests:2.1.1'
+    tck 'org.junit.jupiter:junit-jupiter:6.1.3'
+    tck 'org.junit.platform:junit-platform-launcher'
+}
+
+def tckClasses = tasks.register('tckClasses', Sync) {
+    from { configurations.tck.filter { it.name.startsWith('jakarta.json-tck-tests-') }.collect { zipTree(it) } }
+    into layout.buildDirectory.dir('tck-classes')
+}
+
+def tck = tasks.register('tck', Test) {
+    description = 'Runs the Jakarta JSON Processing TCK against SilkJsonProvider.'
+    group = 'verification'
+    testClassesDirs = files(tckClasses)
+    classpath = files(tckClasses) + sourceSets.main.output + configurations.tck
+    // The signature test compares the API jar with the one the TCK was cut
+    // from, which is the API's own business rather than a provider's.
+    exclude 'ee/jakarta/tck/jsonp/signaturetest/**'
+}
+
+tasks.named('check') {
+    dependsOn tck
+}

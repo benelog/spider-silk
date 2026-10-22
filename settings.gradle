@@ -10,6 +10,7 @@ rootProject.name = 'spider-silk'
 // run time and which spider-silk-core is built on; it lives here until its API settles.
 include 'silk-json'
 include 'silk-json-processor'
+include 'silk-json-jsonp'
 include 'spider-silk-core'
 include 'spider-silk-test'
 include 'spider-silk-tomcat'
