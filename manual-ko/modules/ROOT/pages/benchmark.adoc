@@ -659,7 +659,7 @@ GRAALVM_HOME=~/.sdkman/candidates/java/25.2.4-graalce ORACLE_GRAALVM_HOME=~/.sdk
 [source,bash]
 ----
 ../gradlew -p json-bench installDist
-taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench -jvmArgs "-Xms1g -Xmx1g" -prof gc
+taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench JsonBench -jvmArgs "-Xms1g -Xmx1g" -prof gc
 ----
 
 ``GRAALVM_HOME``이 없으면 JVM 대상만 측정한다.

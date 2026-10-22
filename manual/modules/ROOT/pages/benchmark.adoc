@@ -659,7 +659,7 @@ The microbenchmark runs on its own, from the `benchmark/` directory:
 [source,bash]
 ----
 ../gradlew -p json-bench installDist
-taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench -jvmArgs "-Xms1g -Xmx1g" -prof gc
+taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench JsonBench -jvmArgs "-Xms1g -Xmx1g" -prof gc
 ----
 
 Without `GRAALVM_HOME`, the run measures the JVM targets only.

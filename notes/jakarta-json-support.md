@@ -124,7 +124,10 @@ JSON-P는 객체를 클래스에 바인딩하지 않는다.
   `JsonProvider.provider()`와 `Json.*`의 `ServiceLoader` 경로, 생성자, `JsonpCodecs`가 설정 없이 동작하고, 출력은 JVM과 같다.
   처음에는 `Charset.forName("UTF-32BE")`가 `Documents`의 정적 초기화에서 `UnsupportedCharsetException`을 던져 UTF-8 문서도 읽지 못했다.
   UTF-32는 JDK의 확장 문자셋이라 `-H:+AddAllCharsets` 없이는 이미지에 들지 않으므로, 모듈이 직접 디코딩한다.
-- **남은 것**: 진짜 스트리밍 입력(4단계)과 Parsson 대비 성능 측정이다.
+- **성능 측정**: `benchmark/json-bench`의 `JsonpBench`가 Parsson과 같은 100개 레코드·100개 장소로 트리 읽기, 이벤트 파싱, 트리 쓰기, 생성기, 빌더를 비교한다.
+  setup에서 두 프로바이더가 같은 트리로 읽고 같은 텍스트로 쓰는지 확인한다.
+  코드만 준비했고, 측정은 아직 하지 않았다.
+- **남은 것**: 진짜 스트리밍 입력(4단계)과 `JsonpBench`의 측정이다.
 
 ## core API에 JSON-P를 쓸 수 있는가
 

@@ -7,7 +7,7 @@ The manual's [Performance Benchmark](../manual/modules/ROOT/pages/benchmark.adoc
 
 - `spider-silk-app/`: the Spider Silk application, on Jetty or Tomcat, rendering with jte or Thymeleaf, with its JSON through the codecs generated from its records.
 - `spring-boot-app/`: the Spring Boot application, with Spring Web MVC, Jackson, and Thymeleaf on Spring Boot's defaults.
-- `json-bench/`: a JMH microbenchmark of the JSON serializer and parser alone, on the documents the HTTP cases send and on a document of decimals, against Jackson and fastjson2.
+- `json-bench/`: a JMH microbenchmark of the JSON serializer and parser alone, on the documents the HTTP cases send and on a document of decimals, against Jackson and fastjson2, and of `silk-json-jsonp` against Parsson.
 - `items.json`: the 100 records the `json-list` case answers with, which the `json-post` case sends as a body through `post-items.lua`.
 - `run.sh`: runs the whole benchmark through the scripts below, starts a fresh process per case, warms it up, measures it with [wrk](https://github.com/wg/wrk), and writes `results/<timestamp>/`.
 - `native-build.sh`: builds both applications as GraalVM native images from a clean project and times each build.
@@ -68,10 +68,22 @@ The documents those reads take are made in a `@State` that only they use, since 
 
 ```bash
 ../gradlew -p json-bench installDist
-taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench -jvmArgs "-Xms1g -Xmx1g" -prof gc
+taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench JsonBench -jvmArgs "-Xms1g -Xmx1g" -prof gc
 ```
 
 Each case runs in two forks of five warm-up and five measured iterations of a second, pinned to the server CPUs, and `-prof gc` reports the bytes allocated per operation beside the time.
+`JsonBench` names the appendix's cases, which leaves out the JSON-P comparison below.
+
+### Jakarta JSON Processing
+
+`JsonpBench` measures `silk-json-jsonp` against Parsson, the reference implementation of Jakarta JSON Processing, on the same 100 records and 100 places.
+Each provider is made with its constructor, and reads the records and the places as a tree, walks the records as parser events, writes the tree, generates the records with a `JsonGenerator`, and builds their tree with the builders.
+The `codecs` cases read and write the same tree through `JsonpCodecs`, the way a Spider Silk handler takes and answers with one.
+Its setup checks that both providers read the documents as equal trees and write the same text.
+
+```bash
+taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench JsonpBench -jvmArgs "-Xms1g -Xmx1g" -prof gc
+```
 
 ### In a native image
 
