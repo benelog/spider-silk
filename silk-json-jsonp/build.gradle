@@ -16,6 +16,12 @@ dependencies {
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 
+// A small heap, so that a test parsing a document larger than the heap shows
+// that a streamed document is never held whole.
+tasks.named('test', Test) {
+    maxHeapSize = '64m'
+}
+
 // The Jakarta JSON Processing TCK ships as a jar of JUnit tests that call
 // jakarta.json.Json, which finds this provider through its services file.
 // Resolved together with the module's own dependencies, so the TCK runs on
@@ -47,6 +53,20 @@ def tck = tasks.register('tck', Test) {
     exclude 'ee/jakarta/tck/jsonp/signaturetest/**'
 }
 
+// The TCK's documents are small, so the run above reads every one whole. This
+// one streams every document, with a piece of 16 bytes, so that the outer
+// parser reads every object and array but the smallest, and the documents
+// pass through both of its paths.
+def tckStreamed = tasks.register('tckStreamed', Test) {
+    description = 'Runs the Jakarta JSON Processing TCK with every document streamed.'
+    group = 'verification'
+    testClassesDirs = files(tckClasses)
+    classpath = files(tckClasses) + sourceSets.main.output + configurations.tck
+    exclude 'ee/jakarta/tck/jsonp/signaturetest/**'
+    systemProperty 'net.benelog.silkjson.jsonp.streamAbove', '0'
+    systemProperty 'net.benelog.silkjson.jsonp.pieceSize', '16'
+}
+
 tasks.named('check') {
-    dependsOn tck
+    dependsOn tck, tckStreamed
 }

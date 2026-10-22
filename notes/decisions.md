@@ -1656,10 +1656,14 @@ Rejected: 22, the first release with the foreign memory API final, whose updates
 - **silk-json gained two methods, and nothing else changed.**
   - `JsonInput.peek()` answers the kind of the next value from its first byte, which a pull parser needs before it reads.
   - `JsonInput.position()` answers the byte index, from which the parser counts a line and a column only when asked.
-- **The document is read whole.**
+- **A small document is read whole, and a large one streams around `JsonInput` rather than through it.**
   - `JsonInput` reads a byte array, and refilling a buffer would touch the hot paths tuned a word at a time (decision 76).
-  - UTF-8 bytes go to the parser as read, and a `Reader` or UTF-16 or UTF-32 is encoded once more.
-  - A parser reads its stream when it is made, and a reader in `read()`, which is where the TCK expects each one's I/O error.
+  - A document of at most 1 MiB is parsed by one `JsonInput`, as before.
+  - Past that, `StreamingJsonParser` reads the brackets, commas, colons, and keys of each object or array over 64 KiB off the stream, and hands every other value to a `JsonInput` of its own, so the bytes held are the largest such value's.
+  - A number or a literal goes as the bytes a number or a word is made of, and what its parser leaves goes back to the stream, so failures and locations are those of the document held whole.
+  - The TCK runs a second time with every document streamed in pieces of 16 bytes, and a test parses 128 MB in a heap of 64 MB.
+  - UTF-8 bytes go to the parser as read, and a `Reader` or UTF-16 or UTF-32 is encoded once more, a buffer at a time.
+  - A parser reads the start of its stream when it is made, and a reader in `read()`, which is where the TCK expects each one's I/O error.
 - **The services file is the spec's entry point, not a lookup of this project's.**
   - `jakarta.json.Json` calls `ServiceLoader` on every call, inside the API jar.
   - The module only names the provider there, and `new SilkJsonProvider()` reaches nothing.
@@ -1674,7 +1678,7 @@ Rejected: 22, the first release with the foreign memory API final, whose updates
 
 Rejected: `silk-json-p`, whose package by the build's rule is `net.benelog.silkjson.p`.
 Rejected: the JSON-P tree in core's API, which changes every JSON signature of core and loses the 400 for a missing key (`notes/jakarta-json-support.md`).
-Rejected: a streaming parser now, before a benchmark shows what buffer refills cost `JsonInput`.
+Rejected: buffer refills inside `JsonInput`, before a benchmark shows what they cost its hot paths.
 
 ## Rejected — decisions, with the reason
 

@@ -61,10 +61,13 @@ import net.benelog.silkjson.JsonOutput;
  * with a {@link java.util.ServiceLoader} on every call, which a provider of
  * your own skips, as does a factory made from one.
  *
- * <p>A document is read whole before it is parsed, and goes to the parser as
- * UTF-8: a byte stream in UTF-8 as it is read, and any other input decoded and
- * encoded once. A {@link Reader}'s document, and a byte stream in UTF-16 or
- * UTF-32, which the stream's first bytes tell apart, cost that second pass.
+ * <p>A document goes to the parser as UTF-8: a byte stream in UTF-8 as it is
+ * read, and any other input decoded and encoded once more, a buffer at a
+ * time. A {@link Reader}'s document, and a byte stream in UTF-16 or UTF-32,
+ * which the stream's first bytes tell apart, cost that second pass. A
+ * document of at most 1 MiB is read whole and parsed by one
+ * {@link JsonInput}; a larger one is parsed as it is read, a value at a time,
+ * and is never held whole.
  *
  * <p>All methods are safe for concurrent use, and the provider holds nothing:
  * every factory method makes a new object.

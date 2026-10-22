@@ -56,14 +56,23 @@ Parsson 같은 다른 프로바이더도 클래스패스에 있으면, ``Json``�
 [#reading]
 == 읽기
 
-파서와 리더는 문서 전체를 메모리로 읽어 들여 UTF-8로 파싱한다.
+UTF-8로 1 MiB 이하인 문서는 메모리로 통째로 읽어 ``JsonInput`` 하나로 파싱한다.
+그보다 큰 문서는 읽는 대로 파싱하므로, 그 바이트를 한꺼번에 쥐지 않는다.
 
-* UTF-8 바이트 스트림은 읽은 그대로 파서에 간다.
-* ``Reader``와 UTF-16이나 UTF-32 바이트 스트림은 먼저 디코딩하고 한 번 더 인코딩한다.
-  바이트 스트림의 인코딩은 RFC 4627이 정한 대로 처음 네 바이트로 판별한다.
-  UTF-8 바이트 순서 표시는 건너뛴다.
-* 파서는 만들어질 때 스트림을 읽으므로, I/O 오류는 ``createParser``에서 나는 ``JsonException``이다.
-  리더는 ``read()``에서 스트림을 읽으며, I/O 오류는 거기서 나는 ``JsonException``이다.
+* 큰 문서에서 64 KiB를 넘는 객체와 배열은 스트림에서 한 바이트씩 읽는다: 그 괄호, 쉼표, 콜론, 키다.
+  나머지, 곧 문자열, 수, 리터럴, 그리고 64 KiB 이하의 객체나 배열은 통째로 읽어 저마다의 ``JsonInput``으로 파싱한다.
+  한꺼번에 쥐는 바이트는 그런 값 가운데 가장 큰 것의 바이트다.
+* 두 방식은 같은 이벤트, 값, 실패, 위치를 돌려준다.
+  빌드는 모든 문서를 스트리밍하는 두 번째 TCK 실행으로 이것을 확인한다.
+* 시스템 프로퍼티 ``net.benelog.silkjson.jsonp.streamAbove``와 ``net.benelog.silkjson.jsonp.pieceSize``가 두 크기를 바이트로 정한다.
+
+UTF-8 바이트 스트림은 읽는 그대로 파서에 간다.
+``Reader``와 UTF-16이나 UTF-32 바이트 스트림은 버퍼 단위로 디코딩하고 한 번 더 인코딩한다.
+바이트 스트림의 인코딩은 RFC 4627이 정한 대로 처음 네 바이트로 판별한다.
+UTF-8 바이트 순서 표시는 건너뛴다.
+
+파서는 만들어질 때 스트림의 앞부분을 읽으므로, 거기서 난 I/O 오류는 ``createParser``에서 나는 ``JsonException``이다.
+리더는 ``read()``에서 스트림을 읽으며, I/O 오류는 거기서 나는 ``JsonException``이다.
 
 문법은 확장 없는 RFC 8259의 것이며, silk-json이 읽는 방식과 같다.
 객체와 배열은 최대 256단계까지 중첩된다.
@@ -206,10 +215,11 @@ static final JsonReader<NewDeck> NEW_DECK = JsonpCodecs.object(object -> new New
 == 적합성
 
 빌드는 ``check``의 일부로 JSON-P TCK 2.1.1을 이 프로바이더에 돌리며, 그 178개 테스트가 모두 통과한다.
+TCK는 두 번 돈다: 한 번은 프로바이더의 기본값으로, 한 번은 모든 문서를 16바이트 조각으로 스트리밍해서다.
 
 [source,bash]
 ----
-./gradlew :silk-json-jsonp:tck
+./gradlew :silk-json-jsonp:tck :silk-json-jsonp:tckStreamed
 ----
 
 TCK의 시그니처 테스트는 뺀다.

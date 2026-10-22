@@ -56,14 +56,23 @@ Every method is safe to call from many threads, and every `create` method makes 
 [#reading]
 == Reading
 
-A parser or a reader reads the whole document into memory, and parses it as UTF-8.
+A document of at most 1 MiB of UTF-8 is read into memory whole and parsed by one `JsonInput`.
+A larger one is parsed as it is read, so its bytes are never held at once.
 
-* A byte stream in UTF-8 goes to the parser as it was read.
-* A `Reader`, and a byte stream in UTF-16 or UTF-32, is decoded and encoded once more first.
-  A byte stream's encoding is told from its first four bytes, as RFC 4627 has it.
-  A UTF-8 byte order mark is passed over.
-* A parser reads its stream when it is made, so an I/O error is a `JsonException` from `createParser`.
-  A reader reads its stream in `read()`, and an I/O error is a `JsonException` from there.
+* The objects and arrays of a larger document that run past 64 KiB are read off the stream a byte at a time: their brackets, commas, colons, and keys.
+  Anything else, a string, a number, a literal, or an object or an array of at most 64 KiB, is read whole and parsed by a `JsonInput` of its own.
+  The bytes held at once are those of the largest such value.
+* Both ways answer the same events, values, failures, and locations.
+  The build checks this with a second run of the TCK, in which every document is streamed.
+* The system properties `net.benelog.silkjson.jsonp.streamAbove` and `net.benelog.silkjson.jsonp.pieceSize` set the two sizes, in bytes.
+
+A byte stream in UTF-8 goes to the parser as it is read.
+A `Reader`, and a byte stream in UTF-16 or UTF-32, is decoded and encoded once more, a buffer at a time.
+A byte stream's encoding is told from its first four bytes, as RFC 4627 has it.
+A UTF-8 byte order mark is passed over.
+
+A parser reads the start of its stream when it is made, so an I/O error there is a `JsonException` from `createParser`.
+A reader reads its stream in `read()`, and an I/O error is a `JsonException` from there.
 
 The syntax is RFC 8259's with no extension, as silk-json reads it.
 Objects and arrays nest at most 256 levels.
@@ -206,10 +215,11 @@ Core's own API stays silk-json's.
 == Conformance
 
 The build runs the JSON-P TCK 2.1.1 against the provider as part of `check`, and all of its 178 tests pass.
+It runs the TCK twice: once as the provider runs by default, and once with every document streamed and a piece of 16 bytes.
 
 [source,bash]
 ----
-./gradlew :silk-json-jsonp:tck
+./gradlew :silk-json-jsonp:tck :silk-json-jsonp:tckStreamed
 ----
 
 The TCK's signature test is left out.

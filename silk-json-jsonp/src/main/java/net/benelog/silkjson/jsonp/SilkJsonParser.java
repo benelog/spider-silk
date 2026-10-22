@@ -4,13 +4,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.Arrays;
-import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Spliterator;
-import java.util.Spliterators;
-import java.util.function.Consumer;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 import jakarta.json.JsonArray;
 import jakarta.json.JsonConfig.KeyStrategy;
@@ -18,7 +12,6 @@ import jakarta.json.JsonException;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
 import jakarta.json.stream.JsonLocation;
-import jakarta.json.stream.JsonParser;
 import jakarta.json.stream.JsonParsingException;
 
 import org.jspecify.annotations.Nullable;
@@ -32,17 +25,20 @@ import net.benelog.silkjson.JsonInput;
  * read whole, so a string, a number, and a key are read once and held for
  * {@link #getString()}.
  *
- * <p>The document is read whole when the parser is made, so that a stream
- * that fails fails there. One value is the whole document, as RFC 8259 has
- * it: {@link #hasNext()} answers false after it, and throws
- * {@link JsonParsingException} when anything but whitespace follows.
+ * <p>It parses a document held whole: one of at most
+ * {@link Documents#STREAM_ABOVE} bytes, or a value a
+ * {@link StreamingJsonParser} reads whole out of a larger one. One value is
+ * the whole document, as RFC 8259 has it: {@link #hasNext()} answers false
+ * after it, and throws {@link JsonParsingException} when anything but
+ * whitespace follows.
  */
-final class SilkJsonParser implements JsonParser {
+final class SilkJsonParser extends EventParser {
 
     private static final byte OBJECT = 1;
     private static final byte ARRAY = 2;
 
     private final JsonInput in;
+    private final int length;
     private final Documents.Locator locator;
     private final @Nullable Closeable closeable;
     private final KeyStrategy strategy;
@@ -64,6 +60,7 @@ final class SilkJsonParser implements JsonParser {
     private @Nullable String text;
 
     SilkJsonParser(byte[] utf8, @Nullable Closeable closeable, KeyStrategy strategy) {
+        this.length = utf8.length;
         this.in = JsonInput.of(utf8);
         this.locator = new Documents.Locator(utf8);
         this.closeable = closeable;
@@ -273,71 +270,19 @@ final class SilkJsonParser implements JsonParser {
         };
     }
 
-    /** The elements of the array whose START_ARRAY is the current event, each read as the stream asks for it. */
     @Override
-    public Stream<JsonValue> getArrayStream() {
-        if (current != Event.START_ARRAY) {
-            throw new IllegalStateException("getArrayStream() reads an array from its START_ARRAY, not from " + current);
-        }
-        return stream(new Spliterators.AbstractSpliterator<JsonValue>(Long.MAX_VALUE, Spliterator.ORDERED) {
-            private boolean done;
-
-            @Override
-            public boolean tryAdvance(Consumer<? super JsonValue> action) {
-                if (done || next() == Event.END_ARRAY) {
-                    done = true;
-                    return false;
-                }
-                action.accept(getValue());
-                return true;
-            }
-        });
+    boolean inside() {
+        return depth > 0;
     }
 
-    /** The members of the object whose START_OBJECT is the current event, each read as the stream asks for it. */
-    @Override
-    public Stream<Map.Entry<String, JsonValue>> getObjectStream() {
-        if (current != Event.START_OBJECT) {
-            throw new IllegalStateException("getObjectStream() reads an object from its START_OBJECT, not from " + current);
-        }
-        return stream(new Spliterators.AbstractSpliterator<Map.Entry<String, JsonValue>>(Long.MAX_VALUE, Spliterator.ORDERED) {
-            private boolean done;
-
-            @Override
-            public boolean tryAdvance(Consumer<? super Map.Entry<String, JsonValue>> action) {
-                if (done || next() == Event.END_OBJECT) {
-                    done = true;
-                    return false;
-                }
-                String key = getString();
-                next();
-                action.accept(Map.entry(key, getValue()));
-                return true;
-            }
-        });
+    /** Whether the document's value has been read to its end, for a parser that reads a value of a larger document through this one. */
+    boolean isDone() {
+        return finished;
     }
 
-    /** The document's value, as a stream of one: a document holds one value. */
-    @Override
-    public Stream<JsonValue> getValueStream() {
-        if (depth > 0) {
-            throw new IllegalStateException("getValueStream() reads the document's value, and the parser is inside it");
-        }
-        return stream(new Spliterators.AbstractSpliterator<JsonValue>(Long.MAX_VALUE, Spliterator.ORDERED) {
-            @Override
-            public boolean tryAdvance(Consumer<? super JsonValue> action) {
-                if (!hasNext()) {
-                    return false;
-                }
-                next();
-                action.accept(getValue());
-                return true;
-            }
-        });
-    }
-
-    private static <T> Stream<T> stream(Spliterator<T> spliterator) {
-        return StreamSupport.stream(spliterator, false);
+    /** How many bytes are left after the value, which that parser reads itself. */
+    int unread() {
+        return length - in.position();
     }
 
     /** Passes over the rest of the array the parser is in, to its END_ARRAY; does nothing outside an array. */

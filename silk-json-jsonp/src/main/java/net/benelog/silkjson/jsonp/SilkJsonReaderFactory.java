@@ -21,21 +21,21 @@ final class SilkJsonReaderFactory implements JsonReaderFactory {
     @Override
     public JsonReader createReader(Reader reader) {
         Objects.requireNonNull(reader, "reader");
-        return new SilkJsonReader(() -> Documents.read(reader), reader, config.keyStrategy);
+        return new SilkJsonReader(() -> Sources.of(reader), reader, config.keyStrategy);
     }
 
     /** A reader of a byte stream whose encoding is told from its first bytes. */
     @Override
     public JsonReader createReader(InputStream in) {
         Objects.requireNonNull(in, "in");
-        return new SilkJsonReader(() -> Documents.read(in), in, config.keyStrategy);
+        return new SilkJsonReader(() -> Sources.detected(in), in, config.keyStrategy);
     }
 
     @Override
     public JsonReader createReader(InputStream in, Charset charset) {
         Objects.requireNonNull(in, "in");
         Objects.requireNonNull(charset, "charset");
-        return new SilkJsonReader(() -> Documents.read(in, charset), in, config.keyStrategy);
+        return new SilkJsonReader(() -> Sources.decoded(in, charset), in, config.keyStrategy);
     }
 
     @Override

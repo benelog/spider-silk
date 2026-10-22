@@ -49,6 +49,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `silk-json-jsonp`: a new module, Jakarta JSON Processing (JSON-P) 2.1 on silk-json, which passes the JSON-P TCK 2.1.1.
   `SilkJsonProvider` is the `JsonProvider`: its parser reads with a `JsonInput`, its generator and writer write with a `JsonOutput`, and its tree is immutable and built with no reflection.
   JSON Pointer, JSON Patch with `createDiff`, JSON Merge Patch, `JsonGenerator.PRETTY_PRINTING`, and `JsonConfig.KEY_STRATEGY` are implemented.
+  A document of at most 1 MiB is parsed whole, and a larger one as it is read, a value at a time, so its bytes are never held at once.
   The module names the provider in its services file, so `jakarta.json.Json` finds it, and `new SilkJsonProvider()` skips that lookup.
   `JsonpCodecs.WRITER`, `OBJECT`, `ARRAY`, `VALUE`, and `object(fromObject)` put the JSON-P tree where a `JsonWriter` or a `JsonReader` goes, and a body they cannot read is a 400.
 - `silk-json`: `JsonInput.peek()` answers the kind of the value that comes next, a `JsonInput.Kind`, with nothing read, and `JsonInput.position()` answers where the input stands as an index into the document's bytes.

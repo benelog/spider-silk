@@ -66,7 +66,7 @@ final class TreeReader {
     }
 
     /** A key's start, since the message of a rejection may travel back to the client. */
-    private static String shortened(String key) {
+    static String shortened(String key) {
         return key.length() <= 32 ? key : key.substring(0, 32) + "...";
     }
 }
