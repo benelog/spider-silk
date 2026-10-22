@@ -583,6 +583,58 @@ class JsonInputTest {
         in.end();
     }
 
+    /** A reader that takes a value of any kind asks which comes next, reads it with the method for that kind, and moves on. */
+    @Test
+    void peekTellsTheNextKindWithNothingRead() {
+        JsonInput in = JsonInput.of(" [ {\"a\":1} , [] , \"s\" , -1.5 , 7 , true , false , null ] ");
+        assertThat(in.peek()).isEqualTo(JsonInput.Kind.ARRAY);
+        in.array();
+        List<JsonInput.Kind> kinds = new ArrayList<>();
+        while (in.nextElement()) {
+            JsonInput.Kind kind = in.peek();
+            assertThat(in.peek()).isEqualTo(kind);
+            kinds.add(kind);
+            in.skipValue();
+        }
+        in.end();
+        assertThat(kinds).containsExactly(JsonInput.Kind.OBJECT, JsonInput.Kind.ARRAY, JsonInput.Kind.STRING,
+                JsonInput.Kind.NUMBER, JsonInput.Kind.NUMBER, JsonInput.Kind.BOOLEAN, JsonInput.Kind.BOOLEAN,
+                JsonInput.Kind.NULL);
+
+        JsonInput member = JsonInput.of("{\"a\": \"x\"}");
+        member.object();
+        member.nextKey();
+        assertThat(member.peek()).isEqualTo(JsonInput.Kind.STRING);
+        assertThat(member.readString()).isEqualTo("x");
+
+        assertThatThrownBy(() -> JsonInput.of("  ").peek()).isInstanceOf(JsonException.class)
+                .hasMessage("Near character 2: Missing value");
+        assertThatThrownBy(() -> JsonInput.of("}").peek()).isInstanceOf(JsonException.class)
+                .hasMessage("Near character 0: Unexpected character");
+        JsonInput trailingComma = JsonInput.of("[1,]");
+        trailingComma.array();
+        trailingComma.nextElement();
+        trailingComma.readLong();
+        trailingComma.nextElement();
+        assertThatThrownBy(trailingComma::peek).hasMessage("Near character 3: Unexpected character");
+    }
+
+    /** The position is a byte index: past what was read, and at the fault once one is thrown. */
+    @Test
+    void positionIsWhereTheInputStandsInBytes() {
+        JsonInput in = JsonInput.of("{\"이름\": \"값\", \"n\": 01}");
+        assertThat(in.position()).isZero();
+        in.object();
+        assertThat(in.position()).isEqualTo(1);
+        in.nextKey();
+        assertThat(in.position()).isEqualTo(10);
+        in.readString();
+        assertThat(in.position()).isEqualTo(16);
+        in.nextKey();
+        assertThatThrownBy(in::readLong).hasMessage("Near character 18: Leading zero in a number");
+        assertThat(in.position()).isEqualTo(24);
+    }
+
     @Test
     void readValueTakesAWholeTreeAndSkipValuePassesOneOver() {
         JsonInput in = JsonInput.of("{\"a\":[1,{\"b\":\"c\"}],\"d\":2,\"e\":{\"f\":[true,null]}}");

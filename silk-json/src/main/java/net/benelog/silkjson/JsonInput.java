@@ -34,7 +34,8 @@ import org.jspecify.annotations.Nullable;
  * when they answer false. A value is read with one of the {@code read}
  * methods, taken whole as a tree with {@link #readValue()} or as the bytes
  * it is written in with {@link #readValueBytes()}, or passed over with
- * {@link #skipValue()}. {@link #end()} checks that nothing follows.
+ * {@link #skipValue()}; {@link #peek()} says which kind comes next, for a
+ * reader that takes more than one. {@link #end()} checks that nothing follows.
  *
  * <p>The syntax is RFC 8259's, with no extension, as {@link Json#parse}
  * states it, and every failure is a {@link JsonException} that says where.
@@ -536,6 +537,42 @@ public final class JsonInput {
 
     // ---- values ----
 
+    /** The kinds of value a document holds, as {@link #peek()} tells them apart. */
+    public enum Kind {
+        OBJECT, ARRAY, STRING, NUMBER, BOOLEAN, NULL
+    }
+
+    /**
+     * The kind of the value that comes next, told from its first byte with
+     * nothing read: for a reader that takes a value of more than one kind, as
+     * a pull parser reporting each value as an event does. The value is then
+     * read with the method for its kind, which checks its syntax. Throws
+     * {@link JsonException} at the end of the input and at a byte that starts
+     * no value.
+     */
+    public Kind peek() {
+        byte[] in = this.in;
+        int p = skipWhitespace(pos);
+        pos = p;
+        if (p >= in.length) {
+            throw error("Missing value");
+        }
+        byte b = in[p];
+        return switch (b) {
+            case '{' -> Kind.OBJECT;
+            case '[' -> Kind.ARRAY;
+            case '"' -> Kind.STRING;
+            case 't', 'f' -> Kind.BOOLEAN;
+            case 'n' -> Kind.NULL;
+            default -> {
+                if (b != '-' && !isDigit(b)) {
+                    throw error("Unexpected character");
+                }
+                yield Kind.NUMBER;
+            }
+        };
+    }
+
     /** The string that comes next, or a {@link JsonException} for a value of another kind. */
     public String readString() {
         byte[] in = this.in;
@@ -852,6 +889,16 @@ public final class JsonInput {
     /** A {@link JsonException} naming where the input stands, for a reader to throw for a rule of its own. */
     public JsonException error(String message) {
         return new JsonException("Near character " + characterIndex() + ": " + message);
+    }
+
+    /**
+     * Where the input stands, as an index into the document's bytes: past the
+     * last thing read, or, once a {@link JsonException} has been thrown, at
+     * the fault it names. A reader that reports a line and a column counts
+     * them in the bytes before it.
+     */
+    public int position() {
+        return pos;
     }
 
     // ---- a tree ----
