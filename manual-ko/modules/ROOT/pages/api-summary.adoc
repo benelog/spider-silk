@@ -57,7 +57,7 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 == ``WebResponse``가 제공하는 것
 
 * 본문: `html`, `text`, `rawJson(text)`, `json(JsonValue)`, `json(value, writer)`, `bytes(contentType, data)`, `template(name)`, `template(name, model)`, `stream(contentType, out -> ...)`, `file(path)`, `sse(stream -> ...)`, `raw((req, res) -> ...)`
-* ``Model.of(...)``는 `template(name, model)`이 받는 불변 ``Model``을 null 값을 담을 수 있는 항목 열 개까지로 만든다; xref:templates.adoc#model[템플릿]을 참고한다
+* ``Model.of(...)``는 ``template(name, model)``이 받는 불변 ``Model``을 null 값을 담을 수 있는 항목 열 개까지로 만든다; xref:templates.adoc#model[템플릿]을 참고한다
 * ``model.with(key, value)``는 항목 하나를 더한 모델을, ``model.asMap()``은 렌더러를 위한 읽기 전용 맵을 답한다
 * jte-models가 생성한 메서드로 부르는 jte 템플릿은 ``html(templates.deck(deck).render())``로 보낸다; xref:templates.adoc#jte-models[템플릿]을 참고한다
 * ``file(path)``는 콘텐츠 타입을 이름에서, 길이를 파일에서 읽는다.
@@ -78,7 +78,7 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 이 패키지는 코어가 그 위에 지어진 JSON 라이브러리인 xref:json.adoc#silk-json[silk-json]의 것이다.
 
 * 트리: `Json.object()`, `Json.array()`, `Json.parse(text)`, `Json.parse(utf8)`, 그리고 `JsonObject`, `JsonArray`, ``JsonPrimitive``를 가진 `JsonValue`; xref:json.adoc[JSON]을 참고한다
-* 매핑: ``JsonOutput``을 상대로 하는 람다 `(value, out) -> ...`인 `JsonWriter<T>`; ``JsonInput``을 상대로 하는 람다인 `JsonReader<T>`; 그리고 둘을 한꺼번에 가진 `JsonCodec<T>`.
+* 매핑: ``JsonOutput``을 상대로 하는 람다 ``(value, out) -> ...``인 `JsonWriter<T>`; ``JsonInput``을 상대로 하는 람다인 `JsonReader<T>`; 그리고 둘을 한꺼번에 가진 `JsonCodec<T>`.
   `JsonWriter.list`, `JsonWriter.tree`, `JsonReader.object`, `JsonReader.list`, `JsonReader.tree`, `JsonCodec.of`, ``JsonCodec.list``가 이들을 만든다.
   `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, ``reader.fromJsonBytes(utf8)``는 요청 밖에서 하나를 실행한다
 * `JsonOutput`: `object()`, `array()`, `end()`, `name(key)`, `put(key, ...)`, `putNull(key)`, `value(...)`, `nullValue()`, `values(strings)`, `newline()`.

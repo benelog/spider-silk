@@ -122,7 +122,7 @@ Hello, silk
 | xref:websocket.adoc[`WebSockets`]: 라우트 곁의 WebSocket 엔드포인트, Jetty 전용
 
 | `spider-silk-jackson`
-| xref:json-interop.adoc#jackson[`JacksonCodecs`]: 핸들러가 받는 `JsonWriter`와 `JsonReader` 뒤의 Jackson 3
+| xref:json-interop.adoc#jackson[`JacksonCodecs`]: 핸들러가 받는 ``JsonWriter``와 ``JsonReader`` 뒤의 Jackson 3
 
 | `silk-json-jsonp`
 | xref:jsonp.adoc[`SilkJsonProvider`]: silk-json 위의 Jakarta JSON Processing, 그리고 핸들러가 받는 ``JsonWriter``와 ``JsonReader`` 뒤의 JSON-P 트리인 `JsonpCodecs`

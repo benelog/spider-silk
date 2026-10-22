@@ -155,7 +155,7 @@ dependencies {
 
 그러면 빌드는 템플릿마다 메서드 하나를 가진 인터페이스 ``gg.jte.generated.precompiled.Templates``와, 그 구현 두 개를 생성한다.
 ``StaticTemplates``는 사전 컴파일된 클래스를 렌더링하고, ``DynamicTemplates``는 건네받은 ``TemplateEngine``으로 렌더링한다.
-기본값이 있는 것을 포함해 모든 `@param`이 메서드의 파라미터다.
+기본값이 있는 것을 포함해 모든 ``@param``이 메서드의 파라미터다.
 메서드는 ``JteModel``을 답하고, 그 ``render()``가 페이지를 문자열로 답하므로, ``WebResponse.html``이 그것을 보낸다:
 
 [source,java]

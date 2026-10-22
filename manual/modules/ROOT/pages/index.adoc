@@ -195,7 +195,7 @@ It is a separate module, so the production jar carries no test code.
 |===
 
 Routing, filters, status pages, JSON, templates, static files, SSE, multipart uploads, and sessions behave the same on all three servers.
-The APIs of `TomcatServer` and `UndertowServer` follow `JettyServer`'s, so switching servers changes one line: the factory passed to `App.server(...)`.
+The APIs of `TomcatServer` and `UndertowServer` follow ``JettyServer``'s, so switching servers changes one line: the factory passed to `App.server(...)`.
 
 The template engine is switched with `App.templates(...)`.
 Switching engines leaves a handler's `WebResponse.template(name, model)` call as it is.

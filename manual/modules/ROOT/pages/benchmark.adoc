@@ -477,7 +477,7 @@ The hand-written writer lands between the tree and the codec: it finds each key 
 The codec reads the 10 KB document in 92% of fastjson2's time, and writes the small object in 92% of it.
 fastjson2 stays ahead writing the 10 KB document, by 3%.
 Its lead is in writing the strings, and it is wider where no string needs an escape: 1.17 times on the plain records and 1.11 times on the Korean ones.
-fastjson2 reads a `String`'s own bytes through `sun.misc.Unsafe`, which the JDK is retiring and core does not use.
+fastjson2 reads a ``String``'s own bytes through `sun.misc.Unsafe`, which the JDK is retiring and core does not use.
 The codec copies a string's characters out with `getChars` and checks them one at a time.
 Copying a string's bytes with no check at all, a floor no correct writer can stand on, writes the plain records in 2.7 µs, ahead of fastjson2's 3.7 µs.
 Checking that copy eight bytes at a time takes it to 4.0 µs, so the lead is the string's representation, all of it.

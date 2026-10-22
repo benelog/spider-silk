@@ -203,7 +203,7 @@ An escape moves the narrowed bytes after it up rather than narrowing them again.
 These took 100 records with a 200-character description from 15.0 µs to 6.9 µs.
 
 fastjson2 still writes the records whose short strings need no escape 1.17 times as fast.
-It reads the `String`'s own Latin-1 bytes through `sun.misc.Unsafe`, which the JDK is retiring.
+It reads the ``String``'s own Latin-1 bytes through `sun.misc.Unsafe`, which the JDK is retiring.
 Copying a string's bytes with no check at all writes the plain list in 2.7 µs against fastjson2's 3.7 µs, so the gap is the string's representation, all of it.
 
 [#reading-strings]

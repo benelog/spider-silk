@@ -89,8 +89,8 @@ JSON null인 본문도 400으로 답하므로, 핸들러는 값 대신 null을 �
 Jackson이 만들 수 없는 매핑은 클라이언트가 아니라 프로그램의 실수이며, 500으로 답한다.
 
 둘 다 코어가 라이터나 리더를 받는 곳이면 어디서나 동작한다.
-``req.bodyNdjson(NEW_DECK)``은 각 줄을 Jackson으로 읽고, ``sink.write(deck, DECK)``는 `jsonArray`나 `ndjson` 응답의 각 요소를 쓴다.
-`JsonWriter.list`와 `JsonReader.list` 안에서는 요소를 하나씩 쓰고 읽는다.
+``req.bodyNdjson(NEW_DECK)``은 각 줄을 Jackson으로 읽고, ``sink.write(deck, DECK)``는 ``jsonArray``나 `ndjson` 응답의 각 요소를 쓴다.
+``JsonWriter.list``와 `JsonReader.list` 안에서는 요소를 하나씩 쓰고 읽는다.
 리스트는 ``JACKSON.reader(new TypeReference<List<NewDeck>>() { })``로 Jackson에 통째로 맡기는 편이 빠르다.
 `JsonReader.list` 안의 요소 리더는 요소마다 Jackson 파서를 새로 시작하며, 레코드 100개의 리스트를 읽는 데 약 1.75배의 시간이 든다.
 

@@ -121,7 +121,7 @@ This is stricter than JSON-B's own default, which leaves a missing property at i
 [#mixin]
 == Binding a type you do not own
 
-A type that cannot carry the annotations, a domain record or a type from another library, is bound through a mixin: a type annotated `@JsonBound(Other.class)`, whose members of the same names carry the annotations for `Other`'s properties.
+A type that cannot carry the annotations, a domain record or a type from another library, is bound through a mixin: a type annotated `@JsonBound(Other.class)`, whose members of the same names carry the annotations for ``Other``'s properties.
 The codec is generated beside the mixin, in its package, as `OtherJson`.
 For a record, a mixin's method names the component of the same name, so `isAdmin()` is the component `isAdmin`.
 For a class, a mixin's method names the property its JavaBeans name gives.

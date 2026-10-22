@@ -4,7 +4,7 @@
 `spider-silk-jetty-websocket` maps WebSocket endpoints alongside an app's HTTP routes.
 It is Jetty-only by construction, which is why it is a module with a name rather than a method on `App`.
 A WebSocket is a protocol upgrade, and an upgrade leaves servlet dispatch; see xref:sse.adoc#why-websocket-is-not-in-core[why SSE is in core and WebSocket is not].
-The module needs no change to core, because it plugs into `JettyServer`'s existing `customizeServer` hook.
+The module needs no change to core, because it plugs into ``JettyServer``'s existing `customizeServer` hook.
 
 == Installation
 
@@ -35,7 +35,7 @@ The upgrade handler is inserted ahead of the servlet, so a request whose path ma
 Paths are relative to the server's context path, the same as a route is.
 
 `WebSockets` is a `Consumer<Server>`, which is exactly what xref:server.adoc[`customizeServer`] takes.
-The hook is `customizeServer` rather than `customizeContext` because Jetty's WebSocket container is built from the `Server`'s buffer pool and executor, and the context is not linked to a server until after the context customizers have run.
+The hook is `customizeServer` rather than `customizeContext` because Jetty's WebSocket container is built from the ``Server``'s buffer pool and executor, and the context is not linked to a server until after the context customizers have run.
 The diagram shows where the upgrade handler lands in Jetty's handler chain, and which requests reach the servlet behind it:
 
 .Where the upgrade handler sits
