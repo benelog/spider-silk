@@ -8,7 +8,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
-import java.util.function.Supplier;
 
 import jakarta.json.JsonArray;
 import jakarta.json.JsonConfig.KeyStrategy;
@@ -24,17 +23,21 @@ import net.benelog.silkjson.JsonInput;
 
 /**
  * A pull parser over a document too large to hold, which reads it as it
- * arrives and holds a value at a time. A string, a number, a literal, and an
- * object or an array of at most {@code piece} bytes are each read whole and
- * parsed by a {@link SilkJsonParser} over their bytes, so they take the same
- * {@link JsonInput} a document held whole takes. Only a larger object or
- * array is read here, its brackets, commas, colons, and keys a byte at a time
- * off the stream, so the bytes held at once are those of the largest value
- * that is not such a container.
+ * arrives, in runs: the bytes buffered from the place the parser stands, at
+ * most {@code piece} of them, go to one {@link SilkJsonParser}, which reads as
+ * many values as they hold, so the values of a large document share a
+ * {@link JsonInput} a run at a time. The bytes end where the buffer or the
+ * piece does, inside a value too. The run stops before the step that reaches
+ * their end, and the parser takes over there: it enters the containers the
+ * run was inside, reads that step off the stream, and hands what follows to
+ * the next run. A string or a number no run holds is read whole by a parser
+ * of its own. The bytes held at once are a run's, or those of the largest
+ * value that is not an object or an array.
  *
  * <p>Events, values, failures, and locations are those a {@link SilkJsonParser}
  * over the whole document answers. A failure inside a value read whole is
- * reported at its place in the document.
+ * reported at its place in the document, and the step a run fails on is read
+ * again here, which names the failure where it is.
  */
 final class StreamingJsonParser extends EventParser {
 
@@ -64,12 +67,18 @@ final class StreamingJsonParser extends EventParser {
     /** The key of a KEY_NAME read here. */
     private @Nullable String key;
 
-    /** The value read whole whose events are the current ones, and where it starts in the document. */
-    private @Nullable SilkJsonParser value;
-    private Documents.Location valueStart = new Documents.Location(1, 1, 0);
+    /** The parser of a value read whole or of a run, whose events are the current ones, and where its bytes start in the document. */
+    private @Nullable SilkJsonParser held;
+    private Documents.Location heldStart = new Documents.Location(1, 1, 0);
+
+    /** The most bytes a value of the last run took, or the bytes of the last value read whole, fewer than which buffered most likely end inside the next one. */
+    private int widest;
+
+    /** Whether the document's object or array runs past the piece its run holds. */
+    private boolean documentLonger;
 
     StreamingJsonParser(byte[] head, InputStream rest, @Nullable Closeable closeable, KeyStrategy strategy, int piece) {
-        this.window = new Window(head, rest);
+        this.window = new Window(head, rest, piece);
         this.closeable = closeable;
         this.strategy = strategy;
         this.piece = piece;
@@ -94,36 +103,81 @@ final class StreamingJsonParser extends EventParser {
         if (!hasNext()) {
             throw new NoSuchElementException("The document has no more events");
         }
-        SilkJsonParser held = value;
-        if (held != null) {
-            if (!held.isDone()) {
-                Event event = within(held::next);
-                if (held.isDone()) {
-                    valueRead();
-                }
-                current = event;
-                return event;
-            }
-            value = null;
-        }
-        Event event;
-        if (depth == 0) {
-            event = value();
-        } else if (containers[depth - 1] == OBJECT) {
-            if (valueNext) {
-                valueNext = false;
-                event = value();
-            } else {
-                event = member();
-            }
-        } else {
-            event = element();
+        Event event = heldNext();
+        if (event == null) {
+            event = step();
         }
         current = event;
         return event;
     }
 
-    /** The next member of an object read here: its key, or the object's end. */
+    /** The next event of the parser held, or null once it has none, and the next event is read here. */
+    private @Nullable Event heldNext() {
+        SilkJsonParser parser = held;
+        if (parser == null) {
+            return null;
+        }
+        if (parser.isRun()) {
+            if (parser.runEnded()) {
+                window.skip(parser.position() - parser.floor());
+                widest = parser.widest();
+                held = null;
+                return null;
+            }
+            int at = parser.position();
+            Event before = parser.currentEvent();
+            try {
+                Event event = parser.next();
+                if (event != Event.VALUE_NUMBER || !parser.atEnd()) {
+                    finish(parser);
+                    return event;
+                }
+            } catch (JsonParsingException e) {
+                // The bytes end inside the value, or it is at fault, which a read here names where it is.
+            }
+            stopRun(parser, at, before);
+            return null;
+        }
+        if (parser.isDone()) {
+            held = null;
+            return null;
+        }
+        Event event;
+        try {
+            event = parser.next();
+        } catch (JsonParsingException e) {
+            throw placed(e);
+        }
+        finish(parser);
+        return event;
+    }
+
+    /** Ends the document once the parser held has read the document's value to its end, a run's bytes passed over. */
+    private void finish(SilkJsonParser parser) {
+        if (parser.isDone()) {
+            if (parser.isRun()) {
+                window.skip(parser.position());
+            }
+            valueRead();
+        }
+    }
+
+    /** The next event read here, off the stream. */
+    private Event step() {
+        if (depth == 0) {
+            return value();
+        }
+        if (containers[depth - 1] == OBJECT) {
+            if (valueNext) {
+                valueNext = false;
+                return value();
+            }
+            return member();
+        }
+        return element();
+    }
+
+    /** The next member of an object read here: the first event of a run of them, its key, or the object's end. */
     private Event member() {
         int b = window.peek();
         if (b < 0) {
@@ -141,9 +195,14 @@ final class StreamingJsonParser extends EventParser {
                 throw fault("Expected ',' or '}'");
             }
             window.skip(1);
-            b = window.peek();
         }
-        if (b != '"') {
+        Event run = run(OBJECT);
+        return run != null ? run : key();
+    }
+
+    /** The key of the member that comes next, read here. */
+    private Event key() {
+        if (window.peek() != '"') {
             throw fault("Expected '\"'");
         }
         Documents.Location start = window.location();
@@ -163,7 +222,7 @@ final class StreamingJsonParser extends EventParser {
         return Event.KEY_NAME;
     }
 
-    /** The next element of an array read here, or the array's end. */
+    /** The next element of an array read here: the first event of a run of them, of the element, or the array's end. */
     private Event element() {
         int b = window.peek();
         if (b < 0) {
@@ -182,16 +241,87 @@ final class StreamingJsonParser extends EventParser {
             }
             window.skip(1);
         }
-        return value();
+        Event run = run(ARRAY);
+        return run != null ? run : value();
     }
 
-    /** The value that comes next: an object or an array of more than a piece entered here, and anything else read whole. */
+    /**
+     * Hands the elements or the members that come next to a run, and answers
+     * its first event. Answers null when the next one is read here instead:
+     * when what comes next starts no element or member, which a read here
+     * names as a fault, when fewer bytes are buffered than the {@link #widest}
+     * value before took, so that they most likely end inside the next one,
+     * or when the bytes buffered do not hold its first event.
+     */
+    private @Nullable Event run(byte container) {
+        int b = window.peek();
+        boolean starts = container == OBJECT
+                ? b == '"'
+                : b == '{' || b == '[' || b == '"' || b == '-' || (b >= '0' && b <= '9') || b == 't' || b == 'f' || b == 'n';
+        return starts && window.buffered(piece) >= widest ? runFrom(depth) : null;
+    }
+
+    /**
+     * Hands the bytes buffered from the place the parser stands, at most a
+     * piece of them, to a run, and answers its first event, or null when they
+     * do not hold it. The bytes are copied after a bracket for each container
+     * read here, so the run parses them in the containers they are in.
+     */
+    private @Nullable Event runFrom(int floor) {
+        int length = window.buffered(piece);
+        byte[] bytes = window.copy(floor, length);
+        for (int i = 0; i < floor; i++) {
+            bytes[i] = containers[i] == OBJECT ? (byte) '{' : (byte) '[';
+        }
+        Documents.Location start = window.location();
+        heldStart = new Documents.Location(start.line(), start.column() - floor, start.offset() - floor);
+        held = SilkJsonParser.run(bytes, floor, strategy);
+        Event event = heldNext();
+        if (event == null) {
+            // The first value runs past the bytes, a long string or number most likely: no run is
+            // tried for the values that follow until one read here is shorter.
+            widest = Integer.MAX_VALUE;
+        }
+        return event;
+    }
+
+    /**
+     * Takes over from a run whose step the bytes ended inside, or failed, at
+     * the place the run stood before that step: the containers the run had
+     * entered are entered here, and the step is read here, off the stream.
+     */
+    private void stopRun(SilkJsonParser run, int at, @Nullable Event before) {
+        held = null;
+        window.skip(at - run.floor());
+        for (int level = run.floor(); level < run.depth(); level++) {
+            enter(run.isObject(level) ? OBJECT : ARRAY);
+        }
+        if (run.depth() > run.floor()) {
+            first = before == Event.START_OBJECT || before == Event.START_ARRAY;
+        }
+        valueNext = before == Event.KEY_NAME;
+    }
+
+    /**
+     * The value that comes next. The document's object or array starts a run,
+     * which reads as much of it as the bytes buffered hold. Inside, an object
+     * or an array of more than a piece is entered here, and anything else is
+     * read whole.
+     */
     private Event value() {
         int b = window.peek();
         if (b < 0) {
             throw fault("Missing value");
         }
         if (b == '{' || b == '[') {
+            if (depth == 0) {
+                window.topUp(piece);
+                documentLonger = window.buffered(piece) == piece;
+                Event run = runFrom(0);
+                if (run != null) {
+                    return run;
+                }
+            }
             int length = window.containerLength(piece, MAX_DEPTH - depth);
             if (length == Window.NESTED_TOO_DEEP) {
                 throw fault("Nested deeper than " + MAX_DEPTH + " levels");
@@ -223,18 +353,24 @@ final class StreamingJsonParser extends EventParser {
      * after the value in the document held whole.
      */
     private Event whole(int length) {
-        valueStart = window.location();
-        SilkJsonParser held = new SilkJsonParser(window.take(length), null, strategy);
-        value = held;
-        Event event = within(held::next);
-        if (held.isDone()) {
-            window.unread(held.unread());
+        widest = length;
+        heldStart = window.location();
+        SilkJsonParser parser = new SilkJsonParser(window.take(length), null, strategy);
+        held = parser;
+        Event event;
+        try {
+            event = parser.next();
+        } catch (JsonParsingException e) {
+            throw placed(e);
+        }
+        if (parser.isDone()) {
+            window.unread(parser.unread());
             valueRead();
         }
         return event;
     }
 
-    /** A value read whole has had its last event, which ends the document when it was the document's value. */
+    /** A value read whole, or a run of the document's value, has had its last event, which ends the document when it was the document's value. */
     private void valueRead() {
         if (depth == 0) {
             finished = true;
@@ -259,13 +395,9 @@ final class StreamingJsonParser extends EventParser {
         finished = depth == 0;
     }
 
-    /** A call to the value read whole, with a failure in it reported at its place in the document. */
-    private <T> T within(Supplier<T> call) {
-        try {
-            return call.get();
-        } catch (JsonParsingException e) {
-            throw new JsonParsingException(rebased(e.getMessage(), valueStart), valueStart.plus(e.getLocation()));
-        }
+    /** A failure of a value read whole, reported at its place in the document. */
+    private JsonParsingException placed(JsonParsingException e) {
+        return new JsonParsingException(rebased(e.getMessage(), heldStart), heldStart.plus(e.getLocation()));
     }
 
     /** A message that names a character of a value read whole, naming it in the document instead. */
@@ -286,14 +418,17 @@ final class StreamingJsonParser extends EventParser {
     }
 
     private JsonParsingException fault(String message) {
-        Documents.Location at = window.location();
+        return fault(message, window.location());
+    }
+
+    private static JsonParsingException fault(String message, Documents.Location at) {
         return new JsonParsingException("Near character " + at.offset() + ": " + message, at);
     }
 
     @Override
     boolean inside() {
-        SilkJsonParser held = value;
-        return depth > 0 || (held != null && held.inside());
+        SilkJsonParser parser = held;
+        return depth > 0 || (parser != null && parser.inside());
     }
 
     @Override
@@ -303,9 +438,9 @@ final class StreamingJsonParser extends EventParser {
 
     @Override
     public String getString() {
-        SilkJsonParser held = value;
-        if (held != null) {
-            return held.getString();
+        SilkJsonParser parser = held;
+        if (parser != null) {
+            return parser.getString();
         }
         String name = key;
         if (current != Event.KEY_NAME || name == null) {
@@ -334,35 +469,37 @@ final class StreamingJsonParser extends EventParser {
         return number("getBigDecimal()").getBigDecimal();
     }
 
-    /** The value read whole a number accessor reads from: a number is never read here. */
+    /** The parser held, which a number accessor reads from: a number is never read here. */
     private SilkJsonParser number(String method) {
-        SilkJsonParser held = value;
-        if (held == null) {
+        SilkJsonParser parser = held;
+        if (parser == null) {
             throw new IllegalStateException(method + " reads a number, not " + current);
         }
-        return held;
+        return parser;
     }
 
     @Override
     public JsonLocation getLocation() {
-        SilkJsonParser held = value;
-        return held != null ? valueStart.plus(held.getLocation()) : window.location();
+        return location();
+    }
+
+    private Documents.Location location() {
+        SilkJsonParser parser = held;
+        return parser != null ? heldStart.plus(parser.getLocation()) : window.location();
     }
 
     @Override
     public JsonValue getValue() {
-        SilkJsonParser held = value;
-        if (held != null) {
-            JsonValue read = within(held::getValue);
-            settle(held);
-            return read;
-        }
         Event event = current;
         if (event == Event.START_OBJECT) {
             return getObject();
         }
         if (event == Event.START_ARRAY) {
             return getArray();
+        }
+        SilkJsonParser parser = held;
+        if (parser != null) {
+            return parser.getValue();
         }
         if (event == Event.KEY_NAME) {
             return new SilkJsonString(getString());
@@ -375,17 +512,27 @@ final class StreamingJsonParser extends EventParser {
         if (current != Event.START_OBJECT) {
             throw new IllegalStateException("getObject() reads an object from its START_OBJECT, not from " + current);
         }
-        SilkJsonParser held = value;
-        if (held != null) {
-            JsonObject read = within(held::getObject);
-            settle(held);
-            return read;
+        SilkJsonParser parser = held;
+        if (parser != null) {
+            int at = parser.position();
+            if (holdsWhole(parser)) {
+                try {
+                    JsonObject read = parser.getObject();
+                    settle(parser);
+                    return read;
+                } catch (JsonParsingException e) {
+                    if (!parser.isRun()) {
+                        throw placed(e);
+                    }
+                }
+            }
+            stopRun(parser, at, Event.START_OBJECT);
         }
         Members members = new Members(strategy);
         while (next() != Event.END_OBJECT) {
             String name = getString();
             if (strategy == KeyStrategy.NONE && members.has(name)) {
-                throw fault("Duplicate key in a JSON object: " + TreeReader.shortened(name));
+                throw fault("Duplicate key in a JSON object: " + TreeReader.shortened(name), location());
             }
             next();
             members.put(name, getValue());
@@ -398,11 +545,21 @@ final class StreamingJsonParser extends EventParser {
         if (current != Event.START_ARRAY) {
             throw new IllegalStateException("getArray() reads an array from its START_ARRAY, not from " + current);
         }
-        SilkJsonParser held = value;
-        if (held != null) {
-            JsonArray read = within(held::getArray);
-            settle(held);
-            return read;
+        SilkJsonParser parser = held;
+        if (parser != null) {
+            int at = parser.position();
+            if (holdsWhole(parser)) {
+                try {
+                    JsonArray read = parser.getArray();
+                    settle(parser);
+                    return read;
+                } catch (JsonParsingException e) {
+                    if (!parser.isRun()) {
+                        throw placed(e);
+                    }
+                }
+            }
+            stopRun(parser, at, Event.START_ARRAY);
         }
         List<JsonValue> elements = new ArrayList<>();
         while (next() != Event.END_ARRAY) {
@@ -414,14 +571,24 @@ final class StreamingJsonParser extends EventParser {
     /** Passes over the rest of the innermost array, to its END_ARRAY; does nothing when the innermost container is an object. */
     @Override
     public void skipArray() {
-        SilkJsonParser held = value;
-        if (held != null && held.inside()) {
-            within(() -> {
-                held.skipArray();
-                return held;
-            });
-            settle(held);
-        } else if (depth > 0 && containers[depth - 1] == ARRAY) {
+        SilkJsonParser parser = held;
+        if (parser != null && parser.inside()) {
+            int at = parser.position();
+            Event before = parser.currentEvent();
+            if (holdsWhole(parser)) {
+                try {
+                    parser.skipArray();
+                    settle(parser);
+                    return;
+                } catch (JsonParsingException e) {
+                    if (!parser.isRun()) {
+                        throw placed(e);
+                    }
+                }
+            }
+            stopRun(parser, at, before);
+        }
+        if (depth > 0 && containers[depth - 1] == ARRAY) {
             skip();
         }
     }
@@ -429,16 +596,37 @@ final class StreamingJsonParser extends EventParser {
     /** Passes over the rest of the innermost object, to its END_OBJECT; does nothing when the innermost container is an array. */
     @Override
     public void skipObject() {
-        SilkJsonParser held = value;
-        if (held != null && held.inside()) {
-            within(() -> {
-                held.skipObject();
-                return held;
-            });
-            settle(held);
-        } else if (depth > 0 && containers[depth - 1] == OBJECT) {
+        SilkJsonParser parser = held;
+        if (parser != null && parser.inside()) {
+            int at = parser.position();
+            Event before = parser.currentEvent();
+            if (holdsWhole(parser)) {
+                try {
+                    parser.skipObject();
+                    settle(parser);
+                    return;
+                } catch (JsonParsingException e) {
+                    if (!parser.isRun()) {
+                        throw placed(e);
+                    }
+                }
+            }
+            stopRun(parser, at, before);
+        }
+        if (depth > 0 && containers[depth - 1] == OBJECT) {
             skip();
         }
+    }
+
+    /**
+     * Whether the parser held reads the rest of its innermost container
+     * whole, all or nothing. A value read whole does, and so does a run, but
+     * for the document's own object or array when that runs past the run's
+     * piece: it is read here, a value at a time, rather than parsed to the
+     * piece's end for nothing.
+     */
+    private boolean holdsWhole(SilkJsonParser parser) {
+        return !parser.isRun() || parser.floor() > 0 || parser.depth() > 1 || !documentLonger;
     }
 
     /** Reads the events of the innermost container read here to its end. */
@@ -449,12 +637,10 @@ final class StreamingJsonParser extends EventParser {
         }
     }
 
-    /** Takes the event a call left the value read whole at as the current one. */
-    private void settle(SilkJsonParser held) {
-        current = held.currentEvent();
-        if (held.isDone()) {
-            valueRead();
-        }
+    /** Takes the event a call left the parser held at as the current one. */
+    private void settle(SilkJsonParser parser) {
+        current = parser.currentEvent();
+        finish(parser);
     }
 
     /** Closes the reader or the stream the document came from. */
@@ -483,17 +669,28 @@ final class StreamingJsonParser extends EventParser {
         static final int NESTED_TOO_DEEP = -2;
 
         private final InputStream in;
+        private final int least;
         private byte[] buffer;
         private int pos;
         private int limit;
         private boolean end;
+
+        /** Whether the last read filled the buffer to its end, as a stream with more to come does. */
+        private boolean filled;
         private final Documents.Counter counted = new Documents.Counter();
         private int countedTo;
 
-        Window(byte[] head, InputStream in) {
+        /**
+         * Takes the bytes read ahead and the stream of the rest. The buffer
+         * doubles, up to a piece, each time a read fills it, so that a run of
+         * a long document has a piece to read, and a short one takes no more
+         * than it needs.
+         */
+        Window(byte[] head, InputStream in, int piece) {
             this.buffer = head;
             this.limit = head.length;
             this.in = in;
+            this.least = piece;
         }
 
         /** Whether at least that many bytes from the place the parser stands are buffered, once more have been read if they must be. */
@@ -517,6 +714,8 @@ final class StreamingJsonParser extends EventParser {
             }
             if (n > buffer.length || limit == buffer.length) {
                 buffer = Arrays.copyOf(buffer, Math.max(n, Math.max(buffer.length * 2, 8192)));
+            } else if (filled && buffer.length < least) {
+                buffer = Arrays.copyOf(buffer, Math.min(buffer.length * 2, least));
             }
             try {
                 int read = in.read(buffer, limit, buffer.length - limit);
@@ -525,6 +724,7 @@ final class StreamingJsonParser extends EventParser {
                 } else {
                     limit += read;
                 }
+                filled = limit == buffer.length;
             } catch (IOException e) {
                 throw Documents.unreadable(e);
             }
@@ -560,6 +760,33 @@ final class StreamingJsonParser extends EventParser {
         byte[] take(int n) {
             byte[] bytes = Arrays.copyOfRange(buffer, pos, pos + n);
             pos += n;
+            return bytes;
+        }
+
+        /** How many bytes are buffered from the place the parser stands, at most that many; none are read for it. */
+        int buffered(int max) {
+            return Math.min(limit - pos, max);
+        }
+
+        /** Reads off the stream until that many bytes are buffered or the document ends, a read at a time, as many as the buffer takes. */
+        void topUp(int max) {
+            while (limit - pos < max && !end) {
+                fill(limit - pos + 1);
+            }
+        }
+
+        /**
+         * A copy of that many buffered bytes from the place the parser
+         * stands, after that much room for the caller to write; the parser
+         * stays where it stands. The room is copied from the bytes passed
+         * over, when there are as many, so the array is not cleared first.
+         */
+        byte[] copy(int room, int n) {
+            if (pos >= room) {
+                return Arrays.copyOfRange(buffer, pos - room, pos + n);
+            }
+            byte[] bytes = new byte[room + n];
+            System.arraycopy(buffer, pos, bytes, room, n);
             return bytes;
         }
 

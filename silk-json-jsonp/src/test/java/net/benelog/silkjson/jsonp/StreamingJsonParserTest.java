@@ -64,14 +64,24 @@ class StreamingJsonParserTest {
     }
 
     static JsonParser streamed(String text, int headLength, int piece) {
+        return streamed(text, headLength, piece, true, KeyStrategy.LAST);
+    }
+
+    /** A streaming parser of the text, its first bytes read ahead, and the rest handed over a few bytes at a time or as fast as it is asked for. */
+    static JsonParser streamed(String text, int headLength, int piece, boolean trickling, KeyStrategy strategy) {
         byte[] utf8 = text.getBytes(StandardCharsets.UTF_8);
         int split = Math.min(headLength, utf8.length);
-        return new StreamingJsonParser(Arrays.copyOf(utf8, split), trickle(Arrays.copyOfRange(utf8, split, utf8.length)), null,
-                KeyStrategy.LAST, piece);
+        byte[] rest = Arrays.copyOfRange(utf8, split, utf8.length);
+        return new StreamingJsonParser(Arrays.copyOf(utf8, split), trickling ? trickle(rest) : new ByteArrayInputStream(rest), null,
+                strategy, piece);
     }
 
     static JsonParser whole(String text) {
-        return new SilkJsonParser(text.getBytes(StandardCharsets.UTF_8), null, KeyStrategy.LAST);
+        return whole(text, KeyStrategy.LAST);
+    }
+
+    static JsonParser whole(String text, KeyStrategy strategy) {
+        return new SilkJsonParser(text.getBytes(StandardCharsets.UTF_8), null, strategy);
     }
 
     /** Every event, with what it holds and where it leaves the parser, or the failure that ends it. */
@@ -86,6 +96,55 @@ class StreamingJsonParserTest {
                     default -> "";
                 };
                 trace.add(event + " " + held + " @" + place(parser.getLocation()));
+            }
+        } catch (JsonParsingException e) {
+            trace.add("failure " + e.getMessage() + " @" + place(e.getLocation()));
+        }
+        return trace;
+    }
+
+    /**
+     * The events, with every other object or array read as a tree from its start, the document's own first when
+     * the parity is 0, or the failure that ends them.
+     */
+    static List<String> trees(JsonParser parser, int parity) {
+        List<String> trace = new ArrayList<>();
+        int starts = 0;
+        try {
+            while (parser.hasNext()) {
+                Event event = parser.next();
+                if ((event == Event.START_OBJECT || event == Event.START_ARRAY) && starts++ % 2 == parity) {
+                    trace.add("value " + parser.getValue() + " @" + place(parser.getLocation()));
+                } else {
+                    trace.add(event + " @" + place(parser.getLocation()));
+                }
+            }
+        } catch (JsonParsingException e) {
+            trace.add("failure " + e.getMessage() + " @" + place(e.getLocation()));
+        }
+        return trace;
+    }
+
+    /**
+     * The events, with the rest of every other object or array passed over from its start, the document's own first
+     * when the parity is 0, or the failure that ends them.
+     */
+    static List<String> skips(JsonParser parser, int parity) {
+        List<String> trace = new ArrayList<>();
+        int starts = 0;
+        try {
+            while (parser.hasNext()) {
+                Event event = parser.next();
+                if ((event == Event.START_OBJECT || event == Event.START_ARRAY) && starts++ % 2 == parity) {
+                    if (event == Event.START_OBJECT) {
+                        parser.skipObject();
+                    } else {
+                        parser.skipArray();
+                    }
+                    trace.add("skipped to " + parser.currentEvent() + " @" + place(parser.getLocation()));
+                } else {
+                    trace.add(event + " @" + place(parser.getLocation()));
+                }
             }
         } catch (JsonParsingException e) {
             trace.add("failure " + e.getMessage() + " @" + place(e.getLocation()));
@@ -119,6 +178,64 @@ class StreamingJsonParserTest {
             for (int piece : new int[] {1, 2, 7, 16, 1 << 20}) {
                 assertThat(trace(streamed(text, 0, piece))).as("%s, piece %d", text, piece).isEqualTo(expected);
             }
+        }
+    }
+
+    /**
+     * A stream that hands over as much as it is asked for has its values read in runs, which end wherever a piece
+     * does, inside a value too; the steps a run's bytes end inside are read again off the stream, as events, as
+     * trees, and passed over alike.
+     */
+    @Test
+    void runsThatEndAnywhereReadAsTheDocumentHeldWhole() {
+        List<String> texts = new ArrayList<>(VALID);
+        texts.addAll(INVALID);
+        for (String text : texts) {
+            List<String> events = trace(whole(text));
+            for (int piece = 1; piece <= 300; piece += piece < 40 ? 1 : 37) {
+                for (int head : new int[] {0, 5, 1 << 20}) {
+                    for (boolean trickling : new boolean[] {false, true}) {
+                        String as = "%s, piece %d, head %d, trickling %s".formatted(text, piece, head, trickling);
+                        assertThat(trace(streamed(text, head, piece, trickling, KeyStrategy.LAST))).as(as).isEqualTo(events);
+                        for (int parity : new int[] {0, 1}) {
+                            assertThat(trees(streamed(text, head, piece, trickling, KeyStrategy.LAST), parity)).as(as)
+                                    .isEqualTo(trees(whole(text), parity));
+                            assertThat(skips(streamed(text, head, piece, trickling, KeyStrategy.LAST), parity)).as(as)
+                                    .isEqualTo(skips(whole(text), parity));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /** A repeated key is refused where the document held whole refuses it, in an object read off the stream or in a run. */
+    @Test
+    void aRepeatedKeyIsRefusedWhereItIsWhole() {
+        List<String> texts = List.of(
+                "{\"a\":1,\"b\":2,\"a\":3}",
+                "{\"a\":{\"b\":1},\n\"c\":2, \"a\" : 3}",
+                "[{\"x\":1},{\"y\":{\"z\":1,\"z\":2}}]",
+                records(30).replace("{\"id\":20,", "{\"id\":20,\"id\":21,"));
+        for (String text : texts) {
+            String expected = tree(whole(text, KeyStrategy.NONE));
+            assertThat(expected).as(text).startsWith("failure").contains("Duplicate key");
+            for (int piece : new int[] {1, 2, 7, 16, 64, 1 << 20}) {
+                for (int head : new int[] {0, 1 << 20}) {
+                    assertThat(tree(streamed(text, head, piece, false, KeyStrategy.NONE)))
+                            .as("%s, piece %d, head %d", text, piece, head).isEqualTo(expected);
+                }
+            }
+        }
+    }
+
+    /** The document's value read as a tree from its first event, and whether events follow, or the failure that ends it. */
+    static String tree(JsonParser parser) {
+        try {
+            parser.next();
+            return parser.getValue() + " " + parser.hasNext();
+        } catch (JsonParsingException e) {
+            return "failure " + e.getMessage() + " @" + place(e.getLocation());
         }
     }
 

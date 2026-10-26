@@ -31,14 +31,18 @@ import net.benelog.silkjson.JsonInput;
  * the whole document, as RFC 8259 has it: {@link #hasNext()} answers false
  * after it, and throws {@link JsonParsingException} when anything but
  * whitespace follows.
+ *
+ * <p>It also parses a {@linkplain #run run}: the bytes a streaming parser has
+ * buffered of a larger document, whose values the one input reads one after
+ * another.
  */
 final class SilkJsonParser extends EventParser {
 
     private static final byte OBJECT = 1;
     private static final byte ARRAY = 2;
 
+    private final byte[] utf8;
     private final JsonInput in;
-    private final int length;
     private final Documents.Locator locator;
     private final @Nullable Closeable closeable;
     private final KeyStrategy strategy;
@@ -46,6 +50,17 @@ final class SilkJsonParser extends EventParser {
     /** The containers the parser is inside, innermost last. */
     private byte[] containers = new byte[16];
     private int depth;
+
+    /** Whether the bytes are a run's, and how many containers its first bytes open, which answer no event. */
+    private final boolean run;
+    private final int floor;
+
+    /** Where a run stops at the latest, which {@link #runEnded()} finds after its first value. */
+    private int cut = -1;
+
+    /** Where a run's last value at its own level ended, and the most bytes one of them took, its comma included. */
+    private int lastEnd;
+    private int widest;
 
     /** Whether the event before was a key, so that its value comes next. */
     private boolean valueNext;
@@ -60,11 +75,46 @@ final class SilkJsonParser extends EventParser {
     private @Nullable String text;
 
     SilkJsonParser(byte[] utf8, @Nullable Closeable closeable, KeyStrategy strategy) {
-        this.length = utf8.length;
+        this(utf8, closeable, strategy, false, 0);
+    }
+
+    private SilkJsonParser(byte[] utf8, @Nullable Closeable closeable, KeyStrategy strategy, boolean run, int floor) {
+        this.utf8 = utf8;
         this.in = JsonInput.of(utf8);
         this.locator = new Documents.Locator(utf8);
         this.closeable = closeable;
         this.strategy = strategy;
+        this.run = run;
+        this.floor = floor;
+        this.lastEnd = floor;
+        for (int i = 0; i < floor; i++) {
+            if (utf8[i] == '{') {
+                in.object();
+                enter(OBJECT);
+            } else {
+                in.array();
+                enter(ARRAY);
+            }
+        }
+    }
+
+    /**
+     * A parser of a run: the bytes a {@link StreamingJsonParser} has buffered
+     * from the start of the document's value, or of an element or a member
+     * of the container it is in, after a bracket for each container it is in,
+     * that container's last. The brackets answer no event, so the first event
+     * is the first value's, and nesting counts from the document's root, as
+     * it does in the document held whole.
+     *
+     * <p>The bytes may end anywhere, inside a value too. A step that reaches
+     * their end throws, or reads a number that may go on past them, and the
+     * streaming parser reads that step again off its stream. A run ends after
+     * a value at its own level when no comma follows or the next value is
+     * likely to run past the bytes, and a run of the document's value ends
+     * with that value.
+     */
+    static SilkJsonParser run(byte[] bytes, int floor, KeyStrategy strategy) {
+        return new SilkJsonParser(bytes, null, strategy, true, floor);
     }
 
     @Override
@@ -159,8 +209,9 @@ final class SilkJsonParser extends EventParser {
         finished = depth == 0;
     }
 
+    /** The input's failure as JSON-P's; a run's is read again off the stream, and needs no location counted. */
     private JsonParsingException failure(net.benelog.silkjson.JsonException e) {
-        return new JsonParsingException(e.getMessage(), getLocation());
+        return new JsonParsingException(e.getMessage(), run ? null : getLocation());
     }
 
     @Override
@@ -270,9 +321,10 @@ final class SilkJsonParser extends EventParser {
         };
     }
 
+    /** Whether the parser is inside an object or an array of the document, or of a value of a run. */
     @Override
     boolean inside() {
-        return depth > 0;
+        return depth > floor;
     }
 
     /** Whether the document's value has been read to its end, for a parser that reads a value of a larger document through this one. */
@@ -282,7 +334,91 @@ final class SilkJsonParser extends EventParser {
 
     /** How many bytes are left after the value, which that parser reads itself. */
     int unread() {
-        return length - in.position();
+        return utf8.length - in.position();
+    }
+
+    // ---- a run ----
+
+    boolean isRun() {
+        return run;
+    }
+
+    /**
+     * Whether a run has read its last value: it stands at its own level
+     * after a value, and no comma follows within its bytes, or the next value
+     * is likely to run past them. The cut is the last comma of the bytes
+     * that follows a byte the first value ends with, the likeliest start of a
+     * value the bytes end inside, so that a run of like values stops before
+     * that one rather than failing on it. A run also stops when fewer bytes
+     * are left than its widest value took.
+     */
+    boolean runEnded() {
+        if (depth != floor || valueNext || current == null) {
+            return false;
+        }
+        byte[] bytes = utf8;
+        int p = in.position();
+        widest = Math.max(widest, p - lastEnd);
+        lastEnd = p;
+        if (cut < 0) {
+            cut = cut(p);
+        }
+        while (p < bytes.length && isWhitespace(bytes[p])) {
+            p++;
+        }
+        return p == bytes.length || bytes[p] != ',' || p >= cut || bytes.length - p < widest;
+    }
+
+    private int cut(int afterFirst) {
+        byte[] bytes = utf8;
+        byte last = bytes[afterFirst - 1];
+        boolean digit = last >= '0' && last <= '9';
+        for (int c = bytes.length - 1; c > afterFirst; c--) {
+            if (bytes[c] == ',') {
+                int b = c - 1;
+                while (isWhitespace(bytes[b])) {
+                    b--;
+                }
+                if (bytes[b] == last || (digit && bytes[b] >= '0' && bytes[b] <= '9')) {
+                    return c;
+                }
+            }
+        }
+        return bytes.length;
+    }
+
+    private static boolean isWhitespace(byte b) {
+        return b == ' ' || b == '\n' || b == '\r' || b == '\t';
+    }
+
+    /** Where the input stands, as an index into the bytes. */
+    int position() {
+        return in.position();
+    }
+
+    /** Whether the input has read to the end of the bytes, as a number a run ends with may go on past them. */
+    boolean atEnd() {
+        return in.position() == utf8.length;
+    }
+
+    /** The most bytes a value of a run took at its own level, its comma included. */
+    int widest() {
+        return widest;
+    }
+
+    /** How many containers a run's first bytes open. */
+    int floor() {
+        return floor;
+    }
+
+    /** How many containers the parser is inside, the floor's included. */
+    int depth() {
+        return depth;
+    }
+
+    /** Whether the container at that level, from 0, is an object. */
+    boolean isObject(int level) {
+        return containers[level] == OBJECT;
     }
 
     /** Passes over the rest of the array the parser is in, to its END_ARRAY; does nothing outside an array. */

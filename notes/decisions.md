@@ -1659,8 +1659,9 @@ Rejected: 22, the first release with the foreign memory API final, whose updates
 - **A small document is read whole, and a large one streams around `JsonInput` rather than through it.**
   - `JsonInput` reads a byte array, and refilling a buffer would touch the hot paths tuned a word at a time (decision 76).
   - A document of at most 1 MiB is parsed by one `JsonInput`, as before.
-  - Past that, `StreamingJsonParser` reads the brackets, commas, colons, and keys of each object or array over 64 KiB off the stream, and hands every other value to a `JsonInput` of its own, so the bytes held are the largest such value's.
-  - A number or a literal goes as the bytes a number or a word is made of, and what its parser leaves goes back to the stream, so failures and locations are those of the document held whole.
+  - Past that, `StreamingJsonParser` hands the bytes it has buffered, at most 64 KiB at a time, to one `JsonInput`, which reads as many values as they hold.
+  - Where such a run's bytes end inside a value, the run stops before that step, and the parser enters the containers the run was in and reads the step off the stream, so failures and locations are those of the document held whole.
+  - A value no run holds goes to a `JsonInput` of its own, a number or a literal as the bytes a number or a word is made of, and what its parser leaves goes back to the stream.
   - The TCK runs a second time with every document streamed in pieces of 16 bytes, and a test parses 128 MB in a heap of 64 MB.
   - UTF-8 bytes go to the parser as read, and a `Reader` or UTF-16 or UTF-32 is encoded once more, a buffer at a time.
   - A parser reads the start of its stream when it is made, and a reader in `read()`, which is where the TCK expects each one's I/O error.
@@ -1679,6 +1680,8 @@ Rejected: 22, the first release with the foreign memory API final, whose updates
 Rejected: `silk-json-p`, whose package by the build's rule is `net.benelog.silkjson.p`.
 Rejected: the JSON-P tree in core's API, which changes every JSON signature of core and loses the 400 for a missing key (`notes/jakarta-json-support.md`).
 Rejected: buffer refills inside `JsonInput`, before a benchmark shows what they cost its hot paths.
+Rejected: a `JsonInput` per value of a large object or array, which made a parser and a key table per record and read 1.5 to 3.8 times slower than the document held whole.
+Rejected: scanning a run's bytes for the end of its last whole value before parsing them, a second pass over every byte that a run stopping at the step it cannot finish does without.
 
 ## Rejected — decisions, with the reason
 

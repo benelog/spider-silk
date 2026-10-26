@@ -3,6 +3,9 @@ package net.benelog.silkjson.jsonp;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
+import java.nio.ByteOrder;
 
 import jakarta.json.JsonException;
 import jakarta.json.stream.JsonLocation;
@@ -14,8 +17,9 @@ import org.jspecify.annotations.Nullable;
  * streamed past that. A document of at most {@link #STREAM_ABOVE} bytes of
  * UTF-8 is read into memory and parsed by one
  * {@link net.benelog.silkjson.JsonInput}. A larger one is parsed as it is
- * read, by a {@link StreamingJsonParser}, which holds a value of at most
- * {@link #PIECE} bytes at a time.
+ * read, by a {@link StreamingJsonParser}, which hands the values of a large
+ * object or array to a {@code JsonInput} at most {@link #PIECE} bytes at a
+ * time.
  */
 final class Documents {
 
@@ -23,7 +27,7 @@ final class Documents {
     static final int STREAM_ABOVE = Math.max(0, Math.min(Integer.getInteger("net.benelog.silkjson.jsonp.streamAbove", 1 << 20),
             Integer.MAX_VALUE - 16));
 
-    /** The bytes of the largest object or array a streamed document reads whole: 64 KiB, or the system property {@code net.benelog.silkjson.jsonp.pieceSize}. */
+    /** The bytes of the largest object or array a streamed document reads whole, and of a run of its values: 64 KiB, or the system property {@code net.benelog.silkjson.jsonp.pieceSize}. */
     static final int PIECE = Math.max(1, Integer.getInteger("net.benelog.silkjson.jsonp.pieceSize", 64 * 1024));
 
     private Documents() {
@@ -111,27 +115,52 @@ final class Documents {
     /**
      * Counts the lines and the characters in a document's UTF-8, a range of
      * bytes at a time. Columns and the offset count UTF-16 characters, as a
-     * {@link Reader} over the document would.
+     * {@link Reader} over the document would. Eight bytes with no line feed
+     * among them, which is most of a document, are counted as one word.
      */
     static final class Counter {
+
+        private static final VarHandle WORDS = MethodHandles.byteArrayViewVarHandle(long[].class, ByteOrder.LITTLE_ENDIAN);
+        private static final long ONES = 0x0101010101010101L;
+        private static final long HIGH_BITS = 0x8080808080808080L;
+        private static final long LINE_FEEDS = 0x0A0A0A0A0A0A0A0AL;
 
         private long line = 1;
         private long column = 1;
         private long offset;
 
         void count(byte[] utf8, int from, int to) {
-            for (int i = from; i < to; i++) {
-                int b = utf8[i] & 0xFF;
-                if ((b & 0xC0) == 0x80) {
-                    continue; // a continuation byte, of a character already counted
+            int i = from;
+            while (i < to) {
+                int stop = to;
+                if (i <= to - 8) {
+                    long word = (long) WORDS.get(utf8, i);
+                    long feeds = word ^ LINE_FEEDS;
+                    if (((feeds - ONES) & ~feeds & HIGH_BITS) == 0) {
+                        // The bytes that start a character, less the continuation bytes 10xxxxxx,
+                        // and a four-byte sequence, from a lead byte 1111xxxx, is a surrogate pair.
+                        int chars = 8 - Long.bitCount(word & ~(word << 1) & HIGH_BITS)
+                                + Long.bitCount(word & (word << 1) & (word << 2) & (word << 3) & HIGH_BITS);
+                        column += chars;
+                        offset += chars;
+                        i += 8;
+                        continue;
+                    }
+                    stop = i + 8;
                 }
-                int chars = b >= 0xF0 ? 2 : 1; // a four-byte sequence is a surrogate pair
-                offset += chars;
-                if (b == '\n') {
-                    line++;
-                    column = 1;
-                } else {
-                    column += chars;
+                for (; i < stop; i++) {
+                    int b = utf8[i] & 0xFF;
+                    if ((b & 0xC0) == 0x80) {
+                        continue; // a continuation byte, of a character already counted
+                    }
+                    int chars = b >= 0xF0 ? 2 : 1; // a four-byte sequence is a surrogate pair
+                    offset += chars;
+                    if (b == '\n') {
+                        line++;
+                        column = 1;
+                    } else {
+                        column += chars;
+                    }
                 }
             }
         }

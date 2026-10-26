@@ -59,9 +59,10 @@ Every method is safe to call from many threads, and every `create` method makes 
 A document of at most 1 MiB of UTF-8 is read into memory whole and parsed by one `JsonInput`.
 A larger one is parsed as it is read, so its bytes are never held at once.
 
-* The objects and arrays of a larger document that run past 64 KiB are read off the stream a byte at a time: their brackets, commas, colons, and keys.
-  Anything else, a string, a number, a literal, or an object or an array of at most 64 KiB, is read whole and parsed by a `JsonInput` of its own.
-  The bytes held at once are those of the largest such value.
+* A larger document is parsed in runs of at most 64 KiB: the bytes buffered from the place the parser stands go to one `JsonInput`, which reads as many values as they hold.
+  Where a run's bytes end inside a value, the parser enters the objects and arrays the run was inside, reads on from there off the stream, and hands what follows to the next run.
+  A string or a number longer than a run is read whole by a `JsonInput` of its own.
+  The bytes held at once are a run's, or those of the largest such string or number.
 * Both ways answer the same events, values, failures, and locations.
   The build checks this with a second run of the TCK, in which every document is streamed.
 * The system properties `net.benelog.silkjson.jsonp.streamAbove` and `net.benelog.silkjson.jsonp.pieceSize` set the two sizes, in bytes.
