@@ -24,6 +24,9 @@
 - **`silk-json-processor` runs inside javac and ships nothing to the runtime.**
   It generates a `JsonCodec` for each `@JsonBound` type from the type's declaration and the `jakarta.json.bind` annotations, read by qualified name so the processor depends on neither silk-json nor the API.
   Generated code calls constructors and accessors only: no registry, no `ServiceLoader`, and nothing looked up by name at run time.
+- **`silk-json-jsonb` is the part of JSON-B that needs no reflection, and no more.**
+  `SilkJsonb` takes its codecs from the application by name, and `JsonbBuilder` never finds it.
+  What JSON-B defines through reflection, such as binding a type with no `@JsonBound`, stays out rather than behind an opt-in.
 - There is no DI container: `FlashcardContext` assembles the object graph by calling constructors directly.
 
 ## Code Style

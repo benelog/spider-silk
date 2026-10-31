@@ -41,9 +41,21 @@ final class Property {
     @Nullable String dateFormat;
     @Nullable String dateLocale;
 
+    /** A {@code @JsonbDateFormat(TIME_IN_MILLIS)}: the value is a number of milliseconds since the epoch. */
+    boolean timeInMillis;
+
+    /** A {@code @JsonbNumberFormat}: the value is a string in that pattern, in that locale or none. */
+    @Nullable String numberFormat;
+    @Nullable String numberLocale;
+
     /** A {@code @JsonbTypeAdapter}, with the type its adapted side has on the wire. */
     @Nullable TypeElement adapter;
     @Nullable TypeMirror adapted;
+
+    /** A {@code @JsonbTypeSerializer} and a {@code @JsonbTypeDeserializer}, the latter with the class it is told it reads. */
+    @Nullable TypeElement serializer;
+    @Nullable TypeElement deserializer;
+    @Nullable String deserializedClass;
 
     Property(String name, TypeMirror type, Element element) {
         this.name = name;

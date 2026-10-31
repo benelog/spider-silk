@@ -363,7 +363,6 @@ class JsonProcessorTest {
     @Test
     void whatCannotBeBoundIsACompileErrorThatSaysWhy() {
         assertError("package example;" + IMPORTS + "@JsonBound public interface Shape { }", "binds a record or a class");
-        assertError("package example;" + IMPORTS + "@JsonBound public record Box<T>(T value) { }", "generic type cannot be bound");
         assertError("package example;" + IMPORTS + "@JsonBound public record Bad(Object thing) { }",
                 "cannot be bound: annotate it @JsonBound, or adapt it with @JsonbTypeAdapter");
         assertError("package example;" + IMPORTS + "@JsonBound public record Keys(Map<Integer, String> byNumber) { }",
@@ -372,8 +371,8 @@ class JsonProcessorTest {
                 "Two properties are named \"x\" in JSON");
         assertError("package example;" + IMPORTS + "@JsonBound @JsonbVisibility(jakarta.json.bind.config.PropertyVisibilityStrategy.class) public record Seen(String a) { }",
                 "@JsonbVisibility is not supported");
-        assertError("package example;" + IMPORTS + "@JsonBound public record Num(@JsonbNumberFormat(\"#.##\") double d) { }",
-                "@JsonbNumberFormat is not supported");
+        assertError("package example;" + IMPORTS + "@JsonBound public record Num(@JsonbNumberFormat(\"0.0.0\") double d) { }",
+                "The number format 0.0.0 is not a pattern");
         assertError("package example;" + IMPORTS + "@JsonBound public record Prim(@JsonbTransient int n) { }",
                 "@JsonbTransient creator parameter cannot be a primitive");
         assertError("package example;" + IMPORTS + """
@@ -492,20 +491,9 @@ class JsonProcessorTest {
         }
     }
 
-    /** What is unsupported on a property is unsupported on a type and a package too; a package's date format and nillable apply. */
+    /** A generated codec can give @JsonbVisibility no meaning; a package's date format, number format, and nillable apply. */
     @Test
     void typeAndPackageAnnotationsAreReadOrRefused() throws Exception {
-        assertError("package example;" + IMPORTS + "@JsonBound @JsonbNumberFormat(\"#0.00\") public record Price(double amount) { }",
-                "@JsonbNumberFormat is not supported by the generated codec, here on example.Price");
-        assertError("package example;" + IMPORTS + """
-                @JsonBound @JsonbTypeAdapter(Wrapped.Adapter.class)
-                public record Wrapped(String v) {
-                    public static class Adapter implements JsonbAdapter<Wrapped, String> {
-                        public String adaptToJson(Wrapped w) { return w.v(); }
-                        public Wrapped adaptFromJson(String s) { return new Wrapped(s); }
-                    }
-                }
-                """, "@JsonbTypeAdapter is not supported");
         Compilation.Result visibility = Compilation.compile(Map.of(
                 "example.package-info", "@jakarta.json.bind.annotation.JsonbVisibility(jakarta.json.bind.config.PropertyVisibilityStrategy.class)"
                         + " package example;",
@@ -515,10 +503,395 @@ class JsonProcessorTest {
 
         Compilation.Result defaults = compile(Map.of(
                 "example.package-info", "@jakarta.json.bind.annotation.JsonbDateFormat(\"dd.MM.yyyy\")"
+                        + " @jakarta.json.bind.annotation.JsonbNumberFormat(\"0.0\")"
                         + " @jakarta.json.bind.annotation.JsonbNillable package example;",
-                "example.Due", "package example;" + IMPORTS + "@JsonBound public record Due(LocalDate on, @Nullable String note) { }"));
+                "example.Due", "package example;" + IMPORTS
+                        + "@JsonBound public record Due(LocalDate on, @Nullable String note, double rate, @JsonbNumberFormat int plain) { }"));
         JsonCodec<Object> due = codec(defaults, "example.DueJson");
-        assertThat(due.toJson(due.fromJson("{\"on\":\"09.10.2026\"}"))).isEqualTo("{\"on\":\"09.10.2026\",\"note\":null}");
+        assertThat(due.toJson(due.fromJson("{\"on\":\"09.10.2026\",\"rate\":\"1.5\",\"plain\":3}")))
+                .isEqualTo("{\"on\":\"09.10.2026\",\"note\":null,\"rate\":\"1.5\",\"plain\":3}");
+    }
+
+    /** A number in a format is a string on the wire, as JSON-B has it, and reads back only when the whole string is the number. */
+    @Test
+    void aNumberFormatWritesAndReadsEveryNumberType() throws Exception {
+        Compilation.Result result = compile(Map.of("example.Price", "package example;" + IMPORTS + """
+                @JsonBound
+                public record Price(@JsonbNumberFormat("#,##0.00") double amount, @JsonbNumberFormat("000") int code,
+                        @JsonbNumberFormat("#.##########") float ratio, @JsonbNumberFormat("0.0") BigDecimal exact,
+                        @JsonbNumberFormat("#,##0") BigInteger big, @JsonbNumberFormat("0") Long boxed, @JsonbNumberFormat("0") byte tiny,
+                        @JsonbNumberFormat("0.0") List<Double> rates, @JsonbNumberFormat("0.0") Optional<Double> hint,
+                        @JsonbNumberFormat("00") OptionalInt level, @JsonbNumberFormat(value = "#,##0.00", locale = "de") double german) {
+                }
+                """));
+        JsonCodec<Object> price = codec(result, "example.PriceJson");
+
+        String document = "{\"amount\":\"1,234.50\",\"code\":\"007\",\"ratio\":\"0.1\",\"exact\":\"2.5\","
+                + "\"big\":\"123,456,789,012,345,678,901\",\"boxed\":\"9\",\"tiny\":\"-3\",\"rates\":[\"1.5\",\"2.5\"],"
+                + "\"hint\":\"0.5\",\"level\":\"04\",\"german\":\"1.234,50\"}";
+        Object read = price.fromJson(document);
+        assertThat(read.toString()).contains("amount=1234.5").contains("code=7").contains("ratio=0.1").contains("exact=2.5")
+                .contains("big=123456789012345678901").contains("tiny=-3").contains("rates=[1.5, 2.5]").contains("level=OptionalInt[4]");
+        assertThat(price.toJson(read)).isEqualTo(document);
+
+        assertThatThrownBy(() -> price.fromJson(document.replace("\"007\"", "\"7 apples\"")))
+                .isInstanceOf(JsonException.class).hasMessageContaining("Not a number in the format");
+        assertThatThrownBy(() -> price.fromJson(document.replace("\"007\"", "\"7.5\"")))
+                .isInstanceOf(JsonException.class).hasMessageContaining("Not a whole number in range");
+        assertThatThrownBy(() -> price.fromJson(document.replace("\"123,456,789,012,345,678,901\"", "\"1.5\"")))
+                .isInstanceOf(JsonException.class).hasMessageContaining("Not a whole number");
+        assertThatThrownBy(() -> price.fromJson(document.replace("\"-3\"", "\"300\"")))
+                .isInstanceOf(JsonException.class).hasMessageContaining("Not a whole number in range");
+    }
+
+    /** TIME_IN_MILLIS is a JSON number, as Yasson writes it, and a time with no zone stands in UTC. */
+    @Test
+    void timeInMillisIsANumber() throws Exception {
+        Compilation.Result result = compile(Map.of("example.Stamps", "package example;" + IMPORTS + """
+                @JsonBound
+                public record Stamps(@JsonbDateFormat(JsonbDateFormat.TIME_IN_MILLIS) Instant at,
+                        @JsonbDateFormat(JsonbDateFormat.TIME_IN_MILLIS) ZonedDateTime zoned,
+                        @JsonbDateFormat(JsonbDateFormat.TIME_IN_MILLIS) OffsetDateTime offset,
+                        @JsonbDateFormat(JsonbDateFormat.TIME_IN_MILLIS) LocalDateTime local,
+                        @JsonbDateFormat(JsonbDateFormat.TIME_IN_MILLIS) LocalDate day,
+                        @JsonbDateFormat(JsonbDateFormat.TIME_IN_MILLIS) List<Instant> all) {
+                }
+                """));
+        JsonCodec<Object> stamps = codec(result, "example.StampsJson");
+
+        String document = "{\"at\":1500,\"zoned\":1500,\"offset\":1500,\"local\":1500,\"day\":0,\"all\":[1500]}";
+        Object read = stamps.fromJson(document);
+        assertThat(read.toString()).contains("at=1970-01-01T00:00:01.500Z").contains("zoned=1970-01-01T00:00:01.500Z")
+                .contains("local=1970-01-01T00:00:01.500").contains("day=1970-01-01");
+        assertThat(stamps.toJson(read)).isEqualTo(document);
+        assertError("package example;" + IMPORTS
+                + "@JsonBound public record Later(@JsonbDateFormat(JsonbDateFormat.TIME_IN_MILLIS) LocalTime at) { }",
+                "TIME_IN_MILLIS takes an instant or a date, not java.time.LocalTime");
+    }
+
+    private static final Map<String, String> ANIMALS = Map.of(
+            "example.Animal", "package example;" + IMPORTS + """
+                    @JsonBound
+                    @JsonbTypeInfo(key = "kind", value = {
+                        @JsonbSubtype(alias = "dog", type = Dog.class),
+                        @JsonbSubtype(alias = "puppy", type = Puppy.class),
+                        @JsonbSubtype(alias = "cat", type = Cat.class),
+                        @JsonbSubtype(alias = "bird", type = Bird.class)
+                    })
+                    public interface Animal {
+                    }
+                    """,
+            "example.Dog", "package example;" + IMPORTS + """
+                    @JsonBound
+                    public class Dog implements Animal {
+                        public String name = "";
+                    }
+                    """,
+            "example.Puppy", "package example;" + IMPORTS + """
+                    @JsonBound
+                    public class Puppy extends Dog {
+                        public int weeks;
+                    }
+                    """,
+            "example.Cat", "package example;" + IMPORTS + "@JsonBound public record Cat(int lives) implements Animal { }",
+            "example.Bird", "package example;" + IMPORTS + """
+                    @JsonBound
+                    @JsonbTypeInfo(key = "wings", value = {
+                        @JsonbSubtype(alias = "owl", type = Owl.class)
+                    })
+                    public abstract class Bird implements Animal {
+                    }
+                    """,
+            "example.Owl", "package example;" + IMPORTS + "@JsonBound public class Owl extends Bird { public int age; }",
+            "example.Zoo", "package example;" + IMPORTS + "@JsonBound public record Zoo(Animal star, List<Animal> all, @Nullable Animal spare) { }");
+
+    /** The key goes first, a subclass is tried before its superclass, and a subtype can have subtypes under a key of its own. */
+    @Test
+    void jsonbTypeInfoChoosesTheSubtypeWhereverItsKeyStands() throws Exception {
+        Compilation.Result result = compile(ANIMALS);
+        JsonCodec<Object> zoo = codec(result, "example.ZooJson");
+        JsonCodec<Object> animal = codec(result, "example.AnimalJson");
+
+        String document = "{\"star\":{\"kind\":\"cat\",\"lives\":9},\"all\":[{\"kind\":\"dog\",\"name\":\"Rex\"},"
+                + "{\"kind\":\"puppy\",\"name\":\"Bo\",\"weeks\":6},{\"kind\":\"bird\",\"wings\":\"owl\",\"age\":3}]}";
+        assertThat(zoo.toJson(zoo.fromJson(document))).isEqualTo(document);
+        assertThat(animal.fromJson("{\"lives\":7,\"name\":\"x\",\"kind\":\"cat\"}").toString()).isEqualTo("Cat[lives=7]");
+        assertThat(animal.fromJson("{ \"lives\" : 7 , \"kind\" : \"cat\" }").toString()).isEqualTo("Cat[lives=7]");
+
+        assertThatThrownBy(() -> animal.fromJson("{\"lives\":7}"))
+                .isInstanceOf(JsonException.class).hasMessage("Missing key in JSON object: kind");
+        assertThatThrownBy(() -> animal.fromJson("{\"kind\":\"fish\"}"))
+                .isInstanceOf(JsonException.class).hasMessageContaining("Not a name this value takes: fish");
+        assertThatThrownBy(() -> animal.fromJson("[]"))
+                .isInstanceOf(JsonException.class).hasMessageContaining("Not a JSON object: an array");
+
+        assertThat(result.generated("example.AnimalJson")).doesNotContain("reflect");
+        assertThat(result.generated("example.AnimalJson").indexOf("instanceof example.Puppy"))
+                .isLessThan(result.generated("example.AnimalJson").indexOf("instanceof example.Dog"));
+    }
+
+    /** The manual's example: a sealed interface, whose subtypes are records. */
+    @Test
+    void aSealedInterfaceListsItsRecords() throws Exception {
+        Compilation.Result result = compile(Map.of(
+                "example.Animal", "package example;" + IMPORTS + """
+                        @JsonBound
+                        @JsonbTypeInfo({
+                            @JsonbSubtype(alias = "dog", type = Dog.class),
+                            @JsonbSubtype(alias = "cat", type = Cat.class)
+                        })
+                        public sealed interface Animal permits Dog, Cat {
+                        }
+                        """,
+                "example.Dog", "package example;" + IMPORTS + "@JsonBound public record Dog(String name) implements Animal { }",
+                "example.Cat", "package example;" + IMPORTS + "@JsonBound public record Cat(int lives) implements Animal { }"));
+        JsonCodec<Object> animal = codec(result, "example.AnimalJson");
+        JsonCodec<Object> cat = codec(result, "example.CatJson");
+
+        Object read = animal.fromJson("{\"lives\":9,\"@type\":\"cat\"}");
+        assertThat(animal.toJson(read)).isEqualTo("{\"@type\":\"cat\",\"lives\":9}");
+        assertThat(cat.toJson(cat.fromJson("{\"lives\":9,\"@type\":\"cat\"}"))).isEqualTo("{\"lives\":9}");
+    }
+
+    /** A class that can be a value itself reads an object without the key as itself, and writes one with no key. */
+    @Test
+    void aConcreteClassWithSubtypesIsAValueItself() throws Exception {
+        Compilation.Result result = compile(Map.of(
+                "example.Shape", "package example;" + IMPORTS + """
+                        @JsonBound
+                        @JsonbTypeInfo(@JsonbSubtype(alias = "round", type = Round.class))
+                        public class Shape {
+                            public String label = "";
+                        }
+                        """,
+                "example.Round", "package example;" + IMPORTS + "@JsonBound public class Round extends Shape { public int radius; }"));
+        JsonCodec<Object> shape = codec(result, "example.ShapeJson");
+
+        assertThat(shape.toJson(shape.fromJson("{\"label\":\"a\"}"))).isEqualTo("{\"label\":\"a\"}");
+        assertThat(shape.toJson(shape.fromJson("{\"@type\":\"round\",\"label\":\"b\",\"radius\":2}")))
+                .isEqualTo("{\"@type\":\"round\",\"label\":\"b\",\"radius\":2}");
+    }
+
+    @Test
+    void whatJsonbTypeInfoCannotDoIsACompileError() {
+        String sub = "@JsonBound public record Sub(int a) implements Root { }";
+        assertTypeInfoError("@JsonbTypeInfo({})", "public interface Root { }", sub, "lists no subtypes");
+        assertTypeInfoError("@JsonbTypeInfo({@JsonbSubtype(alias = \"a\", type = Sub.class), @JsonbSubtype(alias = \"a\", type = Sub2.class)})",
+                "public interface Root { }", sub, "go by the alias a");
+        assertTypeInfoError("@JsonbTypeInfo(@JsonbSubtype(alias = \"a\", type = Other.class))", "public interface Root { }", sub,
+                "example.Other is not a subtype of example.Root");
+        assertTypeInfoError("@JsonbTypeInfo(@JsonbSubtype(alias = \"a\", type = Sub.class))", "public interface Root { }",
+                "public record Sub(int a) implements Root { }", "needs @JsonBound");
+        assertTypeInfoError("@JsonbTypeInfo(@JsonbSubtype(alias = \"a\", type = Sub.class))", "public interface Root<T> { }",
+                "@JsonBound public record Sub(int a) implements Root<String> { }", "A generic type cannot carry @JsonbTypeInfo");
+        assertTypeInfoError("@JsonbTypeInfo(@JsonbSubtype(alias = \"a\", type = Sub.class))", "public interface Root { }",
+                "@JsonBound public record Sub(@JsonbProperty(\"@type\") int a) implements Root { }", "the key @JsonbTypeInfo keeps");
+    }
+
+    private static void assertTypeInfoError(String typeInfo, String root, String sub, String message) {
+        Compilation.Result result = Compilation.compile(Map.of(
+                "example.Root", "package example;" + IMPORTS + "@JsonBound " + typeInfo + " " + root,
+                "example.Sub", "package example;" + IMPORTS + sub,
+                "example.Sub2", "package example;" + IMPORTS + "@JsonBound public record Sub2(int b) implements Root { }".replace(
+                        "implements Root", root.contains("<T>") ? "implements Root<String>" : "implements Root"),
+                "example.Other", "package example;" + IMPORTS + "@JsonBound public record Other(int c) { }"));
+        assertThat(result.success()).as(typeInfo).isFalse();
+        assertThat(result.errors()).as(typeInfo).anySatisfy(e -> assertThat(e).contains(message));
+    }
+
+    /** A generic type's codec takes a codec for each type variable, and a type that names its arguments builds it where it is used. */
+    @Test
+    void aGenericTypeTakesACodecForEachTypeVariable() throws Exception {
+        Compilation.Result result = compile(Map.of(
+                "example.Tag", "package example;" + IMPORTS + "@JsonBound public record Tag(String label) { }",
+                "example.Level", "package example; public enum Level { EASY, HARD }",
+                "example.Box", "package example;" + IMPORTS + """
+                        @JsonBound
+                        public record Box<T>(T value, @Nullable T spare, List<T> more, Map<String, T> byName, Optional<T> maybe) {
+                        }
+                        """,
+                "example.Page", "package example;" + IMPORTS + """
+                        @JsonBound
+                        public class Page<K extends Comparable<K>, V> {
+                            private @Nullable K next;
+                            public List<V> items = List.of();
+                            public @Nullable K getNext() { return next; }
+                            public void setNext(@Nullable K next) { this.next = next; }
+                        }
+                        """,
+                "example.Node", "package example;" + IMPORTS + "@JsonBound public record Node<T>(T value, @Nullable Node<T> next) { }",
+                "example.Holder", "package example;" + IMPORTS + """
+                        @JsonBound
+                        public record Holder(Box<Tag> tag, Box<String> text, Box<Integer> number, Box<List<Level>> levels,
+                                Box<Box<Tag>> nested, Page<String, Tag> page, Node<Long> chain) {
+                        }
+                        """,
+                "example.Outer", "package example;" + IMPORTS + "@JsonBound public record Outer<U>(Box<U> inner, Box<List<U>> list) { }"));
+        JsonCodec<Object> holder = codec(result, "example.HolderJson");
+
+        String tag = "{\"value\":{\"label\":\"a\"},\"more\":[],\"byName\":{}}";
+        String document = "{\"tag\":" + tag + ","
+                + "\"text\":{\"value\":\"t\",\"spare\":\"s\",\"more\":[\"m\"],\"byName\":{\"k\":\"v\"},\"maybe\":\"o\"},"
+                + "\"number\":{\"value\":1,\"more\":[2],\"byName\":{}},"
+                + "\"levels\":{\"value\":[\"EASY\",\"HARD\"],\"more\":[],\"byName\":{}},"
+                + "\"nested\":{\"value\":" + tag + ",\"more\":[],\"byName\":{}},"
+                + "\"page\":{\"next\":\"n\",\"items\":[{\"label\":\"b\"}]},"
+                + "\"chain\":{\"value\":1,\"next\":{\"value\":2}}}";
+        assertThat(holder.toJson(holder.fromJson(document))).isEqualTo(document);
+        assertThatThrownBy(() -> holder.fromJson(document.replace("\"value\":\"t\",", "")))
+                .isInstanceOf(JsonException.class).hasMessage("Missing key in JSON object: value");
+
+        assertThat(result.generated("example.BoxJson"))
+                .contains("public final class BoxJson<T> implements net.benelog.silkjson.JsonCodec<example.Box<T>>")
+                .contains("public static <T> BoxJson<T> of(net.benelog.silkjson.JsonCodec<T> $T)")
+                .doesNotContain("CODEC");
+        assertThat(result.generated("example.PageJson"))
+                .contains("public final class PageJson<K extends java.lang.Comparable<K>, V>");
+        assertThat(result.generated("example.NodeJson")).contains("this.write(p_next, $out);");
+        assertThat(result.generated("example.HolderJson")).contains("example.BoxJson.of(example.TagJson.CODEC).write(p_tag, $out);");
+
+        // what the application writes for a generic type at the top of a document
+        Class<?> box = result.load("example.BoxJson");
+        @SuppressWarnings("unchecked")
+        JsonCodec<Object> ofStrings = (JsonCodec<Object>) box.getMethod("of", JsonCodec.class).invoke(null,
+                JsonCodec.of((String value, net.benelog.silkjson.JsonOutput out) -> out.value(value),
+                        net.benelog.silkjson.JsonInput::readString));
+        assertThat(ofStrings.toJson(ofStrings.fromJson("{\"value\":\"x\",\"more\":[],\"byName\":{}}")))
+                .isEqualTo("{\"value\":\"x\",\"more\":[],\"byName\":{}}");
+
+        assertError("package example;" + IMPORTS + """
+                @JsonBound public class Own {
+                    public <X> X getThing() { return null; }
+                }
+                """, "The type variable X cannot be bound");
+    }
+
+    /** An adapter on the type converts the whole value, wherever the type is used, and an interface can then be bound. */
+    @Test
+    void anAdapterOnATypeConvertsItWhole() throws Exception {
+        Compilation.Result result = compile(Map.of(
+                "example.Money", "package example;" + IMPORTS + """
+                        @JsonBound
+                        @JsonbTypeAdapter(Money.Adapter.class)
+                        public record Money(long cents) {
+                            public static class Adapter implements JsonbAdapter<Money, String> {
+                                @Override public String adaptToJson(Money money) { return money.cents() + "c"; }
+                                @Override public Money adaptFromJson(String text) { return new Money(Long.parseLong(text.replace("c", ""))); }
+                            }
+                        }
+                        """,
+                "example.Unit", "package example;" + IMPORTS + """
+                        @JsonBound
+                        @JsonbTypeAdapter(Unit.Adapter.class)
+                        public interface Unit {
+                            String code();
+                            class Adapter implements JsonbAdapter<Unit, String> {
+                                public Adapter() { }
+                                @Override public String adaptToJson(Unit unit) { return unit.code(); }
+                                @Override public Unit adaptFromJson(String text) { return () -> text; }
+                            }
+                        }
+                        """,
+                "example.Bill", "package example;" + IMPORTS + "@JsonBound public record Bill(Money total, List<Money> lines, Unit unit) { }"));
+        JsonCodec<Object> bill = codec(result, "example.BillJson");
+
+        String document = "{\"total\":\"150c\",\"lines\":[\"100c\",\"50c\"],\"unit\":\"kg\"}";
+        assertThat(bill.toJson(bill.fromJson(document))).isEqualTo(document);
+    }
+
+    private static final String SERIALIZERS = IMPORTS + """
+            import jakarta.json.bind.serializer.*;
+            import jakarta.json.stream.*;
+            import java.lang.reflect.Type;
+            """;
+
+    /** A serializer and a deserializer work in JSON-P's generator and parser, through silk-json-jsonb, on a property or a type. */
+    @Test
+    void aSerializerAndADeserializerRunThroughJsonP() throws Exception {
+        Compilation.Result result = compile(Map.of(
+                "example.Point", "package example; public record Point(int x, int y) { }",
+                "example.PointSerializer", "package example;" + SERIALIZERS + """
+                        public class PointSerializer implements JsonbSerializer<Point> {
+                            @Override public void serialize(Point point, JsonGenerator generator, SerializationContext context) {
+                                generator.writeStartArray().write(point.x()).write(point.y()).writeEnd();
+                            }
+                        }
+                        """,
+                "example.PointDeserializer", "package example;" + SERIALIZERS + """
+                        public class PointDeserializer implements JsonbDeserializer<Point> {
+                            @Override public Point deserialize(JsonParser parser, DeserializationContext context, Type type) {
+                                jakarta.json.JsonArray array = parser.getArray();
+                                return new Point(array.getInt(0), array.getInt(1));
+                            }
+                        }
+                        """,
+                "example.Count", "package example;" + SERIALIZERS + """
+                        public class Count implements JsonbSerializer<Integer> {
+                            @Override public void serialize(Integer n, JsonGenerator generator, SerializationContext context) {
+                                context.serialize("n" + n, generator);
+                            }
+                        }
+                        """,
+                "example.Whole", "package example;" + SERIALIZERS + """
+                        @JsonBound
+                        @JsonbTypeSerializer(Whole.Out.class)
+                        @JsonbTypeDeserializer(Whole.In.class)
+                        public interface Whole {
+                            String text();
+                            class Out implements JsonbSerializer<Whole> {
+                                public Out() { }
+                                @Override public void serialize(Whole whole, JsonGenerator generator, SerializationContext context) {
+                                    generator.writeStartObject();
+                                    context.serialize("text", whole.text(), generator);
+                                    generator.writeEnd();
+                                }
+                            }
+                            class In implements JsonbDeserializer<Whole> {
+                                public In() { }
+                                @Override public Whole deserialize(JsonParser parser, DeserializationContext context, Type type) {
+                                    parser.next();
+                                    String text = context.deserialize(String.class, parser);
+                                    return () -> text + "!";
+                                }
+                            }
+                        }
+                        """,
+                "example.Route", "package example;" + SERIALIZERS + """
+                        @JsonBound
+                        public record Route(
+                                @JsonbTypeSerializer(PointSerializer.class) @JsonbTypeDeserializer(PointDeserializer.class) Point from,
+                                @JsonbTypeSerializer(PointSerializer.class) @JsonbTypeDeserializer(PointDeserializer.class) @Nullable Point to,
+                                @JsonbTypeSerializer(Count.class) int stops, Whole whole, String after) {
+                        }
+                        """));
+        JsonCodec<Object> route = codec(result, "example.RouteJson");
+
+        Object read = route.fromJson("{\"from\":[1,2],\"to\":null,\"stops\":3,\"whole\":{\"text\":\"w\"},\"after\":\"a\"}");
+        assertThat(read.toString()).contains("from=Point[x=1, y=2]").contains("to=null").contains("stops=3").contains("after=a");
+        assertThat(route.toJson(route.fromJson("{\"from\":[1,2],\"stops\":3,\"whole\":{\"text\":\"w\"},\"after\":\"a\"}")))
+                .isEqualTo("{\"from\":[1,2],\"stops\":\"n3\",\"whole\":{\"text\":\"w!\"},\"after\":\"a\"}");
+        assertThat(result.generated("example.RouteJson")).contains("new example.PointSerializer()")
+                .contains("net.benelog.silkjson.jsonb.JsonbCodecs.write(S_from, p_from, $out);")
+                .contains("net.benelog.silkjson.jsonb.JsonbCodecs.read(D_from, $in, example.Point.class)");
+    }
+
+    @Test
+    void aConverterThatDoesNotFitIsACompileError() {
+        assertError("package example;" + SERIALIZERS + """
+                @JsonBound public record Wrong(@JsonbTypeSerializer(Wrong.Out.class) long n) {
+                    public static class Out implements JsonbSerializer<String> {
+                        @Override public void serialize(String s, JsonGenerator generator, SerializationContext context) { }
+                    }
+                }
+                """, "The serializer example.Wrong.Out serializes java.lang.String, not long");
+        assertError("package example;" + SERIALIZERS + """
+                @JsonBound public record Wrong(@JsonbTypeDeserializer(Wrong.In.class) String s) {
+                    public static class In implements JsonbDeserializer<String> {
+                        public In(int size) { }
+                        @Override public String deserialize(JsonParser parser, DeserializationContext context, Type type) { return ""; }
+                    }
+                }
+                """, "The deserializer example.Wrong.In needs a public no-argument constructor");
     }
 
     /** A creator parameter is matched to its property by its @JsonbProperty name, whatever its Java name. */

@@ -1,0 +1,127 @@
+= Jakarta JSON Binding
+:navtitle: Jakarta JSON Binding
+
+``silk-json-jsonb``는 xref:json.adoc#silk-json[silk-json] 위에서 Jakarta JSON Binding(JSON-B) 중 리플렉션이 필요 없는 부분을 제공한다.
+``SilkJsonb``는 애플리케이션이 지명한 코덱 위의 ``Jsonb``이고, ``JsonbCodecs``는 xref:json-codegen.adoc[생성된 코덱]에 애너테이션으로 지정한 시리얼라이저와 디시리얼라이저를 실행한다.
+이 모듈은 JSON-B 구현이 아니다: ``JsonbBuilder.create()``는 이것을 찾지 못하고, JSON-B TCK도 통과하지 않는다.
+
+[#setup]
+== 설정
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation '{silk-json-group}:silk-json-jsonb:{project-version}'
+}
+----
+
+[source,xml,subs="attributes+"]
+----
+<dependency>
+  <groupId>{silk-json-group}</groupId>
+  <artifactId>silk-json-jsonb</artifactId>
+  <version>{project-version}</version>
+</dependency>
+----
+
+이 모듈은 ``silk-json-jsonp``와 ``jakarta.json.bind-api`` 3.0에 의존하며, core에는 의존하지 않는다.
+Spider Silk 애플리케이션이 아니어도 silk-json처럼 이 모듈만 가져다 쓸 수 있다.
+패키지는 ``{silk-json-group}.jsonb``다.
+생성된 코덱은 시리얼라이저나 디시리얼라이저에만 이 모듈이 필요하며, 나머지 애너테이션은 컴파일 시점에 읽힌다.
+
+[#jsonb]
+== Jsonb
+
+``SilkJsonb``는 바인딩한 타입에 대해 ``Jsonb``를 구현한다.
+빌더로 만들고, 상수에 둔다:
+
+[source,java]
+----
+static final Jsonb JSONB = SilkJsonb.builder()
+        .bind(Deck.class, DeckJson.CODEC)
+        .bind(Animal.class, AnimalJson.CODEC)
+        .build();
+
+String json = JSONB.toJson(deck);
+Deck read = JSONB.fromJson(json, Deck.class);
+String animal = JSONB.toJson(new Cat(9), Animal.class); // {"@type":"cat","lives":9}
+----
+
+타입은 여기에 바인딩하거나 아예 바인딩되지 않는다.
+스캔하거나 리플렉션으로 만드는 것은 없고, 두 인스턴스는 아무것도 공유하지 않는다.
+바인딩되지 않은 타입은 ``JsonbException``이며, 코덱이 거부한 문서도 마찬가지다.
+
+``toJson(object)``는 객체 자신의 클래스를 따르므로, 하위 타입의 값은 ``toJson(object, Animal.class)``처럼 쓰일 타입을 지정해야 한다.
+``bind(Type, codec)``는 ``Page<Deck>``의 ``ParameterizedType``처럼 ``Class``로 표현할 수 없는 타입을 바인딩한다.
+``SilkJsonb``는 문서를 통째로 메모리에 두고, 바이트를 UTF-8로 읽고 쓴다.
+
+[#serializers]
+== 시리얼라이저와 디시리얼라이저
+
+``@JsonbTypeSerializer``와 ``@JsonbTypeDeserializer``는 JSON-P의 생성기와 파서로 작성한 클래스를 생성된 코덱 안에서 실행한다.
+코덱은 그 클래스를 ``new``로 만들므로 공개 무인자 생성자가 필요하고, 그 타입 인자는 프로퍼티나 타입의 것이어야 한다.
+프로세서는 둘 다 검사하며, ``silk-json-jsonb``가 컴파일 클래스패스에 없으면 애너테이션을 거부한다.
+
+[source,java]
+----
+public class PointSerializer implements JsonbSerializer<Point> {
+    @Override
+    public void serialize(Point point, JsonGenerator generator, SerializationContext context) {
+        generator.writeStartArray().write(point.x()).write(point.y()).writeEnd();
+    }
+}
+
+public class PointDeserializer implements JsonbDeserializer<Point> {
+    @Override
+    public Point deserialize(JsonParser parser, DeserializationContext context, Type type) {
+        JsonArray array = parser.getArray();
+        return new Point(array.getInt(0), array.getInt(1));
+    }
+}
+
+@JsonBound
+public record Route(
+        @JsonbTypeSerializer(PointSerializer.class)
+        @JsonbTypeDeserializer(PointDeserializer.class)
+        Point from) {
+}
+----
+
+시리얼라이저는 키 뒤의 자리에 값 하나를 통째로 쓰며, 값을 열어 둔 채 끝내면 ``JsonGenerationException``이다.
+디시리얼라이저의 파서는 값의 첫 이벤트, 객체라면 ``START_OBJECT``에 서 있다.
+파서는 값의 바이트 복사본을 읽으므로, 디시리얼라이저가 값을 얼마나 읽든 입력은 그 값을 지나간다.
+
+[#contexts]
+== 컨텍스트
+
+컨텍스트는 JSON-P에 형태가 있는 값을 받으며, 바인딩된 타입은 받지 않는다.
+
+``SerializationContext``는 null, 문자열, 문자, 불리언, 숫자, enum, JSON-P의 ``JsonValue``를 받는다.
+``DeserializationContext``는 enum을 뺀 같은 타입을 받으며, enum의 상수는 리플렉션으로 찾아야 하기 때문이다.
+그 밖의 타입은 클래스로 찾아야 하는데 여기서는 그렇게 하지 않으므로 ``JsonbException``이다.
+시리얼라이저는 그런 값을 자신의 필드를 통해 쓰거나, 그 값의 생성된 코덱을 가지고 있다가 쓴다.
+들어오는 길에 종류가 맞지 않는 값은 문서의 잘못이며 ``JsonException``이다.
+
+[#left-out]
+== 제외한 것
+
+JSON-B의 다음 부분은 리플렉션이나, 생성된 코덱에 없는 실행 시 설정이 필요하다:
+
+[cols="2,4",options="header"]
+|===
+| 제외한 것 | 이유
+
+| `JsonbBuilder.create()`
+| API가 ``ServiceLoader``와 ``Class.forName``으로 프로바이더를 찾는다.
+
+| ``@JsonBound``가 없는 타입
+| 프로세서가 보지 못한 클래스를 매핑하려면 실행 시 그 필드와 메서드를 읽어야 한다.
+JSON-B TCK는 대부분 이것을 검사한다.
+
+| `@JsonbVisibility`
+| ``PropertyVisibilityStrategy``의 메서드는 ``java.lang.reflect.Field``와 ``java.lang.reflect.Method``를 받는다.
+
+| `JsonbConfig`
+| 생성된 코덱은 이름, null 처리, 형식을 컴파일 시점에 고정한다.
+``withAdapters``와 ``withSerializers``는 어댑터의 타입 인자도 리플렉션으로 읽는다.
+|===

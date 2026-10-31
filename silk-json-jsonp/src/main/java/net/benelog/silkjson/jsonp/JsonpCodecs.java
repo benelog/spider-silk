@@ -6,6 +6,8 @@ import jakarta.json.JsonArray;
 import jakarta.json.JsonConfig.KeyStrategy;
 import jakarta.json.JsonObject;
 import jakarta.json.JsonValue;
+import jakarta.json.stream.JsonGenerator;
+import jakarta.json.stream.JsonParser;
 
 import org.jspecify.annotations.Nullable;
 
@@ -55,6 +57,26 @@ public final class JsonpCodecs {
     };
 
     private JsonpCodecs() {
+    }
+
+    /**
+     * A generator of the next value in the output, for code written against
+     * JSON-P to take part in a document being written: after a name, as an
+     * element, or as the document. {@code close()} checks that one whole value
+     * was written, and leaves the output open for what comes after it.
+     */
+    public static JsonGenerator generator(JsonOutput out) {
+        return new SilkJsonGenerator(out);
+    }
+
+    /**
+     * A parser of the value that comes next in the input, which moves past
+     * it: the value's bytes are the parser's document, so code written against
+     * JSON-P can read as much of it as it likes and leave the input in place
+     * for what comes after it. A value that repeats a key keeps the last.
+     */
+    public static JsonParser parser(JsonInput in) {
+        return new SilkJsonParser(in.readValueBytes(), null, KeyStrategy.LAST);
     }
 
     /**

@@ -29,6 +29,7 @@ JSON-B API의 일부는 시그니처나 기본 동작 자체가 리플렉션을 
 - **`JsonbBuilder.create()`**: API jar의 `JsonbProvider.provider()`가 `ServiceLoader`를 쓰고, 찾지 못하면 `Class.forName`으로 넘어간다.
 - **`JsonbConfig.withAdapters(...)`와 `withSerializers(...)`**: 실행 시 등록한 어댑터가 어느 타입에 적용되는지 알려면 `getGenericInterfaces()`로 타입 인자를 읽어야 한다.
 - **`Class`로 codec을 찾는 디스패치**: `toJson(obj)`가 `obj.getClass()`로 codec을 찾는 것은 엄밀히 리플렉션은 아니지만, 결정 76이 거부한 레지스트리이다.
+  `Jsonb` 인터페이스를 구현하려면 피할 수 없으므로, `SilkJsonb`는 애플리케이션이 타입을 지명해 채우는 인스턴스별 맵으로 이것을 받아들였다(결정 81).
 
 ### 가능하지만 silk-json의 선택과 충돌하는 것
 
@@ -51,6 +52,19 @@ JSON-B API의 일부는 시그니처나 기본 동작 자체가 리플렉션을 
 | 제네릭 바운드 타입 | 타입 인자의 codec을 받는 codec을 생성한다. 지금은 "A generic type cannot be bound"로 거부한다 |
 | `@JsonbTypeSerializer`, `@JsonbTypeDeserializer` | `JsonOutput`과 `JsonInput` 위에 JSON-P 어댑터를 얹은 별도 모듈로 가능하다 |
 | `Jsonb` 파사드 | `@JsonBound` 타입만 받고 나머지는 `JsonbException`으로 거부한다. `JsonbBuilder`를 거치지 않고 직접 생성한다 |
+
+### 구현 결과
+
+2026-10-31에 위 표의 항목을 모두 구현했다(결정 81).
+
+- **프로세서**: `@JsonbNumberFormat`, `TIME_IN_MILLIS`, `@JsonbTypeInfo`와 `@JsonbSubtype`, 제네릭 바운드 타입, 타입에 붙은 `@JsonbTypeAdapter`를 읽는다.
+  `TIME_IN_MILLIS`가 JSON 숫자이고 `@JsonbNumberFormat`이 문자열인 것은 Yasson 3.0.4의 소스로 확인했다.
+- **`silk-json-jsonb`**: `Jsonb` 파사드인 `SilkJsonb`, `@JsonbTypeSerializer`와 `@JsonbTypeDeserializer`를 실행하는 `JsonbCodecs`가 있다.
+- **`JsonInput.peekOneOf`**: 판별 키를 찾고 입력을 객체 앞으로 되돌리므로, 하위 타입의 codec은 그대로 객체를 읽는다.
+- **Yasson과 다른 점**: 하위 타입 자신의 codec은 키를 쓰지 않는다.
+  기본 로캘은 JVM의 것이 아니라 `Locale.ROOT`이고, 형식 있는 숫자는 문자열 전체가 숫자여야 읽힌다.
+- **남은 것**: `DeserializationContext`는 enum과 바운드 타입을 받지 않는다.
+  생성 codec은 enum 상수 표를 갖지만 컨텍스트는 `Class`만 받으므로, 찾으려면 리플렉션이나 레지스트리가 필요하다.
 
 ### 정리
 

@@ -63,7 +63,9 @@ interface DeckSummaryWire { @JsonbProperty("card_count") long cardCount(); }
 ```
 
 - Setup: `spiderSilk { json() }` with the Gradle plugin, or `annotationProcessor 'net.benelog.silkjson:silk-json-processor:1.1.0'` plus `compileOnly 'jakarta.json.bind:jakarta.json.bind-api:3.0.4'`; the Maven parent adds the processor for every child, and the API goes in as `provided`. Nothing at run time.
-- Vocabulary: the standard `jakarta.json.bind.annotation` set — `@JsonbProperty`, `@JsonbTransient`, `@JsonbNillable`, `@JsonbPropertyOrder`, `@JsonbCreator`, `@JsonbDateFormat`, `@JsonbTypeAdapter`. `@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`/`Deserializer`, and `@JsonbTypeInfo` are compile errors.
+- Vocabulary: the standard `jakarta.json.bind.annotation` set — `@JsonbProperty`, `@JsonbTransient`, `@JsonbNillable`, `@JsonbPropertyOrder`, `@JsonbCreator`, `@JsonbDateFormat` (also `TIME_IN_MILLIS`, a JSON number), `@JsonbNumberFormat` (a string in the pattern, `Locale.ROOT` unless `locale` says otherwise), `@JsonbTypeAdapter` (on a property or the type), `@JsonbTypeInfo` with `@JsonbSubtype`. `@JsonbTypeSerializer`/`Deserializer` also need `silk-json-jsonb`. `@JsonbVisibility` is a compile error.
+- Generic types: `@JsonBound public record Page<T>(...)` has no `CODEC`. `PageJson.of(DeckJson.CODEC)` builds the codec, and a property of type `Page<Deck>` builds it where it is used.
+- Subtypes: `@JsonbTypeInfo` binds an interface or abstract class, each listed subtype annotated `@JsonBound`. `AnimalJson.CODEC` writes the key first and finds it wherever it stands on the way in; `CatJson.CODEC` writes no key.
 - Types: primitives and boxes, String, BigDecimal/BigInteger, UUID, URI, enums (by name), `java.time` (ISO text), Optional/OptionalInt/Long/Double, List/Set/Collection/Iterable, `Map<String, V>`, `JsonValue`, and other `@JsonBound` types, nested freely. Anything else: annotate it `@JsonBound` or adapt it with `@JsonbTypeAdapter`.
 - Reading is strict: a record component or creator parameter is required unless `@Nullable` or `Optional`; missing or `null` -> `JsonException` -> 400. Unknown members are skipped. Setter/field properties keep the class's default when absent. Null properties are omitted on output unless `@JsonbNillable`; order is declaration order unless `@JsonbPropertyOrder`.
 - `-Asilkjson.names=explicit` (a javac arg) makes a property without `@JsonbProperty` a compile error, for a build that wants every wire name written down.
@@ -125,6 +127,8 @@ return WebResponse.json(deck, DECK); // serialized straight into the response bu
 
 - They work in `bodyNdjson`, `jsonArray`/`ndjson` sinks, and inside `JsonWriter.list`/`JsonReader.list` as well.
 - Do not pass the mapper to each call or wrap Jackson's output in `rawJson`: the module exists so a handler names a type and nothing else.
+
+A library that takes a `Jsonb` gets one from `silk-json-jsonb`: `SilkJsonb.builder().bind(Deck.class, DeckJson.CODEC).build()`, created directly, since `JsonbBuilder.create()` never finds it. Only bound types work, and anything else is a `JsonbException`.
 
 For the JSON-P tree (`jakarta.json`: `JsonObject`, JSON Patch, JSON Merge Patch), add `silk-json-jsonp` and keep a `new SilkJsonProvider()` in a constant rather than calling `Json.*`, which looks the provider up on every call:
 

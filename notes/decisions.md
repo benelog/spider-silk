@@ -1683,6 +1683,39 @@ Rejected: buffer refills inside `JsonInput`, before a benchmark shows what they 
 Rejected: a `JsonInput` per value of a large object or array, which made a parser and a key table per record and read 1.5 to 3.8 times slower than the document held whole.
 Rejected: scanning a run's bytes for the end of its last whole value before parsing them, a second pass over every byte that a run stopping at the step it cannot finish does without.
 
+## 81 · JSON-B without reflection
+
+### 81. silk-json takes every part of JSON-B that needs no reflection, and leaves the rest out rather than behind an opt-in
+
+This settles what decision 77 left open as "the JSON-P and JSON-B runtimes" and `@JsonbTypeInfo`.
+The processor reads more of the annotations, and `silk-json-jsonb` holds what runs at run time (`notes/jakarta-json-support.md` has the review).
+
+- **What needs a class looked up or read is out.**
+  - `JsonbBuilder.create()`, a type with no `@JsonBound`, `@JsonbVisibility`, and `JsonbConfig` stay out.
+  - The module is not a JSON-B implementation, and does not run the JSON-B TCK, most of which binds unannotated types.
+- **`SilkJsonb` is a map the application fills, one instance at a time.**
+  - `Jsonb.fromJson(text, Deck.class)` cannot be implemented without one, so the map is the price of the interface.
+  - It differs from the registry decision 76 rejected in three ways: it is not in core or in generated code, nothing fills it but a line naming the type, and nothing global holds it.
+- **A subtype is chosen without a tree.**
+  - `JsonInput.peekOneOf` finds the key, wherever it stands, and leaves the input before the object, so a subtype's codec reads it unchanged and skips the key as a member it does not know.
+  - The key goes out first through `writeMembers`, which every codec has, since a subtype cannot know its parents when one is bound through a mixin.
+  - A subtype's own codec writes no key, where Yasson writes it: a codec writes what its own type says.
+- **A generic codec is built where it is used.**
+  - A constant in the using codec would make two codecs' static initializers depend on each other, which can deadlock across two threads.
+  - It costs a few allocations per use, and an application that minds keeps one in a constant.
+- **Numbers and times follow Yasson on the wire, and differ where a server's setting would leak in.**
+  - `@JsonbNumberFormat` is a string, and `TIME_IN_MILLIS` a number, as Yasson writes them.
+  - The default locale is `Locale.ROOT`, not the JVM's, so a wire format does not change with the machine.
+  - A number in a format is read whole and exactly, where Yasson's `parse` stops at the first character it cannot read.
+- **A serializer's parser reads a copy of the value's bytes.**
+  - The input then moves past the value however little of it the deserializer reads.
+  - Generated code calls `JsonbCodecs`, so a type that uses neither annotation never needs the module.
+
+Rejected: a reflection fallback in an opt-in module, Micronaut's way, which makes an exception to the rule official.
+Rejected: `Jsonb` looking up a generated class by name, which is `Class.forName` behind a convention.
+Rejected: `@JsonbTypeInfo` reading the object into a tree first, Yasson's way, which costs an allocation per member to find one key.
+Rejected: a key written by the subtype's own codec, which a mixin-bound parent could not reach and which would change `<Subtype>Json.CODEC` for every other use.
+
 ## Rejected — decisions, with the reason
 
 These are closed: reopening one changes what the framework is.

@@ -35,6 +35,11 @@ final class Annotations {
     static final String JSONB_VISIBILITY = "jakarta.json.bind.annotation.JsonbVisibility";
     static final String JSONB_TYPE_INFO = "jakarta.json.bind.annotation.JsonbTypeInfo";
     static final String JSONB_ADAPTER = "jakarta.json.bind.adapter.JsonbAdapter";
+    static final String JSONB_SERIALIZER = "jakarta.json.bind.serializer.JsonbSerializer";
+    static final String JSONB_DESERIALIZER = "jakarta.json.bind.serializer.JsonbDeserializer";
+
+    /** The class in {@code silk-json-jsonb} that generated code calls a serializer or a deserializer through. */
+    static final String JSONB_CODECS = "net.benelog.silkjson.jsonb.JsonbCodecs";
 
     private Annotations() {
     }

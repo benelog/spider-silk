@@ -24,6 +24,9 @@ xref:json-codegen.adoc[`silk-json-processor`]가 생성하는 코덱은 이 규�
 xref:jsonp.adoc[`silk-json-jsonp`]도 같은 쪽에 있다.
 그 파서, 생성기, 트리는 생성자와 인터페이스 메서드만 부른다.
 ``jakarta.json.Json`` 안의 ``ServiceLoader`` 탐색은 API의 것이며, ``new SilkJsonProvider()``로 만든 프로바이더는 거기에 닿지 않는다.
+xref:jsonb.adoc[`silk-json-jsonb`]도 같은 쪽에 있다.
+``SilkJsonb``는 애플리케이션이 타입을 하나씩 지명해 채운 맵에서 코덱을 찾으며, ``java.lang.reflect.Type``은 ``Jsonb``가 선언한 시그니처에만 나타난다.
+프로세서가 보지 못한 타입의 바인딩처럼 리플렉션이 필요한 JSON-B의 부분은 제외했다.
 애플리케이션이 추가하는 JSON 바인딩 라이브러리는 템플릿 모듈과 같은 조건에 놓인다: 가져오면 그 리플렉션도 함께 가져온 것이다.
 Jackson과 Gson은 필드를 리플렉션으로 읽고 쓰므로, 바인딩되는 모든 타입은 xref:native-image.adoc[네이티브 이미지] 설정에 항목이 필요하다.
 xref:json-interop.adoc#jackson[`spider-silk-jackson`]은 Jackson을 코어의 ``JsonWriter``와 ``JsonReader`` 뒤에 두며, Jackson의 리플렉션은 코어가 아니라 그 모듈에 머문다.

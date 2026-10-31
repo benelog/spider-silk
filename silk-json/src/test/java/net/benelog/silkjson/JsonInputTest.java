@@ -826,4 +826,52 @@ class JsonInputTest {
         assertThat(generated.nextKeyIs(key)).isTrue();
         assertThat(generated.readLong()).isEqualTo(1L);
     }
+
+    /** A peek finds the key wherever it stands and leaves the input as it found it, inside an object or an array too. */
+    @Test
+    void peekOneOfLeavesTheInputWhereItStood() {
+        JsonKey key = JsonKey.of("kind");
+        JsonKey[] names = {JsonKey.of("cat"), JsonKey.of("dog")};
+
+        JsonInput in = JsonInput.of("{\"pet\":{\"lives\":{\"kind\":\"no\"},\"kind\":\"dog\"},\"next\":[{\"a\":1},{\"kind\":\"cat\"}],\"z\":0}");
+        in.object();
+        assertThat(in.nextKey()).isTrue();
+        assertThat(in.peekOneOf(key, names)).isEqualTo(1);
+        assertThat(in.key()).isEqualTo("pet");
+        in.object();
+        assertThat(in.nextKey()).isTrue();
+        assertThat(in.key()).isEqualTo("lives");
+        in.skipValue();
+        assertThat(in.nextKey()).isTrue();
+        assertThat(in.readString()).isEqualTo("dog");
+        assertThat(in.nextKey()).isFalse();
+
+        assertThat(in.nextKey()).isTrue();
+        assertThat(in.key()).isEqualTo("next");
+        in.array();
+        assertThat(in.nextElement()).isTrue();
+        assertThat(in.peekOneOf(key, names)).isEqualTo(-1);
+        in.skipValue();
+        assertThat(in.nextElement()).isTrue();
+        assertThat(in.peekOneOf(key, names)).isEqualTo(0);
+        in.skipValue();
+        assertThat(in.nextElement()).isFalse();
+        assertThat(in.nextKey()).isTrue();
+        assertThat(in.key()).isEqualTo("z");
+        assertThat(in.readLong()).isEqualTo(0);
+        assertThat(in.nextKey()).isFalse();
+        in.end();
+    }
+
+    @Test
+    void peekOneOfRefusesWhatItCannotRead() {
+        JsonKey key = JsonKey.of("kind");
+        JsonKey[] names = {JsonKey.of("cat")};
+
+        assertThatThrownBy(() -> JsonInput.of("[]").peekOneOf(key, names)).isInstanceOf(JsonException.class)
+                .hasMessageContaining("Not a JSON object");
+        assertThatThrownBy(() -> JsonInput.of("{\"kind\":1}").peekOneOf(key, names)).isInstanceOf(JsonException.class);
+        assertThatThrownBy(() -> JsonInput.of("{\"kind\":\"fish\"}").peekOneOf(key, names)).isInstanceOf(JsonException.class)
+                .hasMessageContaining("Not a name this value takes: fish");
+    }
 }

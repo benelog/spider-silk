@@ -631,6 +631,45 @@ public final class JsonInput {
     }
 
     /**
+     * The index among those names of the string the object that comes next
+     * holds under that key, or -1 for an object without the key, with the
+     * input left where it stood, before the object. A reader of a type with
+     * subtypes picks one this way, wherever in the object the key stands, and
+     * the subtype's reader then reads the object from its opening brace.
+     *
+     * @throws JsonException when the next value is not an object, or the
+     *         member's value is not a string, or none of them
+     */
+    public int peekOneOf(JsonKey key, JsonKey[] names) {
+        int startPos = pos;
+        int startKind = kind;
+        boolean startFirst = first;
+        int startDepth = depth;
+        int startKeyStart = keyStart;
+        int startKeyEnd = keyEnd;
+        boolean startKeyEscaped = keyEscaped;
+        boolean startKeyAscii = keyAscii;
+        object();
+        int found = -1;
+        while (nextKey()) {
+            if (keyIs(key)) {
+                found = readOneOf(names);
+                break;
+            }
+            skipValue();
+        }
+        pos = startPos;
+        kind = startKind;
+        first = startFirst;
+        depth = startDepth;
+        keyStart = startKeyStart;
+        keyEnd = startKeyEnd;
+        keyEscaped = startKeyEscaped;
+        keyAscii = startKeyAscii;
+        return found;
+    }
+
+    /**
      * A string past its first byte that is not plain ASCII. One with an
      * escape and only Latin-1 characters is resolved into bytes; one with a
      * character outside ASCII, or with both, is decoded a character at a time

@@ -1,0 +1,18 @@
+plugins {
+    id 'java-library'
+}
+
+description = 'Jakarta JSON Binding (JSON-B) on silk-json, with no reflection: a Jsonb over generated codecs, and the serializers and deserializers a generated codec calls.'
+
+dependencies {
+    api project(':silk-json-jsonp')
+
+    // api, not implementation: Jsonb, JsonbSerializer, and JsonbDeserializer
+    // are what a consumer names.
+    api 'jakarta.json.bind:jakarta.json.bind-api:3.0.4'
+
+    testAnnotationProcessor project(':silk-json-processor')
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'
+    testImplementation 'org.assertj:assertj-core:3.27.7'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}

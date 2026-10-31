@@ -16,6 +16,7 @@
 *** xref:large-json.adoc[대용량 JSON과 NDJSON]
 *** xref:json-interop.adoc[외부 JSON 바인딩]
 *** xref:jsonp.adoc[Jakarta JSON Processing]
+*** xref:jsonb.adoc[Jakarta JSON Binding]
 ** xref:templates.adoc[템플릿]
 *** xref:freemarker.adoc[FreeMarker]
 *** xref:handlebars.adoc[Handlebars]

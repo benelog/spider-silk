@@ -86,5 +86,6 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
 * `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `keyHead()`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readFloat()`, `readNumber()`, `readOneOf(names)`, `readBoolean()`, `readNull()`, `readValue()`, `readValueBytes()`, `skipValue()`, `peek()`, `position()`, `end()`, `error(message)`, 그 바탕은 ``JsonInput.of(utf8)``이나 ``JsonInput.of(text)``다
 * `JsonKey.of(name)`: `put`, `name`, ``keyIs``를 위해 한 번만 인코딩한 멤버 이름
 * `JsonKey.names(constants)`: `put(key, name)`, `value(name)`, ``readOneOf``를 위해 한 번만 인코딩한 enum 상수 이름들
-* `@JsonBound`: 애너테이션이 붙은 타입이나 그것이 지명한 타입의 코덱을 ``silk-json-processor``가 컴파일 시점에 ``<Type>Json.CODEC``으로 생성한다; xref:json-codegen.adoc[생성되는 JSON 코덱]을 참고한다
+* `@JsonBound`: 애너테이션이 붙은 타입이나 그것이 지명한 타입의 코덱을 ``silk-json-processor``가 컴파일 시점에 ``<Type>Json.CODEC``으로, 제네릭 타입이면 ``<Type>Json.of(...)``로 생성한다; xref:json-codegen.adoc[생성되는 JSON 코덱]을 참고한다
 * ``silk-json-jsonp``의 ``net.benelog.silkjson.jsonp``에 있는 ``SilkJsonProvider``와 `JsonpCodecs`: silk-json 위의 Jakarta JSON Processing, 그리고 ``JsonWriter``와 ``JsonReader``로서의 JSON-P 트리; xref:jsonp.adoc[Jakarta JSON Processing]을 참고한다
+* ``silk-json-jsonb``의 ``net.benelog.silkjson.jsonb``에 있는 ``SilkJsonb``와 `JsonbCodecs`: 애플리케이션이 지명한 코덱 위의 ``Jsonb``, 그리고 생성된 코덱이 부르는 시리얼라이저와 디시리얼라이저; xref:jsonb.adoc[Jakarta JSON Binding]을 참고한다

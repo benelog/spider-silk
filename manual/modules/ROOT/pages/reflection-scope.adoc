@@ -24,6 +24,9 @@ The processor runs inside javac, the code it writes calls the type's own accesso
 xref:jsonp.adoc[`silk-json-jsonp`] is on the same side.
 Its parser, generator, and tree call constructors and interface methods only.
 The `ServiceLoader` lookup inside `jakarta.json.Json` is the API's, and a provider made with `new SilkJsonProvider()` never reaches it.
+xref:jsonb.adoc[`silk-json-jsonb`] is on the same side too.
+`SilkJsonb` finds a codec in a map the application fills by naming each type, and `java.lang.reflect.Type` appears only in the signatures `Jsonb` declares.
+The part of JSON-B that needs reflection, such as binding a type no processor saw, is left out.
 A JSON binding library an application adds is on the same terms as a template module: take it and you have taken its reflection with it.
 Jackson and Gson read and write fields reflectively, so every bound type needs an entry in a xref:native-image.adoc[native image] config.
 xref:json-interop.adoc#jackson[`spider-silk-jackson`] puts Jackson behind core's `JsonWriter` and `JsonReader`, and Jackson's reflection stays in that module rather than in core.

@@ -46,6 +46,18 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
   The generated code calls the type's own accessors and constructor, with no reflection, no registry, and nothing for a native image.
   A component is required unless it is `@Nullable` or an `Optional`, and `-Asilkjson.names=explicit` makes a property without a `@JsonbProperty` name a compile error.
   An enum is written and read through its constants' names encoded once, as a property, in an `Optional`, as a collection element, or as a map value, and a name that is none of them is refused with `JsonException`.
+- `silk-json-processor`: `@JsonbNumberFormat` writes and reads a number as a string in a `DecimalFormat` pattern, in `Locale.ROOT` unless the annotation names a locale, and `JsonbDateFormat.TIME_IN_MILLIS` writes and reads a JSON number of milliseconds since the epoch.
+- `silk-json-processor`: `@JsonbTypeInfo` and `@JsonbSubtype` bind an interface or a class to its subtypes.
+  `<Type>Json.CODEC` writes the key first and finds it wherever it stands in an object on the way in, and a subtype can list subtypes of its own under a key of its own.
+  Every generated codec gains `writeMembers(value, out)`, which a parent type's codec calls.
+- `silk-json-processor`: a generic type can be bound.
+  It has no `CODEC` constant, `<Type>Json.of(...)` takes a codec for each type variable, and a property that names the type arguments has the codec built where it is used.
+- `silk-json-processor`: `@JsonbTypeAdapter` on a type converts the whole value wherever the type is used, and lets an interface or an abstract class be bound.
+- `silk-json`: `JsonInput.peekOneOf(key, names)` answers which of the names the next object holds under a key, and leaves the input before the object.
+- `silk-json-jsonp`: `JsonpCodecs.generator(out)` is a `JsonGenerator` of the next value in a `JsonOutput`, and `JsonpCodecs.parser(in)` a `JsonParser` of the next value in a `JsonInput`.
+- `silk-json-jsonb`: a new module, the part of Jakarta JSON Binding that needs no reflection.
+  `SilkJsonb` is a `Jsonb` over codecs the application binds by name, and `JsonbCodecs` runs the `@JsonbTypeSerializer` and `@JsonbTypeDeserializer` a generated codec is annotated with.
+  It is not a JSON-B implementation: `JsonbBuilder.create()` does not find it, and it does not pass the JSON-B TCK.
 - `silk-json-jsonp`: a new module, Jakarta JSON Processing (JSON-P) 2.1 on silk-json, which passes the JSON-P TCK 2.1.1.
   `SilkJsonProvider` is the `JsonProvider`: its parser reads with a `JsonInput`, its generator and writer write with a `JsonOutput`, and its tree is immutable and built with no reflection.
   JSON Pointer, JSON Patch with `createDiff`, JSON Merge Patch, `JsonGenerator.PRETTY_PRINTING`, and `JsonConfig.KEY_STRATEGY` are implemented.
@@ -251,7 +263,7 @@ Every rename is a compile error whose fix is the new name, and no deprecated ali
 - `silk-json`: a `JsonKey` whose name holds a lone surrogate matches only the key written with its escape, where it also matched the key `a?`.
 - `silk-json-processor`: a collection nested in a collection or a map, such as `List<List<Integer>>` or `Map<String, List<String>>`, generates a codec that compiles.
 - `silk-json-processor`: a class binds the public getters, setters, and fields it inherits, the superclass's properties first, where they were silently left out.
-- `silk-json-processor`: `@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`, `@JsonbTypeDeserializer`, `@JsonbTypeAdapter`, and `@JsonbTypeInfo` on a type or a package are a compile error, where they were ignored.
+- `silk-json-processor`: `@JsonbVisibility` on a type or a package is a compile error, where it was ignored.
   A package's `@JsonbDateFormat` and `@JsonbNillable` apply to its types.
 - `silk-json-processor`: a `@JsonbCreator` parameter is matched to its property by its `@JsonbProperty` name, and by its Java name only without one.
 - `silk-json-processor`: `@Nullable` on a record component or a creator parameter makes the member optional when the accessor carries none.

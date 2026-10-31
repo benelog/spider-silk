@@ -1,10 +1,13 @@
 package net.benelog.silkjson.processor;
 
+import java.text.DecimalFormat;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.AnnotationMirror;
@@ -17,12 +20,15 @@ import javax.lang.model.element.NestingKind;
 import javax.lang.model.element.PackageElement;
 import javax.lang.model.element.RecordComponentElement;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.TypeParameterElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.ExecutableType;
+import javax.lang.model.type.PrimitiveType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.TypeVariable;
 import javax.lang.model.util.ElementFilter;
 import javax.lang.model.util.Types;
 
@@ -45,6 +51,10 @@ final class BoundType {
         SETTERS
     }
 
+    /** A subtype {@code @JsonbTypeInfo} lists, with the name it goes by on the wire. */
+    record Subtype(String alias, TypeElement type) {
+    }
+
     final TypeElement target;
     final @Nullable TypeElement mixin;
     final String packageName;
@@ -56,8 +66,16 @@ final class BoundType {
     final List<Property> creatorParameters;
     final String factoryName;
 
+    /** The conversions the type takes as a whole, in place of its properties in that direction, or null without any. */
+    final @Nullable Property whole;
+
+    /** The key {@code @JsonbTypeInfo} names, and the subtypes it lists, a subclass before its superclass; none without it. */
+    final String typeKey;
+    final List<Subtype> subtypes;
+
     private BoundType(TypeElement target, @Nullable TypeElement mixin, String packageName, List<Property> properties,
-            Creation creation, List<Property> creatorParameters, String factoryName) {
+            Creation creation, List<Property> creatorParameters, String factoryName, @Nullable Property whole,
+            String typeKey, List<Subtype> subtypes) {
         this.target = target;
         this.mixin = mixin;
         this.packageName = packageName;
@@ -66,6 +84,9 @@ final class BoundType {
         this.creation = creation;
         this.creatorParameters = creatorParameters;
         this.factoryName = factoryName;
+        this.whole = whole;
+        this.typeKey = typeKey;
+        this.subtypes = subtypes;
     }
 
     String generatedQualifiedName() {
@@ -74,6 +95,43 @@ final class BoundType {
 
     String targetName() {
         return target.getQualifiedName().toString();
+    }
+
+    /** The target as generated source spells it, with its own type variables. */
+    String targetType() {
+        return targetName() + typeArguments();
+    }
+
+    boolean generic() {
+        return !target.getTypeParameters().isEmpty();
+    }
+
+    /** Whether no value is of this very type: an interface or an abstract class, whose values are all a subtype's. */
+    boolean abstractType() {
+        return target.getKind() == ElementKind.INTERFACE || target.getModifiers().contains(Modifier.ABSTRACT);
+    }
+
+    /** The type's variables, as {@code <K, V>}, or nothing for a type without any. */
+    String typeArguments() {
+        return generic() ? "<" + String.join(", ", typeVariables()) + ">" : "";
+    }
+
+    List<String> typeVariables() {
+        return target.getTypeParameters().stream().map(parameter -> parameter.getSimpleName().toString()).toList();
+    }
+
+    /** The type's variables with their bounds, as {@code <K extends Comparable<K>, V>}, for the codec to declare the same way. */
+    String typeParameters() {
+        if (!generic()) {
+            return "";
+        }
+        List<String> declared = new ArrayList<>();
+        for (TypeParameterElement parameter : target.getTypeParameters()) {
+            List<String> bounds = parameter.getBounds().stream().filter(bound -> !TypeNames.is(bound, "java.lang.Object"))
+                    .map(TypeNames::of).toList();
+            declared.add(parameter.getSimpleName() + (bounds.isEmpty() ? "" : " extends " + String.join(" & ", bounds)));
+        }
+        return "<" + String.join(", ", declared) + ">";
     }
 
     static BoundType of(TypeElement annotated, ProcessingEnvironment env, boolean explicitNames) {
@@ -91,47 +149,217 @@ final class BoundType {
             target = (TypeElement) declared.asElement();
             mixin = annotated;
         }
-        if (target.getKind() != ElementKind.RECORD && target.getKind() != ElementKind.CLASS) {
+        List<Element> own = mixin != null ? List.of(mixin, target) : List.of(target);
+        Property whole = whole(annotated, target, own, env);
+        boolean wholeBothWays = whole != null && (whole.adapter != null || (whole.serializer != null && whole.deserializer != null));
+        AnnotationMirror typeInfo = Extraction.first(own, Annotations.JSONB_TYPE_INFO);
+        boolean takesAbstract = typeInfo != null || wholeBothWays;
+        if (target.getKind() != ElementKind.RECORD && target.getKind() != ElementKind.CLASS
+                && !(target.getKind() == ElementKind.INTERFACE && takesAbstract)) {
             throw new Invalid(annotated, "@JsonBound binds a record or a class, not " + kindName(target.getKind()) + " "
-                    + target.getQualifiedName());
+                    + target.getQualifiedName() + ", unless @JsonbTypeInfo lists its subtypes");
         }
-        if (target.getModifiers().contains(Modifier.ABSTRACT)) {
+        if (target.getKind() == ElementKind.CLASS && target.getModifiers().contains(Modifier.ABSTRACT) && !takesAbstract) {
             throw new Invalid(annotated, "An abstract class cannot be created from a document: " + target.getQualifiedName());
         }
-        if (!target.getTypeParameters().isEmpty()) {
-            throw new Invalid(annotated, "A generic type cannot be bound: " + target.getQualifiedName());
+        if (typeInfo != null && whole != null) {
+            throw new Invalid(annotated, "@JsonbTypeInfo chooses a subtype's codec, so it does not go with a conversion of"
+                    + " the whole value: " + target.getQualifiedName());
+        }
+        if (typeInfo != null && !target.getTypeParameters().isEmpty()) {
+            throw new Invalid(annotated, "A generic type cannot carry @JsonbTypeInfo: " + target.getQualifiedName());
         }
         String packageName = TypeNames.packageOf(annotated);
         requireReachable(annotated, target, packageName);
         for (Element carrier : carriers(target, mixin, env)) {
-            for (String unsupported : TYPE_UNSUPPORTED) {
-                if (Annotations.has(carrier, unsupported)) {
-                    String where = carrier instanceof PackageElement pkg ? "package " + pkg.getQualifiedName()
-                            : ((TypeElement) carrier).getQualifiedName().toString();
-                    throw new Invalid(annotated, "@" + simpleName(unsupported) + " is not supported by the generated codec,"
-                            + " here on " + where);
-                }
+            if (Annotations.has(carrier, Annotations.JSONB_VISIBILITY)) {
+                String where = carrier instanceof PackageElement pkg ? "package " + pkg.getQualifiedName()
+                        : ((TypeElement) carrier).getQualifiedName().toString();
+                throw new Invalid(annotated, "@" + simpleName(Annotations.JSONB_VISIBILITY)
+                        + " is not supported by the generated codec, here on " + where);
             }
         }
+        String typeKey = typeInfo != null ? typeKey(typeInfo) : "";
+        List<Subtype> subtypes = typeInfo != null ? subtypes(annotated, target, packageName, typeInfo, typeKey, env) : List.of();
 
+        boolean abstractType = target.getKind() == ElementKind.INTERFACE || target.getModifiers().contains(Modifier.ABSTRACT);
+        if (wholeBothWays || abstractType) {
+            return new BoundType(target, mixin, packageName, List.of(), Creation.SETTERS, List.of(), "", whole, typeKey, subtypes);
+        }
         Extraction extraction = new Extraction(env, target, mixin, explicitNames);
         extraction.run();
         List<Property> ordered = extraction.ordered();
         for (Property property : ordered) {
-            requireBindable(property.type, property.element);
+            requireBindable(property.type, property.element, target);
             TypeMirror adapted = property.adapted;
             if (adapted != null) {
-                requireBindable(adapted, property.element);
+                requireBindable(adapted, property.element, target);
             }
         }
         return new BoundType(target, mixin, packageName, ordered, extraction.creation,
-                extraction.creatorParameters, extraction.factoryName);
+                extraction.creatorParameters, extraction.factoryName, whole, typeKey, subtypes);
     }
 
-    /** The annotations no type or package may carry: none of them has a meaning the generated codec gives it. */
-    private static final List<String> TYPE_UNSUPPORTED = List.of(Annotations.JSONB_VISIBILITY, Annotations.JSONB_TYPE_INFO,
-            Annotations.JSONB_NUMBER_FORMAT, Annotations.JSONB_TYPE_SERIALIZER, Annotations.JSONB_TYPE_DESERIALIZER,
-            Annotations.JSONB_TYPE_ADAPTER);
+    /** The key a {@code @JsonbTypeInfo} names, JSON-B's {@code @type} when it names none. */
+    private static String typeKey(AnnotationMirror typeInfo) {
+        String key = Annotations.string(typeInfo, "key");
+        return key != null ? key : "@type";
+    }
+
+    /** The subtypes a {@code @JsonbTypeInfo} lists, checked here rather than in code that would not compile. */
+    private static List<Subtype> subtypes(TypeElement annotated, TypeElement target, String packageName,
+            AnnotationMirror typeInfo, String typeKey, ProcessingEnvironment env) {
+        Types types = env.getTypeUtils();
+        List<Subtype> subtypes = new ArrayList<>();
+        Set<String> aliases = new HashSet<>();
+        Object listed = Annotations.value(typeInfo, "value");
+        for (Object entry : listed instanceof List<?> values ? values : List.of()) {
+            AnnotationMirror subtype = (AnnotationMirror) ((AnnotationValue) entry).getValue();
+            String alias = String.valueOf(Annotations.string(subtype, "alias"));
+            Object named = Annotations.value(subtype, "type");
+            if (!(named instanceof DeclaredType declared) || declared.getKind() == TypeKind.ERROR) {
+                throw new Deferred(String.valueOf(named));
+            }
+            TypeElement element = (TypeElement) declared.asElement();
+            String name = element.getQualifiedName().toString();
+            if (element.equals(target) || !types.isSubtype(types.erasure(declared), types.erasure(target.asType()))) {
+                throw new Invalid(annotated, name + " is not a subtype of " + target.getQualifiedName());
+            }
+            if (!Annotations.has(element, Annotations.JSON_BOUND)) {
+                throw new Invalid(annotated, "The subtype " + name + " needs @JsonBound, since its codec reads and writes it");
+            }
+            if (!element.getTypeParameters().isEmpty()) {
+                throw new Invalid(annotated, "The subtype " + name + " is generic, so no one codec binds it");
+            }
+            if (Annotations.has(element, Annotations.JSONB_TYPE_ADAPTER) || Annotations.has(element, Annotations.JSONB_TYPE_SERIALIZER)) {
+                throw new Invalid(annotated, "The subtype " + name + " is written whole by a conversion, which leaves no place for the key "
+                        + typeKey);
+            }
+            AnnotationMirror chained = Annotations.find(element, Annotations.JSONB_TYPE_INFO);
+            if (chained != null && typeKey(chained).equals(typeKey)) {
+                throw new Invalid(annotated, "The subtype " + name + " takes the key " + typeKey + " for its own subtypes too");
+            }
+            if (!aliases.add(alias)) {
+                throw new Invalid(annotated, "Two subtypes of " + target.getQualifiedName() + " go by the alias " + alias);
+            }
+            requireReachable(annotated, element, packageName);
+            int place = subtypes.size();
+            for (int i = subtypes.size() - 1; i >= 0; i--) {
+                if (types.isSubtype(types.erasure(declared), types.erasure(subtypes.get(i).type().asType()))) {
+                    place = i;
+                }
+            }
+            subtypes.add(place, new Subtype(alias, element));
+        }
+        if (subtypes.isEmpty()) {
+            throw new Invalid(annotated, "@JsonbTypeInfo on " + target.getQualifiedName() + " lists no subtypes");
+        }
+        return subtypes;
+    }
+
+    /** What the type's own {@code @JsonbTypeAdapter}, serializer, and deserializer convert, as a property named for no member. */
+    private static @Nullable Property whole(TypeElement annotated, TypeElement target, List<Element> own, ProcessingEnvironment env) {
+        AnnotationMirror adapter = Extraction.first(own, Annotations.JSONB_TYPE_ADAPTER);
+        AnnotationMirror serializer = Extraction.first(own, Annotations.JSONB_TYPE_SERIALIZER);
+        AnnotationMirror deserializer = Extraction.first(own, Annotations.JSONB_TYPE_DESERIALIZER);
+        if (adapter == null && serializer == null && deserializer == null) {
+            return null;
+        }
+        Property whole = new Property("$type", target.asType(), annotated);
+        conversions(whole, adapter, serializer, deserializer, env);
+        return whole;
+    }
+
+    /** A kind of class that converts a value, as JSON-B declares it: its annotation is checked the same way for each. */
+    private record Contract(String noun, String verb, String qualifiedName, int typeArguments, boolean boxes) {
+    }
+
+    private static final Contract ADAPTER = new Contract("adapter", "adapts", Annotations.JSONB_ADAPTER, 2, false);
+    private static final Contract SERIALIZER = new Contract("serializer", "serializes", Annotations.JSONB_SERIALIZER, 1, true);
+    private static final Contract DESERIALIZER = new Contract("deserializer", "deserializes", Annotations.JSONB_DESERIALIZER, 1, true);
+
+    /** Reads a property's conversions, each created with {@code new}, and checks them against its type. */
+    private static void conversions(Property property, @Nullable AnnotationMirror adapter, @Nullable AnnotationMirror serializer,
+            @Nullable AnnotationMirror deserializer, ProcessingEnvironment env) {
+        if (adapter != null && (serializer != null || deserializer != null)) {
+            throw new Invalid(property.element, "A value takes a @JsonbTypeAdapter or a serializer and deserializer, not both");
+        }
+        if (adapter != null) {
+            DeclaredType adapterType = converter(property, adapter, ADAPTER, env);
+            property.adapter = (TypeElement) adapterType.asElement();
+            property.adapted = contractOf(adapterType, ADAPTER, env).getTypeArguments().get(1);
+        }
+        if (serializer != null) {
+            requireJsonbModule(property, env);
+            property.serializer = (TypeElement) converter(property, serializer, SERIALIZER, env).asElement();
+        }
+        if (deserializer != null) {
+            requireJsonbModule(property, env);
+            property.deserializer = (TypeElement) converter(property, deserializer, DESERIALIZER, env).asElement();
+            property.deserializedClass = TypeNames.of(env.getTypeUtils().erasure(property.type)) + ".class";
+        }
+    }
+
+    private static void requireJsonbModule(Property property, ProcessingEnvironment env) {
+        if (env.getElementUtils().getTypeElement(Annotations.JSONB_CODECS) == null) {
+            throw new Invalid(property.element, "A JSON-B serializer or deserializer runs through silk-json-jsonb:"
+                    + " add it to the compile classpath");
+        }
+    }
+
+    /** The class an annotation names, once it is checked: public, with a public no-argument constructor, and for the property's type. */
+    private static DeclaredType converter(Property property, AnnotationMirror mirror, Contract contract, ProcessingEnvironment env) {
+        Types types = env.getTypeUtils();
+        Object value = Annotations.value(mirror, "value");
+        if (!(value instanceof DeclaredType type)) {
+            throw new Invalid(property.element, "The annotation names no " + contract.noun() + " class");
+        }
+        if (type.getKind() == TypeKind.ERROR) {
+            throw new Deferred(type.toString());
+        }
+        TypeElement converter = (TypeElement) type.asElement();
+        boolean constructible = false;
+        for (ExecutableElement constructor : ElementFilter.constructorsIn(converter.getEnclosedElements())) {
+            if (constructor.getParameters().isEmpty() && constructor.getModifiers().contains(Modifier.PUBLIC)) {
+                constructible = true;
+            }
+        }
+        if (!constructible || !converter.getModifiers().contains(Modifier.PUBLIC)) {
+            throw new Invalid(property.element, "The " + contract.noun() + " " + converter.getQualifiedName()
+                    + " needs a public no-argument constructor, since the generated codec creates it with new");
+        }
+        DeclaredType implemented = contractOf(type, contract, env);
+        TypeMirror handled = implemented.getTypeArguments().get(0);
+        TypeMirror own = contract.boxes() && property.type instanceof PrimitiveType primitive
+                ? types.boxedClass(primitive).asType() : property.type;
+        if (!types.isSameType(types.erasure(handled), types.erasure(own))) {
+            throw new Invalid(property.element, "The " + contract.noun() + " " + converter.getQualifiedName() + " " + contract.verb() + " "
+                    + TypeNames.of(handled) + ", not " + TypeNames.of(property.type));
+        }
+        return type;
+    }
+
+    private static DeclaredType contractOf(DeclaredType type, Contract contract, ProcessingEnvironment env) {
+        DeclaredType implemented = findContract(type, contract.qualifiedName(), env.getTypeUtils());
+        if (implemented == null || implemented.getTypeArguments().size() != contract.typeArguments()) {
+            throw new Invalid(type.asElement(), type + " does not implement " + simpleName(contract.qualifiedName())
+                    + (contract.typeArguments() == 2 ? "<Original, Adapted>" : "<T>"));
+        }
+        return implemented;
+    }
+
+    private static @Nullable DeclaredType findContract(TypeMirror type, String qualifiedName, Types types) {
+        for (TypeMirror supertype : types.directSupertypes(type)) {
+            if (TypeNames.is(supertype, qualifiedName)) {
+                return (DeclaredType) supertype;
+            }
+            DeclaredType found = findContract(supertype, qualifiedName, types);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
 
     /** The elements whose type-level annotations apply to the target: the mixin and its package first, then the target and its package. */
     static List<Element> carriers(TypeElement target, @Nullable TypeElement mixin, ProcessingEnvironment env) {
@@ -178,16 +406,16 @@ final class BoundType {
 
     /**
      * The check that a property's type is one the generated source can spell:
-     * no wildcard, raw type, or type variable. A type javac has not resolved
-     * defers the whole codec to a later round.
+     * no wildcard, raw type, or type variable other than the target's own. A
+     * type javac has not resolved defers the whole codec to a later round.
      */
-    static void requireBindable(TypeMirror type, Element at) {
+    static void requireBindable(TypeMirror type, Element at, TypeElement target) {
         switch (type.getKind()) {
             case BOOLEAN, BYTE, SHORT, INT, LONG, CHAR, FLOAT, DOUBLE -> {
                 // spelled as they are
             }
             case ERROR -> throw new Deferred(type.toString());
-            case ARRAY -> requireBindable(((ArrayType) type).getComponentType(), at);
+            case ARRAY -> requireBindable(((ArrayType) type).getComponentType(), at, target);
             case DECLARED -> {
                 DeclaredType declared = (DeclaredType) type;
                 TypeElement element = (TypeElement) declared.asElement();
@@ -195,11 +423,15 @@ final class BoundType {
                     throw new Invalid(at, "The raw type " + element.getQualifiedName() + " cannot be bound: give its type arguments");
                 }
                 for (TypeMirror argument : declared.getTypeArguments()) {
-                    requireBindable(argument, at);
+                    requireBindable(argument, at, target);
                 }
             }
             case WILDCARD -> throw new Invalid(at, "The wildcard " + type + " cannot be bound: name the type itself");
-            case TYPEVAR -> throw new Invalid(at, "The type variable " + type + " cannot be bound: name the type itself");
+            case TYPEVAR -> {
+                if (!target.getTypeParameters().contains(((TypeVariable) type).asElement())) {
+                    throw new Invalid(at, "The type variable " + type + " cannot be bound: name the type itself");
+                }
+            }
             default -> throw new Invalid(at, "The type " + type + " cannot be bound");
         }
     }
@@ -228,6 +460,7 @@ final class BoundType {
         private String factoryName = "";
         private boolean typeNillable;
         private @Nullable AnnotationMirror typeDateFormat;
+        private @Nullable AnnotationMirror typeNumberFormat;
 
         Extraction(ProcessingEnvironment env, TypeElement target, @Nullable TypeElement mixin, boolean explicitNames) {
             this.env = env;
@@ -251,6 +484,7 @@ final class BoundType {
             AnnotationMirror nillable = first(defaults, Annotations.JSONB_NILLABLE);
             typeNillable = nillable != null && !Boolean.FALSE.equals(Annotations.value(nillable, "value"));
             typeDateFormat = first(defaults, Annotations.JSONB_DATE_FORMAT);
+            typeNumberFormat = first(defaults, Annotations.JSONB_NUMBER_FORMAT);
             if (target.getKind() == ElementKind.RECORD) {
                 record();
             } else {
@@ -612,12 +846,6 @@ final class BoundType {
                     property.excluded = true;
                     return;
                 }
-                for (String unsupported : List.of(Annotations.JSONB_NUMBER_FORMAT, Annotations.JSONB_TYPE_SERIALIZER,
-                        Annotations.JSONB_TYPE_DESERIALIZER)) {
-                    if (Annotations.has(element, unsupported)) {
-                        throw new Invalid(element, "@" + simpleName(unsupported) + " is not supported by the generated codec");
-                    }
-                }
             }
             AnnotationMirror named = first(declared, Annotations.JSONB_PROPERTY);
             String jsonName = named != null ? Annotations.string(named, "value") : null;
@@ -641,17 +869,36 @@ final class BoundType {
                 String pattern = Annotations.string(dateFormat, "value");
                 String locale = Annotations.string(dateFormat, "locale");
                 if (pattern != null && !pattern.equals("##default")) {
-                    if (pattern.equals("##time-in-millis")) {
-                        throw new Invalid(property.element, "@JsonbDateFormat.TIME_IN_MILLIS is not supported by the generated codec");
-                    }
-                    property.dateFormat = pattern;
+                    property.timeInMillis = pattern.equals("##time-in-millis");
+                    property.dateFormat = property.timeInMillis ? null : pattern;
                     property.dateLocale = locale != null && !locale.equals("##default") ? locale : null;
                 }
             }
-            AnnotationMirror adapter = first(declared, Annotations.JSONB_TYPE_ADAPTER);
-            if (adapter != null) {
-                adapter(property, adapter);
+            AnnotationMirror numberFormat = first(declared, Annotations.JSONB_NUMBER_FORMAT);
+            if (numberFormat == null) {
+                numberFormat = typeNumberFormat;
             }
+            if (numberFormat != null) {
+                numberFormat(property, numberFormat);
+            }
+            conversions(property, first(declared, Annotations.JSONB_TYPE_ADAPTER), first(declared, Annotations.JSONB_TYPE_SERIALIZER),
+                    first(declared, Annotations.JSONB_TYPE_DESERIALIZER), env);
+        }
+
+        /** A {@code @JsonbNumberFormat}, whose pattern is tried here so that a bad one is a compile error. No pattern leaves the number plain. */
+        private void numberFormat(Property property, AnnotationMirror mirror) {
+            String pattern = Annotations.string(mirror, "value");
+            if (pattern == null || pattern.isEmpty()) {
+                return;
+            }
+            try {
+                new DecimalFormat(pattern);
+            } catch (IllegalArgumentException e) {
+                throw new Invalid(property.element, "The number format " + pattern + " is not a pattern: " + e.getMessage());
+            }
+            String locale = Annotations.string(mirror, "locale");
+            property.numberFormat = pattern;
+            property.numberLocale = locale != null && !locale.equals("##default") ? locale : null;
         }
 
         private List<Element> mixinMembers(String name) {
@@ -685,49 +932,6 @@ final class BoundType {
                 AnnotationMirror mirror = Annotations.find(element, qualifiedName);
                 if (mirror != null) {
                     return mirror;
-                }
-            }
-            return null;
-        }
-
-        /** A {@code @JsonbTypeAdapter}: the adapter class, created with {@code new}, and the type it puts on the wire. */
-        private void adapter(Property property, AnnotationMirror mirror) {
-            Object value = Annotations.value(mirror, "value");
-            if (!(value instanceof DeclaredType adapterType)) {
-                throw new Invalid(property.element, "@JsonbTypeAdapter names no adapter class");
-            }
-            TypeElement adapter = (TypeElement) adapterType.asElement();
-            boolean constructible = false;
-            for (ExecutableElement constructor : ElementFilter.constructorsIn(adapter.getEnclosedElements())) {
-                if (constructor.getParameters().isEmpty() && constructor.getModifiers().contains(Modifier.PUBLIC)) {
-                    constructible = true;
-                }
-            }
-            if (!constructible || !adapter.getModifiers().contains(Modifier.PUBLIC)) {
-                throw new Invalid(property.element, "The adapter " + adapter.getQualifiedName()
-                        + " needs a public no-argument constructor, since the generated codec creates it with new");
-            }
-            DeclaredType adapterInterface = findAdapterInterface(adapterType);
-            if (adapterInterface == null || adapterInterface.getTypeArguments().size() != 2) {
-                throw new Invalid(property.element, adapter.getQualifiedName() + " does not implement JsonbAdapter<Original, Adapted>");
-            }
-            TypeMirror original = adapterInterface.getTypeArguments().get(0);
-            if (!types.isSameType(types.erasure(original), types.erasure(property.type))) {
-                throw new Invalid(property.element, "The adapter " + adapter.getQualifiedName() + " adapts "
-                        + TypeNames.of(original) + ", not " + TypeNames.of(property.type));
-            }
-            property.adapter = adapter;
-            property.adapted = adapterInterface.getTypeArguments().get(1);
-        }
-
-        private @Nullable DeclaredType findAdapterInterface(TypeMirror type) {
-            for (TypeMirror supertype : types.directSupertypes(type)) {
-                if (TypeNames.is(supertype, Annotations.JSONB_ADAPTER)) {
-                    return (DeclaredType) supertype;
-                }
-                DeclaredType found = findAdapterInterface(supertype);
-                if (found != null) {
-                    return found;
                 }
             }
             return null;
@@ -779,8 +983,22 @@ final class BoundType {
                             + other.name + " and " + property.name);
                 }
             }
+            requireTypeKeysFree(target.asType(), byJsonName);
             env.getElementUtils(); // the environment is held for the messages above; nothing else is read from it here
             return ordered;
+        }
+
+        /** The check that no property takes the name of a key {@code @JsonbTypeInfo} keeps, on the type or any it extends. */
+        private void requireTypeKeysFree(TypeMirror type, Map<String, Property> byJsonName) {
+            AnnotationMirror typeInfo = Annotations.find(types.asElement(type), Annotations.JSONB_TYPE_INFO);
+            Property named = typeInfo != null ? byJsonName.get(typeKey(typeInfo)) : null;
+            if (typeInfo != null && named != null) {
+                throw new Invalid(named.element, "The property is named \"" + typeKey(typeInfo)
+                        + "\" in JSON, the key @JsonbTypeInfo keeps for the subtype");
+            }
+            for (TypeMirror supertype : types.directSupertypes(type)) {
+                requireTypeKeysFree(supertype, byJsonName);
+            }
         }
 
         private @Nullable Property byJsonOrJavaName(String name) {

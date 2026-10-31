@@ -216,4 +216,5 @@ dependencies {
 
 xref:json-codegen.adoc#setup[Generated JSON Codecs] adds its processor, `silk-json-processor`, the same way.
 xref:jsonp.adoc[Jakarta JSON Processing] adds `silk-json-jsonp`, the JSON-P API on silk-json, the same way.
+xref:jsonb.adoc[Jakarta JSON Binding] adds `silk-json-jsonb`, the part of JSON-B that needs no reflection, the same way.
 The library is released with the framework, at the framework's version, under a name of its own so that it reads as a library of its own.

@@ -4,6 +4,7 @@
 `silk-json-processor` generates a `JsonCodec` for every type annotated `@JsonBound`, at compile time, from the type's own declaration.
 The codec is a constant beside the type, `<Type>Json.CODEC`, and a handler names it the way it names a hand-written writer.
 A nested type's codec name starts with the names of the types it is nested in, so `Outer.Inner` generates `OuterInnerJson`.
+A generic type has no constant, and xref:#generics[builds its codec] from a codec for each type argument.
 Two types whose codecs would share a name, such as `Outer.Inner` and a top-level `OuterInner` in one package, are a compile error.
 Nothing is reflected over, nothing registers itself, and a native image needs no entry for the type.
 
@@ -83,14 +84,32 @@ The creator is not private, since the codec calls it.
 | Formats and parses a `java.time` value with that pattern instead of its ISO-8601 text, on the package, on the type, or on one property.
 The pattern applies to the elements of a collection, the values of a map, and the value of an `Optional` too.
 An `Instant` is formatted in UTC.
+`JsonbDateFormat.TIME_IN_MILLIS` writes and reads a JSON number of milliseconds since the epoch.
+It takes an `Instant`, a `ZonedDateTime`, an `OffsetDateTime`, a `LocalDateTime`, or a `LocalDate`, and any other type is a compile error.
+A value read this way is in UTC, and a `LocalDateTime` or a `LocalDate` stands in UTC.
+
+| `@JsonbNumberFormat("pattern", locale = "...")`
+| Writes and reads a number as a string in that `DecimalFormat` pattern, on the package, on the type, or on one property.
+The pattern applies to the elements of a collection, the values of a map, and the value of an `Optional` too.
+A pattern the JDK refuses is a compile error, and an empty pattern leaves the number plain.
+Without a locale the symbols are `Locale.ROOT`'s, so the wire format does not change with the JVM's default locale.
+The string is read whole, and a string that is not the number in the pattern, a fraction for an integer type, or a number out of range is a `JsonException`.
+A native image holds a named locale only when its build includes it, with `-H:IncludeLocales`.
 
 | `@JsonbTypeAdapter(MyAdapter.class)`
-| Converts the property through a `JsonbAdapter<Original, Adapted>`, created with `new`.
+| Converts the value through a `JsonbAdapter<Original, Adapted>`, created with `new`, on a property or on the type.
 The adapter needs a public no-argument constructor, which the processor checks.
+On a type it converts the whole value wherever the type is used, so an interface or an abstract class can be bound.
+
+| `@JsonbTypeSerializer(MySerializer.class)`, `@JsonbTypeDeserializer(MyDeserializer.class)`
+| Hands the value to a `JsonbSerializer` or a `JsonbDeserializer`, created with `new`, on a property or on the type.
+The class needs a public no-argument constructor, and the build needs xref:jsonb.adoc#serializers[`silk-json-jsonb`], which runs it.
+
+| `@JsonbTypeInfo({...})`
+| Lists a type's subtypes, each with its alias on the wire, as xref:#subtypes[Subtypes] describes.
 |===
 
-`@JsonbVisibility`, `@JsonbNumberFormat`, `@JsonbTypeSerializer`, `@JsonbTypeDeserializer`, and `@JsonbTypeInfo` are not supported, and each is a compile error that says so, on a property, a type, or a package.
-`@JsonbTypeAdapter` on a type or a package is a compile error too, since the codec adapts one property at a time.
+`@JsonbVisibility` is not supported, and is a compile error on a type or a package, since a `PropertyVisibilityStrategy` takes a `java.lang.reflect.Field` and a `java.lang.reflect.Method`.
 The default order is declaration order, where JSON-B's own default is lexicographical.
 
 == What a type looks like
@@ -103,7 +122,7 @@ A getter and a setter of one property take the same type, and a mismatch is a co
 A property set through a setter or a field keeps the class's own default when the document leaves it out.
 The codec names the type and calls its constructor, so a nested class is static, and neither the type, a type it is nested in, nor the constructor the codec calls is private.
 
-The property types the codec knows are the primitives and their boxes, `String`, `BigDecimal`, `BigInteger`, `UUID`, `URI`, an enum as its name, written and read through its constants' names encoded once, a `java.time` type as its ISO-8601 text, `Optional`, `OptionalInt`, `OptionalLong`, `OptionalDouble`, `List`, `Set`, `Collection`, `Iterable`, `Map<String, V>`, the `JsonValue` tree, and any other type annotated `@JsonBound`.
+The property types the codec knows are the primitives and their boxes, `String`, `BigDecimal`, `BigInteger`, `UUID`, `URI`, an enum as its name, written and read through its constants' names encoded once, a `java.time` type as its ISO-8601 text, `Optional`, `OptionalInt`, `OptionalLong`, `OptionalDouble`, `List`, `Set`, `Collection`, `Iterable`, `Map<String, V>`, the `JsonValue` tree, any other type annotated `@JsonBound`, and in a generic type its type variables.
 A collection's elements and a map's values are those same types, nested as deep as needed.
 Any other type is a compile error naming the property, with two ways out: annotate the type `@JsonBound`, or adapt it with `@JsonbTypeAdapter`.
 
@@ -117,6 +136,74 @@ Any other component missing from the document, or present as `null`, is a `JsonE
 A member the type does not have is skipped.
 
 This is stricter than JSON-B's own default, which leaves a missing property at its default value, and the strictness is deliberate: a handler receives a whole value or none.
+
+[#generics]
+== Generic types
+
+A generic type's codec takes a codec for each type variable, so it is a class with no `CODEC` constant.
+`PageJson.of(...)` builds it, and you keep the result in a constant:
+
+[source,java]
+----
+@JsonBound
+public record Page<T>(List<T> items, @Nullable String next) {
+}
+
+static final JsonCodec<Page<Deck>> DECK_PAGE = PageJson.of(DeckJson.CODEC);
+----
+
+A property that names the type arguments, such as `Page<Deck> decks`, needs no constant.
+Its codec is built where the value is read or written, and an argument can be any type the codec knows, such as `Page<String>` or `Page<List<Deck>>`.
+The build does not keep it in a constant, since a constant would tie the static initialization of two codecs together, and two threads could wait on each other's.
+A type that refers to itself with its own arguments, such as `Node<T> next` in `Node<T>`, uses the codec it is in.
+The bounds of a type variable are repeated on the codec.
+
+[#subtypes]
+== Subtypes
+
+`@JsonbTypeInfo` binds an interface or an abstract class to the subtypes it lists, each with an alias on the wire.
+
+[source,java]
+----
+@JsonBound
+@JsonbTypeInfo({
+    @JsonbSubtype(alias = "dog", type = Dog.class),
+    @JsonbSubtype(alias = "cat", type = Cat.class)
+})
+public sealed interface Animal permits Dog, Cat {
+}
+
+@JsonBound
+public record Dog(String name) implements Animal {
+}
+
+@JsonBound
+public record Cat(int lives) implements Animal {
+}
+----
+
+`AnimalJson.CODEC` writes a `Cat` as `{"@type":"cat","lives":9}`, the key first and then the subtype's members.
+The key is `@type` unless `key = "..."` names another.
+The codec chooses the subtype with `instanceof`, and tries a subclass before its superclass.
+A value of none of the subtypes is an `IllegalArgumentException`.
+
+On the way in the key is found wherever it stands in the object, and the subtype's codec then reads the object.
+An object without the key, or with an alias the type does not list, is a `JsonException`.
+
+A subtype's own codec writes no key: `CatJson.CODEC` writes `{"lives":9}`.
+This differs from Yasson, which writes the key for a subtype however it is reached.
+A subtype that lists subtypes of its own takes a key of its own, and the document holds both keys.
+
+A class that is not abstract can carry `@JsonbTypeInfo` too.
+Its codec then writes a value of the class itself with no key, and reads an object without the key as the class itself.
+
+The processor refuses what would not work, each with a compile error:
+
+* a subtype that is not annotated `@JsonBound`, that is generic, or that a serializer or an adapter writes whole
+* an alias listed twice, or a list with no subtypes
+* a subtype's key that is the same as its parent's
+* a property whose JSON name is the key
+* `@JsonbTypeInfo` on a generic type, or with a conversion of the whole value
 
 [#mixin]
 == Binding a type you do not own

@@ -8,6 +8,8 @@ import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
+import javax.lang.model.type.TypeVariable;
+import javax.lang.model.type.WildcardType;
 
 /** Type mirrors as the generated source spells them: qualified, with their type arguments, and without their annotations. */
 final class TypeNames {
@@ -20,8 +22,23 @@ final class TypeNames {
             case BOOLEAN, BYTE, SHORT, INT, LONG, CHAR, FLOAT, DOUBLE, VOID -> type.getKind().name().toLowerCase(java.util.Locale.ROOT);
             case DECLARED -> declared((DeclaredType) type);
             case ARRAY -> of(((ArrayType) type).getComponentType()) + "[]";
+            case TYPEVAR -> variable((TypeVariable) type);
+            case WILDCARD -> wildcard((WildcardType) type);
             default -> throw new IllegalArgumentException("A " + type.getKind() + " type cannot be bound: " + type);
         };
+    }
+
+    /** A type variable's name, which a generic codec declares as the type does. */
+    static String variable(TypeVariable type) {
+        return type.asElement().getSimpleName().toString();
+    }
+
+    /** A wildcard, which a property never has but a type parameter's bound can. */
+    private static String wildcard(WildcardType type) {
+        if (type.getExtendsBound() != null) {
+            return "? extends " + of(type.getExtendsBound());
+        }
+        return type.getSuperBound() != null ? "? super " + of(type.getSuperBound()) : "?";
     }
 
     private static String declared(DeclaredType type) {

@@ -12,7 +12,8 @@ import java.lang.annotation.Target;
  * fields and accessors, named and shaped by the standard
  * {@code jakarta.json.bind.annotation} annotations: {@code @JsonbProperty},
  * {@code @JsonbTransient}, {@code @JsonbNillable}, {@code @JsonbPropertyOrder},
- * {@code @JsonbCreator}, {@code @JsonbDateFormat}, and {@code @JsonbTypeAdapter}.
+ * {@code @JsonbCreator}, {@code @JsonbDateFormat}, {@code @JsonbNumberFormat},
+ * {@code @JsonbTypeAdapter}, and {@code @JsonbTypeInfo}.
  *
  * <pre>{@code
  * @JsonBound
@@ -26,6 +27,10 @@ import java.lang.annotation.Target;
  * <p>The generated code calls the type's own accessors and constructor: no
  * reflection, no registry, and nothing for a native image to be told. The
  * codec is a constant the handler names, the same as a hand-written writer.
+ *
+ * <p>A generic type's codec is no constant: {@code <Type>Json.of(...)} builds
+ * it from a codec for each type argument, and a type that names the arguments
+ * in a property has it built for it.
  *
  * <p>A type the application does not own, or one that should not carry the
  * annotations itself, is bound through a mixin: a type annotated

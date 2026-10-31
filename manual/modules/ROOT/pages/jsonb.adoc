@@ -1,0 +1,127 @@
+= Jakarta JSON Binding
+:navtitle: Jakarta JSON Binding
+
+`silk-json-jsonb` provides the part of Jakarta JSON Binding (JSON-B) that needs no reflection, on xref:json.adoc#silk-json[silk-json].
+`SilkJsonb` is a `Jsonb` over codecs the application names, and `JsonbCodecs` runs the serializers and deserializers a xref:json-codegen.adoc[generated codec] is annotated with.
+It is not a JSON-B implementation: `JsonbBuilder.create()` does not find it, and it does not pass the JSON-B TCK.
+
+[#setup]
+== Setup
+
+[source,groovy,subs="attributes+"]
+----
+dependencies {
+    implementation '{silk-json-group}:silk-json-jsonb:{project-version}'
+}
+----
+
+[source,xml,subs="attributes+"]
+----
+<dependency>
+  <groupId>{silk-json-group}</groupId>
+  <artifactId>silk-json-jsonb</artifactId>
+  <version>{project-version}</version>
+</dependency>
+----
+
+The module depends on `silk-json-jsonp` and `jakarta.json.bind-api` 3.0, and not on core.
+An application that is not a Spider Silk one takes it alone, as it takes silk-json.
+Its package is `{silk-json-group}.jsonb`.
+A generated codec needs the module only for a serializer or a deserializer, and every other annotation is read at compile time.
+
+[#jsonb]
+== The Jsonb
+
+`SilkJsonb` implements `Jsonb` for the types you bind.
+You make it with its builder, and keep it in a constant:
+
+[source,java]
+----
+static final Jsonb JSONB = SilkJsonb.builder()
+        .bind(Deck.class, DeckJson.CODEC)
+        .bind(Animal.class, AnimalJson.CODEC)
+        .build();
+
+String json = JSONB.toJson(deck);
+Deck read = JSONB.fromJson(json, Deck.class);
+String animal = JSONB.toJson(new Cat(9), Animal.class); // {"@type":"cat","lives":9}
+----
+
+A type is bound here or not at all.
+Nothing is scanned or created by reflection, and two instances share nothing.
+A type that is not bound is a `JsonbException`, and so is a document the codec refuses.
+
+`toJson(object)` goes by the object's own class, so a value of a subtype needs the type it is written as, as `toJson(object, Animal.class)` does.
+`bind(Type, codec)` binds a type a `Class` cannot say, such as the `ParameterizedType` of `Page<Deck>`.
+`SilkJsonb` holds each document in memory whole, and reads and writes bytes as UTF-8.
+
+[#serializers]
+== Serializers and deserializers
+
+`@JsonbTypeSerializer` and `@JsonbTypeDeserializer` run a class written against JSON-P's generator and parser inside a generated codec.
+The codec creates the class with `new`, so it needs a public no-argument constructor, and its type argument has to be the property's or the type's.
+The processor checks both, and refuses the annotation when `silk-json-jsonb` is not on the compile classpath.
+
+[source,java]
+----
+public class PointSerializer implements JsonbSerializer<Point> {
+    @Override
+    public void serialize(Point point, JsonGenerator generator, SerializationContext context) {
+        generator.writeStartArray().write(point.x()).write(point.y()).writeEnd();
+    }
+}
+
+public class PointDeserializer implements JsonbDeserializer<Point> {
+    @Override
+    public Point deserialize(JsonParser parser, DeserializationContext context, Type type) {
+        JsonArray array = parser.getArray();
+        return new Point(array.getInt(0), array.getInt(1));
+    }
+}
+
+@JsonBound
+public record Route(
+        @JsonbTypeSerializer(PointSerializer.class)
+        @JsonbTypeDeserializer(PointDeserializer.class)
+        Point from) {
+}
+----
+
+A serializer writes one whole value in place, after the key, and a value left open is a `JsonGenerationException`.
+A deserializer's parser stands at the value's first event, `START_OBJECT` for an object.
+The parser reads a copy of the value's bytes, so the input moves past the value however much of it the deserializer reads.
+
+[#contexts]
+== The contexts
+
+The contexts take the values JSON-P has a form for, and no bound type.
+
+`SerializationContext` takes null, a string, a character, a boolean, a number, an enum, and a JSON-P `JsonValue`.
+`DeserializationContext` takes the same types apart from an enum, whose constants it would have to find by reflection.
+Any other type would have to be looked up by its class, which nothing here does, so it is a `JsonbException`.
+A serializer writes such a value through its own fields, or holds the value's generated codec.
+A value of the wrong kind on the way in is the document's fault, and a `JsonException`.
+
+[#left-out]
+== What is left out
+
+These parts of JSON-B need reflection, or a run-time setting a generated codec does not have:
+
+[cols="2,4",options="header"]
+|===
+| Left out | Why
+
+| `JsonbBuilder.create()`
+| The API finds a provider through `ServiceLoader` and then `Class.forName`.
+
+| A type with no `@JsonBound`
+| Mapping a class the processor never saw reads its fields and methods at run time.
+Most of the JSON-B TCK tests this.
+
+| `@JsonbVisibility`
+| The methods of `PropertyVisibilityStrategy` take a `java.lang.reflect.Field` and a `java.lang.reflect.Method`.
+
+| `JsonbConfig`
+| A generated codec fixes its names, its null handling, and its formats at compile time.
+`withAdapters` and `withSerializers` also read an adapter's type arguments by reflection.
+|===

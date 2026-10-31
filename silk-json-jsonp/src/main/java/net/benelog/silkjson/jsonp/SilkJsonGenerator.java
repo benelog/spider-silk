@@ -9,6 +9,8 @@ import jakarta.json.JsonValue;
 import jakarta.json.stream.JsonGenerationException;
 import jakarta.json.stream.JsonGenerator;
 
+import org.jspecify.annotations.Nullable;
+
 import net.benelog.silkjson.JsonOutput;
 
 /**
@@ -26,7 +28,8 @@ final class SilkJsonGenerator implements JsonGenerator {
     private static final byte OBJECT = 1;
     private static final byte ARRAY = 2;
 
-    private final Outputs.Guarded stream;
+    /** The stream behind the output, or null for an output someone else has the rest of. */
+    private final Outputs.@Nullable Guarded stream;
     private final JsonOutput out;
 
     private byte[] containers = new byte[16];
@@ -43,6 +46,16 @@ final class SilkJsonGenerator implements JsonGenerator {
     SilkJsonGenerator(Outputs.Guarded stream) {
         this.stream = stream;
         this.out = JsonOutput.to(stream);
+    }
+
+    /**
+     * A generator of one value in an output that is not its own: after a name,
+     * as an element, or as a document. {@link #close()} checks that the value
+     * is whole, and leaves the output as it is.
+     */
+    SilkJsonGenerator(JsonOutput out) {
+        this.stream = null;
+        this.out = out;
     }
 
     @Override
@@ -252,13 +265,17 @@ final class SilkJsonGenerator implements JsonGenerator {
                     + (started ? "an object or an array is still open" : "none was written"));
         }
         closed = true;
-        out.flush();
-        stream.close();
+        if (stream != null) {
+            out.flush();
+            stream.close();
+        }
     }
 
     @Override
     public void flush() {
-        out.flush();
+        if (stream != null) {
+            out.flush();
+        }
     }
 
     /** A value is written in an array, after a key, or as the document's one value. */

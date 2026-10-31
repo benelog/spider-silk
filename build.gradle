@@ -158,7 +158,7 @@ configure(subprojects.findAll { it.name != 'spider-silk-maven-parent' }) {
 
 // Published to Maven Central: the framework, its test harness, and silk-json, not the example.
 configure(subprojects.findAll {
-    it.name in ['silk-json', 'silk-json-processor', 'silk-json-jsonp', 'spider-silk-core', 'spider-silk-test',
+    it.name in ['silk-json', 'silk-json-processor', 'silk-json-jsonp', 'silk-json-jsonb', 'spider-silk-core', 'spider-silk-test',
             'spider-silk-tomcat', 'spider-silk-undertow', 'spider-silk-freemarker', 'spider-silk-handlebars',
             'spider-silk-thymeleaf', 'spider-silk-jetty-websocket', 'spider-silk-jackson', 'spider-silk-openapi',
             'spider-silk-opentelemetry-agent']
