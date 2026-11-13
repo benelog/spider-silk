@@ -3,12 +3,12 @@
 
 ``WebResponse``는 불변 값이다.
 모든 메서드는 새 응답을 반환하므로, after 필터는 라우트가 반환한 응답을 다시 쓸 수 있다.
-따라서 쓰지 않고 버린 반환값은 잃어버린 변경이다.
+따라서 반환값을 쓰지 않으면 그 변경은 응답에 반영되지 않는다.
 ``WebResponse``에는 Error Prone의 ``@CheckReturnValue``가 붙어 있으므로, Error Prone과 IntelliJ는 그런 호출을 컴파일 시점에 지적한다.
 
-불변성은 봉투에 적용된다: 상태, 헤더, 쿠키, 그리고 템플릿 모델의 항목이다.
+불변인 것은 본문을 뺀 나머지다: 상태, 헤더, 쿠키, 그리고 템플릿 모델의 항목이다.
 쿠키는 추가될 때 복사되고 ``cookies()``가 넘겨줄 때 다시 복사되므로, 이후에 `Cookie` 객체를 바꿔도 응답이 보내는 것은 아무것도 바뀌지 않는다.
-템플릿 모델은 불변인 ``Model``이므로, 핸들러가 모델을 만든 뒤에 하는 어떤 일도 페이지에 도달하지 않는다.
+템플릿 모델은 불변인 ``Model``이므로, 핸들러가 모델을 만든 뒤에 하는 어떤 일도 페이지에 반영되지 않는다.
 복사는 얕은 복사이며, 모델 값으로 저장된 가변 객체는 여전히 핸들러가 넘긴 바로 그 객체이다.
 `bytes` 본문의 배열과 `stream` 본문의 라이터는 복사되지 않고 그대로 넘겨지는데, 두 본문은 큰 본문을 한 번 더 복사하지 않으려고 존재하기 때문이다.
 `json` 본문의 값도 복사되지 않고 그대로 들고 있다가 답을 쓸 때 읽히므로, 핸들러가 반환한 뒤에 바꾼 값은 답을 바꾼다.
@@ -37,7 +37,7 @@ assertThat(((WebResponse.Json<?>) response.body()).toJson()).isEqualTo("{\"id\":
 ----
 
 서블릿은 모든 필터가 답한 뒤, 예외 처리가 아직 적용되는 동안 `Json` 본문을 쓰므로, 예외를 던지는 라이터는 예외 핸들러에 도달한다.
-서블릿은 문서를 스레드가 간직하는 버퍼에 쓰고, ``Content-Length`` 뒤에 그 버퍼를 보내고, 버퍼를 돌려주므로, 클라이언트로 가는 길에 문서 크기의 배열이 할당되지 않는다.
+서블릿은 문서를 스레드가 간직하는 버퍼에 쓰고, ``Content-Length`` 뒤에 그 버퍼를 보내고, 버퍼를 돌려주므로, 클라이언트로 보내는 동안 문서 크기의 배열이 할당되지 않는다.
 버퍼는 서블릿 밖으로 나가지 않으므로, 상수로 둔 응답이나 필터가 들고 있는 응답은 그것이 답하는 요청마다 다시 쓰인다.
 
 ``body(replacement)``는 모든 헤더를 보존한다.
@@ -115,7 +115,7 @@ response.headers(); // every field, in the order they were set
 어떤 표기로든 필드를 다시 설정하면 값은 교체되고 이름과 위치는 그대로 남으므로, ``headers()``는 실제로 전송되는 것을 정확히 다시 읽는다.
 ``vary(field)``는 교체하지 않고 추가하는 유일한 메서드인데, ``Vary``는 목록을 담고 압축과 CORS가 각각 거기에 필드(``Accept-Encoding``과 `Origin`)를 더하기 때문이다.
 
-한 번 이상 보내는 헤더는 범위 밖이며, ``headers()``는 반환 타입으로 이를 드러낸다: ``Map<String, String>``은 이름당 하나의 값을 약속한다.
+한 번 이상 보내는 헤더는 범위 밖이며, ``headers()``는 반환 타입으로 이를 드러낸다: ``Map<String, String>``은 이름당 값이 하나라는 뜻이다.
 쿠키는 자신만의 목록을 가진 예외로, ``cookie(...)``로 추가하고 ``cookies()``로 다시 읽는다.
 한 답에 두 개의 `Link` 줄을 넣는 것처럼 반복되어야 하는 다른 헤더는 모두 ``raw``를 통해 쓴다:
 
@@ -174,7 +174,7 @@ return WebResponse.html(page)
         .expireCookie("stale");
 ----
 
-두 인자 형태는 `Path=/`, `HttpOnly`, ``SameSite=Lax``를 설정하며, 이는 훔칠 가치가 있는 것을 담은 쿠키라면 갖춰야 할 속성이다.
+두 인자 형태는 `Path=/`, `HttpOnly`, ``SameSite=Lax``를 설정하며, 이는 탈취되면 안 되는 값을 담은 쿠키라면 갖춰야 할 속성이다.
 ``cookie(Cookie)``는 `Secure`, `Domain`, ``SameSite=None``을 위해 직접 만든 ``jakarta.servlet.http.Cookie``를 받는다.
 응답은 속성까지 포함한 그 쿠키의 복사본을 보관한다.
 ``expireCookie(name)``은 기본값으로 설정된 쿠키를 지우라고 브라우저에 알린다.
@@ -189,4 +189,4 @@ return WebResponse.html(page)
 `stream`, `sse`, ``raw``는 각각 자신만의 람다를 받으며, 그 람다 타입의 접미사가 속한 계열을 나타낸다.
 ``…Handler``는 ``WebResponse``로 요청에 답한다: ``Handler``와 ``ExceptionHandler``이다.
 ``…Writer``는 아무것도 반환하지 않고 이미 정해진 응답의 본문을 채운다: `StreamWriter(OutputStream)`, `SseWriter(SseStream)`, ``ServletWriter(HttpServletRequest, HttpServletResponse)``이다.
-따라서 ``ServletWriter``는 ``StreamWriter``의 형제이지, ``Handler``의 친척이 아니다.
+따라서 ``ServletWriter``는 ``StreamWriter``와 같은 계열이며, ``Handler``와 같은 계열이 아니다.

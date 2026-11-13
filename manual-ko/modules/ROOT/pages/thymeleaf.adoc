@@ -3,7 +3,7 @@
 
 ``spider-silk-thymeleaf``는 코어에 번들된 jte 대신 https://www.thymeleaf.org[Thymeleaf]로 렌더링한다.
 xref:tomcat.adoc[Tomcat]이 별도 모듈인 것과 같은 이유로 별도 모듈이다.
-한 엔진에 대한 종속은 아티팩트 이름에 담기고, 코어는 템플릿 의존성이 셋이 아니라 하나인 웹 계층으로 남는다.
+한 엔진에 대한 의존은 그 엔진의 이름을 단 아티팩트에 두고, 코어는 템플릿 의존성이 셋이 아니라 하나인 웹 계층으로 유지된다.
 
 == 설치
 
@@ -32,13 +32,13 @@ new App()
 ----
 
 이는 ``classpath:/thymeleaf/deck.html``을 렌더링하며, UTF-8 HTML로 파싱하고 파싱된 템플릿은 캐시한다.
-모델의 키가 템플릿이 읽는 변수이므로, ``${deck.title}``은 ``Model.of("deck", ...)``의 `deck` 항목에 닿는다.
+모델의 키가 템플릿이 읽는 변수이므로, ``${deck.title}``은 ``Model.of("deck", ...)``의 `deck` 항목을 읽는다.
 
 ``th:text``는 이스케이프하고 ``th:utext``는 하지 않는데, 이는 Thymeleaf 자체의 기본값이며 여기서 그것을 위해 설정할 것이 없는 이유다.
 
 == 모델인 것과 모델이 아닌 것
 
-이 모듈은 Thymeleaf의 서블릿 없는 절반을 쓴다: 템플릿 이름, 모델, 렌더링 결과를 쓸 라이터다.
+이 모듈은 Thymeleaf에서 서블릿에 의존하지 않는 부분만 쓴다: 템플릿 이름, 모델, 렌더링 결과를 쓸 라이터다.
 ``WebContext``가 없으므로, `#request`, `#session`, ``@bean``처럼 Spring Web MVC 페이지가 쓰는 표현식은 쓸 수 없다.
 핸들러가 ``Map``에 넣은 것이 페이지가 읽을 수 있는 것이며, 그 밖에는 없다.
 

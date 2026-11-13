@@ -45,7 +45,7 @@ app.get("/stats", statsAction);
 
 `Action` is the A of the ADR (Action-Domain-Responder) pattern: a web-tier class that answers exactly one request.
 Laravel's single action controllers follow the same convention.
-The framework does not know the name.
+The framework has no type named `Action`.
 `Handler` is the interface, and `…Action` is a naming convention for the classes that implement it directly.
 
 == Public methods, registered by reference
@@ -71,4 +71,4 @@ app.post("/decks/{deckId}/rename", deckController::renameDeck);
 The methods are `public` because registration deliberately happens outside the class.
 There is no `Controller` interface and no `register(App)` method to implement.
 Every route the application answers is therefore one statement in one list, and `app.routes()` reports exactly what is written there.
-A class that registers its own routes hides half the routing table inside itself, which is what annotation scanning does, spelled out by hand.
+A class that registers its own routes moves part of the routing table out of that one list and into the class, which is the result annotation scanning produces, written by hand.

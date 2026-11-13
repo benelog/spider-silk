@@ -174,21 +174,21 @@ for (var member : req.bodyJson().asObject()) {
 }
 ----
 
-The key list is a copy and the members handed to the loop are read-only, so writing through either does not reach the object.
+The key list is a copy and the members handed to the loop are read-only, so writing through either does not change the object.
 
 == `JsonCodec<T>`
 
 `JsonCodec<T>` is a writer and a reader at once, for a type that travels both ways.
 `JsonCodec.of(writer, reader)` builds one, and `JsonCodec.list(codec)` gives the list form.
 The writer and the reader are separate interfaces because most types only go out, and a single interface would leave those types with a `read` they cannot implement.
-A generated codec is a `JsonCodec`, so it goes wherever a writer or a reader goes.
+A generated codec is a `JsonCodec`, so it can be passed wherever a writer or a reader is accepted.
 
 == Where this stops being enough
 
 `WebResponse.json(value, writer)` writes the whole document into memory before sending any of it, which an answer of a hundred thousand rows cannot afford.
 xref:large-json.adoc[Large JSON and NDJSON] writes one value at a time instead, and reads a body the same way.
 
-Writing the mapping by hand or generating it from the type is core's decision for core, not for the application.
+Writing the mapping by hand or generating it from the type is a decision about core's own JSON handling, and it is not imposed on the application.
 An application with a wire format it does not own can bind objects with a library instead, through `WebResponse.rawJson(String)` going out and `req.bodyStream()` or `req.bodyReader()` coming in: xref:json-interop.adoc[External JSON Binding].
 
 [#silk-json]

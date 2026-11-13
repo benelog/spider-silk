@@ -107,8 +107,8 @@ The servlet serves a copy of the table taken when it was initialized, so registe
 
 == When nothing matches
 
-A path no route knows answers 404.
-A path that only other methods know answers 405, with an `Allow` header listing the methods that would have worked.
+A path no route matches answers 404.
+A path that only routes of other methods match answers 405, with an `Allow` header listing the methods that would have worked.
 For a GET or HEAD, xref:static-files.adoc[static files] are consulted before the 404.
 Routes are matched first, so a route can shadow a file.
 `statusPage(HttpStatus.NOT_FOUND, handler)` registers the body that 404 answers with.

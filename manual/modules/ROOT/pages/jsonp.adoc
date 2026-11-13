@@ -49,7 +49,7 @@ The module also names the class in `META-INF/services/jakarta.json.spi.JsonProvi
 Those methods look the provider up through a `ServiceLoader` on every call.
 A provider kept in a constant skips that lookup, and so does a factory made from one.
 With another provider on the class path as well, such as Parsson, `Json` takes whichever one the `ServiceLoader` finds first.
-The constructor names the one you mean.
+Calling the constructor fixes which provider is used.
 
 Every method is safe to call from many threads, and every `create` method makes a new object.
 
@@ -57,12 +57,12 @@ Every method is safe to call from many threads, and every `create` method makes 
 == Reading
 
 A document of at most 1 MiB of UTF-8 is read into memory whole and parsed by one `JsonInput`.
-A larger one is parsed as it is read, so its bytes are never held at once.
+A larger one is parsed as it is read, so its bytes are never all in memory at once.
 
 * A larger document is parsed in runs of at most 64 KiB: the bytes buffered from the place the parser stands go to one `JsonInput`, which reads as many values as they hold.
   Where a run's bytes end inside a value, the parser enters the objects and arrays the run was inside, reads on from there off the stream, and hands what follows to the next run.
   A string or a number longer than a run is read whole by a `JsonInput` of its own.
-  The bytes held at once are a run's, or those of the largest such string or number.
+  The bytes in memory at once are a run's, or those of the largest such string or number.
 * Both ways answer the same events, values, failures, and locations.
   The build checks this with a second run of the TCK, in which every document is streamed.
 * The system properties `net.benelog.silkjson.jsonp.streamAbove` and `net.benelog.silkjson.jsonp.pieceSize` set the two sizes, in bytes.
@@ -83,7 +83,7 @@ A document is one value.
 Text after it is a `JsonParsingException`, from the parser's `hasNext()` and from the reader's `read()`.
 `getLocation()` of the exception answers the line and the column from 1 and the offset from 0, counted in characters.
 
-A key that repeats in an object keeps its first place, and the value `JsonConfig.KEY_STRATEGY` says:
+A key that repeats in an object keeps its first position, and takes the value `JsonConfig.KEY_STRATEGY` selects:
 
 [cols="1,3",options="header"]
 |===
@@ -227,7 +227,7 @@ The TCK's signature test is left out.
 It compares the API jar with the one the TCK was cut from, which is the API's concern rather than a provider's.
 
 Nothing in the module is reflection.
-The one lookup is the `ServiceLoader` inside `jakarta.json.Json`, which a provider made with its constructor never reaches.
+The one lookup is the `ServiceLoader` inside `jakarta.json.Json`, which a provider made with its constructor never goes through.
 A xref:native-image.adoc[native image] runs the module with no configuration, `jakarta.json.Json` included, since GraalVM registers the provider its services file names.
 UTF-32 is decoded by the module itself, since a native image carries no UTF-32 charset unless it is built with every charset.
-xref:reflection-scope.adoc[The Scope of "No Reflection"] places the module on core's side of the rule.
+xref:reflection-scope.adoc[The Scope of "No Reflection"] lists the module among those that use no reflection.

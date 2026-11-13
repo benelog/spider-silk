@@ -30,7 +30,7 @@ It is a lambda, and the only name it has is what reflection would dig out of its
 Anything built on top of the list stays out of core too, because the list is plain data: the example app renders a `/_routes` overview page from it, and xref:openapi.adoc[`spider-silk-openapi`] turns the same list into an OpenAPI 3.1 document.
 
 The automatic HEAD and OPTIONS answers are not listed.
-`routes()` reports what was registered, which is the honest answer for a framework whose claim is that only what you register runs.
+`routes()` reports only what was registered, which follows the framework's rule that only what you register runs.
 
 [#matched-route]
 == The matched route
@@ -74,9 +74,9 @@ The description sits between the path and the handler so the handler stays last,
 A route registered without one reports `""` rather than null, so a reader can print `route.description()` without asking whether it is there.
 A path pattern never holds whitespace, so a description passed where the path goes fails at registration with an `IllegalArgumentException` instead of registering a route nothing reaches.
 
-A description is documentation written at the registration site, which is what an annotation is with the reflection taken out.
+A description is documentation written at the registration site, and does the documenting an annotation does, without the reflection.
 Keeping it there is deliberate, because documentation kept anywhere else is a second place to keep in step with the registration.
-It stays a string argument and nothing more: the framework never reads it, and a route without one is registered, matched, and reported exactly as before.
+It is only a string argument: the framework never reads it, and a route without one is registered, matched, and reported exactly as before.
 
 xref:openapi.adoc[`spider-silk-openapi`] writes a non-empty description as the operation's `summary`, and omits the field for a route that has none.
 
@@ -99,7 +99,7 @@ for (Hook hook : app.hooks()) {
 }
 ----
 
-There are five records rather than one with a kind field, because a filter is scoped to a path, a status page to a status, and a response filter to every response, and a component that is null half the time would report that dishonestly.
+There are five records rather than one with a kind field, because a filter is scoped to a path, a status page to a status, and a response filter to every response, and a component that is null half the time would not represent that accurately.
 `Hook.EveryResponse` has no components, since it runs on every response, and registering two gives two entries.
 
 The list is grouped by when it runs: the request filters, then the before-route filters, then the after-route filters, then the status pages, then the response filters.
@@ -109,7 +109,7 @@ A filter's coverage is a pattern and not a path, and it is reported as one.
 `++/admin/*++` stays `++/admin/*++`, and covers `/admin` along with everything under it.
 `beforeRoute(filter)` reports the `++/*++` it registers, and a group's `decks.beforeRoute(filter)` reports the resolved `++/api/decks/*++`.
 Matching a request against those patterns is the dispatcher's job, not this list's: what is exposed here is plain strings, the same as for routes.
-An audit of which paths a filter leaves open belongs on top of the list, the way xref:openapi.adoc[the OpenAPI export] is built on `routes()`.
+An audit of which paths a filter leaves open is something to build on the list, the way xref:openapi.adoc[the OpenAPI export] is built on `routes()`.
 
 The `exception(Type, handler)` handlers are not listed.
 An exception handler is scoped to a type, so neither a path nor a status describes where it applies.

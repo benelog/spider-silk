@@ -83,7 +83,7 @@ docker load < example-flashcard/build/jib-image.tar
 docker run -p 8080:8080 ghcr.io/benelog/spider-silk-flashcard
 ----
 
-The tar is only the daemonless route: `gradle jib` pushes the same image straight to the registry given credentials, and `gradle jibDockerBuild` loads it into a local daemon where one exists.
+The tar is only the way to build the image without a daemon: `gradle jib` pushes the same image straight to the registry given credentials, and `gradle jibDockerBuild` loads it into a local daemon where one exists.
 H2 keeps its database file under the process home, `/root/db` in this image, so the data lives and dies with the container unless a volume is mounted there.
 The same build containerizes the GraalVM binary instead of the jar when run with `-Pnative`.
 That flag swaps the base image and the layers, and xref:native-image.adoc#container[the native image chapter] shows what changes.
@@ -99,7 +99,7 @@ docker build -f example-flashcard/Dockerfile -t spider-silk-flashcard .
 docker run -p 8080:8080 spider-silk-flashcard
 ----
 
-The file reproduces by hand the layering Jib does for free, so every instruction is ordered for the layer cache.
+The file reproduces by hand the layering Jib does automatically, so every instruction is ordered for the layer cache.
 The build stage first copies only the Gradle scripts, of every module since `settings.gradle` names them all, and downloads the dependencies before any source enters the image.
 A source edit therefore re-runs compilation but never the download.
 That download is `resolveDependencies`, a task the xref:gradle-plugin.adoc[spider-silk plugin] registers to fetch the external runtime jars and nothing else.
@@ -109,9 +109,9 @@ The stock `dependencies` report is not a substitute: it stops at metadata and ca
 image::dockerfile-stages.svg[The build stage copies the build scripts, runs resolveDependencies, copies the sources, runs installDist, and sorts the jars into tiers; the runtime stage copies the external jars, the spider-silk jars, the resources, and the loose classes as four layers, least volatile first, and starts the main class with an explicit classpath,link=self]
 
 The runtime stage then copies Jib's four tiers as four `COPY` instructions, least volatile first: the external jars, the spider-silk jars, the resources, and the application's classes as loose `.class` files rather than a jar.
-Skipping the jar removes the one thing that could change without the code changing.
+Copying the classes without a jar removes the one cause of a layer changing when the code has not.
 An archive repackaged with fresh timestamps reads as new content, while an unchanged `.class` file keeps the same bytes, so a comment-only edit that compiles to identical bytecode leaves even the classes layer cached.
-(Gradle builds reproducible jars by default these days, which blunts that problem.
+(Gradle builds reproducible jars by default these days, which reduces that problem.
 Maven's jar plugin does not, unless `project.build.outputTimestamp` says so, which makes loose classes matter more in a Maven build.)
 In an application of your own, spider-silk's jars belong to the external tier, since they change on a version bump and not on your edits.
 The core tier then disappears: it exists here only because the framework builds alongside the example.

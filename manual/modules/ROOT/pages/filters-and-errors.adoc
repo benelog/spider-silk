@@ -3,7 +3,7 @@
 
 A request filter runs before routing, a route filter runs around a matched handler, and a response filter runs on every response.
 An exception handler turns an exception a handler threw into a response.
-A status page fills in the body of a response that ended on a status with nothing to show.
+A status page fills in the body of a response that ended on a status with no body.
 The diagram shows where each one runs, for one request through `AppServlet`.
 
 .One request through AppServlet
@@ -94,9 +94,9 @@ Its answer is final: an empty 404 it returns does not go back to `statusPage(Htt
 A filter that throws is answered the way a handler that throws is.
 The exception reaches the `exception(Type, handler)` handlers, then `statusPage(status, ...)`, and the answer to it is decorated and written without running the response filters again, so a filter that always fails cannot fail in a loop.
 
-A response filter shapes a response and does not authorize a request.
+A response filter changes a response and does not authorize a request.
 The handler has already run by the time it is called, so authorization belongs in `beforeRequest` or `beforeRoute`, depending on its scope.
-What a `WebResponse.raw(...)` writer writes to the servlet response, and a failure after the response is committed, happen after the filter and are out of its reach.
+What a `WebResponse.raw(...)` writer writes to the servlet response, and a failure after the response is committed, happen after the filter, so the filter cannot change them.
 
 == Exception handlers
 

@@ -3,7 +3,7 @@
 
 ``spider-silk-handlebars``는 코어에 번들된 jte 대신 https://github.com/jknack/handlebars.java[Handlebars.java]로 렌더링한다.
 xref:tomcat.adoc[Tomcat]이 별도 모듈인 것과 같은 이유로 별도 모듈이다.
-한 엔진에 대한 종속은 아티팩트 이름에 담기고, 코어는 템플릿 의존성이 셋이 아니라 하나인 웹 계층으로 남는다.
+한 엔진에 대한 의존은 그 엔진의 이름을 단 아티팩트에 두고, 코어는 템플릿 의존성이 셋이 아니라 하나인 웹 계층으로 유지된다.
 
 == 설치
 
@@ -30,7 +30,7 @@ new App()
 ----
 
 이는 ``classpath:/hbs/deck.hbs``를 렌더링한다.
-모델의 키가 템플릿이 읽는 이름이므로, ``+{{deck.title}}+``은 ``Model.of("deck", ...)``의 `deck` 항목에 닿는다.
+모델의 키가 템플릿이 읽는 이름이므로, ``+{{deck.title}}+``은 ``Model.of("deck", ...)``의 `deck` 항목을 읽는다.
 
 ``+{{name}}+``은 HTML 이스케이프되고 ``+{{{name}}}+``은 되지 않는데, 이는 Handlebars 자체의 기본값이며 여기서 그것을 위해 설정할 것이 없는 이유다.
 

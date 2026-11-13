@@ -13,7 +13,7 @@ app.get("/decks/{deckId}", req ->
 Nothing has to be configured for that.
 An `App` renders with https://jte.gg[jte] over `classpath:/jte` and appends `.jte`, so the handler above renders `classpath:/jte/deck.jte`.
 The model's entries are passed to jte's parameters by name, and `ContentType.Html` escapes `${}` output for you.
-A `Model` is immutable, so nothing the handler still holds changes the page.
+A `Model` is immutable, so its entries cannot change after the handler builds it.
 
 [#model]
 == A model with null values
@@ -91,7 +91,7 @@ image::template-rendering.svg[The handler returns WebResponse.template; AppServl
 
 jte compiles templates at runtime by default, reading them from the classpath.
 There is nothing to configure, but the deployment machine needs a JDK, and an edited template is not seen until the classpath copy is rebuilt.
-The engine has a mode for each side of that trade, and `JteTemplates` has a constructor for each.
+The engine has a mode that removes each of those two drawbacks, and `JteTemplates` has a constructor for each.
 
 Development resolves templates from the source directory instead of the classpath:
 
@@ -102,7 +102,7 @@ app.templates(new JteTemplates(
 ----
 
 Before each render, jte checks the modification timestamp of the template file and everything it depends on, and recompiles what changed.
-Saving a `.jte` file and refreshing the browser is the whole loop.
+Saving a `.jte` file and refreshing the browser shows the change.
 
 Production precompiles every template at build time with the https://jte.gg/pre-compiling/[jte Gradle plugin]:
 

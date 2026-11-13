@@ -3,7 +3,7 @@
 
 `spider-silk-freemarker` renders with https://freemarker.apache.org[FreeMarker] instead of the jte bundled with core.
 It is a separate module for the same reason xref:tomcat.adoc[Tomcat] is.
-A tie to one engine belongs in the artifact's name, and core stays a web tier with one template dependency rather than four.
+A dependency on one engine goes in an artifact named after that engine, and core stays a web tier with one template dependency rather than four.
 
 == Installation
 
@@ -30,7 +30,7 @@ new App()
 ----
 
 That renders `classpath:/freemarker/deck.ftlh`, read as UTF-8 with the parsed template cached.
-`model.asMap()` is the data model, so `${deck.title}` reaches the `deck` entry of `Model.of("deck", ...)`.
+`model.asMap()` is the data model, so `${deck.title}` reads the `deck` entry of `Model.of("deck", ...)`.
 
 == Escaping is a decision here
 
@@ -38,7 +38,7 @@ That renders `classpath:/freemarker/deck.ftlh`, read as UTF-8 with the parsed te
 FreeMarker itself escapes nothing until an output format says to.
 That default is the one place it differs from the other three engines, and the main reason this module exists rather than a one-liner.
 
-The default suffix is `.ftlh`, the extension FreeMarker reads as "this one is HTML" on its own.
+The default suffix is `.ftlh`, the extension FreeMarker recognizes as an HTML template with no further setting.
 The escaping is therefore stated twice over: once in the configuration, and once in every template's name.
 A suffix of your own drops the statement in the name, but the configuration still escapes:
 
@@ -68,7 +68,7 @@ configuration.setSharedVariable("siteName", "Spider Silk");
 app.templates(new FreeMarkerTemplates(configuration));
 ----
 
-`RETHROW_HANDLER` is what the built-in configuration uses, and what a server wants.
+`RETHROW_HANDLER` is what the built-in configuration uses, and the one that suits a server.
 A template that fails then reaches `app.exception(...)` instead of writing a stack trace into a half-rendered page.
 FreeMarker's own default, `DEBUG_HANDLER`, writes the stack trace into the page.
 

@@ -176,7 +176,7 @@ An application that wants no slf4j call in its own code logs through `System.get
 == Native image
 
 All three backends run in a xref:native-image.adoc[GraalVM native image], and each needs its configuration file among the included resources.
-A binary carries only the classpath resources the build names, so a configuration file left out is a file the backend does not find.
+A binary carries only the classpath resources the build names, so the backend does not find a configuration file the build leaves out.
 
 [source,groovy]
 ----
@@ -229,7 +229,7 @@ The example application was built with each backend by GraalVM CE 25, and each b
 | 63.0MiB
 |===
 
-The example application ships the Logback row.
+The example application uses Logback, the first row.
 
 [#tomcat]
 == Tomcat

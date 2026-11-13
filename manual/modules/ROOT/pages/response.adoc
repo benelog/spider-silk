@@ -3,12 +3,12 @@
 
 A `WebResponse` is an immutable value.
 Every method returns a new response, so an after-filter can rewrite the response a route returned.
-A result left unused is therefore a change lost.
+A change whose result is left unused is therefore not applied.
 `WebResponse` carries Error Prone's `@CheckReturnValue`, so Error Prone and IntelliJ flag such a call at compile time.
 
-The immutability covers the envelope: the status, the headers, the cookies, and the entries of a template model.
+The immutability covers everything but the body: the status, the headers, the cookies, and the entries of a template model.
 A cookie is copied when it is added and again when `cookies()` hands it out, so changing a `Cookie` object afterwards changes nothing the response sends.
-A template model is a `Model`, which is immutable, so nothing the handler does after building it reaches the page.
+A template model is a `Model`, which is immutable, so nothing the handler does after building it affects the page.
 The copies are shallow, and a mutable object stored as a model value is still the one the handler passed.
 The array of a `bytes` body and the writer of a `stream` body are handed over rather than copied, because those two bodies exist to avoid a second copy of a large body.
 The value of a `json` body is held rather than copied as well, and is read when the answer is written, so a value the handler changes after returning it changes the answer.
@@ -115,7 +115,7 @@ A response holds one value per field.
 Setting a field again, under whatever spelling, replaces the value and leaves the name and its position alone, so `headers()` reads back exactly what goes on the wire.
 `vary(field)` is the one method that adds rather than replaces, because `Vary` holds a list and compression and CORS each add a field to it (`Accept-Encoding` and `Origin`).
 
-A header sent more than once is out of scope, and `headers()` says so by its type: a `Map<String, String>` promises one value per name.
+A header sent more than once is out of scope, and `headers()` says so by its type: a `Map<String, String>` holds one value per name.
 Cookies are the exception that has a list of its own, added with `cookie(...)` and read back with `cookies()`.
 Any other header that must repeat, such as two `Link` lines in one answer, is written through `raw`:
 
@@ -189,4 +189,4 @@ xref:request.adoc[The Request] covers reading the cookies the client sent.
 `stream`, `sse`, and `raw` each take a lambda of their own, and the suffix of the lambda's type names the family it belongs to.
 A `…Handler` answers a request with a `WebResponse`: `Handler` and `ExceptionHandler`.
 A `…Writer` returns nothing and fills the body of a response that has already been decided: `StreamWriter(OutputStream)`, `SseWriter(SseStream)`, and `ServletWriter(HttpServletRequest, HttpServletResponse)`.
-`ServletWriter` is therefore a sibling of `StreamWriter`, not a relative of `Handler`.
+`ServletWriter` therefore belongs to the same family as `StreamWriter`, not to that of `Handler`.

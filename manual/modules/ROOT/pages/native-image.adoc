@@ -1,7 +1,7 @@
 = GraalVM Native Image
 :navtitle: GraalVM Native Image
 
-A framework without reflection is a framework `native-image` can see through.
+The framework has no reflection, so `native-image` can analyze all of its code statically.
 Routing is a list, handlers are lambdas the closed-world analysis follows, and there is no reflection config to write for core.
 Only the parts outside the framework need preparing, and the example project shows each of them.
 `gradle :example-flashcard:nativeCompile` builds a self-contained binary serving the same app.
@@ -108,7 +108,7 @@ if (providers.gradleProperty('native').present) {
 The extension replaces the dependency and class layers Jib would assemble with a single layer holding the binary, sets its executable bit, and points the entrypoint at `/app/flashcard`.
 `imageName` tells it which file to take from `build/native/nativeCompile`, and must match the `imageName` in the `graalvmNative` block.
 
-The base image shrinks along with the process.
+The process needs no JVM, so the base image shrinks too.
 The binary builds mostly static (`--static-nolibc`, a plugin default), with everything but glibc linked in, and `distroless/base` is little more than that glibc, CA certificates, and a filesystem skeleton.
 The image has no shell, no package manager, and no JVM, since the binary stopped needing a JVM at compile time.
 The mostly-static link makes that base sufficient: linked dynamically, the binary also needs `libz`, which `distroless/base` does not carry, so the container dies on startup.
@@ -130,7 +130,7 @@ There is no cross-compilation.
 
 A library that resolves classes by name at runtime can stop a native build.
 The framework will not.
-Prefer the code path that says what it means, such as a precompiled template or a hand-written mapper.
+Prefer a code path that calls directly instead of looking up by name, such as a precompiled template or a hand-written mapper.
 Where a library must reflect, hand `native-image` its config: from the library's own tooling like jte's extension, from GraalVM's metadata repository like H2's, or maintained for your own types as below.
 
 === Keeping DataClassRowMapper, measured
@@ -171,10 +171,10 @@ The example was built and exercised both ways on one machine, through every repo
 
 The comparison was measured on an earlier version of the example, so both sizes are below the current binary's 65MiB.
 The reflection metadata is baked in when the image is built, so boot pays nothing.
-The costs live elsewhere.
+The costs are the speed of each request and the time at which a mistake fails.
 Reflective mapping is slower per row at request time, and, above all, a missing entry fails at runtime rather than at build time.
 A record added without a config entry is not a compile error, and `--no-fallback` cannot catch it: the build succeeds, and the first query against that record answers 500 in production.
-The tracing agent (`-agentlib:native-image-agent=config-output-dir=...`) can write the config from a JVM run that clicks through the app, at the price of sweeping in everything else it saw.
+The tracing agent (`-agentlib:native-image-agent=config-output-dir=...`) can write the config from a JVM run that clicks through the app, but it also records everything else that run touched by reflection.
 
 === Deriving the config from a package
 
@@ -204,6 +204,6 @@ sourceSets.main.resources.srcDir(domainReflectConfig)
 ----
 
 `srcDir(domainReflectConfig)` adds the generated directory to the main resources and carries the task dependency with it, so `processResources` picks the file up, and so does everything built from it, jar and native image alike.
-The sweep is both the point and the caveat: every type in the package is opened to reflection, one source file per top-level type.
+Registering the whole package is both the point and the caveat: every type in the package is opened to reflection, one source file per top-level type.
 The task therefore fits a package that holds nothing but the types meant for reflection.
 Both variants on this page were verified the same way: built with GraalVM CE 25 and exercised through every repository code path in the running binary.

@@ -47,7 +47,7 @@ Deck read = JSONB.fromJson(json, Deck.class);
 String animal = JSONB.toJson(new Cat(9), Animal.class); // {"@type":"cat","lives":9}
 ----
 
-A type is bound here or not at all.
+Only a type bound in the builder is bound.
 Nothing is scanned or created by reflection, and two instances share nothing.
 A type that is not bound is a `JsonbException`, and so is a document the codec refuses.
 
@@ -100,7 +100,7 @@ The contexts take the values JSON-P has a form for, and no bound type.
 `DeserializationContext` takes the same types apart from an enum, whose constants it would have to find by reflection.
 Any other type would have to be looked up by its class, which nothing here does, so it is a `JsonbException`.
 A serializer writes such a value through its own fields, or holds the value's generated codec.
-A value of the wrong kind on the way in is the document's fault, and a `JsonException`.
+A value of the wrong kind when reading is an error in the document, and a `JsonException`.
 
 [#left-out]
 == What is left out

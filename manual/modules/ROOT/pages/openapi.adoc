@@ -2,7 +2,7 @@
 :navtitle: OpenAPI Export
 
 `spider-silk-openapi` turns xref:route-introspection.adoc[`app.routes()`] into an OpenAPI 3.1 document.
-It is a reader over that list and nothing else.
+It only reads that list.
 Core hands the routes out as plain data and needs no change for this module: ``PathPattern``'s `\{deckId}` already _is_ OpenAPI's path template, so there is nothing to translate and nothing to reflect over.
 A path is written the way the router reads it, with a leading `/` and no trailing one, so `get("decks", ...)` and `post("/decks/", ...)` share the one item `/decks`.
 
@@ -31,7 +31,7 @@ app.get("/openapi.json", req -> {
 });
 ----
 
-The title and version are arguments because OpenAPI requires both under `info`, and a default for either would be this module naming someone's API.
+The title and version are arguments because OpenAPI requires both under `info`, and a default for either would have this module name the application's API for it.
 `document` returns a `JsonValue`, so it composes with everything else in xref:json.adoc[the JSON API].
 Writing it to a file at build time is the same call.
 
@@ -59,7 +59,7 @@ The export refuses it instead, and leaving such a route out is a filter you writ
 
 A xref:routing.adoc[named tail] is written out rather than refused.
 `/files/\{path*}` becomes the path `/files/\{path}`, and its parameter carries the description `The rest of the path, slashes included.`
-OpenAPI has no wildcard in a path template, so the star stays behind as core's syntax and only the variable crosses over.
+OpenAPI has no wildcard in a path template, so the document leaves out the star and carries only the variable.
 
 A segment is a variable only when the whole segment is one, as it is to the router.
 `/files/*.txt` is a literal path to the router, and the export writes it as it is.

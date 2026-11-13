@@ -75,7 +75,7 @@ Tomcat requires a `catalina.base` directory on disk.
 The default is a temporary directory created on start and deleted on stop, so nothing lands next to the build.
 `baseDir(...)` replaces that default with a directory of your own, which is left alone on stop.
 
-There is no `sessions(boolean)`: Tomcat's `StandardContext` installs a session manager on start and offers no way out.
+There is no `sessions(boolean)`: Tomcat's `StandardContext` installs a session manager on start and offers no way to turn it off.
 A method that silently did nothing would be worse than no method.
 Logging goes through JULI, so routing it into an application's own logging means `jul-to-slf4j` and a bridge handler.
 xref:logging.adoc#tomcat[Logging] has the dependency and the two lines that install the bridge.

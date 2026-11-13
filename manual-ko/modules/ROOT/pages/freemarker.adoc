@@ -3,7 +3,7 @@
 
 ``spider-silk-freemarker``는 코어에 번들된 jte 대신 https://freemarker.apache.org[FreeMarker]로 렌더링한다.
 xref:tomcat.adoc[Tomcat]이 별도 모듈인 것과 같은 이유로 별도 모듈이다.
-한 엔진에 대한 종속은 아티팩트 이름에 담기고, 코어는 템플릿 의존성이 넷이 아니라 하나인 웹 계층으로 남는다.
+한 엔진에 대한 의존은 그 엔진의 이름을 단 아티팩트에 두고, 코어는 템플릿 의존성이 넷이 아니라 하나인 웹 계층으로 유지된다.
 
 == 설치
 
@@ -30,7 +30,7 @@ new App()
 ----
 
 이는 ``classpath:/freemarker/deck.ftlh``를 렌더링하며, UTF-8로 읽고 파싱된 템플릿은 캐시한다.
-``model.asMap()``이 곧 데이터 모델이므로, ``${deck.title}``은 ``Model.of("deck", ...)``의 `deck` 항목에 닿는다.
+``model.asMap()``이 곧 데이터 모델이므로, ``${deck.title}``은 ``Model.of("deck", ...)``의 `deck` 항목을 읽는다.
 
 == 여기서 이스케이프는 결정 사항이다
 
@@ -38,7 +38,7 @@ new App()
 FreeMarker 자체는 출력 형식이 지시하기 전까지 아무것도 이스케이프하지 않는다.
 이 기본값이 다른 세 엔진과 다른 유일한 지점이며, 이 모듈이 한 줄짜리 코드가 아니라 모듈로 존재하는 주된 이유다.
 
-기본 접미사는 ``.ftlh``로, FreeMarker가 스스로 "이것은 HTML이다"라고 읽는 확장자다.
+기본 접미사는 ``.ftlh``로, FreeMarker가 별도 설정 없이 HTML 템플릿으로 인식하는 확장자다.
 따라서 이스케이프는 두 번 명시된다: 한 번은 설정에서, 한 번은 모든 템플릿의 이름에서다.
 직접 정한 접미사를 쓰면 이름 쪽의 명시는 사라지지만, 설정에 따라 여전히 이스케이프된다:
 
@@ -68,7 +68,7 @@ configuration.setSharedVariable("siteName", "Spider Silk");
 app.templates(new FreeMarkerTemplates(configuration));
 ----
 
-``RETHROW_HANDLER``는 내장 설정이 쓰는 것이며, 서버가 원하는 것이다.
+``RETHROW_HANDLER``는 내장 설정이 쓰는 것이며, 서버에 맞는 설정이다.
 그러면 실패한 템플릿은 반쯤 렌더링된 페이지에 스택 트레이스를 쓰는 대신 ``app.exception(...)``에 도달한다.
 FreeMarker 자체의 기본값인 ``DEBUG_HANDLER``는 페이지에 스택 트레이스를 쓴다.
 

@@ -16,24 +16,24 @@ A `Cors`, `Gzip`, or `SecurityHeaders` changed afterwards changes nothing the ap
 
 == Why not filters, and why not plugins
 
-A `beforeRoute` or `afterRoute` filter runs only once a route has matched, and these three have to reach answers for which no route matched.
+A `beforeRoute` or `afterRoute` filter runs only once a route has matched, and these three have to apply to answers for which no route matched.
 A CORS preflight is an `OPTIONS` nobody registered a handler for.
 A cross-origin 404 has to carry the CORS headers, or the browser reports a CORS failure instead of the 404 that actually happened.
 Security headers belong on an error page as much as on any other page.
-The largest response most applications send is the stylesheet, and that is a static file, answered without routing ever reaching a filter.
+The largest response most applications send is the stylesheet, and that is a static file, answered without passing through a route filter.
 
 They therefore run in `AppServlet`, after the answer is worked out and before it goes on the wire, which is the point where the paths of routes, static files, and errors all meet.
-A xref:filters-and-errors.adoc#response-filters[response filter] reaches those answers too, and runs before these three.
+A xref:filters-and-errors.adoc#response-filters[response filter] runs on those answers too, and it runs before these three.
 They stay named on `App` because a filter that runs before them cannot undo them, and because a CORS preflight is answered while the `Allow` header is worked out, after request filters and before response filters.
-Each is one named method taking one inert value, the same shape as `staticFiles(StaticFiles)` and `requestLogger(...)`.
-That is deliberately not a plugin registry: a registry of things that configure themselves is the beginning of a container.
+Each is one named method taking one value that only holds settings, the same shape as `staticFiles(StaticFiles)` and `requestLogger(...)`.
+That is deliberately not a plugin registry: a registry of plugins that register and configure themselves is the first step toward a DI container.
 
 Nothing is on until it is named.
 An `App` that says none of the three behaves exactly as it did before they existed.
 
 == CORS
 
-`Cors` says which other origins may call the application, and what they may send:
+`Cors` sets which other origins may call the application, and what they may send:
 
 [source,java]
 ----
@@ -65,7 +65,7 @@ A caller that is not a browser ignores all of it, so authentication and authoriz
 
 == Compression
 
-`gzip()` compresses every compressible response the client says it can read:
+`gzip()` compresses every compressible response for a client whose `Accept-Encoding` accepts gzip:
 
 [source,java]
 ----
@@ -85,8 +85,8 @@ The gzip trailer is written only when the writer returns, so a writer that fails
 A writer that fails after the response is committed aborts the transfer, as any other stream does (see xref:request-logging.adoc[Request Logging]).
 
 Server-Sent Events and `raw` responses are never compressed.
-An SSE stream buffered until it is worth deflating is an SSE stream whose events no longer arrive as they are sent.
-A `raw` writer owns the bytes it writes by definition.
+Buffering an SSE stream until it is worth deflating would stop its events from arriving as they are sent.
+A `raw` writer writes its bytes straight to the servlet response, so the framework does not change them.
 Nor is a type that is already compressed, such as JPEG, PNG, MP4, or a zip archive, or a response that already carries a `Content-Encoding`.
 A xref:static-files.adoc[static file answered from a `.br` or `.gz` sibling] is one of those, and passes through untouched rather than being deflated twice.
 
@@ -99,7 +99,7 @@ A browser revalidating with the weak tag still gets its 304.
 
 == Security headers
 
-`securityHeaders()` sends three headers on every response, because there is no application for which their absence is the better answer:
+`securityHeaders()` sends three headers on every response, because no application is better off without them:
 
 [cols="1,1"]
 |===
@@ -121,7 +121,7 @@ app.securityHeaders(SecurityHeaders.defaults()
 ----
 
 HSTS goes out only on a request that already arrived over HTTPS.
-A browser that learns it over plain HTTP learned it from whoever was in the way.
+Over plain HTTP the header could have been inserted by an attacker in the middle of the connection.
 Behind a TLS-terminating proxy, the container therefore has to be told to trust `X-Forwarded-Proto`, or the header never goes out at all.
 HSTS is also the one header here that cannot be taken back: a browser told a year holds that for a year, whatever the server says next.
 Set a short duration first, and lengthen it once nothing on the site needs HTTP.

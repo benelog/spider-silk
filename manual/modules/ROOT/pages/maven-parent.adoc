@@ -68,7 +68,7 @@ The declared plugins inherit the conventions the Gradle plugin sets:
 * `maven.compiler.release` is set to 25, which doubles as where Jib reads the Java version it checks against the base image.
   The `targetCompatibility` mismatch that the Gradle plugin works around therefore does not arise in Maven.
 * jte precompiles every template under `src/main/resources/jte` at build time, native-image resources included, exactly as xref:templates.adoc#production[Templates] describes.
-* The native binary builds with `<fallback>false</fallback>`, mostly static (`--static-nolibc`, so the `distroless/base` container owes it nothing but glibc), and the reachability metadata repository enabled.
+* The native binary builds with `<fallback>false</fallback>`, mostly static (`--static-nolibc`, so the `distroless/base` container has to supply nothing but glibc), and the reachability metadata repository enabled.
   It is named `${spider-silk.native.image-name}`, which defaults to the artifactId.
 
 [#json]
@@ -76,7 +76,7 @@ The declared plugins inherit the conventions the Gradle plugin sets:
 
 The parent puts `silk-json-processor` on the compiler's processor path for every child, the counterpart of `spiderSilk { json() }`.
 The compiler plugin runs in every build, so this needs no declaration, and it costs nothing in a child with no type annotated `@JsonBound`.
-A child that uses the `jakarta.json.bind` annotations adds the API itself, in the `provided` scope, since the annotations are read at compile time and never needed again:
+A child that uses the `jakarta.json.bind` annotations adds the API itself, in the `provided` scope, since the annotations are read at compile time only:
 
 [source,xml]
 ----
@@ -92,7 +92,7 @@ xref:json-codegen.adoc[Generated JSON Codecs] describes what the processor gener
 
 == The native profile
 
-`mvn -Pnative package jib:buildTar` ships the GraalVM binary instead of the jar.
+`mvn -Pnative package jib:buildTar` puts the GraalVM binary in the image instead of the jar.
 The profile binds `native:compile-no-fork` to `package`, swaps Jib's base for `distroless/base`, and attaches Jib's native-image extension pointed at the same binary name.
 xref:native-image.adoc#container[The native image chapter] walks through that switch.
 
@@ -107,4 +107,4 @@ It downloads the dependencies and plugins for the warm-up layer, and runs after 
 
 The parent's version fixes the versions of what it manages: jte {jte-version}, Jib {jib-maven-version} (the Maven plugin lags the Gradle plugin's {jib-version} upstream), the GraalVM build tools {graalvm-buildtools-version}, and its own version of `silk-json-processor`.
 An upgrade of any of them arrives as a parent release.
-As on the Gradle side, nothing here is beyond plain Maven: every convention is readable in the parent POM itself, and a build that would rather own a block copies it out and drops the inheritance.
+As on the Gradle side, nothing here is beyond plain Maven: every convention is readable in the parent POM itself, and a build that would rather maintain a block itself copies it out and drops the inheritance.

@@ -261,7 +261,7 @@ codex plugin add spider-silk@spider-silk
 |===
 
 직렬화기가 대부분의 일을 하는 JSON 목록에서는 Spider Silk가 Jackson을 쓰는 Spring Boot보다 약 1.7배 많은 요청을 처리하고, 같은 목록을 요청 본문에서 읽을 때는 약 2배를 처리한다.
-양쪽 모두 Thymeleaf를 쓰고 같은 컨테이너에서 실행하면 두 프레임워크의 페이지 렌더링 성능은 2% 이내로 차이가 나므로, HTML 페이지에서의 격차는 jte의 몫이다.
+양쪽 모두 Thymeleaf를 쓰고 같은 컨테이너에서 실행하면 두 프레임워크의 페이지 렌더링 성능은 2% 이내로 차이가 나므로, HTML 페이지에서의 격차는 jte에서 나온다.
 GraalVM 네이티브 이미지로는 Spider Silk가 Spring Boot보다 JVM 처리량을 더 많이 유지하며, 이는 GraalVM CE 이미지와 프로파일 기반 최적화(PGO)로 빌드한 Oracle GraalVM 이미지 모두에서 그렇다.
 아래 각 칸은 네이티브 이미지의 처리량을 같은 애플리케이션의 JVM 처리량에 대한 비율로 나타낸 값이다.
 

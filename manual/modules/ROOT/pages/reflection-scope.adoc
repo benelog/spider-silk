@@ -3,37 +3,37 @@
 
 The principle applies to the *framework core* and to xref:json.adoc#silk-json[silk-json], the JSON library core is built on: routing, parameter extraction, and JSON handling use no reflection anywhere.
 
-The default template engine sits right at the boundary, so how far its reflection reaches is worth stating exactly.
+The default template engine ships in core and uses reflection, so the extent of that reflection is stated exactly here.
 jte compiles every template to a Java class, so `${deck.title}` runs as a compiled method call.
 The model is never reflected over, and a typo in that expression is a compile error rather than a silently empty value.
 The engine uses reflection only to load a template: it looks the generated class up by name and invokes its `render` method reflectively.
-That reflection is confined to classes the build generated, and never reaches a class you wrote.
+That reflection is confined to classes the build generated, and is never applied to a class you wrote.
 Because of that confinement, the xref:native-image.adoc[native image] setup stays mechanical: jte's own build extension writes the reflection config for exactly those generated classes, and neither a model class nor a framework class needs an entry.
 
-A template engine in a module of its own brings its own reflection: xref:handlebars.adoc[Handlebars] falls back to reflection for a record or a bean, xref:freemarker.adoc[FreeMarker] reads one through its object wrapper, and xref:thymeleaf.adoc[Thymeleaf] evaluates every expression through OGNL.
+A template engine in a module of its own uses reflection of its own: xref:handlebars.adoc[Handlebars] falls back to reflection for a record or a bean, xref:freemarker.adoc[FreeMarker] reads one through its object wrapper, and xref:thymeleaf.adoc[Thymeleaf] evaluates every expression through OGNL.
 That is one more reason each lives outside core.
-Take the module and you have taken its reflection with it, and an application that stays on the default jte keeps its model access reflection-free.
+An application that adds the module uses that engine's reflection as well, and an application that stays on the default jte keeps its model access reflection-free.
 
-xref:websocket.adoc[`spider-silk-jetty-websocket`] brings its own reflection the same way, and keeps it narrow.
+xref:websocket.adoc[`spider-silk-jetty-websocket`] uses reflection of its own the same way, and confines it to one class.
 Jetty binds an endpoint's callbacks by taking a `MethodHandle` to each, cached per endpoint class, and every connection the module opens is served by one class it declares itself.
 That is the one class Jetty looks up.
 A `WebSocketHandler` an application writes is reached through an interface call and is never reflected over.
 
-The codecs xref:json-codegen.adoc[`silk-json-processor`] generates stay on core's side of the rule.
+The codecs xref:json-codegen.adoc[`silk-json-processor`] generates use no reflection, like core.
 The processor runs inside javac, the code it writes calls the type's own accessors and constructor, and nothing is looked up by name at run time, which is the same trade jte makes for templates.
-xref:jsonp.adoc[`silk-json-jsonp`] is on the same side.
+xref:jsonp.adoc[`silk-json-jsonp`] uses no reflection either.
 Its parser, generator, and tree call constructors and interface methods only.
-The `ServiceLoader` lookup inside `jakarta.json.Json` is the API's, and a provider made with `new SilkJsonProvider()` never reaches it.
-xref:jsonb.adoc[`silk-json-jsonb`] is on the same side too.
+The `ServiceLoader` lookup inside `jakarta.json.Json` is the API's, and a provider made with `new SilkJsonProvider()` never goes through it.
+xref:jsonb.adoc[`silk-json-jsonb`] uses no reflection either.
 `SilkJsonb` finds a codec in a map the application fills by naming each type, and `java.lang.reflect.Type` appears only in the signatures `Jsonb` declares.
 The part of JSON-B that needs reflection, such as binding a type no processor saw, is left out.
-A JSON binding library an application adds is on the same terms as a template module: take it and you have taken its reflection with it.
+A JSON binding library an application adds is like a template module: adding it means using its reflection as well.
 Jackson and Gson read and write fields reflectively, so every bound type needs an entry in a xref:native-image.adoc[native image] config.
 xref:json-interop.adoc#jackson[`spider-silk-jackson`] puts Jackson behind core's `JsonWriter` and `JsonReader`, and Jackson's reflection stays in that module rather than in core.
 avaje-jsonb generates an adapter per type at compile time and needs none, as silk-json's codecs need none.
 Core is not involved in a library either way: xref:json-interop.adoc[the seam] is `WebResponse.rawJson(String)` and `req.bodyStream()`, and an application that stays on the hand-written writers or the generated codecs keeps its wire format reflection-free.
 
 The example project's repositories choose spring-jdbc's `DataClassRowMapper`, which constructs the domain records reflectively.
-That is the example's choice and not the framework's, kept deliberately to show where the boundary runs.
+That is the example's choice and not the framework's, kept deliberately to show how far the rule extends.
 Under a xref:native-image.adoc[native image] that choice is paid for with a reflection config confined to the one domain package, generated by the build.
 Core contributes not a single entry to it.

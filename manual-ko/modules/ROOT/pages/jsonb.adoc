@@ -47,7 +47,7 @@ Deck read = JSONB.fromJson(json, Deck.class);
 String animal = JSONB.toJson(new Cat(9), Animal.class); // {"@type":"cat","lives":9}
 ----
 
-타입은 여기에 바인딩하거나 아예 바인딩되지 않는다.
+빌더에서 바인딩한 타입만 바인딩된다.
 스캔하거나 리플렉션으로 만드는 것은 없고, 두 인스턴스는 아무것도 공유하지 않는다.
 바인딩되지 않은 타입은 ``JsonbException``이며, 코덱이 거부한 문서도 마찬가지다.
 
@@ -89,7 +89,7 @@ public record Route(
 
 시리얼라이저는 키 뒤의 자리에 값 하나를 통째로 쓰며, 값을 열어 둔 채 끝내면 ``JsonGenerationException``이다.
 디시리얼라이저의 파서는 값의 첫 이벤트, 객체라면 ``START_OBJECT``에 서 있다.
-파서는 값의 바이트 복사본을 읽으므로, 디시리얼라이저가 값을 얼마나 읽든 입력은 그 값을 지나간다.
+파서는 값의 바이트 복사본을 읽으므로, 디시리얼라이저가 값을 얼마나 읽든 입력은 그 값 다음 위치로 넘어간다.
 
 [#contexts]
 == 컨텍스트
@@ -100,7 +100,7 @@ public record Route(
 ``DeserializationContext``는 enum을 뺀 같은 타입을 받으며, enum의 상수는 리플렉션으로 찾아야 하기 때문이다.
 그 밖의 타입은 클래스로 찾아야 하는데 여기서는 그렇게 하지 않으므로 ``JsonbException``이다.
 시리얼라이저는 그런 값을 자신의 필드를 통해 쓰거나, 그 값의 생성된 코덱을 가지고 있다가 쓴다.
-들어오는 길에 종류가 맞지 않는 값은 문서의 잘못이며 ``JsonException``이다.
+읽을 때 종류가 맞지 않는 값은 문서의 오류이며 ``JsonException``이다.
 
 [#left-out]
 == 제외한 것

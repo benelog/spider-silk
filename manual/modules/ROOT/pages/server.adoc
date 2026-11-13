@@ -39,7 +39,7 @@ app.server((a, port) -> new JettyServer(a).port(port).threadPool(pool))
 
 Virtual threads pay off only when the handlers block on I/O or on a database.
 A `synchronized` block around that blocking call no longer pins the carrier thread, since JDK 24 (JEP 491).
-A blocking call inside a native method still pins it and takes the benefit back.
+A blocking call inside a native method still pins it and removes the benefit.
 
 == Shutdown
 
@@ -142,13 +142,13 @@ The servers differ in the embedding: what each one needs from its surroundings, 
 |===
 
 None of the three is a better server.
-They cost different things.
+They differ in what each needs and in what this project had to build for it.
 
-**Jetty stays the default** because it costs nothing to keep.
+**Jetty stays the default** because it needs nothing extra.
 It needs no disk, its shutdown and lifecycle are its own rather than assembled here, and it logs through slf4j like the rest of an application.
 For a service deployed as a jar and never touched by an operator, nothing else matters.
 
-**Tomcat earns its place where the surroundings already assume it.**
+**Tomcat is the choice where operations are already built around it.**
 The operational knowledge in most organisations is Tomcat knowledge: the connector attributes, the access log valve, the thread-pool numbers, the JMX beans a dashboard is already scraping.
 It is also the server Spring Boot defaults to, so a service moving off Spring Boot keeps the same runtime behaviour and the same tuning while only the web tier changes.
 Its security advisories also come through a pipeline most enterprise processes already track.
@@ -156,7 +156,7 @@ Its security advisories also come through a pipeline most enterprise processes a
 **Undertow is the one to reach for on the technical merits.**
 It is the lightest of the three to embed, with no working directory and no bridge for its logging.
 Its graceful shutdown is a first-class handler, where Tomcat's is a valve assembled here to the same design.
-The catch is reach: it is a WildFly component rather than a standalone product, so the operational familiarity and the tooling around it are thinner than Tomcat's.
+The catch is its smaller user base: it is a WildFly component rather than a standalone product, so the operational familiarity and the tooling around it are thinner than Tomcat's.
 
 The choice is easy to reverse.
 Switching servers in either direction is the same one line at the factory.

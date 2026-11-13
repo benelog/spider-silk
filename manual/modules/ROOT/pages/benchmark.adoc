@@ -129,7 +129,7 @@ Every value a handler answers with is built once at startup, so a request measur
 
 === Method
 
-`benchmark/run.sh` drives the whole run.
+`benchmark/run.sh` runs the steps below in order.
 
 . For each application, `native-build.sh` builds an image instrumented for profile-guided optimization with Oracle GraalVM's `--pgo-instrument`.
 `pgo-profile.sh` runs that image under every case the application serves, 10 seconds each, and the image writes the counts it collected to a profile when it stops.
@@ -151,7 +151,7 @@ The JVM is Temurin 25 with its default collector, G1.
 The `-native` images come from GraalVM CE 25.2.4, whose only collector is the Serial GC.
 The `-native-oracle` and `-native-pgo` images come from Oracle GraalVM 25.4.4 with its default collector, which is also the Serial GC.
 Built with its defaults, Oracle GraalVM infers a profile for each method from the code with a machine-learned model.
-The PGO image uses the recorded profile in its place.
+The PGO image uses the recorded profile instead of the inferred one.
 
 The reported throughput and each latency percentile are medians of the three rounds, taken separately.
 Across the rounds, the throughput of most cases stayed within 10% of its median.
@@ -328,7 +328,7 @@ Memory is the process's resident set size at that moment.
 | `spring-boot-native-pgo` | 37 ms | 34 ms | 38 ms | 51 MB
 |===
 
-The polls come about 14 ms apart, curl's own start included, so the native images' startup times fall on that grid.
+The polls come about 14 ms apart, curl's own start included, so the native images' startup times are measured only in steps of about 14 ms.
 Spider Silk's PGO image answered the first poll in four of its ten starts, at 9 to 10 ms, and the second poll in the rest, at 23 to 24 ms.
 The PGO images hold less memory at startup: 28 MB and 51 MB against 37 MB and 73 MB on GraalVM CE.
 
@@ -477,10 +477,10 @@ The hand-written writer lands between the tree and the codec: it finds each key 
 The codec reads the 10 KB document in 92% of fastjson2's time, and writes the small object in 92% of it.
 fastjson2 stays ahead writing the 10 KB document, by 3%.
 Its lead is in writing the strings, and it is wider where no string needs an escape: 1.17 times on the plain records and 1.11 times on the Korean ones.
-fastjson2 reads a ``String``'s own bytes through `sun.misc.Unsafe`, which the JDK is retiring and core does not use.
+fastjson2 reads a ``String``'s own bytes through `sun.misc.Unsafe`, which the JDK is removing and core does not use.
 The codec copies a string's characters out with `getChars` and checks them one at a time.
-Copying a string's bytes with no check at all, a floor no correct writer can stand on, writes the plain records in 2.7 µs, ahead of fastjson2's 3.7 µs.
-Checking that copy eight bytes at a time takes it to 4.0 µs, so the lead is the string's representation, all of it.
+Copying a string's bytes with no check at all writes the plain records in 2.7 µs, ahead of fastjson2's 3.7 µs, and is a lower bound no correct writer can reach, since a correct writer has to check.
+Checking that copy eight bytes at a time takes it to 4.0 µs, so all of fastjson2's lead comes from reading the string's internal bytes directly.
 The codec escapes a quote or a backslash in the same loop that writes the plain characters, and compares each character instead of looking it up in a table.
 Before it did, the first quote sent the rest of the string to a slower loop, and the same write took 5.3 µs.
 The JIT compiler of JDK 25 does not vectorize a loop that narrows a `char` to a `byte`, so a pass that checks the whole string before writing it measured slower, not faster.
@@ -502,7 +502,7 @@ Copying through it and checking the bytes eight at a time wrote the 10 KB list i
 The codec allocates 0.7 KB more for them, the encoder and the two buffers around it, made once per document.
 A plain string pays on this path from about 16 characters, on Temurin 21, on Temurin 25, and under GraalVM's JIT compiler alike.
 A string with escapes pays only from 48 to 96 characters, depending on the compiler, and the threshold of 64 sits between the two.
-The 2% to 2.5% that this path first cost the 10 KB list no longer shows: without the path, the same build writes the list in 4.68 µs against 4.72 µs.
+The 2% to 2.5% that this path first cost the 10 KB list is no longer measurable: without the path, the same build writes the list in 4.68 µs against 4.72 µs.
 
 An enum constant is written and read through its name encoded once as a `JsonKey`.
 The name is copied out as a key is, and compared in place on the way in, with no string made.
@@ -538,7 +538,7 @@ Before it did, it made a string of each number with `Double.toString` and copied
 
 Written to a stream straight from the thread's buffer, as `WebResponse.json` sends a body, the list takes 3.8 µs and 184 bytes.
 That is 1.0 µs and 10.5 KB less than the array `toBytes()` copies the document into.
-fastjson2's `JSON.writeTo` saves as much, so the saving is the framework's rather than the library's.
+fastjson2's `JSON.writeTo` saves as much, so the saving comes from the framework writing straight to the stream, not from the JSON library.
 In the HTTP `json-list` case, the same change took the allocation per request from 14.4 KB to 3.8 KB on Jetty and from 13.2 KB to 2.6 KB on Tomcat, counted from the GC log over 30 seconds of load.
 
 fastjson2's speed comes with terms that the table does not show.
@@ -551,7 +551,7 @@ fastjson2's 2.1.x branch, which moves to `VarHandle`, has had no change since Fe
 With `-Dfastjson2.creator=reflect` on the JVM, fastjson2 builds no classes at run time, and reads the list in 24.5 µs and 111.2 KB, four times its usual time, and writes it in 5.7 µs.
 In a GraalVM native image, fastjson2 turns off its `String` fast path and its generated classes, and binds through reflection, which needs reachability metadata for every type it binds.
 fastjson2 2.0.57 does not build into a native image with the settings its jar carries, under GraalVM CE 25.2.4.
-Those settings initialize `JSONFactory` and a few other classes at build time, and the objects those classes hold reach classes the settings leave to run time, which `native-image` refuses.
+Those settings initialize `JSONFactory` and a few other classes at build time, and the objects those classes hold refer to classes the settings leave to be initialized at run time, which `native-image` refuses.
 Built with the whole package initialized at build time, the image misreads the records: `"available":false` fails with `syntax error : 102`, while `true` reads.
 fastjson2 reads `false` through `sun.misc.Unsafe`, at an offset into the byte array that `JDKUtils` computed in the JVM that built the image.
 That offset is 16, and the image's own is 12.
@@ -576,7 +576,7 @@ The same harness on Temurin 25 gives the JVM column.
 The native image takes 1.3 to 2.6 times the JVM's time, as the native images of the HTTP cases answer fewer requests than their JVMs.
 Built with `-O3`, the image took 0% to 8% less time in each case, and with `-march=native` from 6% less to 11% more, so neither option closes the gap to the JVM.
 fastjson2 is left out of the table, since its image misread the documents.
-In the HTTP cases the serializer and the parser are a share of each request, and <<reading>> sets them against the throughput.
+In the HTTP cases the serializer and the parser are part of the work of each request, and <<reading>> compares them with the throughput.
 
 [#reading]
 == Reading the results
@@ -602,7 +602,7 @@ Jetty and Tomcat land within 3% of each other here, since the parse outweighs th
 
 The template cases show the engine outweighing the framework.
 jte runs a template as compiled Java, and renders this page about 2.8 times as fast as Thymeleaf, which interprets the template and reads the model through an expression language.
-With Thymeleaf on both sides, the framework's share is small enough that the two land within 2% of each other on Tomcat.
+With Thymeleaf on both sides, the framework's share of the time is small enough that the two land within 2% of each other on Tomcat.
 Jetty adds 13% to Spider Silk's Thymeleaf page.
 
 The native images give up throughput for startup and memory.
@@ -614,9 +614,9 @@ The two evaluate Thymeleaf's expressions differently: Spider Silk's module throu
 
 Profile-guided optimization recovers most of the throughput that GraalVM CE gives up, for both applications.
 A JIT compiler compiles each method with the branches and types the running program has taken, and a GraalVM CE image is compiled with none of that.
-The PGO image is compiled with the counts its instrumented twin recorded under the same cases.
+The PGO image is compiled with the counts the instrumented image of the same application recorded under the same cases.
 Spider Silk's PGO image keeps 79% to 94% of its JVM's throughput, and Spring Boot's 27% to 89%.
-Part of the gain is Oracle GraalVM's own: its default build, with a profile inferred from the code instead of recorded, already answers up to 1.60 times as many requests as GraalVM CE.
+Part of the gain comes from Oracle GraalVM itself rather than from the profile: its default build, with a profile inferred from the code instead of recorded, already answers up to 1.60 times as many requests as GraalVM CE.
 The largest gains are where GraalVM CE lost the most: Thymeleaf on Spider Silk, and `json-list` and `json-post` on Spring Boot, each close to twice GraalVM CE's throughput.
 With PGO, the two Thymeleaf pages land within 1% of each other.
 The profile was recorded under the same requests that were then measured, which is the most favorable profile there is, as <<limits>> notes.
@@ -635,7 +635,7 @@ The interleaved rounds spread that drift over every target.
 * The handlers do no I/O, so the numbers measure the framework, the serializer, and the template engine only.
 An application that waits on a database spends most of a request there, and the differences above shrink accordingly.
 * The PGO images were profiled under the very cases they were measured on.
-An application's profile covers only the code its profiling load reaches, so its gain depends on how well that load matches production traffic.
+An application's profile covers only the code its profiling load runs, so its gain depends on how well that load matches production traffic.
 * A response from a Jetty target is 26 bytes longer than one from a Tomcat target, mostly for its `Server: Jetty(12.1.13)` header.
 
 [#reproducing]
@@ -665,4 +665,4 @@ taskset -c 0-3 json-bench/build/install/json-bench/bin/json-bench JsonBench -jvm
 Without `GRAALVM_HOME`, the run measures the JVM targets only.
 Without `ORACLE_GRAALVM_HOME`, it leaves out the Oracle GraalVM and PGO targets.
 The full run took 2 hours 51 minutes on this machine, and takes about 80 minutes without the Oracle GraalVM targets.
-`ROUNDS=1 BUILD_ROUNDS=1 STARTS=3 WARMUP=5s DURATION=10s` gives a rough picture in about 15 minutes without them.
+`ROUNDS=1 BUILD_ROUNDS=1 STARTS=3 WARMUP=5s DURATION=10s` gives rough numbers in about 15 minutes without them.

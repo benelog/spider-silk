@@ -13,12 +13,9 @@ Spider Silk is a web framework built on the Jakarta Servlet API.
 An application's startup time is kept to a minimum.
 Startup is a cost paid again at every main point of development and operation: autoscaled containers, serverless environments, test runs, and development-server restarts.
 
-=== Code traceable from its source
-The code a request passes through on its way to a response can be followed by reading the source alone.
-Human developers and AI coding agents both need that traceability.
-For a person, code that is easy to trace is code that is easy to understand and debug.
-An AI agent reasons about behavior from the code before running it, so it fills behavior the code does not show with a guess.
-An agent that guesses wrong about what an annotation does at runtime, for example, writes code that compiles and does not work.
+=== An intuitive execution flow
+The code the server runs between receiving an HTTP request and delivering the response must be easy to read and follow.
+This lowers the cost for an AI coding agent of predicting how the code will run.
 
 === Harmony with the open-source ecosystem
 Spider Silk uses proven open-source technology instead of reinventing it.
@@ -264,7 +261,7 @@ The benchmark ran both frameworks on one laptop with the same JVM and the same l
 |===
 
 At the JSON list, where the serializer does most of the work, Spider Silk answers about 1.7 times as many requests as Spring Boot with Jackson, and about twice as many when it reads the list from a request body.
-With Thymeleaf on both sides and the same container, the two render a page within 2% of each other, so the margin on the HTML page is jte's.
+With Thymeleaf on both sides and the same container, the two render a page within 2% of each other, so the margin on the HTML page comes from jte.
 As a GraalVM native image, Spider Silk keeps more of its JVM throughput than Spring Boot does, both as a GraalVM CE image and as an Oracle GraalVM image built with profile-guided optimization (PGO).
 Each cell below is a native image's throughput as a share of the same application's on the JVM.
 

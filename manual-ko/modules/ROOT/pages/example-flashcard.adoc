@@ -48,7 +48,7 @@ xref:logging.adoc[로깅]이 같은 설정을 Log4j와 JDK 로깅으로 보여 �
 
 라우팅::
 `Controller` 인터페이스는 없다.
-``FlashcardContext.registerRoutes``가 테이블 전체이고, 핸들러는 `Action` 클래스, public 메서드 참조, 또는 람다로 도착한다.
+라우팅 테이블 전체가 ``FlashcardContext.registerRoutes``에 있고, 핸들러는 `Action` 클래스, public 메서드 참조, 또는 람다로 등록한다.
 
 == 실행
 

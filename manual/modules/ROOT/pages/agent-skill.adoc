@@ -1,10 +1,10 @@
 = The Agent Skill
 :navtitle: The Agent Skill
 
-The repository carries an agent skill at `skills/spider-silk/`, in the https://agentskills.io[Agent Skills] format: a `SKILL.md` the agent loads once a task touches the framework, and reference files it reads only as the task needs them.
-An AI coding agent that has never seen Spider Silk guesses, and a framework this deliberate is a bad place to guess.
+The repository carries an agent skill at `skills/spider-silk/`, in the https://agentskills.io[Agent Skills] format: a `SKILL.md` the agent loads once a task uses Spider Silk, and reference files it reads only as the task needs them.
+An AI coding agent that has never seen Spider Silk guesses its API from the conventions of other frameworks, and Spider Silk departs from those conventions often enough that the guesses are wrong.
 The Gradle plugin resolves from Maven Central rather than the Plugin Portal, JSON mapping is written rather than reflected, and the `Controller` interface an agent invents out of habit is exactly what xref:handlers.adoc[Handlers] says not to build.
-The skill is distilled from this manual, and the manual stays the source of truth: a question the skill cannot settle is answered here, and a release that changes an API changes the skill alongside it.
+The skill is distilled from this manual, and the manual stays the source of truth: a question the skill does not answer is answered here, and a release that changes an API changes the skill alongside it.
 Every installation below takes the skill from the latest release's tag, `v{project-version}`, so the skill describes the API of the jars on Maven Central rather than the unreleased one on `main`.
 
 == Claude Code
@@ -97,7 +97,7 @@ https://agentskills.io keeps the list of them.
 
 `SKILL.md` carries what every task needs: the framework's principles stated as rules the agent's code must respect, the dependency and plugin repositories a first build needs, and the core API at a glance.
 Five reference files carry the rest, one per territory: setup, the web API, content, servers and deployment, and testing.
-An agent then reads only the file for the territory its task touches.
+An agent then reads only the file for the territory its task needs.
 Nothing in the skill is new information: every statement comes from this manual, compressed for an agent's context window instead of a reader's screen.
 
 == The measured effect
@@ -107,9 +107,9 @@ Every result was graded against eighteen behavioural assertions per arm.
 The tasks were a notes API built from an empty directory, a content-negotiation-plus-API-key change to a working app, and an SSE endpoint whose literal path had to be registered ahead of an existing `\{id}` route.
 
 Every assertion passed in every run, with the skill and without, on all three models.
-An agent without the skill is not helpless: given the published jars, every model reconstructed the API by unpacking the sources jar or running `javap` over `~/.m2`, and found its way to `accepts`, the before-filter's null contract, and `WebResponse.sse` on its own.
+An agent without the skill still works the API out: given the published jars, every model reconstructed the API by unpacking the sources jar or running `javap` over `~/.m2`, and found its way to `accepts`, the before-filter's null contract, and `WebResponse.sse` on its own.
 
-The skill changes the cost of that reconstruction.
+The skill cuts the tokens that reconstruction takes.
 With the skill the same tasks completed with 12% fewer tokens on Fable 5, 16% fewer on Opus 5, and 22% fewer on Sonnet 5.
 The saving grows as the model tier goes down, because the reconstruction costs more on a lower tier: the skill-less baseline cost 80k tokens per task on Fable, 100k on Opus, and 130k on Sonnet.
 Wall-clock time moved only three to six percent, because Gradle dominates it.

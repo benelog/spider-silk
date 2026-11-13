@@ -12,7 +12,7 @@ Three rules shape every technique below.
 
 * What runs is what the code says.
 Core and silk-json use no reflection, no proxies, no classpath scanning, and no `ServiceLoader`, so a request runs as direct calls through interfaces and lambdas.
-xref:reflection-scope.adoc[The Scope of "No Reflection"] draws the line.
+xref:reflection-scope.adoc[The Scope of "No Reflection"] states where that applies.
 * Work moves from the request to startup or to the build.
 A route table, a filter list, a JSON codec, and a template are each prepared once, and a request only reads them.
 * A change stays only when a measurement shows that it pays.
@@ -59,7 +59,7 @@ Spring Web MVC resolves a handler mapping, argument resolvers, return-value hand
 [#lazy-request]
 === A request read on demand
 
-A request parses only what the handler asks for.
+A request parses only what the handler reads.
 
 * The query string is parsed on the first read and kept.
 The percent decoder returns the same `String` when a value holds no `%` and no `+`.
@@ -99,7 +99,7 @@ No array the size of the document is copied out.
 
 * A platform thread keeps its buffer, up to 64 KB, as a plain `byte[]` in a `ThreadLocal`.
 The next document neither grows nor zeroes it.
-* A virtual thread keeps no buffer, since it lives for one task.
+* A virtual thread keeps no buffer, since it runs one task and ends.
 * The servlet releases the buffer in a `finally` block, after a `GET`, a `HEAD`, a gzip, and a failed write alike.
 * Gzip deflates from the same buffer, so a compressed document is written once.
 
@@ -203,7 +203,7 @@ An escape moves the narrowed bytes after it up rather than narrowing them again.
 These took 100 records with a 200-character description from 15.0 µs to 6.9 µs.
 
 fastjson2 still writes the records whose short strings need no escape 1.17 times as fast.
-It reads the ``String``'s own Latin-1 bytes through `sun.misc.Unsafe`, which the JDK is retiring.
+It reads the ``String``'s own Latin-1 bytes through `sun.misc.Unsafe`, which the JDK is removing.
 Copying a string's bytes with no check at all writes the plain list in 2.7 µs against fastjson2's 3.7 µs, so the gap is the string's representation, all of it.
 
 [#reading-strings]
@@ -236,7 +236,7 @@ The benchmark's page renders about 2.8 times as fast with jte as with Thymeleaf,
 
 * The default `JteTemplates` is created on the first render, so an application that renders no template never sets up jte.
 The field is checked twice around a `volatile` read rather than behind a lock that every request would take.
-* A `Model` reaches the engine as the unmodifiable map it already holds, with no copy.
+* A `Model` is passed to the engine as the unmodifiable map it already holds, with no copy.
 * The FreeMarker, Handlebars, and Thymeleaf modules keep each parsed template in their engine's cache.
 
 [#startup]
@@ -246,7 +246,7 @@ Startup has nothing to scan, since routes are lambdas and a codec is generated c
 
 * Core depends on `jetty-ee10-servlet` alone, not on the Jetty modules that scan annotations and read `web.xml`.
 * The Tomcat module adds its context with `tomcat-embed-core` alone, and the Undertow module gives its deployment an empty resource manager.
-* A JVM process starts in 295 ms on Spider Silk with Jetty against 902 ms on Spring Boot, and holds 117 MB against 210 MB at that point.
+* A JVM process starts in 295 ms on Spider Silk with Jetty against 902 ms on Spring Boot, and its resident memory at that point is 117 MB against 210 MB.
 
 Core and silk-json need no reflection configuration in a native image, since neither looks up a class or a member by name.
 A GraalVM CE image starts in 24 ms.
@@ -275,7 +275,7 @@ Its own cost outweighs the copy it saves.
 * A `switch` on a hash of the key's head read the reversed records in the same 7.35 µs, and the indented and the `json.dumps` ones 3% to 4% slower.
 * Passing an indent's spaces eight at a time read the indented records 7% slower and the `json.dumps` ones 17% slower, since a run of whitespace in a document is a newline and a few spaces.
 * Writing a double's digits from a table of pairs wrote the places in 10.0 µs against 9.3 µs.
-* Counting a number's digits eight at a time read the places in 5.7 µs to 6.1 µs against 5.3 µs, since a run of two to six digits ends before a word pays.
+* Counting a number's digits eight at a time read the places in 5.7 µs to 6.1 µs against 5.3 µs, since a run of two to six digits ends before reading a whole word pays off.
 * Writing a JSON body straight to the servlet's stream leaves no length for `Content-Length`, and a failure halfway would leave half a document sent.
 
 [#not-done]
@@ -286,4 +286,4 @@ Some common techniques are absent, and an application that needs one puts a prox
 * A static file is not answered to a `Range` request with a `206`.
 * A file is copied with `transferTo`, with no `sendfile` or other zero-copy path.
 * Each compressed response builds its own `GZIPOutputStream`, with no `Deflater` kept between responses.
-* The `Date` header is the container's, and a static file's `ETag` and `Last-Modified` are formatted per response.
+* The `Date` header is set by the container, and a static file's `ETag` and `Last-Modified` are formatted per response.

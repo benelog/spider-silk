@@ -4,7 +4,7 @@
 이 장은 API 표면 전체를 나열하며, 각 항목은 해당 내용을 설명하는 장을 가리킨다.
 
 공개된 모든 패키지는 https://jspecify.dev[JSpecify]로 ``@NullMarked``되어 있으므로, 시그니처에 ``@Nullable``이 명시되지 않은 한 파라미터나 반환값은 null을 배제한다.
-NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미터에 도달하는 null을 보고한다.
+NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미터에 null을 넘기는 코드를 보고한다.
 
 == ``App``이 제공하는 것
 
@@ -83,7 +83,7 @@ NullAway나 IntelliJ IDEA처럼 JSpecify를 읽는 도구는 non-null 파라미�
   `writer.toJson(value)`, `writer.toJsonBytes(value)`, `reader.fromJson(text)`, ``reader.fromJsonBytes(utf8)``는 요청 밖에서 하나를 실행한다
 * `JsonOutput`: `object()`, `array()`, `end()`, `name(key)`, `put(key, ...)`, `putNull(key)`, `value(...)`, `nullValue()`, `values(strings)`, `newline()`.
   ``JsonOutput.inMemory()``는 ``toBytes()``와 ``toJson()``을, 또는 ``length()``와 ``writeTo(stream)``에 이은 ``release()``를 답하고, ``JsonOutput.to(stream)``은 ``flush()``에서 버퍼를 보낸다
-* `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `keyHead()`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readFloat()`, `readNumber()`, `readOneOf(names)`, `readBoolean()`, `readNull()`, `readValue()`, `readValueBytes()`, `skipValue()`, `peek()`, `position()`, `end()`, `error(message)`, 그 바탕은 ``JsonInput.of(utf8)``이나 ``JsonInput.of(text)``다
+* `JsonInput`: `object()`, `array()`, `nextKey()`, `nextKeyIs(key)`, `keyHead()`, `nextElement()`, `keyIs(key)`, `key()`, `readString()`, `readLong()`, `readInt()`, `readDouble()`, `readFloat()`, `readNumber()`, `readOneOf(names)`, `readBoolean()`, `readNull()`, `readValue()`, `readValueBytes()`, `skipValue()`, `peek()`, `position()`, `end()`, `error(message)`, 입력은 ``JsonInput.of(utf8)``이나 ``JsonInput.of(text)``로 만든다
 * `JsonKey.of(name)`: `put`, `name`, ``keyIs``를 위해 한 번만 인코딩한 멤버 이름
 * `JsonKey.names(constants)`: `put(key, name)`, `value(name)`, ``readOneOf``를 위해 한 번만 인코딩한 enum 상수 이름들
 * `@JsonBound`: 애너테이션이 붙은 타입이나 그것이 지명한 타입의 코덱을 ``silk-json-processor``가 컴파일 시점에 ``<Type>Json.CODEC``으로, 제네릭 타입이면 ``<Type>Json.of(...)``로 생성한다; xref:json-codegen.adoc[생성되는 JSON 코덱]을 참고한다

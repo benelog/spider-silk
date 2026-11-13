@@ -57,7 +57,7 @@ xref:tomcat.adoc[Tomcat] and xref:undertow.adoc[Undertow] always install a sessi
 == Flash
 
 A flash value is visible exactly once, on the request after the one that set it.
-Flash fills the gap in the Post/Redirect/Get pattern: the POST wants to show "Imported 12 cards." on the page its redirect lands on.
+Flash carries the result of a POST to the page after the redirect in the Post/Redirect/Get pattern: the handler of the POST has to show "Imported 12 cards." on the page its redirect lands on.
 
 [source,java]
 ----

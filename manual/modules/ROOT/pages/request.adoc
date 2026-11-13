@@ -1,12 +1,12 @@
 = The Request
 :navtitle: The Request
 
-`WebRequest` is the handler's view of what the client sent.
+`WebRequest` is the object a handler reads the client's request through.
 The plain reads are listed first, followed by the parts that need more than a getter: cookies, repeated parameters, the query-string and form-body split, content negotiation, file uploads, and body size limits.
 
 == What the request is
 
-Every ordinary question about a request has a method, so none of them needs `raw()`.
+Everything commonly read from a request has a method, so none of it needs `raw()`.
 
 [source,java]
 ----
@@ -26,11 +26,11 @@ req.remoteAddress(); // "203.0.113.7", the proxy's address when one is in front
 `req.scheme() + "://" + req.host() + req.path()` is the absolute URL of the request.
 `host()` therefore carries the port whenever it is not the default for the scheme, since a development server on 8080 is the case where building the URL by hand goes wrong.
 
-`isSecure()`, `scheme()`, and `host()` report what the container believes.
+`isSecure()`, `scheme()`, and `host()` report what the container has determined.
 Behind a TLS-terminating proxy that means the container has to be told to trust `X-Forwarded-Proto`, or a request that reached the browser over HTTPS still reads as plain HTTP here.
 
 `raw()` remains for what these do not cover: an async context, a client certificate, a container-specific attribute.
-It is an escape hatch rather than a shortcut, and what is read through it is read behind the framework's back.
+It is for cases no other method covers, not a shortcut, and the framework does not track what is read through it.
 
 == Cookies
 
@@ -63,7 +63,7 @@ A default as the last argument makes a read optional without a null: `param(name
 List<String> tags = req.params("tag"); // ?tag=java&tag=web, or a checkbox group
 ----
 
-The values come back in request order, and an absent parameter gives an empty list: "no boxes checked" is an answer, not a 400.
+The values come back in request order, and an absent parameter gives an empty list: "no boxes checked" is valid input, not a 400.
 `param(name)` still returns the first value and still answers 400 when there is none.
 `paramOrNull(name)` returns the first value, or null when there is none.
 `param(name, default)` returns the default instead.
@@ -158,13 +158,13 @@ A handler therefore never has a null branch to write.
 
 Calling `accepts` or `acceptedTypes()` makes the answer depend on a request header, so the response carries `Vary: Accept` without the handler saying so.
 That covers the 406, and an answer that turned out to be the only type on offer.
-That is the same bookkeeping `app.gzip()` does for `Accept-Encoding`, for the same reason: a shared cache must not hand JSON to the next browser.
+That is the same handling `app.gzip()` does for `Accept-Encoding`, for the same reason: a shared cache must not hand JSON to the next browser.
 
 `req.acceptedTypes()` is the parsed view behind `accepts`, for the rare decision `accepts` cannot phrase.
 It reports the media types asked for, best first, with the refused ones dropped, and is empty when the request sent no `Accept`.
 
 `Accept-Language` and `Accept-Encoding` are not negotiated for you.
-Encoding is the compression layer's own business, and language negotiation would need locale support that core does not have.
+Encoding is handled by the compression layer, and language negotiation would need locale support that core does not have.
 
 == File uploads
 

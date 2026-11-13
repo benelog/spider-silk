@@ -24,7 +24,7 @@ void createsADeck() {
 }
 ----
 
-`get`/`post`/`put`/`patch`/`delete`/`head`/``options``와 `postForm`, `postJson`/`putJson`/``patchJson``은 모두 원시 ``HttpResponse<String>``을 반환하므로, 단언은 프로젝트가 이미 쓰는 라이브러리에 그대로 머문다.
+`get`/`post`/`put`/`patch`/`delete`/`head`/``options``와 `postForm`, `postJson`/`putJson`/``patchJson``은 모두 원시 ``HttpResponse<String>``을 반환하므로, 단언은 프로젝트가 이미 쓰는 라이브러리로 작성한다.
 `post`, `put`, ``patch``는 `Content-Type` 없이 원시 본문을 보낸다.
 `postJson`, `putJson`, ``patchJson``은 ``Content-Type: application/json``을 보내며, ``jsonBody``처럼 각각 `JsonValue` 트리나 원시 텍스트를 받는다.
 애플리케이션이 자신의 ``JsonWriter``로 쓰는 값은 ``client.postJson(path, writer.write(value))``로 보낸다.

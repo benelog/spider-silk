@@ -48,7 +48,7 @@ xref:logging.adoc[Logging] shows the same setup on Log4j and on JDK logging.
 
 Routing::
 There is no `Controller` interface.
-`FlashcardContext.registerRoutes` is the whole table, and handlers arrive as an `Action` class, a public method reference, or a lambda.
+`FlashcardContext.registerRoutes` holds the whole routing table, and handlers are registered as an `Action` class, a public method reference, or a lambda.
 
 == Run
 

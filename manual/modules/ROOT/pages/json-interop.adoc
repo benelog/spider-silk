@@ -2,7 +2,7 @@
 :navtitle: External JSON Binding
 
 An application can bind JSON with a library of its own, through a seam of two methods that core already has.
-Core's JSON is hand-written or generated from the type on purpose, but that decision is the framework's to make for core, not for the application.
+Core's JSON is hand-written or generated from the type on purpose, but that decision is about core's own JSON handling and is not imposed on the application.
 An application with three hundred DTOs, or one whose wire format is generated from a schema it does not own, has a reason to bind objects with a library.
 Jackson has a module of its own, <<jackson,`spider-silk-jackson`>>, which binds through the `JsonWriter` and `JsonReader` that core already takes.
 
@@ -18,17 +18,17 @@ public InputStream bodyStream() // the bytes, unparsed
 public BufferedReader bodyReader() // the characters, unparsed
 ----
 
-That is the whole integration.
+These two are all the integration takes.
 Do not route another library's output through `JsonWriter<T>`: a `JsonWriter` writes values, not text, so the document the library had just finished writing would be parsed only to be written again.
 The library serializes, and `rawJson(String)` sends what it produced.
 
 A body is read one way: as the bytes `body()` and `bodyJson()` keep, or unread through `bodyStream()`, `bodyReader()`, or `bodyNdjson()`.
 `body()` reads the bytes once and keeps them for the rest of the request, so `bodyJson()` and a second `body()` answer the same body, whichever filter or handler asked first.
 A request whose text was read throws `IllegalStateException` from `bodyStream()`, `bodyReader()`, and `bodyNdjson()`, since the reader underneath is already at its end.
-A body handed over unread throws `IllegalStateException` from `body()` and `bodyJson()`, since nobody can say how much of it was consumed.
+A body handed over unread throws `IllegalStateException` from `body()` and `bodyJson()`, since the framework cannot know how much of it was consumed.
 The stream and the reader exclude each other as well, which is the servlet API's own rule.
 A `Content-Type` naming a charset this JVM cannot decode, the empty `charset=` among them, answers 415 from `body()`, `bodyJson()`, `bodyReader()`, and `bodyNdjson()`, before a byte of the body is read.
-What a handler reads through `raw()` bypasses this bookkeeping.
+What a handler reads through `raw()` bypasses these checks.
 A form-encoded POST is also spent by its first `param()` read, because the container parses the form by reading the body to its end.
 `bodyStream()` then answers an empty stream rather than throwing, and a body read as bytes first leaves `formParam()` with no fields.
 
@@ -98,7 +98,7 @@ A `JsonOutput` holds only checked JSON.
 A value marked `@JsonRawValue` is therefore parsed and written as the value it holds, and a raw fragment written through `writeRaw` is refused.
 A `JsonOutput` writes every string as UTF-8, so `new JacksonCodecs(mapper)` refuses a mapper with `JsonWriteFeature.ESCAPE_NON_ASCII` on, with `IllegalArgumentException`, rather than ignore the feature.
 
-Jackson binds by reflection, and this module is where an application chooses it.
+Jackson binds by reflection, and an application that adds this module chooses that reflection.
 A xref:native-image.adoc[native image] then needs a reflection entry for every bound type.
 
 === Through the seam
@@ -155,16 +155,16 @@ app.post("/api/decks", req -> {
 });
 ----
 
-Gson reads characters, so `bodyReader()` is its half of the seam.
+Gson reads characters, so it reads the incoming body through `bodyReader()`.
 `fromJson` returns null for an empty body and throws `JsonSyntaxException` for a malformed one.
-Both are the application's to answer, since core has not been told this body is JSON.
+The application has to handle both itself, since core does not treat this body as JSON.
 
 == A binder that generates its code
 
-xref:reflection-scope.adoc[The framework's no-reflection rule] is about core, and a library an application adds answers for itself.
+xref:reflection-scope.adoc[The framework's no-reflection rule] is about core, and it does not cover a library an application adds.
 Jackson and Gson both read and write fields reflectively, which is a real cost under a xref:native-image.adoc[native image]: every bound type needs a reflection entry.
 
-Core's own answer to a type that should bind itself is xref:json-codegen.adoc[a generated codec]: `@JsonBound` on the type, and the build writes a `JsonCodec` that a handler names like any other.
+For a type that should bind without a hand-written mapping, core provides xref:json-codegen.adoc[a generated codec]: `@JsonBound` on the type, and the build writes a `JsonCodec` that a handler names like any other.
 A library that generates its code takes the same trade from outside the framework.
 
 https://avaje.io/jsonb/[avaje-jsonb] is such a binder, and keeps the runtime free of reflection:
@@ -190,9 +190,9 @@ Its annotation processor generates a Java source adapter per type at compile tim
 There is no reflective fallback.
 The runtime therefore stays reflection-free, and the native image needs no entry for a bound type, which is the same trade jte makes for templates.
 
-What it does *not* keep is the stronger promise underneath the no-reflection rule: the wire format changes only when someone edits it.
+What it does *not* keep is the stronger property a hand-written mapping also guarantees: the wire format changes only when someone edits the mapping.
 A generated adapter derives its field names from the record's components, so renaming a component renames a JSON field.
-It does so silently, at compile time, in a build that still succeeds.
+The change happens at compile time, and the build succeeds with no warning.
 Pinning each name with `@Json.Property("...")` restores the guarantee, and costs about as much typing as the hand-written writer it replaced.
 That is the trade, and silk-json's generated codec makes it on the same terms, with xref:json-codegen.adoc#names[an option that turns a missing name into a compile error].
 The application decides which side of that trade it takes.
@@ -204,7 +204,7 @@ It keeps a runtime reflection fallback for types the processor did not see, so "
 
 Routing, parameter extraction, and the request and response envelope are unchanged by a JSON library.
 An application can bind one endpoint with a library and hand-write the next.
-`WebResponse.rawJson` takes a `String` and does not ask where it came from.
+`WebResponse.rawJson` takes a `String` from whichever library produced it.
 
 NOTE: The snippets on this page, apart from those of `spider-silk-jackson`, are illustrations, not part of the build.
 Only `spider-silk-jackson` depends on Jackson, and no module of this project depends on Gson or avaje-jsonb.

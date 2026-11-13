@@ -17,7 +17,7 @@ dependencies {
 
 It brings `jetty-websocket-jetty-server`, Jetty's server-side WebSocket at the `Handler` level, pinned to the same Jetty version core uses.
 Choosing it over the `ee10` artifact of the same name is deliberate.
-The `ee10` one is the servlet-container integration, and it arrives with annotation scanning, ASM, CDI, and JNDI in tow, none of which this framework wants near it.
+The `ee10` one is the servlet-container integration, and it arrives with annotation scanning, ASM, CDI, and JNDI in tow, none of which this framework uses.
 
 == Mapping a path
 
@@ -67,7 +67,7 @@ Every method has a do-nothing default (`onOpen`, `onText`, `onBinary`, `onClose`
 The `Session` is passed to each one rather than handed out once, so nothing has to be remembered in a field to reply.
 
 `Session` is Jetty's own and is not wrapped.
-The module is tied to Jetty by name, so hiding Jetty behind a facade would buy portability the name has already ruled out.
+The module is tied to Jetty by name, so wrapping Jetty in a facade would not make it portable to another server.
 `sendText` and `sendBinary` are asynchronous and take a `Callback`.
 `Callback.NOOP` is the fire-and-forget form, and passing a real callback is how a handler notices a send failure.
 A handler never calls `session.demand()`, because the module's endpoint is auto-demanding: the next message is asked for as soon as the callback returns.
@@ -134,16 +134,16 @@ A socket that stays open through quiet periods survives that timeout only if the
 
 == What does not reach a socket
 
-An upgrade leaves servlet dispatch for good, so none of the framework follows it:
+An upgrade leaves servlet dispatch for good, so no part of the framework applies to it:
 
 * the router does not, and `app.routes()` does not list a socket,
 * `beforeRequest`, `beforeRoute`, `afterRoute`, and `responseFilter` filters do not run,
 * `statusPage(status, ...)` does not cover it,
 * the request logger never sees the connection, the upgrade included, because the upgrade handler answers ahead of `AppServlet` and the servlet never runs,
-* `WebTest` cannot reach it, since its client speaks plain HTTP and has no way to open a socket.
+* `WebTest` cannot test it, since its client speaks plain HTTP and has no way to open a socket.
 
 That list is the whole reason WebSocket is not in core: core would be publishing an API its own features silently do not cover.
-The module's tests show the same limit from the other side.
+The module's own tests run into the same limit.
 They start a real Jetty on a free port and talk to it with the JDK's own `java.net.http.WebSocket` client, because there is no harness that could stand in.
 
 `app.stop()` closes the sockets still open.
