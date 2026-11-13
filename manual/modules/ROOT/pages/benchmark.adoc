@@ -551,7 +551,7 @@ fastjson2's 2.1.x branch, which moves to `VarHandle`, has had no change since Fe
 With `-Dfastjson2.creator=reflect` on the JVM, fastjson2 builds no classes at run time, and reads the list in 24.5 µs and 111.2 KB, four times its usual time, and writes it in 5.7 µs.
 In a GraalVM native image, fastjson2 turns off its `String` fast path and its generated classes, and binds through reflection, which needs reachability metadata for every type it binds.
 fastjson2 2.0.57 does not build into a native image with the settings its jar carries, under GraalVM CE 25.2.4.
-Those settings initialize `JSONFactory` and a few other classes at build time, and the objects those classes hold refer to classes the settings leave to be initialized at run time, which `native-image` refuses.
+Those settings initialize `JSONFactory` and a few other classes at build time, and the objects those classes hold are instances of classes the settings leave to be initialized at run time, which `native-image` refuses.
 Built with the whole package initialized at build time, the image misreads the records: `"available":false` fails with `syntax error : 102`, while `true` reads.
 fastjson2 reads `false` through `sun.misc.Unsafe`, at an offset into the byte array that `JDKUtils` computed in the JVM that built the image.
 That offset is 16, and the image's own is 12.

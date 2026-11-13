@@ -174,7 +174,7 @@ The reflection metadata is baked in when the image is built, so boot pays nothin
 The costs are the speed of each request and the time at which a mistake fails.
 Reflective mapping is slower per row at request time, and, above all, a missing entry fails at runtime rather than at build time.
 A record added without a config entry is not a compile error, and `--no-fallback` cannot catch it: the build succeeds, and the first query against that record answers 500 in production.
-The tracing agent (`-agentlib:native-image-agent=config-output-dir=...`) can write the config from a JVM run that clicks through the app, but it also records everything else that run touched by reflection.
+The tracing agent (`-agentlib:native-image-agent=config-output-dir=...`) can write the config from a JVM run that clicks through the app, but it also records everything else that run touched.
 
 === Deriving the config from a package
 

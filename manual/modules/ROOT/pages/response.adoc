@@ -6,7 +6,7 @@ Every method returns a new response, so an after-filter can rewrite the response
 A change whose result is left unused is therefore not applied.
 `WebResponse` carries Error Prone's `@CheckReturnValue`, so Error Prone and IntelliJ flag such a call at compile time.
 
-The immutability covers everything but the body: the status, the headers, the cookies, and the entries of a template model.
+The immutability covers the status, the headers, the cookies, and the entries of a template model.
 A cookie is copied when it is added and again when `cookies()` hands it out, so changing a `Cookie` object afterwards changes nothing the response sends.
 A template model is a `Model`, which is immutable, so nothing the handler does after building it affects the page.
 The copies are shallow, and a mutable object stored as a model value is still the one the handler passed.

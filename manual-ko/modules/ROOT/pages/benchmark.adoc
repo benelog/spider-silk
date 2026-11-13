@@ -551,7 +551,7 @@ JDK 26과 JDK 27의 기본값은 아직 경고이고, 거부를 기본값으로 
 JVM에서 ``-Dfastjson2.creator=reflect``를 주면 fastjson2는 실행 중에 클래스를 만들지 않으며, 목록을 평소의 네 배인 24.5 µs와 111.2 KB에 읽고 5.7 µs에 쓴다.
 GraalVM 네이티브 이미지에서 fastjson2는 ``String`` fast path와 생성 클래스를 끄고 리플렉션으로 바인딩하며, 이를 위해 바인딩하는 타입마다 reachability 메타데이터가 필요하다.
 fastjson2 2.0.57은 GraalVM CE 25.2.4에서 jar에 든 설정만으로는 네이티브 이미지로 빌드되지 않는다.
-그 설정은 ``JSONFactory``를 비롯한 몇 클래스를 빌드 시 초기화하고, 그 클래스들이 가진 객체는 설정이 실행 시에 초기화하도록 남겨 둔 클래스를 참조하며, ``native-image``는 이를 거부한다.
+그 설정은 ``JSONFactory``를 비롯한 몇 클래스를 빌드 시 초기화하고, 그 클래스들이 가진 객체는 설정이 실행 시에 초기화하도록 남겨 둔 클래스의 인스턴스이며, ``native-image``는 이를 거부한다.
 패키지 전체를 빌드 시 초기화해 빌드한 이미지는 레코드를 잘못 읽는다: ``"available":false``는 ``syntax error : 102``로 실패하고 ``true``는 읽힌다.
 fastjson2는 ``false``를 ``sun.misc.Unsafe``로 읽는데, 그 바이트 배열 오프셋은 ``JDKUtils``가 이미지를 빌드한 JVM에서 계산한 값이다.
 그 오프셋은 16이고, 이미지 자신의 값은 12다.
